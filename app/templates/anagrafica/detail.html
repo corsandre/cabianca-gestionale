@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ c.name }} - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-person text-cb-green"></i> {{ c.name }}</h1>
+    <div>
+        <a href="{{ url_for('anagrafica.edit', id=c.id) }}" class="btn btn-cb-outline btn-sm"><i class="bi bi-pencil"></i> Modifica</a>
+        <a href="{{ url_for('anagrafica.index') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Lista</a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="cb-card p-3">
+            <h5 class="mb-3">Dati anagrafici</h5>
+            <table class="table table-sm mb-0">
+                <tr><th>Tipo</th><td><span class="badge bg-secondary">{{ c.type|replace('_',' ')|title }}</span></td></tr>
+                <tr><th>Ragione sociale</th><td>{{ c.ragione_sociale or '-' }}</td></tr>
+                <tr><th>P.IVA</th><td>{{ c.partita_iva or '-' }}</td></tr>
+                <tr><th>Codice Fiscale</th><td>{{ c.codice_fiscale or '-' }}</td></tr>
+                <tr><th>Codice SDI</th><td>{{ c.codice_sdi or '-' }}</td></tr>
+                <tr><th>PEC</th><td>{{ c.pec or '-' }}</td></tr>
+            </table>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="cb-card p-3">
+            <h5 class="mb-3">Contatti e indirizzo</h5>
+            <table class="table table-sm mb-0">
+                <tr><th>Email</th><td>{{ c.email or '-' }}</td></tr>
+                <tr><th>Telefono</th><td>{{ c.phone or '-' }}</td></tr>
+                <tr><th>Indirizzo</th><td>{{ c.address or '-' }}</td></tr>
+                <tr><th>Citta</th><td>{{ c.city or '-' }} {{ c.province or '' }}</td></tr>
+                <tr><th>CAP</th><td>{{ c.cap or '-' }}</td></tr>
+            </table>
+        </div>
+    </div>
+    {% if c.notes %}
+    <div class="col-12">
+        <div class="cb-card p-3">
+            <h5>Note</h5>
+            <p class="mb-0">{{ c.notes }}</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% if transactions %}
+<h5 class="mt-4 mb-3">Ultimi movimenti</h5>
+<div class="cb-table">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>Data</th><th>Descrizione</th><th>Fonte</th><th class="text-end">Importo</th></tr></thead>
+            <tbody>
+                {% for t in transactions %}
+                <tr>
+                    <td class="small">{{ t.date.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ t.description[:50] if t.description else '-' }}</td>
+                    <td><span class="badge badge-{{ t.source }}">{{ t.source|upper }}</span></td>
+                    <td class="text-end fw-bold {% if t.type == 'entrata' %}text-cb-dark-green{% else %}text-cb-gold{% endif %}">
+                        {% if t.type == 'uscita' %}-{% endif %}&euro;{{ "{:,.2f}".format(t.amount) }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

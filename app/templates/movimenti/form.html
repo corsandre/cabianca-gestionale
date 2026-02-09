@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}{{ "Modifica" if t else "Nuovo" }} Movimento - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-pencil-square text-cb-green"></i> {{ "Modifica" if t else "Nuovo" }} Movimento</h1>
+</div>
+
+<div class="cb-card p-4" style="max-width:800px">
+    <form method="POST" id="movForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Tipo *</label>
+                <select name="type" class="form-select" required>
+                    <option value="uscita" {% if t and t.type == 'uscita' %}selected{% endif %}>Uscita</option>
+                    <option value="entrata" {% if t and t.type == 'entrata' %}selected{% endif %}>Entrata</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Data *</label>
+                <input type="date" name="date" class="form-control" value="{{ t.date.isoformat() if t else '' }}" required>
+            </div>
+            <div class="col-md-8">
+                <label class="form-label">Descrizione *</label>
+                <input type="text" name="description" class="form-control" value="{{ t.description or '' if t else '' }}" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Importo (EUR) *</label>
+                <input type="number" step="0.01" name="amount" class="form-control" value="{{ t.amount if t else '' }}" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Aliquota IVA %</label>
+                <select name="iva_rate" class="form-select">
+                    <option value="0" {% if t and t.iva_rate == 0 %}selected{% endif %}>Esente</option>
+                    <option value="4" {% if t and t.iva_rate == 4 %}selected{% endif %}>4%</option>
+                    <option value="5" {% if t and t.iva_rate == 5 %}selected{% endif %}>5%</option>
+                    <option value="10" {% if t and t.iva_rate == 10 %}selected{% endif %}>10%</option>
+                    <option value="22" {% if t and t.iva_rate == 22 %}selected{% endif %}>22%</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Metodo pagamento</label>
+                <select name="payment_method" class="form-select">
+                    <option value="">--</option>
+                    <option value="contanti" {% if t and t.payment_method == 'contanti' %}selected{% endif %}>Contanti</option>
+                    <option value="bonifico" {% if t and t.payment_method == 'bonifico' %}selected{% endif %}>Bonifico</option>
+                    <option value="carta" {% if t and t.payment_method == 'carta' %}selected{% endif %}>Carta</option>
+                    <option value="assegno" {% if t and t.payment_method == 'assegno' %}selected{% endif %}>Assegno</option>
+                    <option value="altro" {% if t and t.payment_method == 'altro' %}selected{% endif %}>Altro</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Stato pagamento</label>
+                <select name="payment_status" class="form-select">
+                    <option value="pagato" {% if t and t.payment_status == 'pagato' %}selected{% endif %}>Pagato</option>
+                    <option value="da_pagare" {% if t and t.payment_status == 'da_pagare' %}selected{% endif %}>Da pagare</option>
+                    <option value="parziale" {% if t and t.payment_status == 'parziale' %}selected{% endif %}>Parziale</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Scadenza</label>
+                <input type="date" name="due_date" class="form-control" value="{{ t.due_date.isoformat() if t and t.due_date else '' }}">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Data pagamento</label>
+                <input type="date" name="payment_date" class="form-control" value="{{ t.payment_date.isoformat() if t and t.payment_date else '' }}">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Contatto</label>
+                <select name="contact_id" class="form-select">
+                    <option value="">--</option>
+                    {% for c in contacts %}
+                    <option value="{{ c.id }}" {% if t and t.contact_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Categoria</label>
+                <select name="category_id" class="form-select">
+                    <option value="">--</option>
+                    {% for c in categories %}
+                    <option value="{{ c.id }}" {% if t and t.category_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Flusso di ricavo</label>
+                <select name="revenue_stream_id" class="form-select">
+                    <option value="">--</option>
+                    {% for s in streams %}
+                    <option value="{{ s.id }}" {% if t and t.revenue_stream_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Registrazione</label>
+                <select name="official" class="form-select">
+                    <option value="0" {% if t and not t.official %}selected{% endif %}>Extra-contabile</option>
+                    <option value="1" {% if t and t.official %}selected{% endif %}>Ufficiale</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Tag</label>
+                <select name="tags" class="form-select" multiple size="3">
+                    {% for tag in tags %}
+                    <option value="{{ tag.id }}" {% if t and tag in t.tags %}selected{% endif %}>{{ tag.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Allegato</label>
+                <input type="file" name="attachment" class="form-control" accept=".pdf,.jpg,.jpeg,.png,.webp">
+                {% if t and t.attachment_path %}
+                <small class="text-muted">Attuale: {{ t.attachment_path }}</small>
+                {% endif %}
+            </div>
+            <div class="col-12">
+                <label class="form-label">Note</label>
+                <textarea name="notes" class="form-control" rows="2">{{ t.notes or '' if t else '' }}</textarea>
+            </div>
+        </div>
+
+        <div class="mt-4 d-flex gap-2">
+            <button type="submit" class="btn btn-cb">Salva</button>
+            <a href="{{ next_url or url_for('movimenti.index') }}" class="btn btn-outline-secondary">Annulla</a>
+        </div>
+    </form>
+
+    {% if t %}
+    <form method="POST" action="{{ url_for('movimenti.delete', id=t.id) }}" class="mt-2" onsubmit="return confirm('Eliminare questo movimento?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+        <button type="submit" class="btn btn-outline-danger"><i class="bi bi-trash"></i> Elimina</button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

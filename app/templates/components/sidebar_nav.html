@@ -1,0 +1,62 @@
+<ul class="nav flex-column cb-nav">
+    <li class="nav-item">
+        <a class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
+            <i class="bi bi-grid-1x2"></i> Cruscotto
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.blueprint == 'prima_nota' %}active{% endif %}" href="{{ url_for('prima_nota.index') }}">
+            <i class="bi bi-journal-text"></i> Libro Mastro
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.blueprint == 'fatture' %}active{% endif %}" href="{{ url_for('fatture.index') }}">
+            <i class="bi bi-file-earmark-text"></i> Fatture SDI
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.blueprint == 'cassa' %}active{% endif %}" href="{{ url_for('cassa.index') }}">
+            <i class="bi bi-cash-stack"></i> Cassa
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.blueprint == 'movimenti' %}active{% endif %}" href="{{ url_for('movimenti.index') }}">
+            <i class="bi bi-pencil-square"></i> Movimenti Manuali
+        </a>
+    </li>
+    <li class="cb-nav-divider"></li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.blueprint == 'anagrafica' %}active{% endif %}" href="{{ url_for('anagrafica.index') }}">
+            <i class="bi bi-people"></i> Anagrafica
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.blueprint == 'inventario' %}active{% endif %}" href="{{ url_for('inventario.index') }}">
+            <i class="bi bi-box-seam"></i> Inventario
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.blueprint == 'categorie' %}active{% endif %}" href="{{ url_for('categorie.index') }}">
+            <i class="bi bi-tags"></i> Categorie & Tag
+        </a>
+    </li>
+    <li class="cb-nav-divider"></li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.blueprint == 'analisi' %}active{% endif %}" href="{{ url_for('analisi.index') }}">
+            <i class="bi bi-graph-up"></i> Analisi
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.blueprint == 'scadenzario' %}active{% endif %}" href="{{ url_for('scadenzario.index') }}">
+            <i class="bi bi-calendar-check"></i> Scadenzario
+        </a>
+    </li>
+    <li class="cb-nav-divider"></li>
+    {% if current_user.role == 'admin' %}
+    <li class="nav-item">
+        <a class="nav-link {% if request.blueprint == 'impostazioni' %}active{% endif %}" href="{{ url_for('impostazioni.index') }}">
+            <i class="bi bi-gear"></i> Impostazioni
+        </a>
+    </li>
+    {% endif %}
+</ul>

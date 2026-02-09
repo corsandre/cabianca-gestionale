@@ -1,0 +1,152 @@
+import os
+import logging
+
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask_login import login_required, current_user
+from app import db
+from app.models import SdiInvoice, Transaction
+from app.services.sdi_importer import import_sdi_xml
+from app.utils.decorators import write_required
+
+logger = logging.getLogger(__name__)
+
+bp = Blueprint("fatture", __name__, url_prefix="/fatture")
+
+
+@bp.route("/")
+@login_required
+def index():
+    direction = request.args.get("direction", "")
+    search = request.args.get("q", "").strip()
+
+    query = SdiInvoice.query
+    if direction:
+        query = query.filter_by(direction=direction)
+    if search:
+        query = query.filter(
+            db.or_(
+                SdiInvoice.sender_name.ilike(f"%{search}%"),
+                SdiInvoice.invoice_number.ilike(f"%{search}%"),
+            )
+        )
+
+    page = request.args.get("page", 1, type=int)
+    pagination = query.order_by(SdiInvoice.invoice_date.desc()).paginate(page=page, per_page=50)
+
+    return render_template("fatture/index.html", invoices=pagination.items, pagination=pagination)
+
+
+@bp.route("/upload", methods=["GET", "POST"])
+@login_required
+@write_required
+def upload():
+    if request.method == "POST":
+        files = request.files.getlist("xml_files")
+        if not files or not files[0].filename:
+            flash("Seleziona almeno un file XML.", "warning")
+            return redirect(url_for("fatture.upload"))
+
+        imported = 0
+        skipped = 0
+        for file in files:
+            if not file.filename.lower().endswith(".xml"):
+                skipped += 1
+                continue
+            result = import_sdi_xml(file.read(), file.filename, uploaded_by=current_user.id)
+            if result["status"] == "imported":
+                imported += 1
+            else:
+                skipped += 1
+
+        db.session.commit()
+        if imported:
+            flash(f"{imported} fatture importate con successo.", "success")
+        if skipped:
+            flash(f"{skipped} file ignorati (errori o duplicati).", "warning")
+        return redirect(url_for("fatture.index"))
+
+    return render_template("fatture/upload.html")
+
+
+@bp.route("/controlla-email", methods=["POST"])
+@login_required
+@write_required
+def check_email():
+    from app.services.email_fetcher import fetch_sdi_emails
+    stats = fetch_sdi_emails(current_app._get_current_object())
+    if stats["imported"]:
+        flash(f"{stats['imported']} fatture importate da email.", "success")
+    if stats["duplicates"]:
+        flash(f"{stats['duplicates']} duplicati ignorati.", "info")
+    if stats["errors"]:
+        flash(f"{stats['errors']} errori durante l'importazione.", "warning")
+    if not stats["imported"] and not stats["duplicates"] and not stats["errors"]:
+        flash("Nessuna nuova fattura trovata nelle email.", "info")
+    return redirect(url_for("fatture.index"))
+
+
+@bp.route("/<int:id>")
+@login_required
+def detail(id):
+    invoice = SdiInvoice.query.get_or_404(id)
+    transactions = Transaction.query.filter_by(invoice_id=id).all()
+    return render_template("fatture/detail.html", invoice=invoice, transactions=transactions)
+
+
+@bp.route("/<int:id>/elimina", methods=["POST"])
+@login_required
+@write_required
+def delete(id):
+    invoice = SdiInvoice.query.get_or_404(id)
+    Transaction.query.filter_by(invoice_id=id).delete()
+    db.session.delete(invoice)
+    db.session.commit()
+    flash("Fattura e movimenti collegati eliminati.", "success")
+    return redirect(url_for("fatture.index"))
+
+
+@bp.route("/rielabora", methods=["POST"])
+@login_required
+@write_required
+def rielabora():
+    """Ri-elabora tutti i file fattura salvati per aggiornare due_date."""
+    from app.services.sdi_parser import parse_fattura_xml
+    from app.services.pdf_parser import parse_fattura_pdf
+
+    updated = 0
+    errors = 0
+
+    for invoice in SdiInvoice.query.all():
+        filepath = invoice.xml_path
+        if not filepath or not os.path.isfile(filepath):
+            continue
+
+        try:
+            with open(filepath, "rb") as f:
+                content = f.read()
+
+            if filepath.lower().endswith(".pdf") or content[:5] == b"%PDF-":
+                data = parse_fattura_pdf(content)
+            else:
+                data = parse_fattura_xml(content)
+
+            due_date = data.get("due_date")
+            if due_date:
+                tx = Transaction.query.filter_by(invoice_id=invoice.id).first()
+                if tx and tx.due_date != due_date:
+                    tx.due_date = due_date
+                    updated += 1
+        except Exception as e:
+            logger.warning(f"Rielabora {invoice.xml_filename}: {e}")
+            errors += 1
+
+    db.session.commit()
+
+    if updated:
+        flash(f"{updated} scadenze aggiornate.", "success")
+    else:
+        flash("Nessuna nuova scadenza trovata.", "info")
+    if errors:
+        flash(f"{errors} file con errori.", "warning")
+
+    return redirect(url_for("fatture.index"))

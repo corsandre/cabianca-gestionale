@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Categorie & Tag - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-tags text-cb-green"></i> Categorie & Tag</h1>
+</div>
+
+<div class="row g-4">
+    <!-- CATEGORIES -->
+    <div class="col-lg-7">
+        <div class="cb-card p-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">Categorie</h5>
+                <button class="btn btn-cb btn-sm" data-bs-toggle="collapse" data-bs-target="#newCatForm"><i class="bi bi-plus-lg"></i> Nuova</button>
+            </div>
+
+            <div class="collapse mb-3" id="newCatForm">
+                <form method="POST" action="{{ url_for('categorie.new_category') }}" class="row g-2 align-items-end p-2 bg-light rounded">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="col">
+                        <input type="text" name="name" class="form-control form-control-sm" placeholder="Nome categoria" required>
+                    </div>
+                    <div class="col-auto">
+                        <select name="type" class="form-select form-select-sm">
+                            <option value="uscita">Uscita</option>
+                            <option value="entrata">Entrata</option>
+                            <option value="entrambi">Entrambi</option>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <input type="color" name="color" class="form-control form-control-sm form-control-color" value="#7f8c8d">
+                    </div>
+                    <div class="col-auto">
+                        <button class="btn btn-cb btn-sm">Aggiungi</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead><tr><th></th><th>Nome</th><th>Tipo</th><th></th></tr></thead>
+                    <tbody>
+                        {% for cat in categories %}
+                        <tr>
+                            <td><span class="cb-chip" style="background:{{ cat.color }}">&nbsp;&nbsp;</span></td>
+                            <td>{{ cat.name }}</td>
+                            <td><span class="badge bg-secondary">{{ cat.type }}</span></td>
+                            <td class="text-end">
+                                <form method="POST" action="{{ url_for('categorie.delete_category', id=cat.id) }}" class="d-inline" onsubmit="return confirm('Disattivare questa categoria?')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button class="btn btn-sm btn-outline-danger py-0"><i class="bi bi-x"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAGS -->
+    <div class="col-lg-5">
+        <div class="cb-card p-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">Tag</h5>
+                <button class="btn btn-cb btn-sm" data-bs-toggle="collapse" data-bs-target="#newTagForm"><i class="bi bi-plus-lg"></i> Nuovo</button>
+            </div>
+
+            <div class="collapse mb-3" id="newTagForm">
+                <form method="POST" action="{{ url_for('categorie.new_tag') }}" class="row g-2 align-items-end p-2 bg-light rounded">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="col">
+                        <input type="text" name="name" class="form-control form-control-sm" placeholder="Nome tag" required>
+                    </div>
+                    <div class="col-auto">
+                        <input type="color" name="color" class="form-control form-control-sm form-control-color" value="#7f8c8d">
+                    </div>
+                    <div class="col-auto">
+                        <button class="btn btn-cb btn-sm">Aggiungi</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2">
+                {% for tag in tags %}
+                <div class="d-flex align-items-center gap-1">
+                    <span class="cb-chip" style="background:{{ tag.color }}">{{ tag.name }}</span>
+                    <form method="POST" action="{{ url_for('categorie.delete_tag', id=tag.id) }}" class="d-inline" onsubmit="return confirm('Eliminare il tag?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm p-0 text-muted"><i class="bi bi-x-circle" style="font-size:0.7rem"></i></button>
+                    </form>
+                </div>
+                {% endfor %}
+                {% if not tags %}
+                <p class="text-muted small">Nessun tag creato.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

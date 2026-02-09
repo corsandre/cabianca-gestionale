@@ -1,0 +1,15 @@
+{
+    "name": "Ca Bianca Gestionale",
+    "short_name": "CaBianca",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#FBFCFF",
+    "theme_color": "#009d5a",
+    "icons": [
+        {
+            "src": "/static/img/logo.svg",
+            "sizes": "any",
+            "type": "image/svg+xml"
+        }
+    ]
+}

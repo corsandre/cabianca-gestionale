@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Carica Fatture XML - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-upload text-cb-green"></i> Carica Fatture XML</h1>
+</div>
+
+<div class="cb-card p-4" style="max-width:600px">
+    <p class="text-muted">Carica i file XML delle fatture elettroniche scaricati dal portale Fatture e Corrispettivi dell'Agenzia delle Entrate.</p>
+
+    <form method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-3">
+            <label class="form-label">File XML (anche multipli)</label>
+            <input type="file" name="xml_files" class="form-control" accept=".xml" multiple required>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-cb"><i class="bi bi-upload"></i> Importa</button>
+            <a href="{{ url_for('fatture.index') }}" class="btn btn-outline-secondary">Annulla</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

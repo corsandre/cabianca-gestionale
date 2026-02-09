@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Libro Mastro - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-journal-text text-cb-green"></i> Libro Mastro</h1>
+    <a href="{{ url_for('movimenti.new') }}" class="btn btn-cb"><i class="bi bi-plus-lg"></i> Nuovo movimento</a>
+</div>
+
+<!-- FILTERS -->
+<div class="cb-filters">
+    <form method="GET" class="row g-2 align-items-end">
+        <div class="col-6 col-md-2">
+            <label class="form-label small">Da</label>
+            <input type="date" name="date_from" class="form-control form-control-sm" value="{{ request.args.get('date_from', '') }}">
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small">A</label>
+            <input type="date" name="date_to" class="form-control form-control-sm" value="{{ request.args.get('date_to', '') }}">
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small">Tipo</label>
+            <select name="tipo" class="form-select form-select-sm">
+                <option value="">Tutti</option>
+                <option value="entrata" {% if request.args.get('tipo')=='entrata' %}selected{% endif %}>Entrate</option>
+                <option value="uscita" {% if request.args.get('tipo')=='uscita' %}selected{% endif %}>Uscite</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small">Fonte</label>
+            <select name="fonte" class="form-select form-select-sm">
+                <option value="">Tutte</option>
+                <option value="sdi" {% if request.args.get('fonte')=='sdi' %}selected{% endif %}>SDI</option>
+                <option value="cassa" {% if request.args.get('fonte')=='cassa' %}selected{% endif %}>Cassa</option>
+                <option value="manuale" {% if request.args.get('fonte')=='manuale' %}selected{% endif %}>Manuale</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small">Registrazione</label>
+            <select name="ufficiale" class="form-select form-select-sm">
+                <option value="">Tutte</option>
+                <option value="si" {% if request.args.get('ufficiale')=='si' %}selected{% endif %}>Ufficiali</option>
+                <option value="no" {% if request.args.get('ufficiale')=='no' %}selected{% endif %}>Extra-contabili</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small">Categoria</label>
+            <select name="categoria" class="form-select form-select-sm">
+                <option value="">Tutte</option>
+                {% for c in categories %}
+                <option value="{{ c.id }}" {% if request.args.get('categoria')==c.id|string %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small">Flusso ricavo</label>
+            <select name="flusso" class="form-select form-select-sm">
+                <option value="">Tutti</option>
+                {% for s in streams %}
+                <option value="{{ s.id }}" {% if request.args.get('flusso')==s.id|string %}selected{% endif %}>{{ s.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small">Cerca</label>
+            <input type="text" name="q" class="form-control form-control-sm" placeholder="Descrizione..." value="{{ request.args.get('q', '') }}">
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-cb btn-sm">Filtra</button>
+            <a href="{{ url_for('prima_nota.index') }}" class="btn btn-sm btn-outline-secondary">Reset</a>
+        </div>
+    </form>
+</div>
+
+<!-- TABLE -->
+<div class="cb-table">
+    {% if transactions %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr>
+                <th>Data</th><th>Descrizione</th><th>Contatto</th><th>Fonte</th><th>Categoria</th><th>Stato</th><th class="text-end">Importo</th><th></th>
+            </tr></thead>
+            <tbody>
+                {% for t in transactions %}
+                <tr>
+                    <td class="small text-nowrap">{{ t.date.strftime('%d/%m/%Y') }}</td>
+                    <td>
+                        {{ t.description[:60] if t.description else '-' }}
+                        {% if not t.official %}<i class="bi bi-eye-slash text-muted ms-1" title="Extra-contabile"></i>{% endif %}
+                    </td>
+                    <td class="small">{{ t.contact.name if t.contact else '-' }}</td>
+                    <td><span class="badge badge-{{ t.source }}">{{ t.source|upper }}</span></td>
+                    <td>
+                        {% if t.category %}
+                        <span class="cb-chip" style="background:{{ t.category.color }}">{{ t.category.name }}</span>
+                        {% else %}-{% endif %}
+                    </td>
+                    <td><span class="badge badge-{{ t.payment_status }}">{{ t.payment_status|replace('_',' ')|title }}</span></td>
+                    <td class="text-end fw-bold text-nowrap {% if t.type == 'entrata' %}text-cb-dark-green{% else %}text-cb-gold{% endif %}">
+                        {% if t.type == 'uscita' %}-{% endif %}&euro;{{ "{:,.2f}".format(t.amount) }}
+                    </td>
+                    <td class="text-center"><a href="{{ url_for('movimenti.edit', id=t.id, next=url_for('prima_nota.index')) }}" title="Modifica"><i class="bi bi-pencil"></i></a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- PAGINATION -->
+    {% if pagination.pages > 1 %}
+    <nav class="p-3">
+        <ul class="pagination pagination-sm justify-content-center mb-0">
+            {% if pagination.has_prev %}
+            <li class="page-item"><a class="page-link" href="?page={{ pagination.prev_num }}">&laquo;</a></li>
+            {% endif %}
+            {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if p %}
+                <li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="?page={{ p }}">{{ p }}</a></li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                {% endif %}
+            {% endfor %}
+            {% if pagination.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ pagination.next_num }}">&raquo;</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+    {% else %}
+    <div class="cb-empty">
+        <i class="bi bi-journal-text d-block"></i>
+        <p>Nessun movimento trovato.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

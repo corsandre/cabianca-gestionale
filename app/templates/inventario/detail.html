@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}{{ p.name }} - Inventario - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-box-seam text-cb-green"></i> {{ p.name }}</h1>
+    <div>
+        <a href="{{ url_for('inventario.edit', id=p.id) }}" class="btn btn-cb-outline btn-sm"><i class="bi bi-pencil"></i> Modifica</a>
+        <a href="{{ url_for('inventario.index') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Lista</a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-label">Giacenza</div>
+            <div class="cb-stat-value {% if p.current_quantity <= p.min_quantity %}text-danger{% else %}text-cb-dark-green{% endif %}">{{ p.current_quantity }} {{ p.unit }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-label">Scorta minima</div>
+            <div class="cb-stat-value">{{ p.min_quantity }} {{ p.unit }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-label">Prezzo</div>
+            <div class="cb-stat-value">&euro;{{ "{:,.2f}".format(p.price) }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-label">Categoria</div>
+            <div class="cb-stat-value" style="font-size:1rem">{{ p.product_category or '-' }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Add movement -->
+<div class="cb-card p-3 mb-4">
+    <h5 class="mb-3">Registra movimento</h5>
+    <form method="POST" action="{{ url_for('inventario.add_movement', id=p.id) }}" class="row g-2 align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-auto">
+            <select name="type" class="form-select form-select-sm">
+                <option value="carico">Carico</option>
+                <option value="scarico">Scarico</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <input type="number" step="0.01" name="quantity" class="form-control form-control-sm" placeholder="Quantita" required style="width:100px">
+        </div>
+        <div class="col-auto">
+            <input type="date" name="date" class="form-control form-control-sm" value="{{ today if today else '' }}">
+        </div>
+        <div class="col">
+            <input type="text" name="notes" class="form-control form-control-sm" placeholder="Note...">
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-cb btn-sm">Registra</button>
+        </div>
+    </form>
+</div>
+
+<!-- Movement history -->
+{% if movements %}
+<h5>Storico movimenti</h5>
+<div class="cb-table">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>Data</th><th>Tipo</th><th class="text-end">Quantita</th><th>Note</th></tr></thead>
+            <tbody>
+                {% for m in movements %}
+                <tr>
+                    <td class="small">{{ m.date.strftime('%d/%m/%Y') }}</td>
+                    <td><span class="badge {% if m.type == 'carico' %}badge-entrata{% else %}badge-uscita{% endif %}">{{ m.type }}</span></td>
+                    <td class="text-end fw-bold">{{ m.quantity }} {{ p.unit }}</td>
+                    <td class="small">{{ m.notes or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

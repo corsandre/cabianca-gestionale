@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Movimenti Manuali - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-pencil-square text-cb-green"></i> Movimenti Manuali</h1>
+    <a href="{{ url_for('movimenti.new') }}" class="btn btn-cb"><i class="bi bi-plus-lg"></i> Nuovo</a>
+</div>
+
+<div class="cb-table">
+    {% if transactions %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr>
+                <th>Data</th><th>Descrizione</th><th>Contatto</th><th>Categoria</th><th>Reg.</th><th>Stato</th><th class="text-end">Importo</th><th></th>
+            </tr></thead>
+            <tbody>
+                {% for t in transactions %}
+                <tr>
+                    <td class="small text-nowrap">{{ t.date.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ t.description[:50] if t.description else '-' }}</td>
+                    <td class="small">{{ t.contact.name if t.contact else '-' }}</td>
+                    <td>{% if t.category %}<span class="cb-chip" style="background:{{ t.category.color }}">{{ t.category.name }}</span>{% else %}-{% endif %}</td>
+                    <td>{% if t.official %}<i class="bi bi-check-circle text-success" title="Ufficiale"></i>{% else %}<i class="bi bi-eye-slash text-muted" title="Extra-contabile"></i>{% endif %}</td>
+                    <td><span class="badge badge-{{ t.payment_status }}">{{ t.payment_status|replace('_',' ')|title }}</span></td>
+                    <td class="text-end fw-bold text-nowrap {% if t.type == 'entrata' %}text-cb-dark-green{% else %}text-cb-gold{% endif %}">
+                        {% if t.type == 'uscita' %}-{% endif %}&euro;{{ "{:,.2f}".format(t.amount) }}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('movimenti.edit', id=t.id) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="cb-empty">
+        <i class="bi bi-pencil-square d-block"></i>
+        <p>Nessun movimento manuale.</p>
+        <a href="{{ url_for('movimenti.new') }}" class="btn btn-cb">Aggiungi</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

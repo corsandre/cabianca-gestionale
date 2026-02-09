@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Analisi - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-graph-up text-cb-green"></i> Analisi</h1>
+    <a href="{{ url_for('analisi.export', date_from=date_from, date_to=date_to, filter_type=filter_type) }}" class="btn btn-cb-outline btn-sm"><i class="bi bi-download"></i> Esporta CSV</a>
+</div>
+
+<!-- FILTERS -->
+<div class="cb-filters">
+    <form method="GET" class="row g-2 align-items-end">
+        <div class="col-6 col-md-2">
+            <label class="form-label small">Da</label>
+            <input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from }}">
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small">A</label>
+            <input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to }}">
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small">Tipo registrazione</label>
+            <select name="filter_type" class="form-select form-select-sm">
+                <option value="tutti" {% if filter_type=='tutti' %}selected{% endif %}>Tutti i movimenti</option>
+                <option value="ufficiali" {% if filter_type=='ufficiali' %}selected{% endif %}>Solo ufficiali</option>
+                <option value="extra" {% if filter_type=='extra' %}selected{% endif %}>Solo extra-contabili</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-cb btn-sm">Analizza</button>
+        </div>
+    </form>
+</div>
+
+<!-- SUMMARY CARDS -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-label">Totale entrate</div>
+            <div class="cb-stat-value text-cb-dark-green" style="font-size:1.4rem">&euro;{{ "{:,.2f}".format(total_income) }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-label">Totale uscite</div>
+            <div class="cb-stat-value text-cb-gold" style="font-size:1.4rem">&euro;{{ "{:,.2f}".format(total_expense) }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-label">Utile / Perdita</div>
+            <div class="cb-stat-value {% if net >= 0 %}text-cb-dark-green{% else %}text-danger{% endif %}" style="font-size:1.4rem">&euro;{{ "{:,.2f}".format(net) }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-label">Totale IVA</div>
+            <div class="cb-stat-value" style="font-size:1.4rem">&euro;{{ "{:,.2f}".format(total_iva) }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- CHARTS -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="cb-card p-3">
+            <h5 class="mb-3">Entrate per flusso di ricavo</h5>
+            {% if by_stream %}
+            <canvas id="streamChart" height="250"></canvas>
+            {% else %}
+            <p class="text-muted small">Nessun dato disponibile.</p>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="cb-card p-3">
+            <h5 class="mb-3">Uscite per categoria</h5>
+            {% if by_category_expense %}
+            <canvas id="expCatChart" height="250"></canvas>
+            {% else %}
+            <p class="text-muted small">Nessun dato disponibile.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- BREAKDOWN TABLES -->
+<div class="row g-3">
+    <div class="col-md-4">
+        <div class="cb-card p-3">
+            <h5 class="mb-3">Entrate per categoria</h5>
+            {% if by_category_income %}
+            <table class="table table-sm mb-0">
+                {% for name, color, amount in by_category_income %}
+                <tr>
+                    <td><span class="cb-chip" style="background:{{ color }}">{{ name }}</span></td>
+                    <td class="text-end fw-bold text-cb-dark-green">&euro;{{ "{:,.2f}".format(amount) }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% else %}<p class="text-muted small">Nessun dato.</p>{% endif %}
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="cb-card p-3">
+            <h5 class="mb-3">Uscite per categoria</h5>
+            {% if by_category_expense %}
+            <table class="table table-sm mb-0">
+                {% for name, color, amount in by_category_expense %}
+                <tr>
+                    <td><span class="cb-chip" style="background:{{ color }}">{{ name }}</span></td>
+                    <td class="text-end fw-bold text-cb-gold">&euro;{{ "{:,.2f}".format(amount) }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% else %}<p class="text-muted small">Nessun dato.</p>{% endif %}
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="cb-card p-3">
+            <h5 class="mb-3">Per metodo pagamento</h5>
+            {% if by_method %}
+            <table class="table table-sm mb-0">
+                {% for method, amount in by_method %}
+                <tr>
+                    <td>{{ method|title }}</td>
+                    <td class="text-end fw-bold">&euro;{{ "{:,.2f}".format(amount) }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% else %}<p class="text-muted small">Nessun dato.</p>{% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+{% if by_stream %}
+new Chart(document.getElementById('streamChart'), {
+    type: 'doughnut',
+    data: {
+        labels: [{% for name, color, amount in by_stream %}"{{ name }}"{% if not loop.last %},{% endif %}{% endfor %}],
+        datasets: [{
+            data: [{% for name, color, amount in by_stream %}{{ amount }}{% if not loop.last %},{% endif %}{% endfor %}],
+            backgroundColor: [{% for name, color, amount in by_stream %}"{{ color }}"{% if not loop.last %},{% endif %}{% endfor %}]
+        }]
+    },
+    options: {responsive: true, plugins: {legend: {position: 'bottom'}}}
+});
+{% endif %}
+{% if by_category_expense %}
+new Chart(document.getElementById('expCatChart'), {
+    type: 'doughnut',
+    data: {
+        labels: [{% for name, color, amount in by_category_expense %}"{{ name }}"{% if not loop.last %},{% endif %}{% endfor %}],
+        datasets: [{
+            data: [{% for name, color, amount in by_category_expense %}{{ amount }}{% if not loop.last %},{% endif %}{% endfor %}],
+            backgroundColor: [{% for name, color, amount in by_category_expense %}"{{ color }}"{% if not loop.last %},{% endif %}{% endfor %}]
+        }]
+    },
+    options: {responsive: true, plugins: {legend: {position: 'bottom'}}}
+});
+{% endif %}
+</script>
+{% endblock %}

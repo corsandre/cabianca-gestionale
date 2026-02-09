@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ "Modifica" if c else "Nuovo" }} Contatto - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-people text-cb-green"></i> {{ "Modifica" if c else "Nuovo" }} Contatto</h1>
+</div>
+
+<div class="cb-card p-4" style="max-width:800px">
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Tipo *</label>
+                <select name="type" class="form-select" required>
+                    {% for val, label in contact_types %}
+                    <option value="{{ val }}" {% if c and c.type == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Nome / Denominazione *</label>
+                <input type="text" name="name" class="form-control" value="{{ c.name if c else '' }}" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Ragione sociale</label>
+                <input type="text" name="ragione_sociale" class="form-control" value="{{ c.ragione_sociale or '' if c else '' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Partita IVA</label>
+                <input type="text" name="partita_iva" class="form-control" value="{{ c.partita_iva or '' if c else '' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Codice Fiscale</label>
+                <input type="text" name="codice_fiscale" class="form-control" value="{{ c.codice_fiscale or '' if c else '' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Codice SDI</label>
+                <input type="text" name="codice_sdi" class="form-control" value="{{ c.codice_sdi or '' if c else '' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">PEC</label>
+                <input type="email" name="pec" class="form-control" value="{{ c.pec or '' if c else '' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Email</label>
+                <input type="email" name="email" class="form-control" value="{{ c.email or '' if c else '' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Telefono</label>
+                <input type="text" name="phone" class="form-control" value="{{ c.phone or '' if c else '' }}">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Indirizzo</label>
+                <input type="text" name="address" class="form-control" value="{{ c.address or '' if c else '' }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Citta</label>
+                <input type="text" name="city" class="form-control" value="{{ c.city or '' if c else '' }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Prov.</label>
+                <input type="text" name="province" class="form-control" maxlength="2" value="{{ c.province or '' if c else '' }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">CAP</label>
+                <input type="text" name="cap" class="form-control" maxlength="5" value="{{ c.cap or '' if c else '' }}">
+            </div>
+            <div class="col-12">
+                <label class="form-label">Note</label>
+                <textarea name="notes" class="form-control" rows="2">{{ c.notes or '' if c else '' }}</textarea>
+            </div>
+        </div>
+        <div class="mt-4 d-flex gap-2">
+            <button type="submit" class="btn btn-cb">Salva</button>
+            <a href="{{ url_for('anagrafica.index') }}" class="btn btn-outline-secondary">Annulla</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

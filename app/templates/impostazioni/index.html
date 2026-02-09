@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Impostazioni - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-gear text-cb-green"></i> Impostazioni</h1>
+</div>
+
+<div class="row g-4">
+    <!-- USERS -->
+    <div class="col-lg-6">
+        <div class="cb-card p-3">
+            <h5 class="mb-3">Utenti</h5>
+            <table class="table table-sm mb-3">
+                <thead><tr><th>Username</th><th>Nome</th><th>Ruolo</th><th>Stato</th><th></th></tr></thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td>{{ u.username }}</td>
+                        <td>{{ u.display_name }}</td>
+                        <td><span class="badge bg-secondary">{{ u.role }}</span></td>
+                        <td>{% if u.active %}<span class="text-success">Attivo</span>{% else %}<span class="text-muted">Inattivo</span>{% endif %}</td>
+                        <td>
+                            {% if u.id != current_user.id %}
+                            <form method="POST" action="{{ url_for('impostazioni.toggle_user', id=u.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button class="btn btn-sm btn-outline-secondary">{{ "Disattiva" if u.active else "Attiva" }}</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <h6>Nuovo utente</h6>
+            <form method="POST" action="{{ url_for('impostazioni.new_user') }}" class="row g-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="col-md-4">
+                    <input type="text" name="username" class="form-control form-control-sm" placeholder="Username" required>
+                </div>
+                <div class="col-md-4">
+                    <input type="password" name="password" class="form-control form-control-sm" placeholder="Password" required>
+                </div>
+                <div class="col-md-4">
+                    <input type="text" name="display_name" class="form-control form-control-sm" placeholder="Nome visualizzato">
+                </div>
+                <div class="col-md-4">
+                    <select name="role" class="form-select form-select-sm">
+                        <option value="operatore">Operatore</option>
+                        <option value="consulente">Consulente (sola lettura)</option>
+                        <option value="admin">Amministratore</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-cb btn-sm">Crea utente</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div class="col-lg-6">
+        <!-- PASSWORD -->
+        <div class="cb-card p-3 mb-3">
+            <h5 class="mb-3">Cambia la tua password</h5>
+            <form method="POST" action="{{ url_for('impostazioni.change_password') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="mb-2">
+                    <input type="password" name="old_password" class="form-control form-control-sm" placeholder="Password attuale" required>
+                </div>
+                <div class="mb-2">
+                    <input type="password" name="new_password" class="form-control form-control-sm" placeholder="Nuova password (min 6 car.)" required minlength="6">
+                </div>
+                <button class="btn btn-cb btn-sm">Aggiorna password</button>
+            </form>
+        </div>
+
+        <!-- REVENUE STREAMS -->
+        <div class="cb-card p-3 mb-3">
+            <h5 class="mb-3">Flussi di ricavo</h5>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                {% for s in streams %}
+                <span class="cb-chip" style="background:{{ s.color }}">{{ s.name }}</span>
+                {% endfor %}
+            </div>
+            <form method="POST" action="{{ url_for('impostazioni.new_stream') }}" class="row g-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="col">
+                    <input type="text" name="name" class="form-control form-control-sm" placeholder="Nome flusso" required>
+                </div>
+                <div class="col-auto">
+                    <input type="color" name="color" class="form-control form-control-sm form-control-color" value="#009d5a">
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-cb btn-sm">Aggiungi</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- BACKUP -->
+        <div class="cb-card p-3">
+            <h5 class="mb-3">Backup</h5>
+            <p class="small text-muted">Il backup automatico viene eseguito ogni notte alle 2:00 su Google Drive.</p>
+            <form method="POST" action="{{ url_for('impostazioni.backup_now') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-cb btn-sm"><i class="bi bi-cloud-upload"></i> Esegui backup ora</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

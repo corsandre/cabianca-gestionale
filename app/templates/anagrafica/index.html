@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Anagrafica - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-people text-cb-green"></i> Anagrafica</h1>
+    <a href="{{ url_for('anagrafica.new') }}" class="btn btn-cb"><i class="bi bi-plus-lg"></i> Nuovo contatto</a>
+</div>
+
+<div class="cb-filters">
+    <form method="GET" class="row g-2 align-items-end">
+        <div class="col-auto">
+            <select name="tipo" class="form-select form-select-sm">
+                <option value="">Tutti i tipi</option>
+                {% for val, label in contact_types %}
+                <option value="{{ val }}" {% if request.args.get('tipo')==val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-auto">
+            <input type="text" name="q" class="form-control form-control-sm" placeholder="Cerca nome, P.IVA..." value="{{ request.args.get('q','') }}">
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-cb btn-sm">Filtra</button>
+        </div>
+    </form>
+</div>
+
+<div class="cb-table">
+    {% if contacts %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr>
+                <th>Nome</th><th>Tipo</th><th>P.IVA</th><th>Email</th><th>Telefono</th><th>Citta</th><th></th>
+            </tr></thead>
+            <tbody>
+                {% for c in contacts %}
+                <tr>
+                    <td><a href="{{ url_for('anagrafica.detail', id=c.id) }}" class="text-decoration-none fw-bold">{{ c.name }}</a></td>
+                    <td><span class="badge bg-secondary">{{ c.type|replace('_',' ')|title }}</span></td>
+                    <td class="small">{{ c.partita_iva or '-' }}</td>
+                    <td class="small">{{ c.email or '-' }}</td>
+                    <td class="small">{{ c.phone or '-' }}</td>
+                    <td class="small">{{ c.city or '-' }}</td>
+                    <td><a href="{{ url_for('anagrafica.edit', id=c.id) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="cb-empty">
+        <i class="bi bi-people d-block"></i>
+        <p>Nessun contatto trovato.</p>
+        <a href="{{ url_for('anagrafica.new') }}" class="btn btn-cb">Aggiungi contatto</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

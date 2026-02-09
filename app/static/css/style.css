@@ -1,0 +1,421 @@
+/* ============================================
+   Fattoria Ca Bianca - Gestionale
+   Custom Styles (Ca Bianca Branding)
+   ============================================ */
+
+:root {
+    --cb-green: #009d5a;
+    --cb-gold: #c6a96f;
+    --cb-yellow: #fcc900;
+    --cb-dark-green: #297a38;
+    --cb-dark: #1d1922;
+    --cb-navy: #00123A;
+    --cb-offwhite: #FBFCFF;
+    --cb-light-blue: #BFD1FF;
+    --cb-sidebar-width: 230px;
+}
+
+/* === TYPOGRAPHY === */
+
+body {
+    font-family: "Varela Round", sans-serif;
+    background-color: #f5f6f8;
+    color: var(--cb-dark);
+    font-size: 0.95rem;
+}
+
+h1, h2, h3, h4, h5, .cb-heading {
+    font-family: "Yeseva One", serif;
+}
+
+/* === TOP BAR === */
+
+.cb-topbar {
+    background: var(--cb-green);
+    padding: 0.4rem 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 1040;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.cb-topbar .navbar-brand {
+    font-family: "Yeseva One", serif;
+    font-size: 1.2rem;
+}
+
+/* === SIDEBAR === */
+
+.cb-sidebar {
+    width: var(--cb-sidebar-width);
+    min-height: calc(100vh - 56px);
+    background: white;
+    border-right: 1px solid #e9ecef;
+    position: sticky;
+    top: 56px;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.cb-offcanvas {
+    width: var(--cb-sidebar-width) !important;
+}
+
+.cb-nav {
+    padding: 0.5rem 0;
+}
+
+.cb-nav .nav-link {
+    color: var(--cb-dark);
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+    border-left: 3px solid transparent;
+    transition: all 0.15s;
+}
+
+.cb-nav .nav-link:hover {
+    background: #f0faf5;
+    color: var(--cb-green);
+}
+
+.cb-nav .nav-link.active {
+    background: #e6f7ef;
+    color: var(--cb-green);
+    border-left-color: var(--cb-green);
+    font-weight: 600;
+}
+
+.cb-nav .nav-link i {
+    width: 24px;
+    margin-right: 0.5rem;
+    text-align: center;
+}
+
+.cb-nav-divider {
+    border-top: 1px solid #e9ecef;
+    margin: 0.3rem 1rem;
+}
+
+/* === MAIN CONTENT === */
+
+.cb-main {
+    padding: 1.5rem;
+    min-height: calc(100vh - 56px);
+    max-width: 100%;
+    overflow-x: hidden;
+    padding-bottom: 80px;
+}
+
+@media (min-width: 768px) {
+    .cb-main {
+        padding-bottom: 1.5rem;
+    }
+}
+
+/* === MOBILE BOTTOM NAV === */
+
+.cb-bottomnav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    display: flex;
+    justify-content: space-around;
+    border-top: 1px solid #e0e0e0;
+    z-index: 1030;
+    padding: 0.2rem 0;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
+}
+
+.cb-bottomnav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-decoration: none;
+    color: #888;
+    font-size: 0.7rem;
+    padding: 0.3rem 0.5rem;
+    transition: color 0.15s;
+}
+
+.cb-bottomnav-item i {
+    font-size: 1.3rem;
+}
+
+.cb-bottomnav-item.active {
+    color: var(--cb-green);
+}
+
+.cb-bottomnav-fab {
+    background: var(--cb-green);
+    color: white !important;
+    border-radius: 50%;
+    width: 52px;
+    height: 52px;
+    margin-top: -18px;
+    justify-content: center;
+    box-shadow: 0 2px 10px rgba(0,157,90,0.4);
+}
+
+.cb-bottomnav-fab i {
+    font-size: 1.5rem;
+}
+
+.cb-bottomnav-fab span {
+    display: none;
+}
+
+/* === CARDS === */
+
+.cb-card {
+    background: white;
+    border-radius: 12px;
+    border: none;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    transition: box-shadow 0.2s;
+}
+
+.cb-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.cb-stat-card {
+    padding: 1.2rem;
+    text-align: center;
+}
+
+.cb-stat-card .cb-stat-value {
+    font-family: "Yeseva One", serif;
+    font-size: 1.8rem;
+    color: var(--cb-dark);
+}
+
+.cb-stat-card .cb-stat-label {
+    font-size: 0.8rem;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.cb-stat-card .cb-stat-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+/* === TABLES === */
+
+.cb-table {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.cb-table table {
+    margin-bottom: 0;
+}
+
+.cb-table th {
+    background: #f8f9fa;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #666;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.cb-table td {
+    vertical-align: middle;
+}
+
+/* === BADGES === */
+
+.badge-entrata {
+    background: var(--cb-dark-green);
+    color: white;
+}
+
+.badge-uscita {
+    background: var(--cb-gold);
+    color: white;
+}
+
+.badge-sdi {
+    background: var(--cb-navy);
+    color: white;
+}
+
+.badge-cassa {
+    background: var(--cb-yellow);
+    color: var(--cb-dark);
+}
+
+.badge-manuale {
+    background: #6c757d;
+    color: white;
+}
+
+.badge-pagato {
+    background: #28a745;
+}
+
+.badge-da_pagare {
+    background: var(--cb-yellow);
+    color: var(--cb-dark);
+}
+
+.badge-scaduto {
+    background: #dc3545;
+}
+
+.badge-parziale {
+    background: #fd7e14;
+}
+
+/* === BUTTONS === */
+
+.btn-cb {
+    background: var(--cb-green);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+.btn-cb:hover {
+    background: var(--cb-dark-green);
+    color: white;
+}
+
+.btn-cb-outline {
+    border: 2px solid var(--cb-green);
+    color: var(--cb-green);
+    background: transparent;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+.btn-cb-outline:hover {
+    background: var(--cb-green);
+    color: white;
+}
+
+.btn-cb-gold {
+    background: var(--cb-gold);
+    color: white;
+    border: none;
+    border-radius: 8px;
+}
+
+.btn-cb-gold:hover {
+    background: #b0944d;
+    color: white;
+}
+
+/* === FORMS === */
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--cb-green);
+    box-shadow: 0 0 0 0.2rem rgba(0,157,90,0.2);
+}
+
+/* === LOGIN PAGE === */
+
+.cb-login-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--cb-green) 0%, var(--cb-dark-green) 100%);
+}
+
+.cb-login-card {
+    background: white;
+    border-radius: 16px;
+    padding: 2.5rem;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+
+.cb-login-card .cb-login-logo {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.cb-login-card .cb-login-logo img {
+    width: 100px;
+}
+
+.cb-login-card h2 {
+    text-align: center;
+    color: var(--cb-green);
+    margin-bottom: 1.5rem;
+    font-size: 1.5rem;
+}
+
+/* === FILTER BAR === */
+
+.cb-filters {
+    background: white;
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+/* === PAGE HEADER === */
+
+.cb-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.cb-page-header h1 {
+    font-size: 1.6rem;
+    margin: 0;
+    color: var(--cb-dark);
+}
+
+/* === CATEGORY CHIP === */
+
+.cb-chip {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: white;
+}
+
+/* === EMPTY STATE === */
+
+.cb-empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #aaa;
+}
+
+.cb-empty i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+/* === UTILS === */
+
+.text-cb-green { color: var(--cb-green) !important; }
+.text-cb-gold { color: var(--cb-gold) !important; }
+.text-cb-dark-green { color: var(--cb-dark-green) !important; }
+.bg-cb-green { background-color: var(--cb-green) !important; }
+.bg-cb-gold { background-color: var(--cb-gold) !important; }
+
+/* === PWA standalone padding === */
+@media (display-mode: standalone) {
+    .cb-topbar { padding-top: env(safe-area-inset-top); }
+    .cb-bottomnav { padding-bottom: env(safe-area-inset-bottom); }
+}

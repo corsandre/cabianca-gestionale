@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Cruscotto - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-grid-1x2 text-cb-green"></i> Cruscotto</h1>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-icon text-cb-dark-green"><i class="bi bi-arrow-down-circle"></i></div>
+            <div class="cb-stat-value text-cb-dark-green">&euro;{{ "{:,.0f}".format(month_income) }}</div>
+            <div class="cb-stat-label">Entrate mese</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-icon text-cb-gold"><i class="bi bi-arrow-up-circle"></i></div>
+            <div class="cb-stat-value text-cb-gold">&euro;{{ "{:,.0f}".format(month_expense) }}</div>
+            <div class="cb-stat-label">Uscite mese</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="cb-card cb-stat-card">
+            {% set net = month_income - month_expense %}
+            <div class="cb-stat-icon {% if net >= 0 %}text-cb-dark-green{% else %}text-danger{% endif %}"><i class="bi bi-wallet2"></i></div>
+            <div class="cb-stat-value {% if net >= 0 %}text-cb-dark-green{% else %}text-danger{% endif %}">&euro;{{ "{:,.0f}".format(net) }}</div>
+            <div class="cb-stat-label">Saldo mese</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-icon {% if overdue > 0 %}text-danger{% else %}text-cb-green{% endif %}"><i class="bi bi-exclamation-triangle"></i></div>
+            <div class="cb-stat-value {% if overdue > 0 %}text-danger{% else %}text-cb-green{% endif %}">{{ overdue }}</div>
+            <div class="cb-stat-label">Scadenze arretrate</div>
+        </div>
+    </div>
+</div>
+
+<!-- YEARLY SUMMARY -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="cb-card p-3 text-center">
+            <small class="text-muted text-uppercase">Entrate anno</small>
+            <h4 class="text-cb-dark-green mb-0">&euro;{{ "{:,.0f}".format(year_income) }}</h4>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="cb-card p-3 text-center">
+            <small class="text-muted text-uppercase">Uscite anno</small>
+            <h4 class="text-cb-gold mb-0">&euro;{{ "{:,.0f}".format(year_expense) }}</h4>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="cb-card p-3 text-center">
+            {% set year_net = year_income - year_expense %}
+            <small class="text-muted text-uppercase">Saldo anno</small>
+            <h4 class="{% if year_net >= 0 %}text-cb-dark-green{% else %}text-danger{% endif %} mb-0">&euro;{{ "{:,.0f}".format(year_net) }}</h4>
+        </div>
+    </div>
+</div>
+
+<!-- CHART + UPCOMING -->
+<div class="row g-3 mb-4">
+    <div class="col-lg-8">
+        <div class="cb-card p-3">
+            <h5 class="mb-3">Andamento ultimi 6 mesi</h5>
+            <div style="position:relative; height:220px">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="cb-card p-3">
+            <h5 class="mb-3">Prossime scadenze</h5>
+            {% if upcoming %}
+            <ul class="list-group list-group-flush">
+                {% for t in upcoming %}
+                <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-muted">{{ t.due_date.strftime('%d/%m') }}</small><br>
+                        <span class="small">{{ t.description[:40] }}{% if t.description|length > 40 %}...{% endif %}</span>
+                    </div>
+                    <span class="badge badge-{{ t.type }}">&euro;{{ "{:,.0f}".format(t.amount) }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-muted small">Nessuna scadenza nei prossimi 7 giorni.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- RECENT TRANSACTIONS -->
+<div class="cb-card p-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">Ultimi movimenti</h5>
+        <a href="{{ url_for('prima_nota.index') }}" class="btn btn-sm btn-cb-outline">Vedi tutti</a>
+    </div>
+    {% if recent %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr>
+                <th>Data</th><th>Descrizione</th><th>Fonte</th><th>Categoria</th><th class="text-end">Importo</th>
+            </tr></thead>
+            <tbody>
+                {% for t in recent %}
+                <tr>
+                    <td class="small">{{ t.date.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ t.description[:50] if t.description else '-' }}</td>
+                    <td><span class="badge badge-{{ t.source }}">{{ t.source|upper }}</span></td>
+                    <td>
+                        {% if t.category %}
+                        <span class="cb-chip" style="background:{{ t.category.color }}">{{ t.category.name }}</span>
+                        {% else %}-{% endif %}
+                    </td>
+                    <td class="text-end fw-bold {% if t.type == 'entrata' %}text-cb-dark-green{% else %}text-cb-gold{% endif %}">
+                        {% if t.type == 'uscita' %}-{% endif %}&euro;{{ "{:,.2f}".format(t.amount) }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="cb-empty">
+        <i class="bi bi-journal-text d-block"></i>
+        <p>Nessun movimento registrato.</p>
+        <a href="{{ url_for('movimenti.new') }}" class="btn btn-cb">Aggiungi il primo movimento</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const mdata = {{ monthly_data|tojson }};
+new Chart(document.getElementById('trendChart'), {
+    type: 'bar',
+    data: {
+        labels: mdata.map(d => d.label),
+        datasets: [
+            {label: 'Entrate', data: mdata.map(d => d.income), backgroundColor: '#297a38', borderRadius: 6},
+            {label: 'Uscite', data: mdata.map(d => d.expense), backgroundColor: '#c6a96f', borderRadius: 6},
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {legend: {position: 'bottom'}},
+        scales: {y: {beginAtZero: true, ticks: {callback: v => '\u20AC' + v.toLocaleString()}}}
+    }
+});
+</script>
+{% endblock %}

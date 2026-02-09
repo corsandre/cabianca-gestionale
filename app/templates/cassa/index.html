@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Cassa - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-cash-stack text-cb-green"></i> Registratore di Cassa</h1>
+    <form method="POST" action="{{ url_for('cassa.sync') }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-cb"><i class="bi bi-arrow-repeat"></i> Sincronizza</button>
+    </form>
+</div>
+
+<div class="cb-filters">
+    <form method="GET" class="row g-2 align-items-end">
+        <div class="col-auto">
+            <label class="form-label small">Mese</label>
+            <input type="month" name="month" class="form-control form-control-sm" value="{{ month }}">
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-cb btn-sm">Filtra</button>
+        </div>
+    </form>
+</div>
+
+<div class="cb-card p-3 mb-3 text-center">
+    <small class="text-muted text-uppercase">Totale mese</small>
+    <h3 class="text-cb-dark-green mb-0">&euro;{{ "{:,.2f}".format(total) }}</h3>
+</div>
+
+<div class="cb-table">
+    {% if records %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr>
+                <th>Data</th><th class="text-end">Incasso giornaliero</th><th>Sincronizzato</th>
+            </tr></thead>
+            <tbody>
+                {% for r in records %}
+                <tr>
+                    <td>{{ r.date.strftime('%d/%m/%Y - %A') }}</td>
+                    <td class="text-end fw-bold text-cb-dark-green">&euro;{{ "{:,.2f}".format(r.total_amount) }}</td>
+                    <td class="small text-muted">{{ r.synced_at.strftime('%d/%m %H:%M') if r.synced_at else '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="cb-empty">
+        <i class="bi bi-cash-stack d-block"></i>
+        <p>Nessun dato per questo mese.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

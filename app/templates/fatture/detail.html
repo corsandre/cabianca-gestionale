@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Fattura {{ invoice.invoice_number }} - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-file-earmark-text text-cb-green"></i> Fattura {{ invoice.invoice_number }}</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('fatture.index') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Indietro</a>
+        <form method="POST" action="{{ url_for('fatture.delete', id=invoice.id) }}" onsubmit="return confirm('Eliminare questa fattura e i movimenti collegati?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-danger"><i class="bi bi-trash"></i> Elimina</button>
+        </form>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="cb-card p-3">
+            <h5 class="mb-3">Dati fattura</h5>
+            <table class="table table-sm mb-0">
+                <tr><th>Numero</th><td>{{ invoice.invoice_number }}</td></tr>
+                <tr><th>Data</th><td>{{ invoice.invoice_date.strftime('%d/%m/%Y') if invoice.invoice_date else '-' }}</td></tr>
+                <tr><th>Tipo</th><td>{{ invoice.invoice_type }}</td></tr>
+                <tr><th>Direzione</th><td><span class="badge {% if invoice.direction == 'ricevuta' %}badge-uscita{% else %}badge-entrata{% endif %}">{{ invoice.direction }}</span></td></tr>
+                <tr><th>File</th><td>
+                    {% if invoice.xml_filename %}
+                    <a href="{{ url_for('static', filename='uploads/' + invoice.xml_filename) }}" download class="text-decoration-none">
+                        <i class="bi bi-download"></i> {{ invoice.xml_filename }}
+                    </a>
+                    {% else %}-{% endif %}
+                </td></tr>
+            </table>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="cb-card p-3">
+            <h5 class="mb-3">Soggetti</h5>
+            <table class="table table-sm mb-0">
+                <tr><th>Mittente</th><td>{{ invoice.sender_name }}</td></tr>
+                <tr><th>P.IVA mitt.</th><td>{{ invoice.sender_partita_iva }}</td></tr>
+                <tr><th>CF mitt.</th><td>{{ invoice.sender_codice_fiscale or '-' }}</td></tr>
+                <tr><th>Destinatario</th><td>{{ invoice.receiver_name }}</td></tr>
+                <tr><th>P.IVA dest.</th><td>{{ invoice.receiver_partita_iva }}</td></tr>
+            </table>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="cb-card p-3">
+            <h5 class="mb-3">Importi</h5>
+            <table class="table table-sm mb-0">
+                <tr><th>Imponibile</th><td>&euro;{{ "{:,.2f}".format(invoice.taxable_amount or 0) }}</td></tr>
+                <tr><th>IVA</th><td>&euro;{{ "{:,.2f}".format(invoice.iva_amount or 0) }}</td></tr>
+                <tr><th>Totale</th><td class="fw-bold">&euro;{{ "{:,.2f}".format(invoice.total_amount or 0) }}</td></tr>
+            </table>
+        </div>
+    </div>
+    {% if transactions %}
+    <div class="col-md-6">
+        <div class="cb-card p-3">
+            <h5 class="mb-3">Movimenti collegati</h5>
+            {% for t in transactions %}
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="badge badge-{{ t.type }}">{{ t.type }}</span>
+                <span class="badge badge-{{ t.payment_status }}">{{ t.payment_status|replace('_',' ')|title }}</span>
+                <span class="fw-bold">&euro;{{ "{:,.2f}".format(t.amount) }}</span>
+                <a href="{{ url_for('movimenti.edit', id=t.id, next=url_for('fatture.detail', id=invoice.id)) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i> Modifica</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

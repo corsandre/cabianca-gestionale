@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Inventario - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-box-seam text-cb-green"></i> Inventario</h1>
+    <a href="{{ url_for('inventario.new') }}" class="btn btn-cb"><i class="bi bi-plus-lg"></i> Nuovo prodotto</a>
+</div>
+
+<div class="cb-filters">
+    <form method="GET" class="row g-2 align-items-end">
+        <div class="col-auto">
+            <input type="text" name="q" class="form-control form-control-sm" placeholder="Cerca prodotto..." value="{{ request.args.get('q','') }}">
+        </div>
+        <div class="col-auto"><button class="btn btn-cb btn-sm">Cerca</button></div>
+    </form>
+</div>
+
+<div class="cb-table">
+    {% if products %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr>
+                <th>Prodotto</th><th>Categoria</th><th>Unita</th><th class="text-end">Giacenza</th><th class="text-end">Min.</th><th class="text-end">Prezzo</th><th></th>
+            </tr></thead>
+            <tbody>
+                {% for p in products %}
+                <tr class="{% if p.current_quantity <= p.min_quantity %}table-warning{% endif %}">
+                    <td><a href="{{ url_for('inventario.detail', id=p.id) }}" class="text-decoration-none fw-bold">{{ p.name }}</a></td>
+                    <td class="small">{{ p.product_category or '-' }}</td>
+                    <td>{{ p.unit }}</td>
+                    <td class="text-end fw-bold {% if p.current_quantity <= p.min_quantity %}text-danger{% endif %}">{{ p.current_quantity }}</td>
+                    <td class="text-end small text-muted">{{ p.min_quantity }}</td>
+                    <td class="text-end">&euro;{{ "{:,.2f}".format(p.price) }}</td>
+                    <td><a href="{{ url_for('inventario.edit', id=p.id) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="cb-empty">
+        <i class="bi bi-box-seam d-block"></i>
+        <p>Nessun prodotto in inventario.</p>
+        <a href="{{ url_for('inventario.new') }}" class="btn btn-cb">Aggiungi prodotto</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

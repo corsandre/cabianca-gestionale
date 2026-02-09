@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Fatture SDI - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-file-earmark-text text-cb-green"></i> Fatture SDI</h1>
+    <div class="d-flex gap-2">
+        <form method="POST" action="{{ url_for('fatture.rielabora') }}" class="d-inline" onsubmit="return confirm('Ri-elaborare tutti i file per aggiornare le scadenze?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Rielabora</button>
+        </form>
+        <form method="POST" action="{{ url_for('fatture.check_email') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-cb-outline"><i class="bi bi-envelope"></i> Controlla email</button>
+        </form>
+        <a href="{{ url_for('fatture.upload') }}" class="btn btn-cb"><i class="bi bi-upload"></i> Carica XML</a>
+    </div>
+</div>
+
+<div class="cb-filters">
+    <form method="GET" class="row g-2 align-items-end">
+        <div class="col-auto">
+            <select name="direction" class="form-select form-select-sm">
+                <option value="">Tutte</option>
+                <option value="ricevuta" {% if request.args.get('direction')=='ricevuta' %}selected{% endif %}>Ricevute (acquisti)</option>
+                <option value="emessa" {% if request.args.get('direction')=='emessa' %}selected{% endif %}>Emesse (vendite)</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <input type="text" name="q" class="form-control form-control-sm" placeholder="Cerca..." value="{{ request.args.get('q','') }}">
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-cb btn-sm">Filtra</button>
+        </div>
+    </form>
+</div>
+
+<div class="cb-table">
+    {% if invoices %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr>
+                <th>Data</th><th>Numero</th><th>Mittente</th><th>P.IVA</th><th>Tipo</th><th>Dir.</th><th class="text-end">Imponibile</th><th class="text-end">IVA</th><th class="text-end">Totale</th>
+            </tr></thead>
+            <tbody>
+                {% for inv in invoices %}
+                <tr style="cursor:pointer" onclick="location.href='{{ url_for('fatture.detail', id=inv.id) }}'">
+                    <td class="small text-nowrap">{{ inv.invoice_date.strftime('%d/%m/%Y') if inv.invoice_date else '-' }}</td>
+                    <td>{{ inv.invoice_number }}</td>
+                    <td>{{ inv.sender_name[:40] }}</td>
+                    <td class="small">{{ inv.sender_partita_iva }}</td>
+                    <td><span class="badge bg-secondary">{{ inv.invoice_type }}</span></td>
+                    <td><span class="badge {% if inv.direction == 'ricevuta' %}badge-uscita{% else %}badge-entrata{% endif %}">{{ inv.direction }}</span></td>
+                    <td class="text-end small">&euro;{{ "{:,.2f}".format(inv.taxable_amount or 0) }}</td>
+                    <td class="text-end small">&euro;{{ "{:,.2f}".format(inv.iva_amount or 0) }}</td>
+                    <td class="text-end fw-bold">&euro;{{ "{:,.2f}".format(inv.total_amount or 0) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="cb-empty">
+        <i class="bi bi-file-earmark-text d-block"></i>
+        <p>Nessuna fattura importata.</p>
+        <a href="{{ url_for('fatture.upload') }}" class="btn btn-cb">Carica file XML</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Scadenzario - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-calendar-check text-cb-green"></i> Scadenzario</h1>
+</div>
+
+<div class="cb-filters">
+    <form method="GET" class="row g-2 align-items-end">
+        <div class="col-auto">
+            <select name="status" class="form-select form-select-sm">
+                <option value="aperte" {% if request.args.get('status','aperte')=='aperte' %}selected{% endif %}>Aperte</option>
+                <option value="scadute" {% if request.args.get('status')=='scadute' %}selected{% endif %}>Scadute</option>
+                <option value="tutte" {% if request.args.get('status')=='tutte' %}selected{% endif %}>Tutte</option>
+            </select>
+        </div>
+        <div class="col-auto"><button class="btn btn-cb btn-sm">Filtra</button></div>
+    </form>
+</div>
+
+<div class="cb-table">
+    {% if deadlines %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr>
+                <th>Scadenza</th><th>Descrizione</th><th>Contatto</th><th>Tipo</th><th>Stato</th><th class="text-end">Importo</th><th></th>
+            </tr></thead>
+            <tbody>
+                {% for t in deadlines %}
+                <tr class="{% if t.due_date < today and t.payment_status != 'pagato' %}table-danger{% elif t.due_date == today %}table-warning{% endif %}">
+                    <td class="fw-bold text-nowrap">
+                        {{ t.due_date.strftime('%d/%m/%Y') }}
+                        {% if t.due_date < today and t.payment_status != 'pagato' %}
+                        <i class="bi bi-exclamation-triangle text-danger"></i>
+                        {% endif %}
+                    </td>
+                    <td>{{ t.description[:50] if t.description else '-' }}</td>
+                    <td class="small">{{ t.contact.name if t.contact else '-' }}</td>
+                    <td><span class="badge badge-{{ t.type }}">{{ t.type }}</span></td>
+                    <td><span class="badge badge-{{ t.payment_status }}">{{ t.payment_status|replace('_',' ')|title }}</span></td>
+                    <td class="text-end fw-bold">&euro;{{ "{:,.2f}".format(t.amount) }}</td>
+                    <td>
+                        {% if t.payment_status != 'pagato' %}
+                        <form method="POST" action="{{ url_for('scadenzario.mark_paid', id=t.id) }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn btn-sm btn-outline-success" title="Segna pagato"><i class="bi bi-check-lg"></i></button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="cb-empty">
+        <i class="bi bi-calendar-check d-block"></i>
+        <p>Nessuna scadenza trovata.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

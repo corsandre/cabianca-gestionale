@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Login - Ca Bianca Gestionale{% endblock %}
+{% block public_content %}
+<div class="cb-login-container">
+    <div class="cb-login-card">
+        <div class="cb-login-logo">
+            <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="Ca Bianca">
+        </div>
+        <h2>Gestionale</h2>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }} py-2" role="alert">{{ msg }}</div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+                <label class="form-label" for="username">Utente</label>
+                <input type="text" class="form-control" id="username" name="username" required autofocus>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="password">Password</label>
+                <input type="password" class="form-control" id="password" name="password" required>
+            </div>
+            <button type="submit" class="btn btn-cb w-100">Accedi</button>
+        </form>
+        <p class="text-center text-muted mt-3 mb-0" style="font-size:0.8rem">Fattoria Ca Bianca &copy; 2026</p>
+    </div>
+</div>
+{% endblock %}
