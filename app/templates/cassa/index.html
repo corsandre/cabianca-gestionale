@@ -146,38 +146,41 @@ document.addEventListener('DOMContentLoaded', function() {
             tr.style.display = (allActive || active.indexOf(tr.dataset.reparto) >= 0) ? '' : 'none';
         });
 
-        // Filter day rows: hide if no matching reparti, update total
+        // Filter day rows: hide if filtered sum is 0, update total
         document.querySelectorAll('.day-row').forEach(function(tr) {
-            var reparti = JSON.parse(tr.dataset.reparti || '[]');
-            var hasMatch = allActive || reparti.some(function(r) { return active.indexOf(r) >= 0; });
-            tr.style.display = hasMatch ? '' : 'none';
-
-            // Hide corresponding detail row too
             var detailId = tr.getAttribute('data-bs-target');
-            if (detailId) {
-                var detail = document.querySelector(detailId);
-                if (detail) detail.closest('.detail-row').style.display = hasMatch ? '' : 'none';
-            }
+            var td = tr.querySelector('.day-total');
 
-            // Update displayed total to sum of visible reparti
-            if (!allActive && hasMatch) {
-                var sum = 0;
+            if (allActive) {
+                tr.style.display = '';
                 if (detailId) {
                     var detail = document.querySelector(detailId);
-                    if (detail) {
-                        detail.querySelectorAll('.detail-item').forEach(function(di) {
-                            if (active.indexOf(di.dataset.reparto) >= 0) {
-                                sum += parseFloat(di.dataset.total);
-                            }
-                        });
-                    }
+                    if (detail) detail.closest('.detail-row').style.display = '';
                 }
-                var td = tr.querySelector('.day-total');
-                if (td && sum > 0) td.textContent = '\u20ac' + sum.toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            } else {
-                var td = tr.querySelector('.day-total');
                 if (td) td.textContent = '\u20ac' + parseFloat(td.dataset.fullTotal).toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                return;
             }
+
+            // Calculate sum of matching reparti for this day
+            var sum = 0;
+            if (detailId) {
+                var detail = document.querySelector(detailId);
+                if (detail) {
+                    detail.querySelectorAll('.detail-item').forEach(function(di) {
+                        if (active.indexOf(di.dataset.reparto) >= 0) {
+                            sum += parseFloat(di.dataset.total);
+                        }
+                    });
+                }
+            }
+
+            var visible = sum > 0;
+            tr.style.display = visible ? '' : 'none';
+            if (detailId) {
+                var detail = document.querySelector(detailId);
+                if (detail) detail.closest('.detail-row').style.display = visible ? '' : 'none';
+            }
+            if (td && visible) td.textContent = '\u20ac' + sum.toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         });
     }
 
