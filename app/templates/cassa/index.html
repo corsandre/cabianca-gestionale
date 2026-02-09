@@ -27,12 +27,12 @@
     <h3 class="text-cb-dark-green mb-0">&euro;{{ "{:,.2f}".format(total) }}</h3>
 </div>
 
-{# Card riassuntive per reparto #}
+{# Card riassuntive per reparto - cliccabili come filtro #}
 {% if reparto_totals %}
-<div class="row g-3 mb-3">
+<div class="row g-3 mb-3" id="reparto-filters">
     {% for rt in reparto_totals %}
     <div class="col-6 col-md-4 col-lg">
-        <div class="cb-card p-3 text-center h-100">
+        <div class="cb-card p-3 text-center h-100 reparto-card active" data-reparto="{{ rt.name }}" role="button">
             <small class="text-muted text-uppercase" style="font-size:0.7rem;">{{ rt.name }}</small>
             <div class="cb-stat-value text-cb-dark-green" style="font-size:1.3rem;">&euro;{{ "{:,.2f}".format(rt.total) }}</div>
             <div class="small text-muted">
@@ -59,18 +59,20 @@
                 {% for rwd in records %}
                 {% set r = rwd.record %}
                 {% set details = rwd.details %}
-                <tr data-bs-toggle="collapse" data-bs-target="#day-{{ r.id }}" role="button" class="{% if details %}cursor-pointer{% endif %}">
+                <tr data-bs-toggle="collapse" data-bs-target="#day-{{ r.id }}" role="button"
+                    class="day-row {% if details %}cursor-pointer{% endif %}"
+                    data-reparti="{{ details | map(attribute='reparto') | list | tojson }}">
                     <td class="text-center">
                         {% if details %}
                         <i class="bi bi-chevron-down small text-muted"></i>
                         {% endif %}
                     </td>
                     <td>{{ r.date.strftime('%d/%m/%Y - %A') }}</td>
-                    <td class="text-end fw-bold text-cb-dark-green">&euro;{{ "{:,.2f}".format(r.total_amount) }}</td>
+                    <td class="text-end fw-bold text-cb-dark-green day-total" data-full-total="{{ r.total_amount }}">&euro;{{ "{:,.2f}".format(r.total_amount) }}</td>
                     <td class="small text-muted d-none d-md-table-cell">{{ r.synced_at.strftime('%d/%m %H:%M') if r.synced_at else '-' }}</td>
                 </tr>
                 {% if details %}
-                <tr class="collapse" id="day-{{ r.id }}">
+                <tr class="collapse detail-row" id="day-{{ r.id }}">
                     <td colspan="4" class="p-0 border-0">
                         <div class="bg-light p-2">
                             <table class="table table-sm mb-0">
@@ -84,7 +86,7 @@
                                 </thead>
                                 <tbody>
                                     {% for d in details %}
-                                    <tr>
+                                    <tr class="detail-item" data-reparto="{{ d.reparto }}" data-total="{{ d.total }}">
                                         <td>
                                             {{ d.reparto }}
                                             <span class="cb-chip" style="background-color: var(--cb-green); color: #fff; font-size:0.65rem;">{{ d.iva_rate }}%</span>
@@ -117,5 +119,86 @@
     .cursor-pointer:hover { background-color: rgba(0, 157, 90, 0.05); }
     tr.collapse td { padding: 0 !important; }
     tr.collapse.show td { padding: 0 !important; }
+    .reparto-card { cursor: pointer; transition: all 0.2s; border: 2px solid transparent; }
+    .reparto-card.active { border-color: var(--cb-green); }
+    .reparto-card:not(.active) { opacity: 0.45; }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var cards = document.querySelectorAll('.reparto-card');
+    if (!cards.length) return;
+
+    function getActiveReparti() {
+        var active = [];
+        cards.forEach(function(c) {
+            if (c.classList.contains('active')) active.push(c.dataset.reparto);
+        });
+        return active;
+    }
+
+    function applyFilter() {
+        var active = getActiveReparti();
+        var allActive = active.length === cards.length;
+
+        // Filter detail items
+        document.querySelectorAll('.detail-item').forEach(function(tr) {
+            tr.style.display = (allActive || active.indexOf(tr.dataset.reparto) >= 0) ? '' : 'none';
+        });
+
+        // Filter day rows: hide if no matching reparti, update total
+        document.querySelectorAll('.day-row').forEach(function(tr) {
+            var reparti = JSON.parse(tr.dataset.reparti || '[]');
+            var hasMatch = allActive || reparti.some(function(r) { return active.indexOf(r) >= 0; });
+            tr.style.display = hasMatch ? '' : 'none';
+
+            // Hide corresponding detail row too
+            var detailId = tr.getAttribute('data-bs-target');
+            if (detailId) {
+                var detail = document.querySelector(detailId);
+                if (detail) detail.closest('.detail-row').style.display = hasMatch ? '' : 'none';
+            }
+
+            // Update displayed total to sum of visible reparti
+            if (!allActive && hasMatch) {
+                var sum = 0;
+                if (detailId) {
+                    var detail = document.querySelector(detailId);
+                    if (detail) {
+                        detail.querySelectorAll('.detail-item').forEach(function(di) {
+                            if (active.indexOf(di.dataset.reparto) >= 0) {
+                                sum += parseFloat(di.dataset.total);
+                            }
+                        });
+                    }
+                }
+                var td = tr.querySelector('.day-total');
+                if (td && sum > 0) td.textContent = '\u20ac' + sum.toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            } else {
+                var td = tr.querySelector('.day-total');
+                if (td) td.textContent = '\u20ac' + parseFloat(td.dataset.fullTotal).toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+        });
+    }
+
+    cards.forEach(function(card) {
+        card.addEventListener('click', function() {
+            var wasAllActive = getActiveReparti().length === cards.length;
+            var isActive = card.classList.contains('active');
+
+            if (wasAllActive) {
+                // From "all selected": select only this one
+                cards.forEach(function(c) { c.classList.remove('active'); });
+                card.classList.add('active');
+            } else if (isActive && getActiveReparti().length === 1) {
+                // Last one active: re-select all
+                cards.forEach(function(c) { c.classList.add('active'); });
+            } else {
+                card.classList.toggle('active');
+            }
+            applyFilter();
+        });
+    });
+});
+</script>
 {% endblock %}
