@@ -6,15 +6,25 @@ Transaction records for each reparto/aliquota IVA combination.
 Portal structure (discovered via exploration):
 - Login via AJAX event system: POST /v2/_modules/Main_Login_1
 - Site selection: POST /v2/_modules/Main_SiteSelector_22 with siteId=19940
-- Z-Report data: POST /controllers/ZReport with {start, stop, searchCase}
+- Z-Report summary: POST /controllers/ZReport with {start, stop, searchCase}
+- Z-Report detail: POST /controllers/ZReportPeriod with hid_chkZRep_{id}=1
 - Date format: dd/mm/yyyy
-- Table id="zreport-summary" with CSS-class-based columns:
-    zreport-date, zreport-zrepnum, zreport-documents_amount,
-    zreport-[2]-tax-10, zreport-[2]-taxable-10,    (reparto 2 = IVA 10%)
-    zreport-[11]-tax-0, zreport-[11]-taxable-0,    (reparto 11 = IVA 0%)
-    zreport-[3]-tax-4, zreport-[3]-taxable-4,      (reparto 3 = IVA 4%)
-    zreport-no_tax,                                  (esentasse)
-    zreport-cash, zreport-bancomat_*, zreport-carta_*
+
+Summary table (id="zreport-summary") columns by CSS class:
+    zreport-[2]-taxable-10 / zreport-[2]-tax-10    (IVA 10%)
+    zreport-[3]-taxable-4  / zreport-[3]-tax-4     (IVA 4%)
+    zreport-[11]-taxable-0 / zreport-[11]-tax-0    (IVA 0%)
+
+Detail tables:
+    groups-2-14: VENDITA PRODOTTI, AGRITURISMO, FATTORIA DIDATTICA
+    taxes-2-14:  Imposta 4%, Imposta 10%, Esentasse, etc.
+
+Split 10% logic:
+    The 10% IVA in the summary includes both "VENDITA PRODOTTI" (trasformati)
+    and "AGRITURISMO" (ristorazione). The detail "groups" table provides
+    the VENDITA PRODOTTI total. Since VENDITA PRODOTTI also includes fresh
+    products at 4%, we subtract: trasformati_10 = VENDITA_total - tax_4_total.
+    Then: ristorazione_10 = tax_10_total - trasformati_10.
 """
 
 import json
@@ -32,13 +42,9 @@ logger = logging.getLogger(__name__)
 SITE_ID = "19940"
 
 # Mappatura dei 5 reparti cassa.
-# Nel portale 4CloudOffice le colonne IVA seguono il pattern:
-#   zreport-[REPARTO]-taxable-ALIQUOTA / zreport-[REPARTO]-tax-ALIQUOTA
-# Attualmente presenti: [3]=4%, [2]=10%, [11]=0%.
-# Il 22% non e' ancora stato usato ma verra' rilevato automaticamente.
-# Il 10% nel portale e' unificato (reparto [2]) - va tutto a "Ristorazione agriturismo"
-# perche' e' la voce principale; "Prodotti trasformati propri" restera' a 0 finche'
-# il portale non splittera' il 10% in reparti separati.
+# Lo split del 10% tra trasformati e ristorazione avviene usando la tabella "Gruppi"
+# dal dettaglio Z-report: il totale VENDITA PRODOTTI meno la quota al 4% da' i
+# trasformati al 10%; il resto del 10% va alla ristorazione.
 REPARTI = [
     {
         "key": "iva_4",
@@ -182,8 +188,7 @@ def _parse_zreport_row(tr):
     """Parse a single <tr> from the zreport-summary table.
 
     Extracts values by CSS class on <td> elements.
-    Column classes follow the pattern: zreport-[REPARTO]-taxable-ALIQUOTA
-    This parser collects all IVA rates dynamically.
+    Also extracts the Z-report ID from the checkbox input.
     """
     import re
 
@@ -203,6 +208,12 @@ def _parse_zreport_row(tr):
     if not rec_date:
         return None
 
+    # Extract Z-report ID from checkbox (chkZRep_NNN)
+    zreport_id = ""
+    cb = tr.find("input", class_="chkZRep")
+    if cb:
+        zreport_id = cb.get("id", "").replace("chkZRep_", "")
+
     # Dynamically extract all IVA rates from CSS classes
     # Pattern: zreport-[X]-taxable-RATE or zreport-[X]-tax-RATE
     iva_data = {}  # {rate: {"taxable": float, "tax": float}}
@@ -217,6 +228,7 @@ def _parse_zreport_row(tr):
 
     return {
         "date": rec_date,
+        "zreport_id": zreport_id,
         "zreport_num": cells_by_class.get("zreport-zrepnum", ""),
         "documents_amount": _parse_amount(cells_by_class.get("zreport-documents_amount", "0")),
         "iva_data": iva_data,
@@ -235,11 +247,47 @@ def _get_by_prefix(cells_by_class, prefix):
     return "0"
 
 
+def _fetch_zreport_groups(session, zreport_id, start_fmt, stop_fmt):
+    """Fetch the 'Gruppi' breakdown from a Z-report detail page.
+
+    Calls POST /controllers/ZReportPeriod with the selected Z-report.
+    Returns dict of group totals, e.g. {"VENDITA PRODOTTI": 386.0, "AGRITURISMO": 522.5}
+    """
+    resp = session.post(
+        "https://www.4cloudoffice.com/controllers/ZReportPeriod",
+        data=[
+            (f"hid_chkZRep_{zreport_id}", "1"),
+            ("start", start_fmt),
+            ("stop", stop_fmt),
+        ],
+        headers={"X-Requested-With": "XMLHttpRequest"},
+        timeout=60,
+    )
+
+    if resp.status_code != 200:
+        logger.warning(f"Errore dettaglio Z-Report {zreport_id}: status {resp.status_code}")
+        return {}
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    groups_table = soup.find("table", id="groups-2-14")
+    if not groups_table:
+        return {}
+
+    groups = {}
+    for tr in groups_table.find("tbody").find_all("tr") if groups_table.find("tbody") else groups_table.find_all("tr")[1:]:
+        cells = [td.get_text(strip=True) for td in tr.find_all("td")]
+        if len(cells) >= 3 and cells[0]:  # skip totals row (empty name)
+            groups[cells[0]] = _parse_amount(cells[2])
+
+    return groups
+
+
 def _aggregate_by_date(rows):
     """Aggregate multiple Z-reports for the same date.
 
     Multiple closures per day are summed together.
-    Returns dict {date: {"iva_data": {rate: {"taxable", "tax"}}, "no_tax", ...}}
+    Includes group totals from Z-report detail pages.
+    Returns dict {date: {"iva_data": {...}, "groups": {...}, ...}}
     """
     by_date = {}
 
@@ -248,6 +296,7 @@ def _aggregate_by_date(rows):
         if d not in by_date:
             by_date[d] = {
                 "iva_data": {},
+                "groups": {},
                 "no_tax": 0, "documents_amount": 0,
                 "cash": 0, "bancomat": 0, "carta": 0,
             }
@@ -263,6 +312,9 @@ def _aggregate_by_date(rows):
                 day["iva_data"][rate] = {"taxable": 0.0, "tax": 0.0}
             day["iva_data"][rate]["taxable"] += amounts["taxable"]
             day["iva_data"][rate]["tax"] += amounts["tax"]
+
+        for group_name, total in row.get("groups", {}).items():
+            day["groups"][group_name] = day["groups"].get(group_name, 0.0) + total
 
     return by_date
 
@@ -283,38 +335,64 @@ def _resolve_reparto_ids():
 
 
 def _build_reparti_data(day_data):
-    """Map aggregated day data to reparto entries.
+    """Map aggregated day data to reparto entries using groups + IVA data.
 
-    Uses the dynamic iva_data dict {rate: {"taxable", "tax"}} from the portal.
-    The 10% IVA goes entirely to iva_10_ristorazione (the portal doesn't split it).
-    iva_10_trasformati stays at 0 until the portal provides a split.
-    The 22% is looked up dynamically (currently unused in the portal).
+    Split logic for the 10% IVA (which covers both VENDITA PRODOTTI and AGRITURISMO):
+    - VENDITA PRODOTTI total from groups includes both 4% (freschi) and 10% (trasformati)
+    - trasformati_total = VENDITA_PRODOTTI_total - tax_4_total
+    - ristorazione_total = tax_10_total - trasformati_total
 
     Returns list of dicts with reparto data (only entries with total > 0).
     """
     iva_data = day_data.get("iva_data", {})
+    groups = day_data.get("groups", {})
     reparti_data = []
+
+    # Get IVA totals from summary
+    tax_4 = iva_data.get(4, {"taxable": 0.0, "tax": 0.0})
+    tax_10 = iva_data.get(10, {"taxable": 0.0, "tax": 0.0})
+    tax_4_total = round(tax_4["taxable"] + tax_4["tax"], 2)
+    tax_10_total = round(tax_10["taxable"] + tax_10["tax"], 2)
+
+    # Get VENDITA PRODOTTI total from groups
+    vendita_total = groups.get("VENDITA PRODOTTI", 0.0)
+
+    # Compute split: trasformati = VENDITA at 10% = VENDITA_total - tax_4_total
+    trasformati_total = max(round(vendita_total - tax_4_total, 2), 0.0)
+
+    # Ristorazione = remaining 10% = tax_10_total - trasformati_total
+    ristorazione_total = max(round(tax_10_total - trasformati_total, 2), 0.0)
 
     for reparto in REPARTI:
         key = reparto["key"]
         rate = reparto["iva_rate"]
 
         if key == "iva_10_trasformati":
-            # Not split in the portal yet - stays at 0
-            net = 0.0
-            iva = 0.0
+            total = trasformati_total
+            # Compute net/iva proportionally from the 10% rate
+            if tax_10_total > 0 and total > 0:
+                ratio = total / tax_10_total
+                net = round(tax_10["taxable"] * ratio, 2)
+                iva = round(total - net, 2)
+            else:
+                net = 0.0
+                iva = 0.0
         elif key == "iva_10_ristorazione":
-            # All 10% goes here
-            amounts = iva_data.get(10, {"taxable": 0.0, "tax": 0.0})
-            net = amounts["taxable"]
-            iva = amounts["tax"]
+            total = ristorazione_total
+            if tax_10_total > 0 and total > 0:
+                ratio = total / tax_10_total
+                net = round(tax_10["taxable"] * ratio, 2)
+                iva = round(total - net, 2)
+            else:
+                net = 0.0
+                iva = 0.0
         else:
             # Direct mapping by IVA rate (4%, 0%, 22%)
             amounts = iva_data.get(rate, {"taxable": 0.0, "tax": 0.0})
             net = amounts["taxable"]
             iva = amounts["tax"]
+            total = round(net + iva, 2)
 
-        total = round(net + iva, 2)
         if total == 0:
             continue
 
@@ -422,20 +500,30 @@ def sync_cash_register():
         start_date = date(2025, 1, 1)
     end_date = date.today()
 
-    # Step 3: Fetch Z-report data
+    # Step 3: Fetch Z-report summary data
     rows = _fetch_zreport_data(session, start_date, end_date)
     logger.info(f"Trovati {len(rows)} Z-report con dati da {start_date} a {end_date}")
 
     if not rows:
         return 0
 
-    # Step 4: Aggregate by date (multiple closures per day)
+    # Step 4: Fetch group details for each Z-report (for 10% split)
+    start_fmt = start_date.strftime("%d/%m/%Y")
+    stop_fmt = end_date.strftime("%d/%m/%Y")
+    for row in rows:
+        zid = row.get("zreport_id")
+        if zid:
+            row["groups"] = _fetch_zreport_groups(session, zid, start_fmt, stop_fmt)
+        else:
+            row["groups"] = {}
+
+    # Step 5: Aggregate by date (multiple closures per day)
     by_date = _aggregate_by_date(rows)
 
-    # Step 5: Resolve reparto IDs from DB
+    # Step 6: Resolve reparto IDs from DB
     reparto_ids = _resolve_reparto_ids()
 
-    # Step 6: Save each day
+    # Step 7: Save each day
     count = 0
     for rec_date in sorted(by_date.keys()):
         reparti_data = _build_reparti_data(by_date[rec_date])
