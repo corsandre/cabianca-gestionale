@@ -231,7 +231,19 @@ def _init_scheduler(app):
                 from app.services.email_fetcher import fetch_sdi_emails
                 fetch_sdi_emails(app)
 
+        # Sync cassa da 4CloudOffice ogni mattina alle 4:00
+        def sync_cassa():
+            with app.app_context():
+                try:
+                    from app.services.cloud_office import sync_cash_register
+                    count = sync_cash_register()
+                    app.logger.info(f"Sync cassa automatica: {count} giorni aggiornati")
+                except Exception as e:
+                    app.logger.error(f"Errore sync cassa automatica: {e}")
+
         scheduler.add_job(run_backup, "cron", hour=2, minute=0)
+        if app.config.get("CLOUD_OFFICE_USER") and app.config.get("CLOUD_OFFICE_PASSWORD"):
+            scheduler.add_job(sync_cassa, "cron", hour=4, minute=0)
         scheduler.add_job(check_deadlines, "cron", hour=8, minute=0)
         if app.config.get("IMAP_HOST") and app.config.get("IMAP_USER"):
             scheduler.add_job(fetch_emails, "cron", hour="8,14,20", minute=30)

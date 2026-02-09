@@ -21,25 +21,85 @@
     </form>
 </div>
 
+{# Totale mensile #}
 <div class="cb-card p-3 mb-3 text-center">
     <small class="text-muted text-uppercase">Totale mese</small>
     <h3 class="text-cb-dark-green mb-0">&euro;{{ "{:,.2f}".format(total) }}</h3>
 </div>
 
+{# Card riassuntive per reparto #}
+{% if reparto_totals %}
+<div class="row g-3 mb-3">
+    {% for rt in reparto_totals %}
+    <div class="col-6 col-md-4 col-lg">
+        <div class="cb-card p-3 text-center h-100">
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;">{{ rt.name }}</small>
+            <div class="cb-stat-value text-cb-dark-green" style="font-size:1.3rem;">&euro;{{ "{:,.2f}".format(rt.total) }}</div>
+            <div class="small text-muted">
+                Imp. &euro;{{ "{:,.2f}".format(rt.net) }} + IVA &euro;{{ "{:,.2f}".format(rt.iva) }}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# Tabella giornaliera con righe espandibili #}
 <div class="cb-table">
     {% if records %}
     <div class="table-responsive">
         <table class="table table-hover mb-0">
             <thead><tr>
-                <th>Data</th><th class="text-end">Incasso giornaliero</th><th>Sincronizzato</th>
+                <th style="width:2rem;"></th>
+                <th>Data</th>
+                <th class="text-end">Incasso giornaliero</th>
+                <th class="d-none d-md-table-cell">Sincronizzato</th>
             </tr></thead>
             <tbody>
-                {% for r in records %}
-                <tr>
+                {% for rwd in records %}
+                {% set r = rwd.record %}
+                {% set details = rwd.details %}
+                <tr data-bs-toggle="collapse" data-bs-target="#day-{{ r.id }}" role="button" class="{% if details %}cursor-pointer{% endif %}">
+                    <td class="text-center">
+                        {% if details %}
+                        <i class="bi bi-chevron-down small text-muted"></i>
+                        {% endif %}
+                    </td>
                     <td>{{ r.date.strftime('%d/%m/%Y - %A') }}</td>
                     <td class="text-end fw-bold text-cb-dark-green">&euro;{{ "{:,.2f}".format(r.total_amount) }}</td>
-                    <td class="small text-muted">{{ r.synced_at.strftime('%d/%m %H:%M') if r.synced_at else '-' }}</td>
+                    <td class="small text-muted d-none d-md-table-cell">{{ r.synced_at.strftime('%d/%m %H:%M') if r.synced_at else '-' }}</td>
                 </tr>
+                {% if details %}
+                <tr class="collapse" id="day-{{ r.id }}">
+                    <td colspan="4" class="p-0 border-0">
+                        <div class="bg-light p-2">
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                    <tr class="text-muted small">
+                                        <th>Reparto</th>
+                                        <th class="text-end">Imponibile</th>
+                                        <th class="text-end">IVA</th>
+                                        <th class="text-end">Totale</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for d in details %}
+                                    <tr>
+                                        <td>
+                                            {{ d.reparto }}
+                                            <span class="cb-chip" style="background-color: var(--cb-green); color: #fff; font-size:0.65rem;">{{ d.iva_rate }}%</span>
+                                        </td>
+                                        <td class="text-end">&euro;{{ "{:,.2f}".format(d.net) }}</td>
+                                        <td class="text-end">&euro;{{ "{:,.2f}".format(d.iva) }}</td>
+                                        <td class="text-end fw-bold">&euro;{{ "{:,.2f}".format(d.total) }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </td>
+                </tr>
+                {% endif %}
                 {% endfor %}
             </tbody>
         </table>
@@ -51,4 +111,11 @@
     </div>
     {% endif %}
 </div>
+
+<style>
+    .cursor-pointer { cursor: pointer; }
+    .cursor-pointer:hover { background-color: rgba(0, 157, 90, 0.05); }
+    tr.collapse td { padding: 0 !important; }
+    tr.collapse.show td { padding: 0 !important; }
+</style>
 {% endblock %}
