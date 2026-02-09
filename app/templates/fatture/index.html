@@ -23,6 +23,7 @@
                 <option value="">Tutte</option>
                 <option value="ricevuta" {% if request.args.get('direction')=='ricevuta' %}selected{% endif %}>Ricevute (acquisti)</option>
                 <option value="emessa" {% if request.args.get('direction')=='emessa' %}selected{% endif %}>Emesse (vendite)</option>
+                <option value="interna" {% if request.args.get('direction')=='interna' %}selected{% endif %}>Interne</option>
             </select>
         </div>
         <div class="col-auto">
@@ -49,7 +50,7 @@
                     <td>{{ inv.sender_name[:40] }}</td>
                     <td class="small">{{ inv.sender_partita_iva }}</td>
                     <td><span class="badge bg-secondary">{{ inv.invoice_type }}</span></td>
-                    <td><span class="badge {% if inv.direction == 'ricevuta' %}badge-uscita{% else %}badge-entrata{% endif %}">{{ inv.direction }}</span></td>
+                    <td><span class="badge {% if inv.direction == 'ricevuta' %}badge-uscita{% elif inv.direction == 'interna' %}bg-info{% else %}badge-entrata{% endif %}">{{ inv.direction }}</span></td>
                     <td class="text-end small">&euro;{{ "{:,.2f}".format(inv.taxable_amount or 0) }}</td>
                     <td class="text-end small">&euro;{{ "{:,.2f}".format(inv.iva_amount or 0) }}</td>
                     <td class="text-end fw-bold">&euro;{{ "{:,.2f}".format(inv.total_amount or 0) }}</td>

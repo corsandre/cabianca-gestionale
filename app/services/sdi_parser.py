@@ -2,6 +2,7 @@
 
 from datetime import date
 from lxml import etree
+from app.config import Config
 
 # FatturaPA namespace
 NS = {"p": "http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2"}
@@ -145,10 +146,14 @@ def parse_fattura_xml(xml_content: bytes) -> dict:
             except (ValueError, TypeError):
                 due_date = None
 
-    # Determine direction: if our company is the receiver, it's "ricevuta" (purchase)
-    # This is a heuristic - the setup.sh should ask for the company P.IVA
-    # For now, default to "ricevuta" (most common use case: importing purchase invoices)
-    direction = "ricevuta"
+    # Determine direction based on P.IVA
+    company_piva = Config.COMPANY_PIVA
+    if sender_piva == company_piva and receiver_piva == company_piva:
+        direction = "interna"
+    elif sender_piva == company_piva:
+        direction = "emessa"
+    else:
+        direction = "ricevuta"
 
     return {
         "invoice_number": invoice_number or "",

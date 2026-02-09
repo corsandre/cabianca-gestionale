@@ -5,8 +5,9 @@ import logging
 from flask import current_app
 from werkzeug.utils import secure_filename
 from app import db
-from app.models import SdiInvoice, Transaction, Contact
+from app.models import SdiInvoice, Transaction, Contact, Category, RevenueStream
 from app.services.sdi_parser import parse_fattura_xml
+from app.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -79,27 +80,96 @@ def import_sdi_file(content: bytes, filename: str, uploaded_by: int = None) -> d
             db.session.add(contact)
             db.session.flush()
 
-        # Create transaction
-        tx = Transaction(
-            type="uscita" if data["direction"] == "ricevuta" else "entrata",
-            source="sdi",
-            official=True,
-            amount=data["total_amount"],
-            iva_amount=data["iva_amount"],
-            net_amount=data["taxable_amount"],
-            date=data["invoice_date"],
-            description=f"Fattura {data['invoice_number']} - {data['sender_name']}",
-            contact_id=contact.id if contact else None,
-            invoice_id=invoice.id,
-            payment_status="da_pagare",
-            due_date=data.get("due_date"),
-            created_by=uploaded_by,
-        )
+        # IVA rate
+        iva_rate = 0
         if data["taxable_amount"] and data["taxable_amount"] > 0:
-            tx.iva_rate = round(data["iva_amount"] / data["taxable_amount"] * 100, 0)
-        db.session.add(tx)
+            iva_rate = round(data["iva_amount"] / data["taxable_amount"] * 100, 0)
 
-        return {"status": "imported", "message": f"Fattura {data['invoice_number']} importata."}
+        if data["direction"] == "interna":
+            # Internal invoice: create both entrata and uscita
+            cat = Category.query.filter_by(name="Trasferimento interno").first()
+            cat_id = cat.id if cat else None
+
+            stream_vendita = RevenueStream.query.filter_by(name="Vendita diretta").first()
+            stream_agriturismo = RevenueStream.query.filter_by(name="Agriturismo").first()
+
+            # Ensure self-contact exists
+            self_contact = Contact.query.filter_by(
+                partita_iva=Config.COMPANY_PIVA
+            ).first()
+            if not self_contact:
+                self_contact = Contact(
+                    type="cliente_b2b",
+                    name="Fattoria Ca' Bianca",
+                    partita_iva=Config.COMPANY_PIVA,
+                )
+                db.session.add(self_contact)
+                db.session.flush()
+
+            # Entrata: vendita dell'azienda agricola all'agriturismo
+            tx_entrata = Transaction(
+                type="entrata",
+                source="sdi",
+                official=True,
+                amount=data["total_amount"],
+                iva_amount=data["iva_amount"],
+                net_amount=data["taxable_amount"],
+                iva_rate=iva_rate,
+                date=data["invoice_date"],
+                description=f"Fattura interna {data['invoice_number']} - Vendita a Agriturismo",
+                contact_id=self_contact.id,
+                invoice_id=invoice.id,
+                category_id=cat_id,
+                revenue_stream_id=stream_vendita.id if stream_vendita else None,
+                payment_status="pagato",
+                due_date=data.get("due_date"),
+                created_by=uploaded_by,
+            )
+            db.session.add(tx_entrata)
+
+            # Uscita: acquisto dell'agriturismo dall'azienda agricola
+            tx_uscita = Transaction(
+                type="uscita",
+                source="sdi",
+                official=True,
+                amount=data["total_amount"],
+                iva_amount=data["iva_amount"],
+                net_amount=data["taxable_amount"],
+                iva_rate=iva_rate,
+                date=data["invoice_date"],
+                description=f"Fattura interna {data['invoice_number']} - Acquisto da Azienda Agricola",
+                contact_id=self_contact.id,
+                invoice_id=invoice.id,
+                category_id=cat_id,
+                revenue_stream_id=stream_agriturismo.id if stream_agriturismo else None,
+                payment_status="pagato",
+                due_date=data.get("due_date"),
+                created_by=uploaded_by,
+            )
+            db.session.add(tx_uscita)
+
+            return {"status": "imported", "message": f"Fattura interna {data['invoice_number']} importata (entrata + uscita)."}
+        else:
+            # Normal invoice: single transaction
+            tx = Transaction(
+                type="uscita" if data["direction"] == "ricevuta" else "entrata",
+                source="sdi",
+                official=True,
+                amount=data["total_amount"],
+                iva_amount=data["iva_amount"],
+                net_amount=data["taxable_amount"],
+                iva_rate=iva_rate,
+                date=data["invoice_date"],
+                description=f"Fattura {data['invoice_number']} - {data['sender_name']}",
+                contact_id=contact.id if contact else None,
+                invoice_id=invoice.id,
+                payment_status="da_pagare",
+                due_date=data.get("due_date"),
+                created_by=uploaded_by,
+            )
+            db.session.add(tx)
+
+            return {"status": "imported", "message": f"Fattura {data['invoice_number']} importata."}
 
     except Exception as e:
         logger.error(f"Errore import {filename}: {e}")

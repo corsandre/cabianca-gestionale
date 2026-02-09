@@ -199,6 +199,7 @@ def _init_db(app):
             ("Consulenze", "uscita", "#95a5a6"),
             ("Attrezzature", "uscita", "#2c3e50"),
             ("Tasse e imposte", "uscita", "#c0392b"),
+            ("Trasferimento interno", "entrambi", "#17a2b8"),
             ("Altro", "entrambi", "#7f8c8d"),
         ]
         for name, typ, color in cats:

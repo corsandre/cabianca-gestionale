@@ -20,7 +20,7 @@
                 <tr><th>Numero</th><td>{{ invoice.invoice_number }}</td></tr>
                 <tr><th>Data</th><td>{{ invoice.invoice_date.strftime('%d/%m/%Y') if invoice.invoice_date else '-' }}</td></tr>
                 <tr><th>Tipo</th><td>{{ invoice.invoice_type }}</td></tr>
-                <tr><th>Direzione</th><td><span class="badge {% if invoice.direction == 'ricevuta' %}badge-uscita{% else %}badge-entrata{% endif %}">{{ invoice.direction }}</span></td></tr>
+                <tr><th>Direzione</th><td><span class="badge {% if invoice.direction == 'ricevuta' %}badge-uscita{% elif invoice.direction == 'interna' %}bg-info{% else %}badge-entrata{% endif %}">{{ invoice.direction }}</span></td></tr>
                 <tr><th>File</th><td>
                     {% if invoice.xml_filename %}
                     <a href="{{ url_for('static', filename='uploads/' + invoice.xml_filename) }}" download class="text-decoration-none">

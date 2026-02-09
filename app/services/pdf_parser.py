@@ -5,10 +5,11 @@ import logging
 from datetime import datetime
 
 import pdfplumber
+from app.config import Config
 
 logger = logging.getLogger(__name__)
 
-CA_BIANCA_PIVA = "01846180196"
+CA_BIANCA_PIVA = Config.COMPANY_PIVA
 
 
 def parse_fattura_pdf(pdf_content: bytes) -> dict:
@@ -40,10 +41,12 @@ def parse_fattura_pdf(pdf_content: bytes) -> dict:
     receiver_piva = ""
     for p in piva_matches:
         piva_num = p[2:]  # rimuovi "IT"
-        if piva_num == CA_BIANCA_PIVA:
-            receiver_piva = piva_num
-        elif not sender_piva:
+        if not sender_piva:
             sender_piva = piva_num
+        elif piva_num == CA_BIANCA_PIVA:
+            receiver_piva = piva_num
+        elif not receiver_piva:
+            receiver_piva = piva_num
 
     # Codice fiscale del cedente (primo trovato, diverso da Ca Bianca)
     cf_matches = re.findall(r"Codice fiscale:\s*(\w+)", text)
@@ -63,17 +66,22 @@ def parse_fattura_pdf(pdf_content: bytes) -> dict:
     )
     sender_name = ""
     receiver_name = ""
+    is_internal = sender_piva == CA_BIANCA_PIVA and receiver_piva == CA_BIANCA_PIVA
     for d in denom_matches:
         d = d.strip()
         d_upper = d.upper().replace("'", " ").replace("\u2019", " ")
         if "FATTORIA CA" in d_upper or "CA BIANCA" in d_upper:
-            if not receiver_name:
+            if not sender_name and is_internal:
+                sender_name = d
+            elif not receiver_name:
                 receiver_name = d
         elif not sender_name:
             sender_name = d
 
     if not receiver_name:
         receiver_name = "FATTORIA CA' BIANCA"
+    if is_internal and not sender_name:
+        sender_name = "FATTORIA CA' BIANCA"
 
     # Tipo documento, numero, data
     doc_match = re.search(
@@ -139,8 +147,13 @@ def parse_fattura_pdf(pdf_content: bytes) -> dict:
         except ValueError:
             due_date = None
 
-    # Direction: sempre ricevuta (Ca Bianca e' il cessionario)
-    direction = "ricevuta"
+    # Direction based on P.IVA
+    if sender_piva == CA_BIANCA_PIVA and receiver_piva == CA_BIANCA_PIVA:
+        direction = "interna"
+    elif sender_piva == CA_BIANCA_PIVA:
+        direction = "emessa"
+    else:
+        direction = "ricevuta"
 
     if not sender_piva and not invoice_number:
         raise ValueError("Impossibile estrarre dati dalla fattura PDF")
