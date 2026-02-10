@@ -4,10 +4,6 @@
 <div class="cb-page-header">
     <h1><i class="bi bi-file-earmark-text text-cb-green"></i> Fatture SDI</h1>
     <div class="d-flex gap-2">
-        <form method="POST" action="{{ url_for('fatture.rielabora') }}" class="d-inline" onsubmit="return confirm('Ri-elaborare tutti i file per aggiornare le scadenze?')">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Rielabora</button>
-        </form>
         <form method="POST" action="{{ url_for('fatture.check_email') }}" class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-cb-outline"><i class="bi bi-envelope"></i> Controlla email</button>
