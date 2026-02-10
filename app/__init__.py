@@ -1,6 +1,6 @@
 import os
 import logging
-from flask import Flask, render_template_string
+from flask import Flask, render_template_string, flash, redirect, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager
@@ -97,16 +97,28 @@ def create_app():
 
     @app.errorhandler(CSRFError)
     def handle_csrf_error(e):
-        app.logger.warning(f"CSRF error: {e.description}")
-        return render_template_string(ERROR_TEMPLATE,
-            title="Sessione scaduta",
-            message="Il modulo e' scaduto. Torna indietro e riprova."), 400
+        import sys
+        from flask_login import current_user
+        try:
+            is_auth = current_user.is_authenticated
+            print(f"[CSRF] {e.description} | URL={request.url} | auth={is_auth} | referrer={request.referrer}", file=sys.stderr, flush=True)
+            if is_auth:
+                flash("Sessione scaduta: ricarica la pagina e riprova.", "warning")
+                return redirect(request.referrer or request.url)
+        except Exception as exc:
+            print(f"[CSRF] handler exception: {exc}", file=sys.stderr, flush=True)
+        return ("<h2>Sessione scaduta</h2>"
+                "<p>Il modulo e' scaduto. <a href='/login'>Torna al login</a></p>"), 400
 
     @app.errorhandler(400)
     def handle_400(e):
-        return render_template_string(ERROR_TEMPLATE,
-            title="Richiesta non valida",
-            message="Controlla i dati inseriti e riprova."), 400
+        import sys
+        ct = request.content_type or 'none'
+        cl = request.content_length or 0
+        print(f"[400] {e} | URL={request.url} | method={request.method} | content-type={ct} | content-length={cl}", file=sys.stderr, flush=True)
+        return ("<h2>Richiesta non valida</h2>"
+                "<p>Controlla i dati inseriti e riprova. "
+                "<a href='javascript:history.back()'>Torna indietro</a></p>"), 400
 
     @app.errorhandler(403)
     def handle_403(e):

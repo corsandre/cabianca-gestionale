@@ -123,9 +123,10 @@
         </div>
 
         <div class="mt-4 d-flex gap-2">
-            <button type="submit" class="btn btn-cb">Salva</button>
+            <button type="submit" class="btn btn-cb" id="btnSave">Salva</button>
             <a href="{{ next_url or url_for('movimenti.index') }}" class="btn btn-outline-secondary">Annulla</a>
         </div>
+        <div id="saveStatus" class="mt-2" style="display:none"></div>
     </form>
 
     {% if t %}
@@ -136,4 +137,77 @@
     </form>
     {% endif %}
 </div>
+{% endblock %}
+{% block extra_js %}
+<script>
+document.getElementById('movForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var form = this;
+    var btn = document.getElementById('btnSave');
+    var status = document.getElementById('saveStatus');
+    var url = form.action || window.location.href;
+    var maxRetries = 2;
+    var fileInput = form.querySelector('input[type="file"]');
+    var hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Salvataggio...';
+    status.style.display = 'none';
+
+    function buildBody() {
+        if (hasFile) return new FormData(form);
+        // URL-encoded: smaller payload, no multipart boundary issues
+        var params = new URLSearchParams();
+        var fd = new FormData(form);
+        fd.forEach(function(val, key) {
+            if (key !== 'attachment') params.append(key, val);
+        });
+        return params;
+    }
+
+    function doSubmit(attempt) {
+        fetch(url, {
+            method: 'POST',
+            body: buildBody(),
+            credentials: 'same-origin',
+            redirect: 'follow'
+        }).then(function(resp) {
+            if (resp.ok || resp.redirected) {
+                window.location.href = resp.url || url;
+            } else if (resp.status === 400 && attempt < maxRetries) {
+                status.className = 'mt-2 alert alert-warning';
+                status.textContent = 'Errore, nuovo tentativo...';
+                status.style.display = 'block';
+                fetch(window.location.href, {credentials: 'same-origin'}).then(function(r) {
+                    return r.text();
+                }).then(function(html) {
+                    var m = html.match(/name="csrf_token"\s+value="([^"]+)"/);
+                    if (m) form.querySelector('[name=csrf_token]').value = m[1];
+                    doSubmit(attempt + 1);
+                }).catch(function() { doSubmit(attempt + 1); });
+            } else {
+                btn.disabled = false;
+                btn.textContent = 'Salva';
+                status.className = 'mt-2 alert alert-danger';
+                status.innerHTML = 'Errore nel salvataggio. <a href="javascript:location.reload()">Ricarica</a> e riprova.';
+                status.style.display = 'block';
+            }
+        }).catch(function(err) {
+            if (attempt < maxRetries) {
+                status.className = 'mt-2 alert alert-warning';
+                status.textContent = 'Errore di rete, nuovo tentativo (' + (attempt+1) + '/' + maxRetries + ')...';
+                status.style.display = 'block';
+                setTimeout(function() { doSubmit(attempt + 1); }, 2000);
+            } else {
+                btn.disabled = false;
+                btn.textContent = 'Salva';
+                status.className = 'mt-2 alert alert-danger';
+                status.textContent = 'Errore di rete. Controlla la connessione e riprova.';
+                status.style.display = 'block';
+            }
+        });
+    }
+    doSubmit(0);
+});
+</script>
 {% endblock %}
