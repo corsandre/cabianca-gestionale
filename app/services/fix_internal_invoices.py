@@ -1,5 +1,6 @@
 """Migrazione: corregge le fatture interne esistenti creando la doppia registrazione."""
 
+import os
 import logging
 from app import db
 from app.models import SdiInvoice, Transaction, Contact, Category, RevenueStream
@@ -8,8 +9,25 @@ from app.config import Config
 logger = logging.getLogger(__name__)
 
 
+def _reparse_invoice(inv):
+    """Ri-elabora il file originale della fattura per ottenere dati aggiornati."""
+    if not inv.xml_path or not os.path.isfile(inv.xml_path):
+        return None
+    with open(inv.xml_path, "rb") as f:
+        content = f.read()
+    if inv.xml_path.lower().endswith(".pdf") or content[:5] == b"%PDF-":
+        from app.services.pdf_parser import parse_fattura_pdf
+        return parse_fattura_pdf(content)
+    else:
+        from app.services.sdi_parser import parse_fattura_xml
+        return parse_fattura_xml(content)
+
+
 def fix_internal_invoices() -> dict:
-    """Trova fatture interne (sender_piva == COMPANY_PIVA) e crea le transazioni mancanti.
+    """Trova fatture interne e crea le transazioni mancanti.
+
+    Ri-elabora i file originali per rilevare fatture interne che avevano
+    sender_piva vuoto a causa del bug nel vecchio parser.
 
     Returns:
         {"fixed": int, "skipped": int, "errors": list}
@@ -17,8 +35,25 @@ def fix_internal_invoices() -> dict:
     company_piva = Config.COMPANY_PIVA
     results = {"fixed": 0, "skipped": 0, "errors": []}
 
-    # Find all invoices where sender is Ca Bianca
-    invoices = SdiInvoice.query.filter_by(sender_partita_iva=company_piva).all()
+    # Find candidates: already marked as interna, or sender is Ca Bianca,
+    # or re-parse all invoices to catch ones with empty sender_piva
+    all_invoices = SdiInvoice.query.all()
+    invoices = []
+    for inv in all_invoices:
+        if inv.direction == "interna" or inv.sender_partita_iva == company_piva:
+            invoices.append(inv)
+        elif not inv.sender_partita_iva or inv.sender_partita_iva == "":
+            # Re-parse to check if it's actually internal
+            try:
+                data = _reparse_invoice(inv)
+                if data and data["direction"] == "interna":
+                    # Update stored data from re-parse
+                    inv.sender_partita_iva = data["sender_partita_iva"]
+                    inv.sender_name = data["sender_name"] or inv.sender_name
+                    inv.receiver_partita_iva = data["receiver_partita_iva"]
+                    invoices.append(inv)
+            except Exception as e:
+                logger.warning(f"Ri-elaborazione {inv.xml_filename}: {e}")
 
     if not invoices:
         return results
