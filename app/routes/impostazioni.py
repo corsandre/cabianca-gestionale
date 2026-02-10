@@ -95,22 +95,6 @@ def new_stream():
     return redirect(url_for("impostazioni.index"))
 
 
-@bp.route("/fix-fatture-interne", methods=["POST"])
-@login_required
-@admin_required
-def fix_fatture_interne():
-    try:
-        from app.services.fix_internal_invoices import fix_internal_invoices
-        results = fix_internal_invoices()
-        msg = f"Migrazione completata: {results['fixed']} corrette, {results['skipped']} gia ok."
-        if results["errors"]:
-            msg += f" Errori: {len(results['errors'])}."
-        flash(msg, "success" if not results["errors"] else "warning")
-    except Exception as e:
-        flash(f"Errore migrazione: {e}", "danger")
-    return redirect(url_for("impostazioni.index"))
-
-
 @bp.route("/backup", methods=["POST"])
 @login_required
 @admin_required

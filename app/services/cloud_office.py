@@ -71,7 +71,7 @@ REPARTI = [
         "key": "iva_0",
         "name": "Fattoria didattica",
         "iva_rate": 0,
-        "category_name": "Servizi",
+        "category_name": "Fattoria Didattica",
         "revenue_stream_name": "Attivita didattiche",
     },
     {
@@ -409,16 +409,16 @@ def _build_reparti_data(day_data):
 
 
 def _save_day(rec_date, reparti_data, reparto_ids):
-    """Save/update transactions and CashRegisterDaily for one day.
+    """Save transactions and CashRegisterDaily for one NEW day.
 
-    Deletes existing source='cassa' transactions for the date,
-    then creates new ones (one per reparto with total > 0).
+    Skips if the day already exists (preserves manual edits).
     """
     from app import db
     from app.models import CashRegisterDaily, Transaction
 
-    # Delete existing cassa transactions for this date
-    Transaction.query.filter_by(source="cassa", date=rec_date).delete()
+    # Skip if already synced (preserva modifiche manuali)
+    if CashRegisterDaily.query.filter_by(date=rec_date).first():
+        return 0.0
 
     day_total = 0.0
     details = []
@@ -495,7 +495,7 @@ def sync_cash_register():
     # Step 2: Determine date range
     last_record = CashRegisterDaily.query.order_by(CashRegisterDaily.date.desc()).first()
     if last_record and last_record.date:
-        start_date = last_record.date
+        start_date = last_record.date + timedelta(days=1)
     else:
         start_date = date(2025, 1, 1)
     end_date = date.today()

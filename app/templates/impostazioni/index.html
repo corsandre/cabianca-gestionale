@@ -97,16 +97,6 @@
             </form>
         </div>
 
-        <!-- FATTURE INTERNE -->
-        <div class="cb-card p-3 mb-3">
-            <h5 class="mb-3">Fatture interne</h5>
-            <p class="small text-muted">Corregge le fatture interne esistenti (stessa P.IVA cedente/cessionario) creando la doppia registrazione entrata + uscita.</p>
-            <form method="POST" action="{{ url_for('impostazioni.fix_fatture_interne') }}" onsubmit="return confirm('Eseguire la migrazione delle fatture interne?')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-outline-info btn-sm"><i class="bi bi-arrow-left-right"></i> Correggi fatture interne</button>
-            </form>
-        </div>
-
         <!-- BACKUP -->
         <div class="cb-card p-3">
             <h5 class="mb-3">Backup</h5>

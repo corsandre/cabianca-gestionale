@@ -199,6 +199,7 @@ def _init_db(app):
         cats = [
             ("Vendita prodotti", "entrata", "#297a38"),
             ("Servizi", "entrata", "#243673"),
+            ("Fattoria Didattica", "entrata", "#243673"),
             ("Ristorazione", "entrata", "#c6a96f"),
             ("Vendita animali", "entrata", "#009d5a"),
             ("Mangimi e foraggi", "uscita", "#e74c3c"),
