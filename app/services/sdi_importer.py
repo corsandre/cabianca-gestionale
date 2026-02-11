@@ -36,12 +36,18 @@ def import_sdi_file(content: bytes, filename: str, uploaded_by: int = None) -> d
         else:
             data = parse_fattura_xml(content)
 
-        # Check duplicate
-        existing = SdiInvoice.query.filter_by(
-            invoice_number=data["invoice_number"],
-            sender_partita_iva=data["sender_partita_iva"],
-            invoice_date=data["invoice_date"],
-        ).first()
+        # Check duplicate (usa anche codice_fiscale per persone fisiche senza P.IVA)
+        dup_filter = {
+            "invoice_number": data["invoice_number"],
+            "invoice_date": data["invoice_date"],
+        }
+        if data["sender_partita_iva"]:
+            dup_filter["sender_partita_iva"] = data["sender_partita_iva"]
+        elif data.get("sender_codice_fiscale"):
+            dup_filter["sender_codice_fiscale"] = data["sender_codice_fiscale"]
+        else:
+            dup_filter["sender_name"] = data["sender_name"]
+        existing = SdiInvoice.query.filter_by(**dup_filter).first()
         if existing:
             return {"status": "duplicate", "message": f"Fattura {data['invoice_number']} gia presente."}
 
@@ -66,11 +72,18 @@ def import_sdi_file(content: bytes, filename: str, uploaded_by: int = None) -> d
         db.session.add(invoice)
         db.session.flush()
 
-        # Auto-create or find contact
-        contact = Contact.query.filter_by(
-            partita_iva=data["sender_partita_iva"]
-        ).first()
-        if not contact and data["sender_partita_iva"]:
+        # Auto-create or find contact (supporta persone fisiche con solo CF)
+        contact = None
+        if data["sender_partita_iva"]:
+            contact = Contact.query.filter_by(
+                partita_iva=data["sender_partita_iva"]
+            ).first()
+        elif data.get("sender_codice_fiscale"):
+            contact = Contact.query.filter_by(
+                codice_fiscale=data["sender_codice_fiscale"]
+            ).first()
+
+        if not contact and (data["sender_partita_iva"] or data.get("sender_codice_fiscale")):
             contact = Contact(
                 type="fornitore" if data["direction"] == "ricevuta" else "cliente_b2b",
                 name=data["sender_name"],

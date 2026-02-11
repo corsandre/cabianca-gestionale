@@ -61,7 +61,7 @@ def parse_fattura_pdf(pdf_content: bytes) -> dict:
 
     # Denominazioni
     denom_matches = re.findall(
-        r"Denominazione:\s*(.+?)(?=\s+(?:Indirizzo|Regime|Denominazione|Codice|Cap|Comune|Pec|Riferimento):|$)",
+        r"Denominazione:\s*(.+?)(?=\s+(?:Indirizzo|Regime\s+fiscale|Denominazione|Codice\s+\w+|Cognome\s+nome|Cap|Comune|Pec|Riferimento):|$)",
         text,
     )
     sender_name = ""
@@ -77,6 +77,15 @@ def parse_fattura_pdf(pdf_content: bytes) -> dict:
                 receiver_name = d
         elif not sender_name:
             sender_name = d
+
+    # Fallback per persone fisiche: "Cognome nome:" (formato TeamSystem)
+    if not sender_name:
+        cn_matches = re.findall(
+            r"Cognome nome:\s*(.+?)(?=\s+(?:Denominazione|Indirizzo|Regime\s+fiscale|Codice\s+\w+|Cap|Comune|Pec|Riferimento):|$)",
+            text,
+        )
+        if cn_matches:
+            sender_name = cn_matches[0].strip()
 
     if not receiver_name:
         receiver_name = "FATTORIA CA' BIANCA"
