@@ -85,15 +85,22 @@ def parse_fattura_pdf(pdf_content: bytes) -> dict:
 
     # Tipo documento, numero, data
     doc_match = re.search(
-        r"(TD\d+)\s*\([^)]+\)\s+(\S+)\s+(\d{2}-\d{2}-\d{4})", text
+        r"(TD\d+)\s*\([^)]+\)\s+(.+?)\s+(\d{2}-\d{2}-\d{4})", text
     )
     invoice_type = doc_match.group(1) if doc_match else ""
-    invoice_number = doc_match.group(2) if doc_match else ""
+    invoice_number = doc_match.group(2).strip() if doc_match else ""
     invoice_date_str = doc_match.group(3) if doc_match else ""
 
     invoice_date = None
     if invoice_date_str:
         invoice_date = datetime.strptime(invoice_date_str, "%d-%m-%Y").date()
+
+    # Importi in formato italiano: 1.500,00 | 330,00 | -5,00
+    # Richiede la virgola decimale, cosi' non cattura codici come N2.2
+    _IT_AMOUNT = r'-?\d{1,3}(?:\.\d{3})*,\d+'
+
+    def _parse_it(s):
+        return float(s.replace(".", "").replace(",", "."))
 
     # Riepilogo IVA
     taxable = 0.0
@@ -107,30 +114,34 @@ def parse_fattura_pdf(pdf_content: bytes) -> dict:
             in_iva_section = False
             continue
         if in_iva_section and "Totale imponibile" not in line:
-            nums = re.findall(r"[\d]+[,\.]\d+", line)
-            if len(nums) >= 2:
-                try:
-                    taxable += float(nums[-2].replace(".", "").replace(",", "."))
-                    iva += float(nums[-1].replace(".", "").replace(",", "."))
-                except ValueError:
-                    pass
+            amounts = re.findall(_IT_AMOUNT, line)
+            has_trailing_zero = bool(re.search(r'\b0\s*$', line))
+            try:
+                if len(amounts) >= 2:
+                    taxable += _parse_it(amounts[-2])
+                    iva += _parse_it(amounts[-1])
+                elif len(amounts) == 1 and has_trailing_zero:
+                    taxable += _parse_it(amounts[0])
+            except ValueError:
+                pass
 
-    # Totale documento
+    # Totale documento - prende l'ultimo importo sulla riga
     total = 0.0
-    total_match = re.search(r"Totale documento\s*\n\s*([\d.,]+)", text)
+    total_match = re.search(r"Totale documento\s*\n\s*(.+)", text)
     if total_match:
-        total = float(total_match.group(1).replace(".", "").replace(",", "."))
+        nums = re.findall(_IT_AMOUNT, total_match.group(1))
+        if nums:
+            total = _parse_it(nums[-1])
     else:
-        # Cerca pattern alternativo nella sezione TOTALI
         totali_match = re.search(
-            r"TOTALI.*?Totale documento\s*\n\s*(?:[\d.,]+\s+)*?([\d.,]+)",
+            r"TOTALI.*?Totale documento\s*\n\s*(.+)",
             text,
             re.DOTALL,
         )
         if totali_match:
-            total = float(
-                totali_match.group(1).replace(".", "").replace(",", ".")
-            )
+            nums = re.findall(_IT_AMOUNT, totali_match.group(1))
+            if nums:
+                total = _parse_it(nums[-1])
 
     if total == 0 and taxable > 0:
         total = round(taxable + iva, 2)

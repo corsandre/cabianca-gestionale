@@ -63,6 +63,35 @@ def index():
         *base_filters
     ).group_by(Transaction.payment_method).all()
 
+    # Calcola importi non assegnati per ogni raggruppamento
+    _unassigned_color = "#aaaaaa"
+    _unassigned_label = "Non assegnato"
+
+    cat_income_total = sum(r[2] for r in by_category_income)
+    if float(total_income) - cat_income_total > 0.01:
+        by_category_income = list(by_category_income) + [
+            (_unassigned_label, _unassigned_color, float(total_income) - cat_income_total)
+        ]
+
+    cat_expense_total = sum(r[2] for r in by_category_expense)
+    if float(total_expense) - cat_expense_total > 0.01:
+        by_category_expense = list(by_category_expense) + [
+            (_unassigned_label, _unassigned_color, float(total_expense) - cat_expense_total)
+        ]
+
+    stream_total = sum(r[2] for r in by_stream)
+    if float(total_income) - stream_total > 0.01:
+        by_stream = list(by_stream) + [
+            (_unassigned_label, _unassigned_color, float(total_income) - stream_total)
+        ]
+
+    method_total = sum(r[1] for r in by_method)
+    all_total = float(total_income) + float(total_expense)
+    if all_total - method_total > 0.01:
+        by_method = list(by_method) + [
+            (_unassigned_label, all_total - method_total)
+        ]
+
     return render_template("analisi/index.html",
         total_income=float(total_income), total_expense=float(total_expense),
         total_iva=float(total_iva), net=float(total_income) - float(total_expense),
