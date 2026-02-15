@@ -14,6 +14,7 @@ Applicazione gestionale per **Fattoria Ca Bianca** - sistema di contabilita, fat
 - **Categorie & Tag** - Categorizzazione flessibile dei movimenti
 - **Analisi** - Report con filtro ufficiali/extra-contabili/tutti, grafici per categoria e flusso di ricavo
 - **Scadenzario** - Gestione scadenze pagamenti
+- **Riconciliazione Bancaria** - Import CBI, abbinamento automatico (regole, SDI, manuali), riconciliazione manuale a due colonne con ricerca AJAX, confronto saldo banca vs contabile, storico saldi giornalieri
 - **Esportazione** - CSV per il commercialista
 - **Notifiche Telegram** - Alert scadenze, scorte basse, backup
 - **Backup automatico** - Google Drive, giornaliero

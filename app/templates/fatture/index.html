@@ -36,7 +36,7 @@
     <div class="table-responsive">
         <table class="table table-hover mb-0">
             <thead><tr>
-                <th>Data</th><th>Numero</th><th>Mittente</th><th>P.IVA</th><th>Tipo</th><th>Dir.</th><th class="text-end">Imponibile</th><th class="text-end">IVA</th><th class="text-end">Totale</th>
+                <th>Data</th><th>Numero</th><th>Mittente</th><th>P.IVA</th><th>Tipo</th><th>Dir.</th><th>Banca</th><th class="text-end">Imponibile</th><th class="text-end">IVA</th><th class="text-end">Totale</th>
             </tr></thead>
             <tbody>
                 {% for inv in invoices %}
@@ -47,6 +47,13 @@
                     <td class="small">{{ inv.sender_partita_iva }}</td>
                     <td><span class="badge bg-secondary">{{ inv.invoice_type }}</span></td>
                     <td><span class="badge {% if inv.direction == 'ricevuta' %}badge-uscita{% elif inv.direction == 'interna' %}bg-info{% else %}badge-entrata{% endif %}">{{ inv.direction }}</span></td>
+                    <td class="text-center">
+                        {% if bank_status.get(inv.id) == 'riconciliato' %}
+                        <i class="bi bi-check-circle-fill text-success" title="Riconciliato in banca"></i>
+                        {% elif inv.id in bank_status %}
+                        <i class="bi bi-clock text-warning" title="In attesa di riconciliazione"></i>
+                        {% endif %}
+                    </td>
                     <td class="text-end small">&euro;{{ "{:,.2f}".format(inv.taxable_amount or 0) }}</td>
                     <td class="text-end small">&euro;{{ "{:,.2f}".format(inv.iva_amount or 0) }}</td>
                     <td class="text-end fw-bold">&euro;{{ "{:,.2f}".format(inv.total_amount or 0) }}</td>

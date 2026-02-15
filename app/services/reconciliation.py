@@ -62,8 +62,10 @@ def reconcile_batch(bank_transactions):
             stats["matched"] += 1
             continue
 
-        # Fase 3: Match transazioni manuali
+        # Fase 3: Match transazioni manuali e banca
         match = _find_best_match(bt, source="manuale")
+        if not match or match["score"] < AUTO_MATCH_THRESHOLD:
+            match = _find_best_match(bt, source="banca")
         if match and match["score"] >= AUTO_MATCH_THRESHOLD:
             _link_transaction(bt, match["transaction"], "auto")
             stats["matched"] += 1
@@ -90,12 +92,13 @@ def get_match_proposals(bank_transaction):
         if score > 20:
             proposals.append({"transaction": tx, "score": score, "reasons": reasons})
 
-    # Cerca tra transazioni manuali
-    candidates = _get_candidates(bank_transaction, "manuale")
-    for tx in candidates:
-        score, reasons = _compute_score(bank_transaction, tx)
-        if score > 20:
-            proposals.append({"transaction": tx, "score": score, "reasons": reasons})
+    # Cerca tra transazioni manuali e banca
+    for src in ("manuale", "banca"):
+        candidates = _get_candidates(bank_transaction, src)
+        for tx in candidates:
+            score, reasons = _compute_score(bank_transaction, tx)
+            if score > 20:
+                proposals.append({"transaction": tx, "score": score, "reasons": reasons})
 
     proposals.sort(key=lambda x: x["score"], reverse=True)
     return proposals[:5]
@@ -222,7 +225,7 @@ def _create_transaction_from_bank(bt, actions):
     """Crea una transazione in prima nota da un movimento bancario."""
     tx = Transaction(
         type="entrata" if bt.direction == "C" else "uscita",
-        source="manuale",
+        source="banca",
         official=True,
         amount=bt.amount,
         date=bt.operation_date,
@@ -245,7 +248,7 @@ def create_transaction_from_bank_manual(bt, category_id=None, contact_id=None,
     """Crea una transazione manuale da un movimento bancario (azione utente)."""
     tx = Transaction(
         type="entrata" if bt.direction == "C" else "uscita",
-        source="manuale",
+        source="banca",
         official=True,
         amount=bt.amount,
         date=bt.operation_date,
@@ -265,6 +268,48 @@ def create_transaction_from_bank_manual(bt, category_id=None, contact_id=None,
     bt.matched_by = "manuale"
 
     return tx
+
+
+def get_available_transactions(bt):
+    """Recupera transazioni disponibili per abbinamento manuale (vista iniziale).
+
+    Mostra le piu' probabili (+-30gg, non pagate) come punto di partenza.
+    La ricerca AJAX permette poi di cercare senza limiti.
+
+    Returns:
+        dict con:
+        - "sdi": lista transazioni SDI disponibili
+        - "altre": lista transazioni manuali/banca disponibili
+    """
+    date_from = bt.operation_date - timedelta(days=60)
+    date_to = bt.operation_date + timedelta(days=30)
+    tx_type = "entrata" if bt.direction == "C" else "uscita"
+
+    # Transazioni gia abbinate ad altri movimenti bancari
+    already_matched = db.select(BankTransaction.matched_transaction_id).where(
+        BankTransaction.matched_transaction_id.isnot(None),
+        BankTransaction.id != bt.id,
+    ).scalar_subquery()
+
+    base_query = Transaction.query.filter(
+        Transaction.type == tx_type,
+        Transaction.date.between(date_from, date_to),
+        ~Transaction.id.in_(already_matched),
+    )
+
+    # SDI: non pagate come default iniziale
+    sdi = base_query.filter(
+        Transaction.source == "sdi",
+        Transaction.payment_status.in_(["da_pagare", "parziale"]),
+    ).order_by(Transaction.date.desc()).limit(20).all()
+
+    # Manuali + banca: non pagate come default iniziale
+    altre = base_query.filter(
+        Transaction.source.in_(["manuale", "banca"]),
+        Transaction.payment_status != "pagato",
+    ).order_by(Transaction.date.desc()).limit(20).all()
+
+    return {"sdi": sdi, "altre": altre}
 
 
 def _build_description(bt):

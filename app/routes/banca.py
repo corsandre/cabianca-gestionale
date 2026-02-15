@@ -5,13 +5,15 @@ import logging
 from datetime import date
 from flask import Blueprint, render_template, request, flash, redirect, url_for
 from flask_login import login_required
+from sqlalchemy import func
 from app import db
 from app.models import (
-    BankTransaction, AutoRule, Transaction, Category, Contact, RevenueStream,
+    BankTransaction, BankBalance, AutoRule, Transaction, Category, Contact, RevenueStream,
 )
 from app.services.cbi_parser import parse_cbi_file
 from app.services.reconciliation import (
     reconcile_batch, get_match_proposals, create_transaction_from_bank_manual,
+    get_available_transactions,
 )
 from app.utils.decorators import write_required
 
@@ -23,7 +25,7 @@ bp = Blueprint("banca", __name__, url_prefix="/banca")
 @bp.route("/")
 @login_required
 def index():
-    """Dashboard banca: statistiche, upload, ultimi movimenti."""
+    """Dashboard banca: statistiche, upload, ultimi movimenti, saldi."""
     total = BankTransaction.query.count()
     riconciliati = BankTransaction.query.filter_by(status="riconciliato").count()
     sospesi = BankTransaction.query.filter_by(status="non_riconciliato").count()
@@ -35,6 +37,45 @@ def index():
 
     rules_count = AutoRule.query.filter_by(active=True).count()
 
+    # Saldo banca: ultimo saldo chiusura da CBI (saldo reale estratto conto)
+    ultimo_saldo = BankBalance.query.filter_by(
+        balance_type="chiusura"
+    ).order_by(BankBalance.date.desc()).first()
+
+    saldo_banca = ultimo_saldo.balance if ultimo_saldo else None
+    saldo_banca_data = ultimo_saldo.date if ultimo_saldo else None
+
+    # Saldo contabile: primo saldo apertura + tutti i movimenti bancari processati
+    # (riconciliati + ignorati). Se tutto e' riconciliato correttamente,
+    # saldo_contabile == saldo_banca. La differenza aiuta a trovare errori.
+    primo_saldo = BankBalance.query.filter_by(
+        balance_type="apertura"
+    ).order_by(BankBalance.date.asc()).first()
+
+    saldo_contabile = None
+    if primo_saldo:
+        # Movimenti processati (riconciliati o ignorati) dal primo saldo in poi
+        crediti = db.session.query(
+            func.coalesce(func.sum(BankTransaction.amount), 0)
+        ).filter(
+            BankTransaction.operation_date >= primo_saldo.date,
+            BankTransaction.direction == "C",
+            BankTransaction.status.in_(["riconciliato", "ignorato"]),
+        ).scalar()
+        debiti = db.session.query(
+            func.coalesce(func.sum(BankTransaction.amount), 0)
+        ).filter(
+            BankTransaction.operation_date >= primo_saldo.date,
+            BankTransaction.direction == "D",
+            BankTransaction.status.in_(["riconciliato", "ignorato"]),
+        ).scalar()
+        saldo_contabile = primo_saldo.balance + float(crediti) - float(debiti)
+
+    # Storico saldi CBI (solo chiusura, piu' leggibile)
+    storico_saldi = BankBalance.query.filter_by(
+        balance_type="chiusura"
+    ).order_by(BankBalance.date.desc()).limit(30).all()
+
     return render_template(
         "banca/index.html",
         total=total,
@@ -43,6 +84,10 @@ def index():
         ignorati=ignorati,
         ultimi=ultimi,
         rules_count=rules_count,
+        saldo_banca=saldo_banca,
+        saldo_banca_data=saldo_banca_data,
+        saldo_contabile=saldo_contabile,
+        storico_saldi=storico_saldi,
     )
 
 
@@ -58,9 +103,11 @@ def upload():
 
     try:
         content = file.read()
-        transactions = parse_cbi_file(content)
+        result = parse_cbi_file(content)
+        transactions = result["transactions"]
+        cbi_balances = result["balances"]
 
-        if not transactions:
+        if not transactions and not cbi_balances:
             flash("Nessun movimento trovato nel file.", "warning")
             return redirect(url_for("banca.index"))
 
@@ -95,6 +142,21 @@ def upload():
             )
             db.session.add(bt)
             imported += 1
+
+        # Salva saldi estratti da record 61/64
+        balances_saved = 0
+        for bal in cbi_balances:
+            existing = BankBalance.query.filter_by(
+                date=bal["date"], balance_type=bal["type"], source="cbi"
+            ).first()
+            if not existing:
+                db.session.add(BankBalance(
+                    date=bal["date"],
+                    balance=bal["balance"],
+                    balance_type=bal["type"],
+                    source="cbi",
+                ))
+                balances_saved += 1
 
         db.session.flush()
 
@@ -142,34 +204,90 @@ def upload():
 @bp.route("/movimenti")
 @login_required
 def movimenti():
-    """Lista completa movimenti bancari con filtri."""
+    """Lista completa movimenti bancari con filtri estesi."""
     status_filter = request.args.get("status", "")
     direction_filter = request.args.get("direction", "")
-    month = request.args.get("month", date.today().strftime("%Y-%m"))
+    date_from = request.args.get("date_from", "")
+    date_to = request.args.get("date_to", "")
+    search = request.args.get("q", "").strip()
+    amount_min = request.args.get("amount_min", "", type=str)
+    amount_max = request.args.get("amount_max", "", type=str)
+    causale_filter = request.args.get("causale", "")
 
-    try:
-        year, mo = map(int, month.split("-"))
-    except ValueError:
-        year, mo = date.today().year, date.today().month
+    query = BankTransaction.query
 
-    query = BankTransaction.query.filter(
-        db.extract("year", BankTransaction.operation_date) == year,
-        db.extract("month", BankTransaction.operation_date) == mo,
-    )
+    # Filtro date (default: mese corrente)
+    if date_from:
+        try:
+            df = date.fromisoformat(date_from)
+            query = query.filter(BankTransaction.operation_date >= df)
+        except ValueError:
+            pass
+    else:
+        # Default: primo giorno del mese corrente
+        df = date.today().replace(day=1)
+        date_from = df.isoformat()
+        query = query.filter(BankTransaction.operation_date >= df)
+
+    if date_to:
+        try:
+            dt = date.fromisoformat(date_to)
+            query = query.filter(BankTransaction.operation_date <= dt)
+        except ValueError:
+            pass
 
     if status_filter:
         query = query.filter(BankTransaction.status == status_filter)
     if direction_filter:
         query = query.filter(BankTransaction.direction == direction_filter)
 
+    # Ricerca testo
+    if search:
+        like_q = f"%{search}%"
+        query = query.filter(db.or_(
+            BankTransaction.counterpart_name.ilike(like_q),
+            BankTransaction.remittance_info.ilike(like_q),
+            BankTransaction.causale_description.ilike(like_q),
+        ))
+
+    # Range importo
+    if amount_min:
+        try:
+            query = query.filter(BankTransaction.amount >= float(amount_min))
+        except ValueError:
+            pass
+    if amount_max:
+        try:
+            query = query.filter(BankTransaction.amount <= float(amount_max))
+        except ValueError:
+            pass
+
+    # Causale ABI
+    if causale_filter:
+        query = query.filter(BankTransaction.causale_abi == causale_filter)
+
     movimenti_list = query.order_by(BankTransaction.operation_date.desc()).all()
+
+    # Valori distinti causale ABI per il filtro
+    causali_abi = db.session.query(
+        BankTransaction.causale_abi, BankTransaction.causale_description
+    ).filter(
+        BankTransaction.causale_abi.isnot(None),
+        BankTransaction.causale_abi != "",
+    ).distinct().order_by(BankTransaction.causale_abi).all()
 
     return render_template(
         "banca/movimenti.html",
         movimenti=movimenti_list,
-        month=month,
+        date_from=date_from,
+        date_to=date_to,
         status_filter=status_filter,
         direction_filter=direction_filter,
+        search=search,
+        amount_min=amount_min,
+        amount_max=amount_max,
+        causale_filter=causale_filter,
+        causali_abi=causali_abi,
     )
 
 
@@ -181,11 +299,12 @@ def sospesi():
         status="non_riconciliato"
     ).order_by(BankTransaction.operation_date.desc()).all()
 
-    # Genera proposte per ogni movimento
+    # Genera proposte e transazioni disponibili per ogni movimento
     items = []
     for bt in pending:
         proposals = get_match_proposals(bt)
-        items.append({"bt": bt, "proposals": proposals})
+        available = get_available_transactions(bt)
+        items.append({"bt": bt, "proposals": proposals, "available": available})
 
     categories = Category.query.filter_by(active=True).order_by(Category.name).all()
     contacts = Contact.query.filter_by(active=True).order_by(Contact.name).all()
@@ -198,6 +317,84 @@ def sospesi():
         contacts=contacts,
         revenue_streams=revenue_streams,
     )
+
+
+@bp.route("/cerca-transazioni/<int:bt_id>")
+@login_required
+def cerca_transazioni(bt_id):
+    """API: cerca transazioni disponibili per abbinamento manuale (AJAX)."""
+    from flask import jsonify
+    bt = BankTransaction.query.get_or_404(bt_id)
+
+    search = request.args.get("q", "").strip()
+    date_from = request.args.get("date_from", "")
+    date_to = request.args.get("date_to", "")
+    source_filter = request.args.get("source", "")  # sdi, altre, or empty=all
+    include_paid = request.args.get("include_paid", "0") == "1"
+
+    tx_type = "entrata" if bt.direction == "C" else "uscita"
+
+    # Transazioni gia' abbinate ad altri movimenti
+    already_matched = db.select(BankTransaction.matched_transaction_id).where(
+        BankTransaction.matched_transaction_id.isnot(None),
+        BankTransaction.id != bt.id,
+    ).scalar_subquery()
+
+    query = Transaction.query.filter(
+        Transaction.type == tx_type,
+        ~Transaction.id.in_(already_matched),
+    )
+
+    # Filtro date (nessun limite di default - cerca tutto)
+    if date_from:
+        try:
+            query = query.filter(Transaction.date >= date.fromisoformat(date_from))
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            query = query.filter(Transaction.date <= date.fromisoformat(date_to))
+        except ValueError:
+            pass
+
+    # Filtro fonte
+    if source_filter == "sdi":
+        query = query.filter(Transaction.source == "sdi")
+        if not include_paid:
+            query = query.filter(Transaction.payment_status.in_(["da_pagare", "parziale"]))
+    elif source_filter == "altre":
+        query = query.filter(Transaction.source.in_(["manuale", "banca"]))
+        if not include_paid:
+            query = query.filter(Transaction.payment_status != "pagato")
+
+    # Escludi pagate (per default, se non filtro per fonte)
+    if not source_filter and not include_paid:
+        query = query.filter(Transaction.payment_status != "pagato")
+
+    # Ricerca testo
+    if search:
+        like_q = f"%{search}%"
+        from app.models import Contact as C
+        query = query.outerjoin(C, Transaction.contact_id == C.id).filter(db.or_(
+            Transaction.description.ilike(like_q),
+            C.name.ilike(like_q),
+        ))
+
+    results = query.order_by(Transaction.date.desc()).limit(50).all()
+
+    items = []
+    for tx in results:
+        items.append({
+            "id": tx.id,
+            "description": (tx.description or "-")[:55],
+            "date": tx.date.strftime("%d/%m/%Y"),
+            "amount": f"{tx.amount:,.2f}",
+            "contact": tx.contact.name[:25] if tx.contact else "",
+            "source": tx.source.upper(),
+            "status": tx.payment_status or "",
+        })
+
+    return jsonify(items)
 
 
 @bp.route("/riconcilia/<int:id>", methods=["POST"])

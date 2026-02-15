@@ -37,13 +37,15 @@ logger = logging.getLogger(__name__)
 
 
 def parse_cbi_file(content):
-    """Parsa un file CBI e restituisce lista di transazioni.
+    """Parsa un file CBI e restituisce transazioni e saldi.
 
     Args:
         content: Contenuto del file CBI (bytes o str)
 
     Returns:
-        Lista di dict con i dati di ogni transazione bancaria.
+        dict con:
+        - "transactions": Lista di dict con i dati di ogni transazione bancaria
+        - "balances": Lista di dict con saldi estratti da record 61/64
     """
     if isinstance(content, bytes):
         for enc in ("utf-8", "latin-1", "cp1252"):
@@ -59,6 +61,7 @@ def parse_cbi_file(content):
 
     lines = text.splitlines()
     transactions = []
+    balances = []
     current_62 = None
     current_63_lines = []
     header_date = None
@@ -78,6 +81,12 @@ def parse_cbi_file(content):
                 date_str = line[14:20]
                 header_date = _parse_cbi_date(date_str) or header_date
 
+        elif record_type == "61":
+            # Saldo apertura giornata
+            bal = _parse_balance_record(line, "apertura", header_date)
+            if bal:
+                balances.append(bal)
+
         elif record_type == "62":
             # Salva il record 62 precedente se presente
             if current_62 is not None:
@@ -91,7 +100,20 @@ def parse_cbi_file(content):
         elif record_type == "63":
             current_63_lines.append(line)
 
-        elif record_type in ("64", "65", "EF"):
+        elif record_type == "64":
+            # Saldo chiusura giornata + salva ultimo record 62
+            if current_62 is not None:
+                tx = _build_transaction(current_62, current_63_lines, header_date)
+                if tx:
+                    transactions.append(tx)
+                current_62 = None
+                current_63_lines = []
+
+            bal = _parse_balance_record(line, "chiusura", header_date)
+            if bal:
+                balances.append(bal)
+
+        elif record_type in ("65", "EF"):
             # Fine giornata/file: salva l'ultimo record 62
             if current_62 is not None:
                 tx = _build_transaction(current_62, current_63_lines, header_date)
@@ -106,7 +128,59 @@ def parse_cbi_file(content):
         if tx:
             transactions.append(tx)
 
-    return transactions
+    return {"transactions": transactions, "balances": balances}
+
+
+def _parse_balance_record(line, balance_type, header_date):
+    """Parsa un record 61 (apertura) o 64 (chiusura) per estrarre il saldo.
+
+    Record 64 (chiusura) - posizioni fisse:
+        [0:2]   = "64"
+        [2:9]   = numero conto
+        [9:12]  = valuta (EUR)
+        [12:18] = data (DDMMYY)
+        [18:19] = segno (C/D)
+        [19:34] = importo (15 chars)
+
+    Record 61 (apertura) - struttura diversa, il saldo e' dopo il marker EUR:
+        ...EUR + DDMMYY + segno + importo (15 chars)
+    """
+    if len(line) < 34:
+        return None
+    try:
+        record_type = line[0:2]
+
+        if record_type == "64":
+            # Posizioni fisse per record 64
+            date_str = line[12:18]
+            sign = line[18:19]
+            amount_raw = line[19:34].strip()
+        elif record_type == "61":
+            # Record 61: cerco il marker EUR per trovare data e saldo
+            eur_idx = line.find("EUR")
+            if eur_idx < 0 or len(line) < eur_idx + 25:
+                return None
+            date_str = line[eur_idx + 3:eur_idx + 9]
+            sign = line[eur_idx + 9:eur_idx + 10]
+            amount_raw = line[eur_idx + 10:eur_idx + 25].strip()
+        else:
+            return None
+
+        bal_date = _parse_cbi_date(date_str) or header_date
+        if not bal_date:
+            return None
+
+        amount = _parse_italian_amount(amount_raw)
+        if sign == "D":
+            amount = -amount
+
+        return {
+            "date": bal_date,
+            "balance": round(amount, 2),
+            "type": balance_type,
+        }
+    except (ValueError, IndexError):
+        return None
 
 
 def _build_transaction(line_62, lines_63, header_date):

@@ -20,69 +20,148 @@
 {% for item in items %}
 {% set bt = item.bt %}
 {% set proposals = item.proposals %}
-<div class="cb-card p-3 mb-3">
-    {# Intestazione movimento #}
-    <div class="d-flex justify-content-between align-items-start mb-2">
-        <div>
-            <span class="badge {{ 'badge-entrata' if bt.direction == 'C' else 'badge-uscita' }} me-1">
-                {{ 'Credito' if bt.direction == 'C' else 'Debito' }}
-            </span>
-            <span class="fw-bold {{ 'text-cb-dark-green' if bt.direction == 'C' else 'text-cb-gold' }}" style="font-size:1.2rem">
-                {{ '+' if bt.direction == 'C' else '-' }}&euro;{{ "{:,.2f}".format(bt.amount) }}
-            </span>
+{% set available = item.available %}
+<div class="cb-card mb-3">
+    {# Intestazione movimento bancario #}
+    <div class="p-3 border-bottom" style="background:#f8f9fa; border-radius:12px 12px 0 0">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <span class="badge {{ 'badge-entrata' if bt.direction == 'C' else 'badge-uscita' }} me-1">
+                    {{ 'Credito' if bt.direction == 'C' else 'Debito' }}
+                </span>
+                <span class="fw-bold {{ 'text-cb-dark-green' if bt.direction == 'C' else 'text-cb-gold' }}" style="font-size:1.2rem">
+                    {{ '+' if bt.direction == 'C' else '-' }}&euro;{{ "{:,.2f}".format(bt.amount) }}
+                </span>
+                <span class="text-muted ms-2 small">{{ bt.operation_date.strftime('%d/%m/%Y') }}</span>
+            </div>
+            {% if bt.causale_abi %}
+            <span class="badge bg-secondary">{{ bt.causale_abi }}</span>
+            {% endif %}
         </div>
-        <span class="text-muted small">{{ bt.operation_date.strftime('%d/%m/%Y') }}</span>
-    </div>
-    <div class="mb-2">
-        {% if bt.counterpart_name %}<div><strong>{{ bt.counterpart_name }}</strong></div>{% endif %}
-        {% if bt.causale_description %}<div class="small text-muted">{{ bt.causale_description }}</div>{% endif %}
-        {% if bt.remittance_info %}<div class="small text-muted">{{ bt.remittance_info[:120] }}</div>{% endif %}
+        <div class="mt-1">
+            {% if bt.counterpart_name %}<strong>{{ bt.counterpart_name }}</strong>{% endif %}
+            {% if bt.causale_description %}<span class="text-muted ms-1">| {{ bt.causale_description }}</span>{% endif %}
+        </div>
+        {% if bt.remittance_info %}<div class="small text-muted mt-1">{{ bt.remittance_info[:150] }}</div>{% endif %}
     </div>
 
-    {# Proposte di abbinamento #}
-    {% if proposals %}
-    <div class="border-top pt-2 mt-2">
-        <small class="text-muted fw-bold">Proposte di abbinamento:</small>
-        {% for p in proposals %}
-        <div class="d-flex align-items-center justify-content-between bg-light rounded p-2 mt-1">
-            <div class="flex-grow-1">
-                <div class="small">
-                    <span class="badge bg-{{ 'success' if p.score >= 80 else 'warning' }} me-1">{{ p.score }}%</span>
-                    {{ p.transaction.description[:60] }}
+    {# Due colonne: proposte + abbinamento manuale #}
+    <div class="row g-0">
+        {# Colonna sinistra: Proposte automatiche #}
+        <div class="col-lg-6 p-3 {% if available.sdi or available.altre %}border-end{% endif %}">
+            <h6 class="text-muted mb-2"><i class="bi bi-lightning"></i> Proposte automatiche</h6>
+            {% if proposals %}
+            {% for p in proposals %}
+            <div class="d-flex align-items-center justify-content-between bg-light rounded p-2 mb-1">
+                <div class="flex-grow-1 me-2">
+                    <div class="small">
+                        <span class="badge bg-{{ 'success' if p.score >= 80 else ('warning text-dark' if p.score >= 50 else 'secondary') }} me-1">{{ p.score }}%</span>
+                        {{ p.transaction.description[:55] }}
+                    </div>
+                    <div class="small text-muted">
+                        {{ p.transaction.date.strftime('%d/%m/%Y') }} |
+                        &euro;{{ "{:,.2f}".format(p.transaction.amount) }} |
+                        <span class="badge badge-{{ p.transaction.source }} badge-sm" style="font-size:0.65rem">{{ p.transaction.source|upper }}</span>
+                        {% if p.reasons %}<br>{{ p.reasons | join(', ') }}{% endif %}
+                    </div>
                 </div>
-                <div class="small text-muted">
-                    {{ p.transaction.date.strftime('%d/%m/%Y') }} |
-                    &euro;{{ "{:,.2f}".format(p.transaction.amount) }} |
-                    {{ p.transaction.source | upper }}
-                    {% if p.reasons %} | {{ p.reasons | join(', ') }}{% endif %}
+                <form method="POST" action="{{ url_for('banca.riconcilia', id=bt.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="transaction_id" value="{{ p.transaction.id }}">
+                    <button class="btn btn-sm btn-cb" title="Abbina"><i class="bi bi-check-lg"></i></button>
+                </form>
+            </div>
+            {% endfor %}
+            {% else %}
+            <p class="small text-muted mb-0">Nessuna proposta automatica.</p>
+            {% endif %}
+        </div>
+
+        {# Colonna destra: Abbinamento manuale #}
+        <div class="col-lg-6 p-3">
+            <h6 class="text-muted mb-2"><i class="bi bi-search"></i> Abbinamento manuale</h6>
+
+            {# Tabs fonte #}
+            <ul class="nav nav-tabs nav-tabs-sm mb-2" role="tablist" style="font-size:0.8rem">
+                <li class="nav-item"><a class="nav-link active search-tab" data-bs-toggle="tab" href="#sdi-{{ bt.id }}" data-source="sdi" data-bt="{{ bt.id }}">Fatture SDI{% if available.sdi %} ({{ available.sdi|length }}){% endif %}</a></li>
+                <li class="nav-item"><a class="nav-link search-tab" data-bs-toggle="tab" href="#altre-{{ bt.id }}" data-source="altre" data-bt="{{ bt.id }}">Manuali/Banca{% if available.altre %} ({{ available.altre|length }}){% endif %}</a></li>
+            </ul>
+
+            {# Barra ricerca #}
+            <div class="row g-1 mb-1">
+                <div class="col">
+                    <input type="text" class="form-control form-control-sm search-q" data-bt="{{ bt.id }}" placeholder="Cerca descrizione, contatto...">
+                </div>
+                <div class="col-auto">
+                    <input type="date" class="form-control form-control-sm search-from" data-bt="{{ bt.id }}">
+                </div>
+                <div class="col-auto">
+                    <input type="date" class="form-control form-control-sm search-to" data-bt="{{ bt.id }}">
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-sm btn-cb-outline search-btn" data-bt="{{ bt.id }}" title="Cerca"><i class="bi bi-search"></i></button>
                 </div>
             </div>
-            <form method="POST" action="{{ url_for('banca.riconcilia', id=bt.id) }}" class="ms-2">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="transaction_id" value="{{ p.transaction.id }}">
-                <button class="btn btn-sm btn-cb" title="Conferma abbinamento">
-                    <i class="bi bi-check-lg"></i>
-                </button>
-            </form>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
+            <div class="mb-2">
+                <div class="form-check form-check-inline" style="font-size:0.8rem">
+                    <input class="form-check-input search-paid" type="checkbox" data-bt="{{ bt.id }}" id="paid-{{ bt.id }}">
+                    <label class="form-check-label" for="paid-{{ bt.id }}">Includi pagate</label>
+                </div>
+            </div>
 
-    {# Azioni #}
-    <div class="border-top pt-2 mt-2">
+            {# Risultati #}
+            <div class="tab-content" style="max-height:280px; overflow-y:auto">
+                <div class="tab-pane fade show active" id="sdi-{{ bt.id }}">
+                    <div class="search-results" data-bt="{{ bt.id }}" data-source="sdi">
+                    {% for tx in available.sdi %}
+                    <div class="d-flex align-items-center justify-content-between border-bottom py-1">
+                        <div class="small flex-grow-1 me-2">
+                            <div>{{ tx.description[:55] if tx.description else '-' }}</div>
+                            <div class="text-muted">{{ tx.date.strftime('%d/%m/%Y') }} | &euro;{{ "{:,.2f}".format(tx.amount) }}{% if tx.contact %} | {{ tx.contact.name[:25] }}{% endif %}</div>
+                        </div>
+                        <form method="POST" action="{{ url_for('banca.riconcilia', id=bt.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="transaction_id" value="{{ tx.id }}">
+                            <button class="btn btn-sm btn-outline-success" title="Abbina"><i class="bi bi-link-45deg"></i></button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                    {% if not available.sdi %}<p class="small text-muted mb-0">Nessuna fattura SDI trovata.</p>{% endif %}
+                    </div>
+                </div>
+                <div class="tab-pane fade" id="altre-{{ bt.id }}">
+                    <div class="search-results" data-bt="{{ bt.id }}" data-source="altre">
+                    {% for tx in available.altre %}
+                    <div class="d-flex align-items-center justify-content-between border-bottom py-1">
+                        <div class="small flex-grow-1 me-2">
+                            <div>{{ tx.description[:55] if tx.description else '-' }}</div>
+                            <div class="text-muted">{{ tx.date.strftime('%d/%m/%Y') }} | &euro;{{ "{:,.2f}".format(tx.amount) }}{% if tx.contact %} | {{ tx.contact.name[:25] }}{% endif %}</div>
+                        </div>
+                        <form method="POST" action="{{ url_for('banca.riconcilia', id=bt.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="transaction_id" value="{{ tx.id }}">
+                            <button class="btn btn-sm btn-outline-success" title="Abbina"><i class="bi bi-link-45deg"></i></button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                    {% if not available.altre %}<p class="small text-muted mb-0">Nessuna transazione trovata.</p>{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Azioni in fondo #}
+    <div class="p-3 border-top" style="background:#fafafa; border-radius:0 0 12px 12px">
         <div class="d-flex gap-2 flex-wrap">
-            {# Crea transazione #}
             <button class="btn btn-sm btn-cb-outline" type="button"
                     data-bs-toggle="collapse" data-bs-target="#crea-{{ bt.id }}">
                 <i class="bi bi-plus-circle"></i> Crea movimento
             </button>
-            {# Ignora #}
             <form method="POST" action="{{ url_for('banca.ignora', id=bt.id) }}" class="d-inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-dash-circle"></i> Ignora</button>
             </form>
-            {# Crea regola #}
             <a href="{{ url_for('banca.regola_nuova', counterpart=bt.counterpart_name or '', causale=bt.causale_abi or '', direction=bt.direction) }}"
                class="btn btn-sm btn-outline-info">
                 <i class="bi bi-gear"></i> Crea regola
@@ -134,4 +213,88 @@
 </div>
 {% endfor %}
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CSRF = '{{ csrf_token() }}';
+
+function buildParams(btId, source) {
+    const q = document.querySelector(`.search-q[data-bt="${btId}"]`).value;
+    const dateFrom = document.querySelector(`.search-from[data-bt="${btId}"]`).value;
+    const dateTo = document.querySelector(`.search-to[data-bt="${btId}"]`).value;
+    const includePaid = document.querySelector(`.search-paid[data-bt="${btId}"]`).checked;
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (dateFrom) params.set('date_from', dateFrom);
+    if (dateTo) params.set('date_to', dateTo);
+    if (includePaid) params.set('include_paid', '1');
+    params.set('source', source);
+    return params;
+}
+
+function renderResults(container, items, btId) {
+    if (!items.length) {
+        container.innerHTML = '<p class="small text-muted mb-0">Nessun risultato.</p>';
+        return;
+    }
+    container.innerHTML = items.map(tx => `
+        <div class="d-flex align-items-center justify-content-between border-bottom py-1">
+            <div class="small flex-grow-1 me-2">
+                <div>${tx.description}</div>
+                <div class="text-muted">${tx.date} | &euro;${tx.amount}${tx.contact ? ' | ' + tx.contact : ''} <span class="badge badge-${tx.source.toLowerCase()}" style="font-size:0.6rem">${tx.source}</span>${tx.status ? ' <span class="badge badge-' + tx.status + '" style="font-size:0.6rem">' + tx.status.replace('_', ' ') + '</span>' : ''}</div>
+            </div>
+            <form method="POST" action="/banca/riconcilia/${btId}">
+                <input type="hidden" name="csrf_token" value="${CSRF}">
+                <input type="hidden" name="transaction_id" value="${tx.id}">
+                <button class="btn btn-sm btn-outline-success" title="Abbina"><i class="bi bi-link-45deg"></i></button>
+            </form>
+        </div>
+    `).join('');
+}
+
+function fetchSource(btId, source) {
+    const params = buildParams(btId, source);
+    const container = document.querySelector(`.search-results[data-bt="${btId}"][data-source="${source}"]`);
+    container.innerHTML = '<p class="small text-muted">Ricerca...</p>';
+    return fetch(`/banca/cerca-transazioni/${btId}?${params}`)
+        .then(r => r.json())
+        .then(items => {
+            renderResults(container, items, btId);
+            // Aggiorna conteggio nella tab
+            const tab = document.querySelector(`.search-tab[data-bt="${btId}"][data-source="${source}"]`);
+            if (tab) {
+                const label = source === 'sdi' ? 'Fatture SDI' : 'Manuali/Banca';
+                tab.textContent = `${label} (${items.length})`;
+            }
+            return items;
+        })
+        .catch(() => {
+            container.innerHTML = '<p class="small text-danger mb-0">Errore di ricerca.</p>';
+        });
+}
+
+function doSearch(btId) {
+    fetchSource(btId, 'sdi');
+    fetchSource(btId, 'altre');
+}
+
+// Click cerca
+document.querySelectorAll('.search-btn').forEach(btn => {
+    btn.addEventListener('click', () => doSearch(btn.dataset.bt));
+});
+
+// Enter nella casella di ricerca
+document.querySelectorAll('.search-q').forEach(input => {
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); doSearch(input.dataset.bt); }
+    });
+});
+
+// Toggle "includi pagate": rilancia ricerca
+document.querySelectorAll('.search-paid').forEach(cb => {
+    cb.addEventListener('change', () => doSearch(cb.dataset.bt));
+});
+
+</script>
 {% endblock %}

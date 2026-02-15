@@ -10,20 +10,28 @@
 
 <div class="cb-filters">
     <form method="GET" class="row g-2 align-items-end">
-        <div class="col-auto">
-            <label class="form-label small">Mese</label>
-            <input type="month" name="month" class="form-control form-control-sm" value="{{ month }}">
+        <div class="col-6 col-md-2">
+            <label class="form-label small">Da data</label>
+            <input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from }}">
         </div>
-        <div class="col-auto">
+        <div class="col-6 col-md-2">
+            <label class="form-label small">A data</label>
+            <input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to }}">
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small">Cerca</label>
+            <input type="text" name="q" class="form-control form-control-sm" placeholder="Controparte, causale..." value="{{ search }}">
+        </div>
+        <div class="col-6 col-md-1">
             <label class="form-label small">Stato</label>
             <select name="status" class="form-select form-select-sm">
                 <option value="">Tutti</option>
-                <option value="non_riconciliato" {{ 'selected' if status_filter == 'non_riconciliato' }}>Non riconciliato</option>
+                <option value="non_riconciliato" {{ 'selected' if status_filter == 'non_riconciliato' }}>Non riconc.</option>
                 <option value="riconciliato" {{ 'selected' if status_filter == 'riconciliato' }}>Riconciliato</option>
                 <option value="ignorato" {{ 'selected' if status_filter == 'ignorato' }}>Ignorato</option>
             </select>
         </div>
-        <div class="col-auto">
+        <div class="col-6 col-md-1">
             <label class="form-label small">Tipo</label>
             <select name="direction" class="form-select form-select-sm">
                 <option value="">Tutti</option>
@@ -31,8 +39,26 @@
                 <option value="D" {{ 'selected' if direction_filter == 'D' }}>Debito</option>
             </select>
         </div>
+        <div class="col-6 col-md-1">
+            <label class="form-label small">Min &euro;</label>
+            <input type="number" name="amount_min" class="form-control form-control-sm" step="0.01" value="{{ amount_min }}">
+        </div>
+        <div class="col-6 col-md-1">
+            <label class="form-label small">Max &euro;</label>
+            <input type="number" name="amount_max" class="form-control form-control-sm" step="0.01" value="{{ amount_max }}">
+        </div>
+        <div class="col-6 col-md-1">
+            <label class="form-label small">Causale</label>
+            <select name="causale" class="form-select form-select-sm">
+                <option value="">Tutte</option>
+                {% for code, desc in causali_abi %}
+                <option value="{{ code }}" {{ 'selected' if causale_filter == code }}>{{ code }} {{ desc }}</option>
+                {% endfor %}
+            </select>
+        </div>
         <div class="col-auto">
             <button class="btn btn-cb btn-sm">Filtra</button>
+            <a href="{{ url_for('banca.movimenti') }}" class="btn btn-sm btn-outline-secondary">Reset</a>
         </div>
     </form>
 </div>

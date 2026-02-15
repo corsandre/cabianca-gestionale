@@ -4,7 +4,7 @@ import logging
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
 from app import db
-from app.models import SdiInvoice, Transaction
+from app.models import SdiInvoice, Transaction, BankTransaction
 from app.services.sdi_importer import import_sdi_xml
 from app.utils.decorators import write_required
 
@@ -33,7 +33,28 @@ def index():
     page = request.args.get("page", 1, type=int)
     pagination = query.order_by(SdiInvoice.invoice_date.desc()).paginate(page=page, per_page=50)
 
-    return render_template("fatture/index.html", invoices=pagination.items, pagination=pagination)
+    # Pre-carica stato riconciliazione per ogni fattura
+    invoice_ids = [inv.id for inv in pagination.items]
+    # Trova le transazioni associate e il loro stato di riconciliazione bancaria
+    bank_status = {}
+    if invoice_ids:
+        results = db.session.query(
+            Transaction.invoice_id,
+            BankTransaction.id,
+            BankTransaction.status,
+        ).outerjoin(
+            BankTransaction, BankTransaction.matched_transaction_id == Transaction.id
+        ).filter(
+            Transaction.invoice_id.in_(invoice_ids)
+        ).all()
+        for inv_id, bt_id, bt_status in results:
+            if bt_id:
+                bank_status[inv_id] = "riconciliato"
+            elif inv_id not in bank_status:
+                bank_status[inv_id] = None
+
+    return render_template("fatture/index.html", invoices=pagination.items,
+                          pagination=pagination, bank_status=bank_status)
 
 
 @bp.route("/upload", methods=["GET", "POST"])

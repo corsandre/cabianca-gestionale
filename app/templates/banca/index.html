@@ -44,6 +44,74 @@
     </div>
 </div>
 
+{# Saldo bancario vs contabile #}
+<div class="cb-card p-3 mb-4">
+    <h5 class="mb-3"><i class="bi bi-calculator"></i> Confronto Saldi</h5>
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="text-center p-3 bg-light rounded">
+                <small class="text-muted text-uppercase d-block">Saldo Banca (E/C)</small>
+                {% if saldo_banca is not none %}
+                <h4 class="mb-0 {% if saldo_banca >= 0 %}text-cb-dark-green{% else %}text-danger{% endif %}">&euro;{{ "{:,.2f}".format(saldo_banca) }}</h4>
+                <small class="text-muted">al {{ saldo_banca_data.strftime('%d/%m/%Y') }}</small>
+                {% else %}
+                <h4 class="mb-0 text-muted">--</h4>
+                <small class="text-muted">Nessun saldo CBI importato</small>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="text-center p-3 bg-light rounded">
+                <small class="text-muted text-uppercase d-block">Saldo Contabile</small>
+                {% if saldo_contabile is not none %}
+                <h4 class="mb-0 {% if saldo_contabile >= 0 %}text-cb-dark-green{% else %}text-danger{% endif %}">&euro;{{ "{:,.2f}".format(saldo_contabile) }}</h4>
+                <small class="text-muted">Apertura + movimenti processati</small>
+                {% else %}
+                <h4 class="mb-0 text-muted">--</h4>
+                <small class="text-muted">Nessun saldo CBI importato</small>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-md-4">
+            {% if saldo_banca is not none and saldo_contabile is not none %}
+            {% set differenza = saldo_banca - saldo_contabile %}
+            <div class="text-center p-3 rounded {% if differenza|abs < 0.01 %}bg-success bg-opacity-10{% else %}bg-danger bg-opacity-10{% endif %}">
+                <small class="text-muted text-uppercase d-block">Differenza</small>
+                <h4 class="mb-0 {% if differenza|abs < 0.01 %}text-success{% else %}text-danger{% endif %}">&euro;{{ "{:,.2f}".format(differenza) }}</h4>
+                <small class="{% if differenza|abs < 0.01 %}text-success{% else %}text-danger{% endif %}">
+                    {% if differenza|abs < 0.01 %}<i class="bi bi-check-circle"></i> Tutto riconciliato{% else %}<i class="bi bi-exclamation-triangle"></i> {{ sospesi }} mov. da processare{% endif %}
+                </small>
+            </div>
+            {% else %}
+            <div class="text-center p-3 bg-light rounded">
+                <small class="text-muted text-uppercase d-block">Differenza</small>
+                <h4 class="mb-0 text-muted">--</h4>
+                <small class="text-muted">Importa un E/C CBI</small>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if storico_saldi %}
+    <details>
+        <summary class="small text-muted" style="cursor:pointer">Storico saldi giornalieri ({{ storico_saldi|length }})</summary>
+        <div class="table-responsive mt-2">
+            <table class="table table-sm mb-0">
+                <thead><tr><th>Data</th><th class="text-end">Saldo chiusura</th></tr></thead>
+                <tbody>
+                    {% for s in storico_saldi %}
+                    <tr>
+                        <td class="small">{{ s.date.strftime('%d/%m/%Y') }}</td>
+                        <td class="text-end fw-bold {% if s.balance >= 0 %}text-cb-dark-green{% else %}text-danger{% endif %}">&euro;{{ "{:,.2f}".format(s.balance) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+    {% endif %}
+</div>
+
 {# Upload CBI #}
 <div class="cb-card p-3 mb-4">
     <h5 class="mb-3"><i class="bi bi-upload"></i> Importa estratto conto CBI</h5>

@@ -95,7 +95,7 @@ class Transaction(db.Model):
     __tablename__ = "transactions"
     id = db.Column(db.Integer, primary_key=True)
     type = db.Column(db.String(10), nullable=False)  # entrata, uscita
-    source = db.Column(db.String(10), nullable=False)  # sdi, cassa, manuale
+    source = db.Column(db.String(10), nullable=False)  # sdi, cassa, manuale, banca
     official = db.Column(db.Boolean, default=True)
     amount = db.Column(db.Float, nullable=False)
     iva_amount = db.Column(db.Float, default=0)
@@ -119,6 +119,11 @@ class Transaction(db.Model):
 
     tags = db.relationship("Tag", secondary=transaction_tags, backref="transactions")
     creator = db.relationship("User", backref="transactions")
+
+    @property
+    def bank_match(self):
+        """Ritorna il primo BankTransaction collegato, se esiste."""
+        return self.bank_matches[0] if self.bank_matches else None
 
 
 # === SDI INVOICES ===
@@ -259,3 +264,15 @@ class BankTransaction(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     matched_transaction = db.relationship("Transaction", backref="bank_matches")
+
+
+class BankBalance(db.Model):
+    """Saldo bancario a una data specifica (da CBI o inserimento manuale)."""
+    __tablename__ = "bank_balances"
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.Date, nullable=False)
+    balance = db.Column(db.Float, nullable=False)
+    balance_type = db.Column(db.String(20), default="chiusura")  # apertura, chiusura
+    source = db.Column(db.String(10), default="manuale")  # cbi, manuale
+    notes = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
