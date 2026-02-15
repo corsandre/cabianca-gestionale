@@ -180,6 +180,30 @@ def import_sdi_file(content: bytes, filename: str, uploaded_by: int = None) -> d
                 due_date=data.get("due_date"),
                 created_by=uploaded_by,
             )
+
+            # Applica regole automatiche per categorizzazione
+            try:
+                from app.services.rules_engine import apply_rules
+                rule_data = {
+                    "description": tx.description,
+                    "counterpart": data["sender_name"],
+                    "partita_iva": data.get("sender_partita_iva", ""),
+                    "amount": data["total_amount"],
+                    "direction": data["direction"],
+                }
+                actions = apply_rules(rule_data, "sdi")
+                if actions:
+                    if actions.get("category_id"):
+                        tx.category_id = actions["category_id"]
+                    if actions.get("contact_id") and not tx.contact_id:
+                        tx.contact_id = actions["contact_id"]
+                    if actions.get("revenue_stream_id"):
+                        tx.revenue_stream_id = actions["revenue_stream_id"]
+                    if actions.get("description"):
+                        tx.description = actions["description"]
+            except Exception as e:
+                logger.warning(f"Errore applicazione regole SDI: {e}")
+
             db.session.add(tx)
 
             return {"status": "imported", "message": f"Fattura {data['invoice_number']} importata."}

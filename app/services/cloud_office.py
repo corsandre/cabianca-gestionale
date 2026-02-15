@@ -441,6 +441,27 @@ def _save_day(rec_date, reparti_data, reparto_ids):
             payment_method="contanti",
             payment_date=rec_date,
         )
+
+        # Applica regole automatiche per eventuali override
+        try:
+            from app.services.rules_engine import apply_rules
+            rule_data = {
+                "description": tx.description,
+                "counterpart": rd["name"],
+                "amount": rd["total"],
+                "direction": "C",
+            }
+            actions = apply_rules(rule_data, "cassa")
+            if actions:
+                if actions.get("category_id"):
+                    tx.category_id = actions["category_id"]
+                if actions.get("revenue_stream_id"):
+                    tx.revenue_stream_id = actions["revenue_stream_id"]
+                if actions.get("description"):
+                    tx.description = actions["description"]
+        except Exception:
+            pass
+
         db.session.add(tx)
         day_total += rd["total"]
 

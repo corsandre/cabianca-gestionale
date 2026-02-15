@@ -273,6 +273,19 @@ h1, h2, h3, h4, h5, .cb-heading {
     background: #fd7e14;
 }
 
+.badge-riconciliato {
+    background: #28a745;
+}
+
+.badge-non_riconciliato {
+    background: #ffc107;
+    color: #1d1922;
+}
+
+.badge-ignorato {
+    background: #6c757d;
+}
+
 /* === BUTTONS === */
 
 .btn-cb {

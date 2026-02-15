@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Movimenti Sospesi - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-exclamation-triangle text-cb-gold"></i> Movimenti Sospesi</h1>
+    <a href="{{ url_for('banca.index') }}" class="btn btn-cb-outline btn-sm">
+        <i class="bi bi-arrow-left"></i> Banca
+    </a>
+</div>
+
+{% if not items %}
+<div class="cb-card cb-empty">
+    <i class="bi bi-check-circle d-block" style="color:#28a745"></i>
+    <p>Tutti i movimenti sono riconciliati!</p>
+    <a href="{{ url_for('banca.index') }}" class="btn btn-cb btn-sm">Torna alla dashboard</a>
+</div>
+{% else %}
+<p class="text-muted mb-3">{{ items | length }} movimenti da riconciliare</p>
+
+{% for item in items %}
+{% set bt = item.bt %}
+{% set proposals = item.proposals %}
+<div class="cb-card p-3 mb-3">
+    {# Intestazione movimento #}
+    <div class="d-flex justify-content-between align-items-start mb-2">
+        <div>
+            <span class="badge {{ 'badge-entrata' if bt.direction == 'C' else 'badge-uscita' }} me-1">
+                {{ 'Credito' if bt.direction == 'C' else 'Debito' }}
+            </span>
+            <span class="fw-bold {{ 'text-cb-dark-green' if bt.direction == 'C' else 'text-cb-gold' }}" style="font-size:1.2rem">
+                {{ '+' if bt.direction == 'C' else '-' }}&euro;{{ "{:,.2f}".format(bt.amount) }}
+            </span>
+        </div>
+        <span class="text-muted small">{{ bt.operation_date.strftime('%d/%m/%Y') }}</span>
+    </div>
+    <div class="mb-2">
+        {% if bt.counterpart_name %}<div><strong>{{ bt.counterpart_name }}</strong></div>{% endif %}
+        {% if bt.causale_description %}<div class="small text-muted">{{ bt.causale_description }}</div>{% endif %}
+        {% if bt.remittance_info %}<div class="small text-muted">{{ bt.remittance_info[:120] }}</div>{% endif %}
+    </div>
+
+    {# Proposte di abbinamento #}
+    {% if proposals %}
+    <div class="border-top pt-2 mt-2">
+        <small class="text-muted fw-bold">Proposte di abbinamento:</small>
+        {% for p in proposals %}
+        <div class="d-flex align-items-center justify-content-between bg-light rounded p-2 mt-1">
+            <div class="flex-grow-1">
+                <div class="small">
+                    <span class="badge bg-{{ 'success' if p.score >= 80 else 'warning' }} me-1">{{ p.score }}%</span>
+                    {{ p.transaction.description[:60] }}
+                </div>
+                <div class="small text-muted">
+                    {{ p.transaction.date.strftime('%d/%m/%Y') }} |
+                    &euro;{{ "{:,.2f}".format(p.transaction.amount) }} |
+                    {{ p.transaction.source | upper }}
+                    {% if p.reasons %} | {{ p.reasons | join(', ') }}{% endif %}
+                </div>
+            </div>
+            <form method="POST" action="{{ url_for('banca.riconcilia', id=bt.id) }}" class="ms-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="transaction_id" value="{{ p.transaction.id }}">
+                <button class="btn btn-sm btn-cb" title="Conferma abbinamento">
+                    <i class="bi bi-check-lg"></i>
+                </button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# Azioni #}
+    <div class="border-top pt-2 mt-2">
+        <div class="d-flex gap-2 flex-wrap">
+            {# Crea transazione #}
+            <button class="btn btn-sm btn-cb-outline" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#crea-{{ bt.id }}">
+                <i class="bi bi-plus-circle"></i> Crea movimento
+            </button>
+            {# Ignora #}
+            <form method="POST" action="{{ url_for('banca.ignora', id=bt.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-dash-circle"></i> Ignora</button>
+            </form>
+            {# Crea regola #}
+            <a href="{{ url_for('banca.regola_nuova', counterpart=bt.counterpart_name or '', causale=bt.causale_abi or '', direction=bt.direction) }}"
+               class="btn btn-sm btn-outline-info">
+                <i class="bi bi-gear"></i> Crea regola
+            </a>
+        </div>
+
+        {# Form creazione transazione (collassato) #}
+        <div class="collapse mt-2" id="crea-{{ bt.id }}">
+            <form method="POST" action="{{ url_for('banca.crea_movimento', id=bt.id) }}" class="bg-light rounded p-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small">Categoria</label>
+                        <select name="category_id" class="form-select form-select-sm">
+                            <option value="">-- Nessuna --</option>
+                            {% for c in categories %}
+                            <option value="{{ c.id }}">{{ c.name }} ({{ c.type }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Contatto</label>
+                        <select name="contact_id" class="form-select form-select-sm">
+                            <option value="">-- Nessuno --</option>
+                            {% for c in contacts %}
+                            <option value="{{ c.id }}">{{ c.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Flusso ricavi</label>
+                        <select name="revenue_stream_id" class="form-select form-select-sm">
+                            <option value="">-- Nessuno --</option>
+                            {% for rs in revenue_streams %}
+                            <option value="{{ rs.id }}">{{ rs.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Descrizione</label>
+                        <input type="text" name="description" class="form-control form-control-sm"
+                               value="{{ bt.counterpart_name or '' }} - {{ bt.causale_description or '' }}">
+                    </div>
+                </div>
+                <button class="btn btn-cb btn-sm mt-2"><i class="bi bi-plus"></i> Crea e riconcilia</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

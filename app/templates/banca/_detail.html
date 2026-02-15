@@ -1,0 +1,78 @@
+{# Pannello dettaglio movimento bancario - incluso con {% include %} dove bt e' nel contesto #}
+<div class="bg-light p-3" style="border-left: 3px solid var(--cb-green);">
+    <div class="row g-2 small">
+        <div class="col-md-6">
+            <table class="table table-sm table-borderless mb-0">
+                <tr>
+                    <td class="text-muted fw-bold" style="width:40%">Controparte</td>
+                    <td>{{ bt.counterpart_name or '-' }}</td>
+                </tr>
+                <tr>
+                    <td class="text-muted fw-bold">Indirizzo</td>
+                    <td>{{ bt.counterpart_address or '-' }}</td>
+                </tr>
+                <tr>
+                    <td class="text-muted fw-bold">ABI/CAB Ordinante</td>
+                    <td>{{ bt.ordinante_abi_cab or '-' }}</td>
+                </tr>
+                <tr>
+                    <td class="text-muted fw-bold">Causale ABI</td>
+                    <td>
+                        <code>{{ bt.causale_abi or '-' }}</code>
+                        {% if bt.causale_description %}
+                            <span class="text-muted">- {{ bt.causale_description }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="text-muted fw-bold">Causale pagamento</td>
+                    <td>{{ bt.remittance_info or '-' }}</td>
+                </tr>
+            </table>
+        </div>
+        <div class="col-md-6">
+            <table class="table table-sm table-borderless mb-0">
+                <tr>
+                    <td class="text-muted fw-bold" style="width:40%">Data operazione</td>
+                    <td>{{ bt.operation_date.strftime('%d/%m/%Y') }}</td>
+                </tr>
+                <tr>
+                    <td class="text-muted fw-bold">Data valuta</td>
+                    <td>{{ bt.value_date.strftime('%d/%m/%Y') if bt.value_date else '-' }}</td>
+                </tr>
+                <tr>
+                    <td class="text-muted fw-bold">Importo</td>
+                    <td class="fw-bold {{ 'text-cb-dark-green' if bt.direction == 'C' else 'text-cb-gold' }}">
+                        {{ 'Credito' if bt.direction == 'C' else 'Debito' }}
+                        &euro;{{ "{:,.2f}".format(bt.amount) }}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="text-muted fw-bold">Riferimento</td>
+                    <td><code>{{ bt.reference_code or '-' }}</code></td>
+                </tr>
+                <tr>
+                    <td class="text-muted fw-bold">Stato</td>
+                    <td>
+                        <span class="badge badge-{{ bt.status }}">{{ bt.status | replace('_', ' ') | title }}</span>
+                        {% if bt.matched_by %}
+                            <span class="text-muted">({{ bt.matched_by }})</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% if bt.matched_transaction %}
+                <tr>
+                    <td class="text-muted fw-bold">Abbinato a</td>
+                    <td>{{ bt.matched_transaction.description[:60] }}</td>
+                </tr>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+    {% if bt.raw_data %}
+    <details class="mt-2">
+        <summary class="text-muted small" style="cursor:pointer">Dati grezzi CBI</summary>
+        <pre class="bg-white p-2 rounded mt-1 small mb-0" style="white-space:pre-wrap; font-size:0.75rem;">{{ bt.raw_data }}</pre>
+    </details>
+    {% endif %}
+</div>

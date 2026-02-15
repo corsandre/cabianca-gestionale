@@ -55,6 +55,7 @@ def create_app():
     from app.routes.analisi import bp as analisi_bp
     from app.routes.scadenzario import bp as scadenzario_bp
     from app.routes.impostazioni import bp as impostazioni_bp
+    from app.routes.banca import bp as banca_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -68,6 +69,7 @@ def create_app():
     app.register_blueprint(analisi_bp)
     app.register_blueprint(scadenzario_bp)
     app.register_blueprint(impostazioni_bp)
+    app.register_blueprint(banca_bp)
 
     # Logging
     logging.basicConfig(level=logging.INFO)

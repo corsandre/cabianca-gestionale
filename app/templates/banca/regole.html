@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% block title %}Regole Automatiche - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-gear text-cb-green"></i> Regole Automatiche</h1>
+    <div>
+        <a href="{{ url_for('banca.index') }}" class="btn btn-cb-outline btn-sm me-1">
+            <i class="bi bi-arrow-left"></i> Banca
+        </a>
+        {% if mode == 'list' %}
+        <a href="{{ url_for('banca.regola_nuova') }}" class="btn btn-cb btn-sm">
+            <i class="bi bi-plus"></i> Nuova regola
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+{% if mode == 'list' %}
+{# === LISTA REGOLE === #}
+<p class="text-muted small mb-3">
+    Le regole si applicano automaticamente a movimenti bancari (CBI), fatture (SDI) e cassa.
+    Una regola tipo "TIM SPA &rarr; Utenze" funziona su tutte le fonti.
+</p>
+
+{% if rules %}
+<div class="cb-table">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr>
+                <th style="width:2rem"></th>
+                <th>Nome</th>
+                <th>Applica a</th>
+                <th class="d-none d-md-table-cell">Condizioni</th>
+                <th class="d-none d-md-table-cell">Azioni</th>
+                <th>Priorita</th>
+                <th></th>
+            </tr></thead>
+            <tbody>
+                {% for r in rules %}
+                <tr class="{{ 'opacity-50' if not r.active }}">
+                    <td class="text-center">
+                        <form method="POST" action="{{ url_for('banca.regola_toggle', id=r.id) }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn btn-sm p-0 border-0" title="{{ 'Disattiva' if r.active else 'Attiva' }}">
+                                <i class="bi {{ 'bi-toggle-on text-cb-green' if r.active else 'bi-toggle-off text-muted' }}" style="font-size:1.3rem"></i>
+                            </button>
+                        </form>
+                    </td>
+                    <td class="fw-bold">{{ r.name }}</td>
+                    <td>
+                        <span class="badge bg-secondary">{{ r.applies_to }}</span>
+                    </td>
+                    <td class="small d-none d-md-table-cell">
+                        {% set conds = [] %}
+                        {% if r.match_description %}{% set _ = conds.append('Desc: "' ~ r.match_description ~ '"') %}{% endif %}
+                        {% if r.match_counterpart %}{% set _ = conds.append('Contr: "' ~ r.match_counterpart ~ '"') %}{% endif %}
+                        {% if r.match_partita_iva %}{% set _ = conds.append('P.IVA: ' ~ r.match_partita_iva) %}{% endif %}
+                        {% if r.match_causale_abi %}{% set _ = conds.append('ABI: ' ~ r.match_causale_abi) %}{% endif %}
+                        {% if r.match_direction %}{% set _ = conds.append('Dir: ' ~ r.match_direction) %}{% endif %}
+                        {{ conds | join(' + ') if conds else '-' }}
+                    </td>
+                    <td class="small d-none d-md-table-cell">
+                        {% if r.action_category %}<span class="cb-chip" style="background:{{ r.action_category.color }}">{{ r.action_category.name }}</span> {% endif %}
+                        {% if r.action_contact %}{{ r.action_contact.name }} {% endif %}
+                        {% if r.action_auto_create %}<span class="badge bg-info">auto-crea</span>{% endif %}
+                    </td>
+                    <td class="text-center">{{ r.priority }}</td>
+                    <td class="text-end text-nowrap">
+                        <a href="{{ url_for('banca.regola_modifica', id=r.id) }}" class="btn btn-sm btn-cb-outline" title="Modifica">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <form method="POST" action="{{ url_for('banca.regola_elimina', id=r.id) }}" class="d-inline"
+                              onsubmit="return confirm('Eliminare la regola \'{{ r.name }}\'?')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn btn-sm btn-outline-danger" title="Elimina">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="cb-card cb-empty">
+    <i class="bi bi-gear d-block"></i>
+    <p>Nessuna regola definita.</p>
+    <a href="{{ url_for('banca.regola_nuova') }}" class="btn btn-cb btn-sm">Crea la prima regola</a>
+</div>
+{% endif %}
+
+{% else %}
+{# === FORM NUOVA/MODIFICA REGOLA === #}
+<div class="cb-card p-4">
+    <h5 class="mb-3">{{ 'Modifica regola' if mode == 'edit' else 'Nuova regola' }}</h5>
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="row g-3">
+            {# Info base #}
+            <div class="col-md-6">
+                <label class="form-label">Nome regola <span class="text-danger">*</span></label>
+                <input type="text" name="name" class="form-control" required
+                       value="{{ rule.name if rule else '' }}"
+                       placeholder="es. TIM SPA -> Utenze">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Applica a</label>
+                <select name="applies_to" class="form-select">
+                    {% for val, label in [('tutti','Tutti'), ('banca','Solo banca'), ('sdi','Solo SDI'), ('cassa','Solo cassa')] %}
+                    <option value="{{ val }}" {{ 'selected' if rule and rule.applies_to == val }}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Priorita</label>
+                <input type="number" name="priority" class="form-control"
+                       value="{{ rule.priority if rule else 0 }}" min="0" max="999">
+            </div>
+        </div>
+
+        <hr class="my-3">
+        <h6 class="text-muted"><i class="bi bi-funnel"></i> Condizioni (AND)</h6>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label small">Testo nella descrizione</label>
+                <input type="text" name="match_description" class="form-control form-control-sm"
+                       value="{{ rule.match_description if rule and rule.match_description else request.args.get('description', '') }}"
+                       placeholder="es. CONSORZIO AGRARIO">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small">Nome controparte</label>
+                <input type="text" name="match_counterpart" class="form-control form-control-sm"
+                       value="{{ rule.match_counterpart if rule and rule.match_counterpart else request.args.get('counterpart', '') }}"
+                       placeholder="es. TIM SPA">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small">P.IVA (esatta)</label>
+                <input type="text" name="match_partita_iva" class="form-control form-control-sm"
+                       value="{{ rule.match_partita_iva if rule and rule.match_partita_iva else '' }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small">Causale ABI</label>
+                <input type="text" name="match_causale_abi" class="form-control form-control-sm"
+                       value="{{ rule.match_causale_abi if rule and rule.match_causale_abi else request.args.get('causale', '') }}"
+                       placeholder="es. 480">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small">Direzione</label>
+                <select name="match_direction" class="form-select form-select-sm">
+                    <option value="">Qualsiasi</option>
+                    {% set dir_val = (rule.match_direction if rule and rule.match_direction else request.args.get('direction', '')) %}
+                    <option value="C" {{ 'selected' if dir_val == 'C' }}>C - Credito / Entrata</option>
+                    <option value="D" {{ 'selected' if dir_val == 'D' }}>D - Debito / Uscita</option>
+                    <option value="ricevuta" {{ 'selected' if dir_val == 'ricevuta' }}>Ricevuta (SDI)</option>
+                    <option value="emessa" {{ 'selected' if dir_val == 'emessa' }}>Emessa (SDI)</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small">Importo minimo</label>
+                <input type="number" step="0.01" name="match_amount_min" class="form-control form-control-sm"
+                       value="{{ rule.match_amount_min if rule and rule.match_amount_min else '' }}">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small">Importo massimo</label>
+                <input type="number" step="0.01" name="match_amount_max" class="form-control form-control-sm"
+                       value="{{ rule.match_amount_max if rule and rule.match_amount_max else '' }}">
+            </div>
+        </div>
+
+        <hr class="my-3">
+        <h6 class="text-muted"><i class="bi bi-lightning"></i> Azioni</h6>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label small">Categoria</label>
+                <select name="action_category_id" class="form-select form-select-sm">
+                    <option value="">-- Nessuna --</option>
+                    {% for c in categories %}
+                    <option value="{{ c.id }}" {{ 'selected' if rule and rule.action_category_id == c.id }}>
+                        {{ c.name }} ({{ c.type }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small">Contatto</label>
+                <select name="action_contact_id" class="form-select form-select-sm">
+                    <option value="">-- Nessuno --</option>
+                    {% for c in contacts %}
+                    <option value="{{ c.id }}" {{ 'selected' if rule and rule.action_contact_id == c.id }}>
+                        {{ c.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small">Flusso ricavi</label>
+                <select name="action_revenue_stream_id" class="form-select form-select-sm">
+                    <option value="">-- Nessuno --</option>
+                    {% for rs in revenue_streams %}
+                    <option value="{{ rs.id }}" {{ 'selected' if rule and rule.action_revenue_stream_id == rs.id }}>
+                        {{ rs.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small">Descrizione personalizzata</label>
+                <input type="text" name="action_description" class="form-control form-control-sm"
+                       value="{{ rule.action_description if rule and rule.action_description else '' }}">
+            </div>
+            <div class="col-12">
+                <div class="form-check">
+                    <input type="checkbox" name="action_auto_create" class="form-check-input" id="auto_create"
+                           {{ 'checked' if rule and rule.action_auto_create }}>
+                    <label class="form-check-label" for="auto_create">
+                        Crea automaticamente transazione in prima nota (solo movimenti bancari CBI)
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <button class="btn btn-cb"><i class="bi bi-check"></i> {{ 'Salva modifiche' if mode == 'edit' else 'Crea regola' }}</button>
+            <a href="{{ url_for('banca.regole') }}" class="btn btn-cb-outline ms-2">Annulla</a>
+        </div>
+    </form>
+</div>
+{% endif %}
+{% endblock %}

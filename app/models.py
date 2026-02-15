@@ -193,3 +193,69 @@ class CashRegisterDaily(db.Model):
     details = db.Column(db.Text)  # JSON
     synced_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# === BANK RECONCILIATION ===
+
+class AutoRule(db.Model):
+    """Regole automatiche unificate per categorizzazione (CBI + SDI + Cassa)."""
+    __tablename__ = "auto_rules"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    active = db.Column(db.Boolean, default=True)
+    priority = db.Column(db.Integer, default=0)
+    applies_to = db.Column(db.String(20), default="tutti")  # tutti, banca, sdi, cassa
+
+    # Condizioni (opzionali, combinate con AND)
+    match_description = db.Column(db.String(300))
+    match_counterpart = db.Column(db.String(200))
+    match_partita_iva = db.Column(db.String(20))
+    match_causale_abi = db.Column(db.String(10))
+    match_amount_min = db.Column(db.Float)
+    match_amount_max = db.Column(db.Float)
+    match_direction = db.Column(db.String(10))  # C/D (CBI), ricevuta/emessa (SDI)
+
+    # Azioni
+    action_category_id = db.Column(db.Integer, db.ForeignKey("categories.id"))
+    action_contact_id = db.Column(db.Integer, db.ForeignKey("contacts.id"))
+    action_revenue_stream_id = db.Column(db.Integer, db.ForeignKey("revenue_streams.id"))
+    action_description = db.Column(db.String(500))
+    action_auto_create = db.Column(db.Boolean, default=False)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    action_category = db.relationship("Category")
+    action_contact = db.relationship("Contact")
+    action_revenue_stream = db.relationship("RevenueStream")
+
+    bank_transactions = db.relationship("BankTransaction", backref="matched_rule", lazy="dynamic")
+
+
+class BankTransaction(db.Model):
+    """Movimenti bancari importati da file CBI."""
+    __tablename__ = "bank_transactions"
+    id = db.Column(db.Integer, primary_key=True)
+    operation_date = db.Column(db.Date, nullable=False)
+    value_date = db.Column(db.Date)
+    amount = db.Column(db.Float, nullable=False)
+    direction = db.Column(db.String(1), nullable=False)  # C=credito, D=debito
+    causale_abi = db.Column(db.String(10))
+    causale_description = db.Column(db.String(300))
+    counterpart_name = db.Column(db.String(200))
+    counterpart_address = db.Column(db.String(300))
+    ordinante_abi_cab = db.Column(db.String(20))
+    remittance_info = db.Column(db.Text)
+    reference_code = db.Column(db.String(100))
+    raw_data = db.Column(db.Text)
+    dedup_hash = db.Column(db.String(64), unique=True)
+
+    status = db.Column(db.String(20), default="non_riconciliato")  # non_riconciliato, riconciliato, ignorato
+    matched_transaction_id = db.Column(db.Integer, db.ForeignKey("transactions.id"))
+    matched_by = db.Column(db.String(20))  # auto, regola, manuale
+    matched_rule_id = db.Column(db.Integer, db.ForeignKey("auto_rules.id"))
+    import_batch_id = db.Column(db.String(50))
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    matched_transaction = db.relationship("Transaction", backref="bank_matches")

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Banca - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-bank text-cb-green"></i> Banca</h1>
+    <div>
+        <a href="{{ url_for('banca.regole') }}" class="btn btn-cb-outline btn-sm me-1">
+            <i class="bi bi-gear"></i> Regole ({{ rules_count }})
+        </a>
+    </div>
+</div>
+
+{# Statistiche #}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-icon text-cb-green"><i class="bi bi-arrow-left-right"></i></div>
+            <div class="cb-stat-value">{{ total }}</div>
+            <div class="cb-stat-label">Movimenti totali</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-icon" style="color:#28a745"><i class="bi bi-check-circle"></i></div>
+            <div class="cb-stat-value">{{ riconciliati }}</div>
+            <div class="cb-stat-label">Riconciliati</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="cb-card cb-stat-card">
+            <a href="{{ url_for('banca.sospesi') }}" class="text-decoration-none">
+                <div class="cb-stat-icon" style="color:#ffc107"><i class="bi bi-exclamation-triangle"></i></div>
+                <div class="cb-stat-value" style="color:var(--cb-dark)">{{ sospesi }}</div>
+                <div class="cb-stat-label">Sospesi</div>
+            </a>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-icon" style="color:#6c757d"><i class="bi bi-dash-circle"></i></div>
+            <div class="cb-stat-value">{{ ignorati }}</div>
+            <div class="cb-stat-label">Ignorati</div>
+        </div>
+    </div>
+</div>
+
+{# Upload CBI #}
+<div class="cb-card p-3 mb-4">
+    <h5 class="mb-3"><i class="bi bi-upload"></i> Importa estratto conto CBI</h5>
+    <form method="POST" action="{{ url_for('banca.upload') }}" enctype="multipart/form-data" class="row g-2 align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col">
+            <input type="file" name="file" class="form-control" accept=".txt,.cbi,.dat" required>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-cb"><i class="bi bi-upload"></i> Importa</button>
+        </div>
+    </form>
+    <small class="text-muted mt-1 d-block">Formato CBI (Corporate Banking Interbancario) da YouBusiness Web</small>
+</div>
+
+{# Ultimi movimenti #}
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h5 class="mb-0">Ultimi movimenti</h5>
+    <a href="{{ url_for('banca.movimenti') }}" class="btn btn-cb-outline btn-sm">Vedi tutti</a>
+</div>
+<div class="cb-table">
+    {% if ultimi %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr>
+                <th>Data</th>
+                <th>Controparte</th>
+                <th>Causale</th>
+                <th class="text-end">Importo</th>
+                <th>Stato</th>
+            </tr></thead>
+            <tbody>
+                {% for bt in ultimi %}
+                <tr data-bs-toggle="collapse" data-bs-target="#idx-{{ bt.id }}" role="button" class="cursor-pointer">
+                    <td class="text-nowrap">{{ bt.operation_date.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ bt.counterpart_name or '-' }}</td>
+                    <td class="small">{{ bt.causale_description or bt.causale_abi or '-' }}</td>
+                    <td class="text-end fw-bold {{ 'text-cb-dark-green' if bt.direction == 'C' else 'text-cb-gold' }}">
+                        {{ '+' if bt.direction == 'C' else '-' }}&euro;{{ "{:,.2f}".format(bt.amount) }}
+                    </td>
+                    <td>
+                        <span class="badge badge-{{ bt.status }}">
+                            {{ bt.status | replace('_', ' ') | title }}
+                        </span>
+                    </td>
+                </tr>
+                <tr class="collapse" id="idx-{{ bt.id }}">
+                    <td colspan="5" class="p-0 border-0">
+                        {% include "banca/_detail.html" %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="cb-empty">
+        <i class="bi bi-bank d-block"></i>
+        <p>Nessun movimento bancario importato.</p>
+        <small class="text-muted">Carica un file CBI per iniziare.</small>
+    </div>
+    {% endif %}
+</div>
+<style>
+.cursor-pointer { cursor: pointer; }
+.cursor-pointer:hover { background-color: rgba(0, 157, 90, 0.05); }
+</style>
+{% endblock %}

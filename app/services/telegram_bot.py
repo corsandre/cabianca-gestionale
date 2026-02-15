@@ -72,6 +72,28 @@ def check_and_notify_deadlines():
             )
         send_telegram_message("\n".join(lines))
 
+    # Avviso se nessun import CBI da >3 giorni
+    from app.models import BankTransaction
+    last_import = BankTransaction.query.order_by(
+        BankTransaction.created_at.desc()
+    ).first()
+    if last_import:
+        days_since = (today - last_import.created_at.date()).days
+        if days_since > 3:
+            send_telegram_message(
+                f"<b>Banca:</b> nessun import CBI da {days_since} giorni. "
+                "Ricordati di caricare l'estratto conto."
+            )
+
+    # Movimenti bancari sospesi
+    sospesi_count = BankTransaction.query.filter_by(
+        status="non_riconciliato"
+    ).count()
+    if sospesi_count > 0:
+        send_telegram_message(
+            f"<b>Banca:</b> {sospesi_count} movimenti da riconciliare."
+        )
+
     # Low stock alerts
     from app.models import Product
     low_stock = Product.query.filter(

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Movimenti Bancari - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-bank text-cb-green"></i> Movimenti Bancari</h1>
+    <a href="{{ url_for('banca.index') }}" class="btn btn-cb-outline btn-sm">
+        <i class="bi bi-arrow-left"></i> Banca
+    </a>
+</div>
+
+<div class="cb-filters">
+    <form method="GET" class="row g-2 align-items-end">
+        <div class="col-auto">
+            <label class="form-label small">Mese</label>
+            <input type="month" name="month" class="form-control form-control-sm" value="{{ month }}">
+        </div>
+        <div class="col-auto">
+            <label class="form-label small">Stato</label>
+            <select name="status" class="form-select form-select-sm">
+                <option value="">Tutti</option>
+                <option value="non_riconciliato" {{ 'selected' if status_filter == 'non_riconciliato' }}>Non riconciliato</option>
+                <option value="riconciliato" {{ 'selected' if status_filter == 'riconciliato' }}>Riconciliato</option>
+                <option value="ignorato" {{ 'selected' if status_filter == 'ignorato' }}>Ignorato</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <label class="form-label small">Tipo</label>
+            <select name="direction" class="form-select form-select-sm">
+                <option value="">Tutti</option>
+                <option value="C" {{ 'selected' if direction_filter == 'C' }}>Credito</option>
+                <option value="D" {{ 'selected' if direction_filter == 'D' }}>Debito</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-cb btn-sm">Filtra</button>
+        </div>
+    </form>
+</div>
+
+<div class="cb-table">
+    {% if movimenti %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr>
+                <th style="width:1.5rem"></th>
+                <th>Data</th>
+                <th>Controparte</th>
+                <th>Causale</th>
+                <th class="text-end">Importo</th>
+                <th>Stato</th>
+            </tr></thead>
+            <tbody>
+                {% for bt in movimenti %}
+                <tr data-bs-toggle="collapse" data-bs-target="#mov-{{ bt.id }}" role="button" class="cursor-pointer">
+                    <td class="text-center"><i class="bi bi-chevron-down small text-muted"></i></td>
+                    <td class="text-nowrap">{{ bt.operation_date.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ bt.counterpart_name or '-' }}</td>
+                    <td class="small">{{ bt.causale_description or bt.causale_abi or '-' }}</td>
+                    <td class="text-end fw-bold text-nowrap {{ 'text-cb-dark-green' if bt.direction == 'C' else 'text-cb-gold' }}">
+                        {{ '+' if bt.direction == 'C' else '-' }}&euro;{{ "{:,.2f}".format(bt.amount) }}
+                    </td>
+                    <td>
+                        <span class="badge badge-{{ bt.status }}">
+                            {{ bt.status | replace('_', ' ') | title }}
+                        </span>
+                    </td>
+                </tr>
+                <tr class="collapse" id="mov-{{ bt.id }}">
+                    <td colspan="6" class="p-0 border-0">
+                        {% include "banca/_detail.html" %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="cb-empty">
+        <i class="bi bi-bank d-block"></i>
+        <p>Nessun movimento per questo periodo.</p>
+    </div>
+    {% endif %}
+</div>
+<style>
+.cursor-pointer { cursor: pointer; }
+.cursor-pointer:hover { background-color: rgba(0, 157, 90, 0.05); }
+</style>
+{% endblock %}
