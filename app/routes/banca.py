@@ -9,6 +9,7 @@ from sqlalchemy import func
 from app import db
 from app.models import (
     BankTransaction, BankBalance, AutoRule, Transaction, Category, Contact, RevenueStream,
+    IgnoreReason,
 )
 from app.services.cbi_parser import parse_cbi_file
 from app.services.reconciliation import (
@@ -310,6 +311,7 @@ def sospesi():
     categories = Category.query.filter_by(active=True).order_by(Category.name).all()
     contacts = Contact.query.filter_by(active=True).order_by(Contact.name).all()
     revenue_streams = RevenueStream.query.filter_by(active=True).order_by(RevenueStream.name).all()
+    reasons = IgnoreReason.query.order_by(IgnoreReason.name).all()
 
     return render_template(
         "banca/sospesi.html",
@@ -317,6 +319,7 @@ def sospesi():
         categories=categories,
         contacts=contacts,
         revenue_streams=revenue_streams,
+        reasons=reasons,
     )
 
 
@@ -430,12 +433,93 @@ def riconcilia(id):
 @login_required
 @write_required
 def ignora(id):
-    """Ignora un movimento bancario."""
+    """Ignora un movimento bancario con motivo."""
     bt = BankTransaction.query.get_or_404(id)
     bt.status = "ignorato"
+    bt.ignore_reason_id = request.form.get("ignore_reason_id", type=int) or None
     db.session.commit()
-    flash("Movimento ignorato.", "info")
+    label = bt.ignore_reason.name if bt.ignore_reason else "Senza motivo"
+    flash(f"Movimento ignorato ({label}).", "info")
     return redirect(url_for("banca.sospesi"))
+
+
+@bp.route("/ignorati")
+@login_required
+def ignorati():
+    """Lista movimenti ignorati, divisi per entrata/uscita."""
+    ignorati_list = BankTransaction.query.filter_by(
+        status="ignorato"
+    ).order_by(BankTransaction.operation_date.desc()).all()
+
+    entrate = [bt for bt in ignorati_list if bt.direction == "C"]
+    uscite = [bt for bt in ignorati_list if bt.direction == "D"]
+
+    totale_entrate = sum(bt.amount for bt in entrate)
+    totale_uscite = sum(bt.amount for bt in uscite)
+
+    # Conteggi per motivo
+    reason_counts = {}
+    for bt in ignorati_list:
+        name = bt.ignore_reason.name if bt.ignore_reason else "Senza motivo"
+        reason_counts[name] = reason_counts.get(name, 0) + 1
+
+    reasons = IgnoreReason.query.order_by(IgnoreReason.name).all()
+
+    return render_template(
+        "banca/ignorati.html",
+        entrate=entrate,
+        uscite=uscite,
+        totale_entrate=totale_entrate,
+        totale_uscite=totale_uscite,
+        reason_counts=reason_counts,
+        reasons=reasons,
+    )
+
+
+@bp.route("/ripristina/<int:id>", methods=["POST"])
+@login_required
+@write_required
+def ripristina(id):
+    """Ripristina un movimento ignorato a sospeso."""
+    bt = BankTransaction.query.get_or_404(id)
+    bt.status = "non_riconciliato"
+    bt.ignore_reason_id = None
+    db.session.commit()
+    flash("Movimento ripristinato tra i sospesi.", "info")
+    return redirect(url_for("banca.ignorati"))
+
+
+@bp.route("/motivi-ignora/nuovo", methods=["POST"])
+@login_required
+@write_required
+def nuovo_motivo_ignora():
+    """Crea un nuovo motivo di ignorazione."""
+    name = request.form.get("name", "").strip()
+    color = request.form.get("color", "#6c757d")
+    if name:
+        existing = IgnoreReason.query.filter_by(name=name).first()
+        if existing:
+            flash("Questo motivo esiste gia'.", "warning")
+        else:
+            db.session.add(IgnoreReason(name=name, color=color))
+            db.session.commit()
+            flash(f"Motivo '{name}' creato.", "success")
+    return redirect(url_for("banca.ignorati"))
+
+
+@bp.route("/motivi-ignora/<int:id>/elimina", methods=["POST"])
+@login_required
+@write_required
+def elimina_motivo_ignora(id):
+    """Elimina un motivo di ignorazione."""
+    reason = IgnoreReason.query.get_or_404(id)
+    # Rimuovi il motivo dai movimenti che lo usano
+    BankTransaction.query.filter_by(ignore_reason_id=id).update({"ignore_reason_id": None})
+    name = reason.name
+    db.session.delete(reason)
+    db.session.commit()
+    flash(f"Motivo '{name}' eliminato.", "success")
+    return redirect(url_for("banca.ignorati"))
 
 
 @bp.route("/crea-movimento/<int:id>", methods=["POST"])

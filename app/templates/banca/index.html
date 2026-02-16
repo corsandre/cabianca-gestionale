@@ -37,9 +37,11 @@
     </div>
     <div class="col-6 col-md-3">
         <div class="cb-card cb-stat-card">
-            <div class="cb-stat-icon" style="color:#6c757d"><i class="bi bi-dash-circle"></i></div>
-            <div class="cb-stat-value">{{ ignorati }}</div>
-            <div class="cb-stat-label">Ignorati</div>
+            <a href="{{ url_for('banca.ignorati') }}" class="text-decoration-none">
+                <div class="cb-stat-icon" style="color:#6c757d"><i class="bi bi-dash-circle"></i></div>
+                <div class="cb-stat-value" style="color:var(--cb-dark)">{{ ignorati }}</div>
+                <div class="cb-stat-label">Ignorati</div>
+            </a>
         </div>
     </div>
 </div>

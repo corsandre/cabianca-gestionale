@@ -242,6 +242,15 @@ class AutoRule(db.Model):
     bank_transactions = db.relationship("BankTransaction", backref="matched_rule", lazy="dynamic")
 
 
+class IgnoreReason(db.Model):
+    """Motivi di ignorazione per movimenti bancari."""
+    __tablename__ = "ignore_reasons"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    color = db.Column(db.String(10), default="#6c757d")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class BankTransaction(db.Model):
     """Movimenti bancari importati da file CBI."""
     __tablename__ = "bank_transactions"
@@ -264,11 +273,13 @@ class BankTransaction(db.Model):
     matched_transaction_id = db.Column(db.Integer, db.ForeignKey("transactions.id"))
     matched_by = db.Column(db.String(20))  # auto, regola, manuale
     matched_rule_id = db.Column(db.Integer, db.ForeignKey("auto_rules.id"))
+    ignore_reason_id = db.Column(db.Integer, db.ForeignKey("ignore_reasons.id"))
     import_batch_id = db.Column(db.String(50))
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     matched_transaction = db.relationship("Transaction", backref="bank_matches")
+    ignore_reason = db.relationship("IgnoreReason", backref="bank_transactions")
 
 
 class BankBalance(db.Model):

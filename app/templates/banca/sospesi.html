@@ -160,6 +160,12 @@
             </button>
             <form method="POST" action="{{ url_for('banca.ignora', id=bt.id) }}" class="d-inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <select name="ignore_reason_id" class="form-select form-select-sm d-inline-block" style="width:auto; font-size:0.78rem">
+                    <option value="">-- Motivo --</option>
+                    {% for r in reasons %}
+                    <option value="{{ r.id }}">{{ r.name }}</option>
+                    {% endfor %}
+                </select>
                 <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-dash-circle"></i> Ignora</button>
             </form>
             <a href="{{ url_for('banca.regola_nuova', counterpart=bt.counterpart_name or '', causale=bt.causale_abi or '', direction=bt.direction) }}"

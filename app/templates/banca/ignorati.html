@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}Movimenti Ignorati - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-dash-circle text-muted"></i> Movimenti Ignorati</h1>
+    <a href="{{ url_for('banca.index') }}" class="btn btn-cb-outline btn-sm">
+        <i class="bi bi-arrow-left"></i> Banca
+    </a>
+</div>
+
+{# Riepilogo #}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-icon text-cb-dark-green"><i class="bi bi-arrow-down-circle"></i></div>
+            <div class="cb-stat-value">{{ entrate | length }}</div>
+            <div class="cb-stat-label">Entrate ignorate</div>
+            <div class="small text-cb-dark-green fw-bold">&euro;{{ "{:,.2f}".format(totale_entrate) }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-icon text-cb-gold"><i class="bi bi-arrow-up-circle"></i></div>
+            <div class="cb-stat-value">{{ uscite | length }}</div>
+            <div class="cb-stat-label">Uscite ignorate</div>
+            <div class="small text-cb-gold fw-bold">&euro;{{ "{:,.2f}".format(totale_uscite) }}</div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6">
+        <div class="cb-card p-3">
+            <h6 class="text-muted mb-2"><i class="bi bi-tag"></i> Per motivo</h6>
+            <div class="d-flex flex-wrap gap-2">
+                {% for reason_name, count in reason_counts.items() %}
+                <span class="badge bg-secondary">
+                    {{ reason_name }}
+                    <span class="badge bg-light text-dark ms-1">{{ count }}</span>
+                </span>
+                {% endfor %}
+                {% if not reason_counts %}
+                <span class="text-muted small">Nessun movimento ignorato</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Gestione motivi di ignorazione #}
+<div class="cb-card p-3 mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0"><i class="bi bi-tags"></i> Motivi di ignorazione</h5>
+        <button class="btn btn-cb btn-sm" data-bs-toggle="collapse" data-bs-target="#newReasonForm">
+            <i class="bi bi-plus-lg"></i> Nuovo
+        </button>
+    </div>
+
+    <div class="collapse mb-3" id="newReasonForm">
+        <form method="POST" action="{{ url_for('banca.nuovo_motivo_ignora') }}" class="row g-2 align-items-end p-2 bg-light rounded">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col">
+                <input type="text" name="name" class="form-control form-control-sm" placeholder="Nome motivo (es. Caparra, Giro conto...)" required>
+            </div>
+            <div class="col-auto">
+                <input type="color" name="color" class="form-control form-control-sm form-control-color" value="#6c757d">
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-cb btn-sm">Aggiungi</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2">
+        {% for r in reasons %}
+        <div class="d-flex align-items-center gap-1">
+            <span class="badge" style="background:{{ r.color }}">{{ r.name }}</span>
+            <form method="POST" action="{{ url_for('banca.elimina_motivo_ignora', id=r.id) }}" class="d-inline" onsubmit="return confirm('Eliminare il motivo \'{{ r.name }}\'?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm p-0 text-muted"><i class="bi bi-x-circle" style="font-size:0.7rem"></i></button>
+            </form>
+        </div>
+        {% endfor %}
+        {% if not reasons %}
+        <p class="text-muted small mb-0">Nessun motivo creato. Clicca "Nuovo" per aggiungerne uno.</p>
+        {% endif %}
+    </div>
+</div>
+
+{# Tabs Entrata / Uscita #}
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item">
+        <a class="nav-link active" data-bs-toggle="tab" href="#tab-entrate">
+            <i class="bi bi-arrow-down-circle text-cb-dark-green"></i> Entrate ({{ entrate | length }})
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" data-bs-toggle="tab" href="#tab-uscite">
+            <i class="bi bi-arrow-up-circle text-cb-gold"></i> Uscite ({{ uscite | length }})
+        </a>
+    </li>
+</ul>
+
+<div class="tab-content">
+    {# Tab Entrate #}
+    <div class="tab-pane fade show active" id="tab-entrate">
+        {% if entrate %}
+        <div class="cb-table">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead><tr>
+                        <th>Data</th>
+                        <th>Controparte</th>
+                        <th>Causale</th>
+                        <th class="text-end">Importo</th>
+                        <th>Motivo</th>
+                        <th></th>
+                    </tr></thead>
+                    <tbody>
+                    {% for bt in entrate %}
+                    <tr>
+                        <td class="text-nowrap">{{ bt.operation_date.strftime('%d/%m/%Y') }}</td>
+                        <td>{{ bt.counterpart_name or '-' }}</td>
+                        <td class="small">{{ bt.causale_description or bt.causale_abi or '-' }}</td>
+                        <td class="text-end fw-bold text-cb-dark-green">+&euro;{{ "{:,.2f}".format(bt.amount) }}</td>
+                        <td>
+                            {% if bt.ignore_reason %}
+                            <span class="badge" style="background:{{ bt.ignore_reason.color }}">{{ bt.ignore_reason.name }}</span>
+                            {% else %}
+                            <span class="badge bg-light text-muted">Senza motivo</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <form method="POST" action="{{ url_for('banca.ripristina', id=bt.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button class="btn btn-sm btn-outline-warning" title="Ripristina tra i sospesi">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="cb-card cb-empty">
+            <i class="bi bi-check-circle d-block" style="color:#28a745"></i>
+            <p>Nessuna entrata ignorata.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {# Tab Uscite #}
+    <div class="tab-pane fade" id="tab-uscite">
+        {% if uscite %}
+        <div class="cb-table">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead><tr>
+                        <th>Data</th>
+                        <th>Controparte</th>
+                        <th>Causale</th>
+                        <th class="text-end">Importo</th>
+                        <th>Motivo</th>
+                        <th></th>
+                    </tr></thead>
+                    <tbody>
+                    {% for bt in uscite %}
+                    <tr>
+                        <td class="text-nowrap">{{ bt.operation_date.strftime('%d/%m/%Y') }}</td>
+                        <td>{{ bt.counterpart_name or '-' }}</td>
+                        <td class="small">{{ bt.causale_description or bt.causale_abi or '-' }}</td>
+                        <td class="text-end fw-bold text-cb-gold">-&euro;{{ "{:,.2f}".format(bt.amount) }}</td>
+                        <td>
+                            {% if bt.ignore_reason %}
+                            <span class="badge" style="background:{{ bt.ignore_reason.color }}">{{ bt.ignore_reason.name }}</span>
+                            {% else %}
+                            <span class="badge bg-light text-muted">Senza motivo</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <form method="POST" action="{{ url_for('banca.ripristina', id=bt.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button class="btn btn-sm btn-outline-warning" title="Ripristina tra i sospesi">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="cb-card cb-empty">
+            <i class="bi bi-check-circle d-block" style="color:#28a745"></i>
+            <p>Nessuna uscita ignorata.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
