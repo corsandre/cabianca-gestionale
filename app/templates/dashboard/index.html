@@ -103,7 +103,7 @@
     <div class="table-responsive">
         <table class="table table-hover mb-0">
             <thead><tr>
-                <th>Data</th><th>Descrizione</th><th>Fonte</th><th>Categoria</th><th>Banca</th><th class="text-end">Importo</th>
+                <th>Data</th><th>Descrizione</th><th>Fonte</th><th>Categoria</th><th>Pagamento</th><th>Banca</th><th class="text-end">Importo</th>
             </tr></thead>
             <tbody>
                 {% for t in recent %}
@@ -115,6 +115,17 @@
                         {% if t.category %}
                         <span class="cb-chip" style="background:{{ t.category.color }}">{{ t.category.name }}</span>
                         {% else %}-{% endif %}
+                    </td>
+                    <td>
+                        {% if t.payment_status == 'pagato' %}
+                        <span class="badge bg-success">Pagato</span>
+                        {% elif t.payment_status == 'parziale' %}
+                        <span class="badge bg-warning text-dark">Parziale</span>
+                        {% elif t.payment_status == 'da_pagare' %}
+                        <span class="badge bg-danger">Da pagare</span>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
                     </td>
                     <td class="text-center">
                         {% if t.bank_match %}
