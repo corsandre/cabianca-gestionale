@@ -178,4 +178,9 @@ def _build_actions(rule):
     if rule.action_notes:
         actions["notes"] = rule.action_notes
 
+    if rule.action_date_offset:
+        actions["date_offset"] = rule.action_date_offset
+    if rule.action_date_end_prev_month:
+        actions["date_end_prev_month"] = True
+
     return actions

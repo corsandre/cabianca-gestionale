@@ -229,6 +229,8 @@ class AutoRule(db.Model):
     action_payment_method = db.Column(db.String(20))  # contanti, bonifico, carta, assegno, altro
     action_iva_rate = db.Column(db.Float)  # 0, 4, 5, 10, 22
     action_notes = db.Column(db.String(500))
+    action_date_offset = db.Column(db.Integer)  # giorni da sottrarre alla data
+    action_date_end_prev_month = db.Column(db.Boolean, default=False)  # ultimo giorno mese precedente
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -332,6 +332,21 @@ document.addEventListener('DOMContentLoaded', function() {
                         <textarea name="action_notes" class="form-control form-control-sm" rows="2"
                                   placeholder="Note aggiuntive per la transazione creata">{{ rule.action_notes if rule and rule.action_notes else '' }}</textarea>
                     </div>
+                    <div class="col-md-6">
+                        <div class="form-check mt-2">
+                            <input type="checkbox" name="action_date_end_prev_month" class="form-check-input" id="date_end_prev_month"
+                                   {{ 'checked' if rule and rule.action_date_end_prev_month }}>
+                            <label class="form-check-label small" for="date_end_prev_month">
+                                Registra all'ultimo giorno del mese precedente
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Giorni di offset dalla data di pagamento</label>
+                        <input type="number" name="action_date_offset" class="form-control form-control-sm" min="0"
+                               value="{{ rule.action_date_offset if rule and rule.action_date_offset else '' }}"
+                               placeholder="Es. 5 = retrodatare di 5 giorni">
+                    </div>
                 </div>
             </div>
         </div>

@@ -169,6 +169,8 @@ def _init_db(app):
         ("auto_rules", "action_payment_method", "VARCHAR(20)"),
         ("auto_rules", "action_iva_rate", "FLOAT"),
         ("auto_rules", "action_notes", "VARCHAR(500)"),
+        ("auto_rules", "action_date_offset", "INTEGER"),
+        ("auto_rules", "action_date_end_prev_month", "BOOLEAN DEFAULT 0"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

@@ -499,6 +499,8 @@ def regola_nuova():
             action_payment_method=request.form.get("action_payment_method", "").strip() or None,
             action_iva_rate=request.form.get("action_iva_rate", type=float),
             action_notes=request.form.get("action_notes", "").strip() or None,
+            action_date_offset=request.form.get("action_date_offset", type=int) or None,
+            action_date_end_prev_month="action_date_end_prev_month" in request.form,
         )
 
         if not rule.name:
@@ -549,6 +551,8 @@ def regola_modifica(id):
         rule.action_payment_method = request.form.get("action_payment_method", "").strip() or None
         rule.action_iva_rate = request.form.get("action_iva_rate", type=float)
         rule.action_notes = request.form.get("action_notes", "").strip() or None
+        rule.action_date_offset = request.form.get("action_date_offset", type=int) or None
+        rule.action_date_end_prev_month = "action_date_end_prev_month" in request.form
 
         if not rule.name:
             flash("Il nome della regola e' obbligatorio.", "warning")

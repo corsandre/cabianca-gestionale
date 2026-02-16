@@ -234,6 +234,14 @@ def _create_transaction_from_bank(bt, actions):
         net_amount = amount
         iva_amount = 0
 
+    # Calcola data contabile (con eventuale offset)
+    tx_date = bt.operation_date
+    if actions.get("date_end_prev_month"):
+        first_of_month = tx_date.replace(day=1)
+        tx_date = first_of_month - timedelta(days=1)
+    elif actions.get("date_offset"):
+        tx_date = tx_date - timedelta(days=actions["date_offset"])
+
     tx = Transaction(
         type="entrata" if bt.direction == "C" else "uscita",
         source="banca",
@@ -242,7 +250,7 @@ def _create_transaction_from_bank(bt, actions):
         net_amount=net_amount,
         iva_amount=iva_amount,
         iva_rate=iva_rate,
-        date=bt.operation_date,
+        date=tx_date,
         description=actions.get("description") or _build_description(bt),
         category_id=actions.get("category_id"),
         contact_id=actions.get("contact_id"),
@@ -250,6 +258,7 @@ def _create_transaction_from_bank(bt, actions):
         payment_status="pagato",
         payment_method=payment_method,
         payment_date=bt.operation_date,
+        due_date=bt.operation_date,
         notes=actions.get("notes"),
     )
     db.session.add(tx)
@@ -282,6 +291,7 @@ def create_transaction_from_bank_manual(bt, category_id=None, contact_id=None,
         payment_status="pagato",
         payment_method="bonifico",
         payment_date=bt.operation_date,
+        due_date=bt.operation_date,
     )
     db.session.add(tx)
     db.session.flush()
