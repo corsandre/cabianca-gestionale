@@ -223,24 +223,47 @@ def _link_transaction(bt, tx, matched_by):
 
 def _create_transaction_from_bank(bt, actions):
     """Crea una transazione in prima nota da un movimento bancario."""
+    payment_method = actions.get("payment_method", "bonifico")
+    iva_rate = actions.get("iva_rate", 0) or 0
+    amount = bt.amount
+
+    if iva_rate > 0:
+        net_amount = round(amount / (1 + iva_rate / 100), 2)
+        iva_amount = round(amount - net_amount, 2)
+    else:
+        net_amount = amount
+        iva_amount = 0
+
     tx = Transaction(
         type="entrata" if bt.direction == "C" else "uscita",
         source="banca",
         official=True,
-        amount=bt.amount,
+        amount=amount,
+        net_amount=net_amount,
+        iva_amount=iva_amount,
+        iva_rate=iva_rate,
         date=bt.operation_date,
         description=actions.get("description") or _build_description(bt),
         category_id=actions.get("category_id"),
         contact_id=actions.get("contact_id"),
         revenue_stream_id=actions.get("revenue_stream_id"),
         payment_status="pagato",
-        payment_method="bonifico",
+        payment_method=payment_method,
         payment_date=bt.operation_date,
+        notes=actions.get("notes"),
     )
     db.session.add(tx)
     db.session.flush()
 
     bt.matched_transaction_id = tx.id
+
+
+def create_transaction_from_rule(bt, actions):
+    """Crea una transazione da regola e riconcilia il movimento bancario (API pubblica)."""
+    _create_transaction_from_bank(bt, actions)
+    bt.status = "riconciliato"
+    bt.matched_by = "regola"
+    bt.matched_rule_id = actions.get("rule_id")
 
 
 def create_transaction_from_bank_manual(bt, category_id=None, contact_id=None,

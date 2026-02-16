@@ -45,6 +45,32 @@ def apply_rules(transaction_data, source):
     return None
 
 
+def apply_specific_rules(transaction_data, source, rule_ids):
+    """Applica solo le regole con gli ID specificati a una transazione.
+
+    Args:
+        transaction_data: dict con i dati della transazione (come apply_rules)
+        source: "banca", "sdi", "cassa"
+        rule_ids: lista di ID regole da applicare
+
+    Returns:
+        dict con le azioni da applicare, o None se nessuna regola matcha.
+    """
+    rules = AutoRule.query.filter(
+        AutoRule.id.in_(rule_ids),
+        AutoRule.active == True,
+        AutoRule.applies_to.in_([source, "tutti"]),
+    ).order_by(AutoRule.priority.desc()).all()
+
+    for rule in rules:
+        if _matches(rule, transaction_data, source):
+            actions = _build_actions(rule)
+            logger.info(f"Regola '{rule.name}' (id={rule.id}) riapplicata a {source}: {transaction_data.get('description', '')[:50]}")
+            return actions
+
+    return None
+
+
 def apply_rules_bulk(transactions_data, source):
     """Applica le regole a una lista di transazioni.
 
@@ -142,5 +168,14 @@ def _build_actions(rule):
 
     if rule.action_auto_create:
         actions["auto_create"] = True
+
+    if rule.action_payment_method:
+        actions["payment_method"] = rule.action_payment_method
+
+    if rule.action_iva_rate is not None:
+        actions["iva_rate"] = rule.action_iva_rate
+
+    if rule.action_notes:
+        actions["notes"] = rule.action_notes
 
     return actions

@@ -164,6 +164,19 @@ def _init_db(app):
     except sqlalchemy.exc.OperationalError:
         pass  # Tables already exist (race condition with multiple workers)
 
+    # Migrazioni incrementali per colonne aggiunte dopo il primo deploy
+    _migrate_columns = [
+        ("auto_rules", "action_payment_method", "VARCHAR(20)"),
+        ("auto_rules", "action_iva_rate", "FLOAT"),
+        ("auto_rules", "action_notes", "VARCHAR(500)"),
+    ]
+    for table, col, col_type in _migrate_columns:
+        try:
+            db.session.execute(sqlalchemy.text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
+            db.session.commit()
+        except sqlalchemy.exc.OperationalError:
+            db.session.rollback()  # Column already exists
+
     from app.models import User, RevenueStream, Category
     import bcrypt
 

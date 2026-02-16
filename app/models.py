@@ -226,6 +226,9 @@ class AutoRule(db.Model):
     action_revenue_stream_id = db.Column(db.Integer, db.ForeignKey("revenue_streams.id"))
     action_description = db.Column(db.String(500))
     action_auto_create = db.Column(db.Boolean, default=False)
+    action_payment_method = db.Column(db.String(20))  # contanti, bonifico, carta, assegno, altro
+    action_iva_rate = db.Column(db.Float)  # 0, 4, 5, 10, 22
+    action_notes = db.Column(db.String(500))
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

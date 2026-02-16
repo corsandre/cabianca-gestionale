@@ -13,8 +13,9 @@ from app.models import (
 from app.services.cbi_parser import parse_cbi_file
 from app.services.reconciliation import (
     reconcile_batch, get_match_proposals, create_transaction_from_bank_manual,
-    get_available_transactions,
+    get_available_transactions, create_transaction_from_rule,
 )
+from app.services.rules_engine import apply_specific_rules
 from app.utils.decorators import write_required
 
 logger = logging.getLogger(__name__)
@@ -495,6 +496,9 @@ def regola_nuova():
             action_revenue_stream_id=request.form.get("action_revenue_stream_id", type=int) or None,
             action_description=request.form.get("action_description", "").strip() or None,
             action_auto_create="action_auto_create" in request.form,
+            action_payment_method=request.form.get("action_payment_method", "").strip() or None,
+            action_iva_rate=request.form.get("action_iva_rate", type=float),
+            action_notes=request.form.get("action_notes", "").strip() or None,
         )
 
         if not rule.name:
@@ -542,6 +546,9 @@ def regola_modifica(id):
         rule.action_revenue_stream_id = request.form.get("action_revenue_stream_id", type=int) or None
         rule.action_description = request.form.get("action_description", "").strip() or None
         rule.action_auto_create = "action_auto_create" in request.form
+        rule.action_payment_method = request.form.get("action_payment_method", "").strip() or None
+        rule.action_iva_rate = request.form.get("action_iva_rate", type=float)
+        rule.action_notes = request.form.get("action_notes", "").strip() or None
 
         if not rule.name:
             flash("Il nome della regola e' obbligatorio.", "warning")
@@ -587,4 +594,67 @@ def regola_toggle(id):
     db.session.commit()
     stato = "attivata" if rule.active else "disattivata"
     flash(f"Regola '{rule.name}' {stato}.", "info")
+    return redirect(url_for("banca.regole"))
+
+
+@bp.route("/regole/riapplica", methods=["POST"])
+@login_required
+@write_required
+def regole_riapplica():
+    """Riapplica regole selezionate su transazioni bancarie esistenti."""
+    rule_ids = request.form.getlist("rule_ids[]", type=int)
+    if not rule_ids:
+        rule_ids = request.form.getlist("rule_ids", type=int)
+    scope = request.form.get("scope", "non_riconciliati")
+
+    if not rule_ids:
+        flash("Seleziona almeno una regola da riapplicare.", "warning")
+        return redirect(url_for("banca.regole"))
+
+    # Filtra transazioni bancarie in base allo scope
+    if scope == "tutti":
+        bank_txs = BankTransaction.query.all()
+    else:
+        bank_txs = BankTransaction.query.filter_by(status="non_riconciliato").all()
+
+    created = 0
+    updated = 0
+
+    for bt in bank_txs:
+        # Salta se gia' riconciliata con transazione collegata
+        if bt.status == "riconciliato" and bt.matched_transaction_id:
+            continue
+
+        rule_data = {
+            "description": bt.causale_description or "",
+            "counterpart": bt.counterpart_name or "",
+            "causale_abi": bt.causale_abi or "",
+            "amount": bt.amount,
+            "direction": bt.direction,
+            "remittance_info": bt.remittance_info or "",
+        }
+
+        actions = apply_specific_rules(rule_data, "banca", rule_ids)
+        if not actions:
+            continue
+
+        if actions.get("auto_create") and bt.status != "riconciliato":
+            create_transaction_from_rule(bt, actions)
+            created += 1
+        else:
+            # Aggiorna matched_rule_id per tracciamento
+            bt.matched_rule_id = actions.get("rule_id")
+            updated += 1
+
+    db.session.commit()
+
+    parts = []
+    if created:
+        parts.append(f"{created} movimenti creati")
+    if updated:
+        parts.append(f"{updated} transazioni aggiornate")
+    if not parts:
+        parts.append("nessuna transazione corrispondente")
+
+    flash(f"Regole riapplicate: {', '.join(parts)}.", "success")
     return redirect(url_for("banca.regole"))
