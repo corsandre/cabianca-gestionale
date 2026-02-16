@@ -225,6 +225,20 @@
 <script>
 const CSRF = '{{ csrf_token() }}';
 
+// Salva posizione scroll prima di ogni submit e ripristina al caricamento
+document.querySelectorAll('form').forEach(f => {
+    f.addEventListener('submit', () => {
+        sessionStorage.setItem('sospesi_scroll', window.scrollY);
+    });
+});
+(function() {
+    const pos = sessionStorage.getItem('sospesi_scroll');
+    if (pos) {
+        sessionStorage.removeItem('sospesi_scroll');
+        window.scrollTo(0, parseInt(pos));
+    }
+})();
+
 function buildParams(btId, source) {
     const q = document.querySelector(`.search-q[data-bt="${btId}"]`).value;
     const dateFrom = document.querySelector(`.search-from[data-bt="${btId}"]`).value;
