@@ -261,6 +261,11 @@ h1, h2, h3, h4, h5, .cb-heading {
     color: white;
 }
 
+.badge-ricorrente {
+    background: #17a2b8;
+    color: white;
+}
+
 .badge-pagato {
     background: #28a745;
 }
@@ -431,6 +436,40 @@ h1, h2, h3, h4, h5, .cb-heading {
 .text-cb-dark-green { color: var(--cb-dark-green) !important; }
 .bg-cb-green { background-color: var(--cb-green) !important; }
 .bg-cb-gold { background-color: var(--cb-gold) !important; }
+
+/* === INTERACTIVE ANALISI === */
+
+.cb-stat-clickable {
+    cursor: pointer;
+    transition: border 0.2s, box-shadow 0.2s;
+    border: 2px solid transparent;
+}
+
+.cb-stat-clickable:hover {
+    border-color: var(--cb-green);
+}
+
+.cb-stat-card.active {
+    border: 2px solid var(--cb-green);
+    box-shadow: 0 0 0 3px rgba(0, 157, 90, 0.15);
+}
+
+.cb-breakdown-bar-bg {
+    background: #f0f0f0;
+    border-radius: 4px;
+    height: 10px;
+    overflow: hidden;
+}
+
+.cb-breakdown-bar {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.cb-breakdown-row:hover {
+    background: #f0faf5;
+}
 
 /* === PWA standalone padding === */
 @media (display-mode: standalone) {

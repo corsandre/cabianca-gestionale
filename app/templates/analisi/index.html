@@ -31,135 +31,363 @@
     </form>
 </div>
 
+<!-- ACTIVE FILTER BADGE -->
+<div id="filterBadge" class="mb-3" style="display:none">
+    <span class="badge bg-cb-green fs-6 px-3 py-2">
+        <span id="filterBadgeText"></span>
+        <button type="button" class="btn-close btn-close-white ms-2" style="font-size:0.6rem" onclick="clearAllFilters()"></button>
+    </span>
+</div>
+
 <!-- SUMMARY CARDS -->
 <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
-        <div class="cb-card cb-stat-card">
+        <div class="cb-card cb-stat-card cb-stat-clickable" id="cardEntrate" onclick="toggleTypeFilter('entrata')">
             <div class="cb-stat-label">Totale entrate</div>
-            <div class="cb-stat-value text-cb-dark-green" style="font-size:1.4rem">&euro;{{ "{:,.2f}".format(total_income) }}</div>
+            <div class="cb-stat-value text-cb-dark-green" style="font-size:1.4rem" id="valEntrate"></div>
         </div>
     </div>
     <div class="col-6 col-md-3">
-        <div class="cb-card cb-stat-card">
+        <div class="cb-card cb-stat-card cb-stat-clickable" id="cardUscite" onclick="toggleTypeFilter('uscita')">
             <div class="cb-stat-label">Totale uscite</div>
-            <div class="cb-stat-value text-cb-gold" style="font-size:1.4rem">&euro;{{ "{:,.2f}".format(total_expense) }}</div>
+            <div class="cb-stat-value text-cb-gold" style="font-size:1.4rem" id="valUscite"></div>
         </div>
     </div>
     <div class="col-6 col-md-3">
-        <div class="cb-card cb-stat-card">
+        <div class="cb-card cb-stat-card cb-stat-clickable" id="cardSaldo" onclick="clearAllFilters()">
             <div class="cb-stat-label">Utile / Perdita</div>
-            <div class="cb-stat-value {% if net >= 0 %}text-cb-dark-green{% else %}text-danger{% endif %}" style="font-size:1.4rem">&euro;{{ "{:,.2f}".format(net) }}</div>
+            <div class="cb-stat-value" style="font-size:1.4rem" id="valSaldo"></div>
         </div>
     </div>
     <div class="col-6 col-md-3">
         <div class="cb-card cb-stat-card">
             <div class="cb-stat-label">Totale IVA</div>
-            <div class="cb-stat-value" style="font-size:1.4rem">&euro;{{ "{:,.2f}".format(total_iva) }}</div>
+            <div class="cb-stat-value" style="font-size:1.4rem" id="valIva"></div>
         </div>
     </div>
 </div>
 
-<!-- CHARTS -->
-<div class="row g-3 mb-4">
-    <div class="col-md-6">
-        <div class="cb-card p-3">
-            <h5 class="mb-3">Entrate per flusso di ricavo</h5>
-            {% if by_stream %}
-            <canvas id="streamChart" height="250"></canvas>
-            {% else %}
-            <p class="text-muted small">Nessun dato disponibile.</p>
-            {% endif %}
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="cb-card p-3">
-            <h5 class="mb-3">Uscite per categoria</h5>
-            {% if by_category_expense %}
-            <canvas id="expCatChart" height="250"></canvas>
-            {% else %}
-            <p class="text-muted small">Nessun dato disponibile.</p>
-            {% endif %}
-        </div>
-    </div>
-</div>
+<!-- CHARTS CONTAINER (populated by JS) -->
+<div id="chartsContainer" class="mb-4"></div>
 
-<!-- BREAKDOWN TABLES -->
-<div class="row g-3">
-    <div class="col-md-4">
-        <div class="cb-card p-3">
-            <h5 class="mb-3">Entrate per categoria</h5>
-            {% if by_category_income %}
-            <table class="table table-sm mb-0">
-                {% for name, color, amount in by_category_income %}
+<!-- BREAKDOWN CONTAINER (populated by JS) -->
+<div id="breakdownContainer" class="mb-4"></div>
+
+<!-- TRANSACTIONS TABLE -->
+<div class="cb-card p-3">
+    <h5 class="mb-3">Transazioni <small class="text-muted fw-normal" id="txCount"></small></h5>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" id="txTable">
+            <thead>
                 <tr>
-                    <td><span class="cb-chip" style="background:{{ color }}">{{ name }}</span></td>
-                    <td class="text-end fw-bold text-cb-dark-green">&euro;{{ "{:,.2f}".format(amount) }}</td>
+                    <th>Data</th>
+                    <th>Descrizione</th>
+                    <th class="d-none d-md-table-cell">Contatto</th>
+                    <th class="d-none d-md-table-cell">Fonte</th>
+                    <th class="d-none d-lg-table-cell">Categoria</th>
+                    <th class="d-none d-lg-table-cell">Flusso</th>
+                    <th class="d-none d-md-table-cell">Stato</th>
+                    <th class="text-end">Importo</th>
+                    <th></th>
                 </tr>
-                {% endfor %}
-            </table>
-            {% else %}<p class="text-muted small">Nessun dato.</p>{% endif %}
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="cb-card p-3">
-            <h5 class="mb-3">Uscite per categoria</h5>
-            {% if by_category_expense %}
-            <table class="table table-sm mb-0">
-                {% for name, color, amount in by_category_expense %}
-                <tr>
-                    <td><span class="cb-chip" style="background:{{ color }}">{{ name }}</span></td>
-                    <td class="text-end fw-bold text-cb-gold">&euro;{{ "{:,.2f}".format(amount) }}</td>
-                </tr>
-                {% endfor %}
-            </table>
-            {% else %}<p class="text-muted small">Nessun dato.</p>{% endif %}
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="cb-card p-3">
-            <h5 class="mb-3">Per metodo pagamento</h5>
-            {% if by_method %}
-            <table class="table table-sm mb-0">
-                {% for method, amount in by_method %}
-                <tr>
-                    <td>{{ method|title }}</td>
-                    <td class="text-end fw-bold">&euro;{{ "{:,.2f}".format(amount) }}</td>
-                </tr>
-                {% endfor %}
-            </table>
-            {% else %}<p class="text-muted small">Nessun dato.</p>{% endif %}
-        </div>
+            </thead>
+            <tbody></tbody>
+        </table>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-{% if by_stream %}
-new Chart(document.getElementById('streamChart'), {
-    type: 'doughnut',
-    data: {
-        labels: [{% for name, color, amount in by_stream %}"{{ name }}"{% if not loop.last %},{% endif %}{% endfor %}],
-        datasets: [{
-            data: [{% for name, color, amount in by_stream %}{{ amount }}{% if not loop.last %},{% endif %}{% endfor %}],
-            backgroundColor: [{% for name, color, amount in by_stream %}"{{ color }}"{% if not loop.last %},{% endif %}{% endfor %}]
-        }]
-    },
-    options: {responsive: true, plugins: {legend: {position: 'bottom'}}}
-});
-{% endif %}
-{% if by_category_expense %}
-new Chart(document.getElementById('expCatChart'), {
-    type: 'doughnut',
-    data: {
-        labels: [{% for name, color, amount in by_category_expense %}"{{ name }}"{% if not loop.last %},{% endif %}{% endfor %}],
-        datasets: [{
-            data: [{% for name, color, amount in by_category_expense %}{{ amount }}{% if not loop.last %},{% endif %}{% endfor %}],
-            backgroundColor: [{% for name, color, amount in by_category_expense %}"{{ color }}"{% if not loop.last %},{% endif %}{% endfor %}]
-        }]
-    },
-    options: {responsive: true, plugins: {legend: {position: 'bottom'}}}
-});
-{% endif %}
+(function() {
+    const ALL_TX = {{ tx_json|safe }};
+    const NONE = '__none__';  // sentinella per "Non assegnato"
+    let filters = { type: null, category_id: null, stream_id: null };
+    let charts = {};  // chiave -> Chart instance
+
+    function fmt(n) {
+        return '\u20AC' + n.toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    function catKey(t) { return t.category_id != null ? t.category_id : NONE; }
+    function streamKey(t) { return t.stream_id != null ? t.stream_id : NONE; }
+
+    function matchesFilter(t) {
+        if (filters.type && t.type !== filters.type) return false;
+        if (filters.category_id !== null) {
+            var k = catKey(t);
+            if (k !== filters.category_id) return false;
+        }
+        if (filters.stream_id !== null) {
+            var k = streamKey(t);
+            if (k !== filters.stream_id) return false;
+        }
+        return true;
+    }
+
+    function getFiltered() { return ALL_TX.filter(matchesFilter); }
+
+    function aggregate(txs) {
+        var byCat = {}, byStream = {};
+        txs.forEach(function(t) {
+            var ck = catKey(t);
+            if (!byCat[ck]) byCat[ck] = {name: t.category_name || 'Non assegnato', color: t.category_color || '#aaaaaa', id: ck, total: 0};
+            byCat[ck].total += t.amount;
+
+            var sk = streamKey(t);
+            if (!byStream[sk]) byStream[sk] = {name: t.stream_name || 'Non assegnato', color: t.stream_color || '#aaaaaa', id: sk, total: 0};
+            byStream[sk].total += t.amount;
+        });
+        return {
+            byCat: Object.values(byCat).sort(function(a,b) { return b.total - a.total; }),
+            byStream: Object.values(byStream).sort(function(a,b) { return b.total - a.total; }),
+        };
+    }
+
+    function updateCards(txs) {
+        var income = 0, expense = 0, iva = 0;
+        txs.forEach(function(t) {
+            if (t.type === 'entrata') income += t.amount;
+            else expense += t.amount;
+            iva += t.iva_amount;
+        });
+        document.getElementById('valEntrate').textContent = fmt(income);
+        document.getElementById('valUscite').textContent = fmt(expense);
+        var net = income - expense;
+        var el = document.getElementById('valSaldo');
+        el.textContent = fmt(net);
+        el.className = 'cb-stat-value ' + (net >= 0 ? 'text-cb-dark-green' : 'text-danger');
+        document.getElementById('valIva').textContent = fmt(iva);
+    }
+
+    // --- Chart helpers ---
+    function destroyAllCharts() {
+        Object.keys(charts).forEach(function(k) { charts[k].destroy(); });
+        charts = {};
+    }
+
+    function createDoughnut(canvasId, data, clickHandler) {
+        var canvas = document.getElementById(canvasId);
+        if (!canvas) return null;
+        var c = new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels: data.map(function(d) { return d.name; }),
+                datasets: [{
+                    data: data.map(function(d) { return d.total; }),
+                    backgroundColor: data.map(function(d) { return d.color; }),
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {boxWidth: 12, font: {size: 11}},
+                        onClick: function(e, legendItem, legend) {
+                            // Click sulla legenda = filtro, non hide/show
+                            if (clickHandler) clickHandler(legendItem.index, data);
+                        }
+                    }
+                },
+                onClick: function(e, els) { if (els.length && clickHandler) clickHandler(els[0].index, data); }
+            }
+        });
+        return c;
+    }
+
+    function getTypeSections() {
+        if (filters.type) return [filters.type];
+        return ['entrata', 'uscita'];
+    }
+
+    function typeLabel(t) { return t === 'entrata' ? 'Entrate' : 'Uscite'; }
+
+    function txOfType(type) {
+        return ALL_TX.filter(function(t) {
+            if (t.type !== type) return false;
+            if (filters.category_id !== null && catKey(t) !== filters.category_id) return false;
+            if (filters.stream_id !== null && streamKey(t) !== filters.stream_id) return false;
+            return true;
+        });
+    }
+
+    // --- Render charts ---
+    function renderCharts() {
+        destroyAllCharts();
+        var types = getTypeSections();
+        var colClass = types.length > 1 ? 'col-md-3' : 'col-md-6';
+        var chartHeight = types.length > 1 ? '200' : '250';
+        var html = '<div class="row g-3">';
+        types.forEach(function(type) {
+            var agg = aggregate(txOfType(type));
+            var label = typeLabel(type);
+            var catId = 'chart_cat_' + type;
+            var strId = 'chart_str_' + type;
+            html += '<div class="' + colClass + '"><div class="cb-card p-3">' +
+                '<h6 class="mb-2">' + label + ' per categoria</h6>' +
+                (agg.byCat.length ? '<canvas id="' + catId + '" height="' + chartHeight + '"></canvas>' : '<p class="text-muted small mb-0">Nessun dato.</p>') +
+                '</div></div>';
+            html += '<div class="' + colClass + '"><div class="cb-card p-3">' +
+                '<h6 class="mb-2">' + label + ' per flusso</h6>' +
+                (agg.byStream.length ? '<canvas id="' + strId + '" height="' + chartHeight + '"></canvas>' : '<p class="text-muted small mb-0">Nessun dato.</p>') +
+                '</div></div>';
+        });
+        html += '</div>';
+        document.getElementById('chartsContainer').innerHTML = html;
+
+        // Create chart instances after DOM is ready
+        types.forEach(function(type) {
+            var agg = aggregate(txOfType(type));
+            if (agg.byCat.length) {
+                charts['cat_' + type] = createDoughnut('chart_cat_' + type, agg.byCat, function(idx, data) {
+                    window._toggleCat(data[idx].id);
+                });
+            }
+            if (agg.byStream.length) {
+                charts['str_' + type] = createDoughnut('chart_str_' + type, agg.byStream, function(idx, data) {
+                    window._toggleStream(data[idx].id);
+                });
+            }
+        });
+    }
+
+    // --- Render breakdowns ---
+    function buildBreakdownRows(items, activeId, toggleFn) {
+        var grandTotal = items.reduce(function(s,c) { return s + c.total; }, 0) || 1;
+        return items.map(function(c) {
+            var pct = (c.total / grandTotal * 100);
+            var isActive = activeId === c.id;
+            var idArg = typeof c.id === 'string' ? "'" + c.id + "'" : c.id;
+            return '<tr class="cb-breakdown-row' + (isActive ? ' table-active' : '') + '" style="cursor:pointer" onclick="' + toggleFn + '(' + idArg + ')">' +
+                '<td><span class="cb-chip" style="background:' + c.color + '">' + c.name + '</span></td>' +
+                '<td><div class="cb-breakdown-bar-bg"><div class="cb-breakdown-bar" style="width:' + pct + '%;background:' + c.color + '"></div></div></td>' +
+                '<td class="text-end fw-bold">' + fmt(c.total) + '</td>' +
+                '<td class="text-end text-muted">' + pct.toFixed(1) + '%</td>' +
+            '</tr>';
+        }).join('');
+    }
+
+    function renderBreakdowns() {
+        var types = getTypeSections();
+        var colClass = types.length > 1 ? 'col-md-6' : 'col-md-6';
+        var html = '';
+        types.forEach(function(type) {
+            var agg = aggregate(txOfType(type));
+            var label = typeLabel(type);
+            html += '<div class="row g-3 mb-3">';
+            // Categoria
+            html += '<div class="' + colClass + '"><div class="cb-card p-3">' +
+                '<h6 class="mb-2">' + label + ' per categoria</h6>' +
+                '<div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead><tr>' +
+                '<th>Categoria</th><th style="width:35%"></th><th class="text-end">Importo</th><th class="text-end">%</th>' +
+                '</tr></thead><tbody>' +
+                (agg.byCat.length ? buildBreakdownRows(agg.byCat, filters.category_id, 'window._toggleCat') : '<tr><td colspan="4" class="text-center text-muted py-2">Nessun dato.</td></tr>') +
+                '</tbody></table></div></div></div>';
+            // Flusso
+            html += '<div class="' + colClass + '"><div class="cb-card p-3">' +
+                '<h6 class="mb-2">' + label + ' per flusso</h6>' +
+                '<div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead><tr>' +
+                '<th>Flusso</th><th style="width:35%"></th><th class="text-end">Importo</th><th class="text-end">%</th>' +
+                '</tr></thead><tbody>' +
+                (agg.byStream.length ? buildBreakdownRows(agg.byStream, filters.stream_id, 'window._toggleStream') : '<tr><td colspan="4" class="text-center text-muted py-2">Nessun dato.</td></tr>') +
+                '</tbody></table></div></div>';
+            html += '</div>';
+        });
+        document.getElementById('breakdownContainer').innerHTML = html;
+    }
+
+    function updateTxTable(txs) {
+        var tbody = document.querySelector('#txTable tbody');
+        document.getElementById('txCount').textContent = '(' + txs.length + ')';
+        if (!txs.length) {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">Nessuna transazione trovata.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = txs.map(function(t) {
+            var badgeSrc = 'badge-' + t.source;
+            var badgeStatus = 'badge-' + (t.payment_status || 'da_pagare');
+            var sign = t.type === 'entrata' ? '+' : '-';
+            var amtClass = t.type === 'entrata' ? 'text-cb-dark-green' : 'text-cb-gold';
+            var desc = t.description ? (t.description.length > 60 ? t.description.substring(0, 60) + '...' : t.description) : '-';
+            return '<tr>' +
+                '<td class="text-nowrap">' + t.date + '</td>' +
+                '<td>' + desc + '</td>' +
+                '<td class="d-none d-md-table-cell">' + (t.contact_name || '-') + '</td>' +
+                '<td class="d-none d-md-table-cell"><span class="badge ' + badgeSrc + '">' + t.source + '</span></td>' +
+                '<td class="d-none d-lg-table-cell">' + (t.category_name ? '<span class="cb-chip" style="background:' + t.category_color + '">' + t.category_name + '</span>' : '-') + '</td>' +
+                '<td class="d-none d-lg-table-cell">' + (t.stream_name || '-') + '</td>' +
+                '<td class="d-none d-md-table-cell"><span class="badge ' + badgeStatus + '">' + (t.payment_status || 'da_pagare').replace('_', ' ') + '</span></td>' +
+                '<td class="text-end fw-bold ' + amtClass + ' text-nowrap">' + sign + fmt(t.amount) + '</td>' +
+                '<td><a href="/prima-nota/' + t.id + '/modifica" class="btn btn-sm btn-outline-secondary py-0 px-1"><i class="bi bi-pencil"></i></a></td>' +
+            '</tr>';
+        }).join('');
+    }
+
+    function updateFilterBadge() {
+        var badge = document.getElementById('filterBadge');
+        var parts = [];
+        if (filters.type) parts.push(filters.type === 'entrata' ? 'Entrate' : 'Uscite');
+        if (filters.category_id !== null) {
+            if (filters.category_id === NONE) {
+                parts.push('Categoria: Non assegnato');
+            } else {
+                var cat = ALL_TX.find(function(t) { return t.category_id === filters.category_id; });
+                if (cat) parts.push(cat.category_name);
+            }
+        }
+        if (filters.stream_id !== null) {
+            if (filters.stream_id === NONE) {
+                parts.push('Flusso: Non assegnato');
+            } else {
+                var st = ALL_TX.find(function(t) { return t.stream_id === filters.stream_id; });
+                if (st) parts.push(st.stream_name);
+            }
+        }
+        if (parts.length) {
+            document.getElementById('filterBadgeText').textContent = 'Filtro: ' + parts.join(' + ');
+            badge.style.display = '';
+        } else {
+            badge.style.display = 'none';
+        }
+        document.getElementById('cardEntrate').classList.toggle('active', filters.type === 'entrata');
+        document.getElementById('cardUscite').classList.toggle('active', filters.type === 'uscita');
+    }
+
+    function applyFilters() {
+        var txs = getFiltered();
+        updateCards(txs);
+        renderCharts();
+        renderBreakdowns();
+        updateTxTable(txs);
+        updateFilterBadge();
+    }
+
+    // --- Click handlers ---
+    window.toggleTypeFilter = function(type) {
+        filters.type = (filters.type === type) ? null : type;
+        applyFilters();
+    };
+
+    window.clearAllFilters = function() {
+        filters.type = null;
+        filters.category_id = null;
+        filters.stream_id = null;
+        applyFilters();
+    };
+
+    window._toggleCat = function(id) {
+        filters.category_id = (filters.category_id === id) ? null : id;
+        applyFilters();
+    };
+
+    window._toggleStream = function(id) {
+        filters.stream_id = (filters.stream_id === id) ? null : id;
+        applyFilters();
+    };
+
+    // Render iniziale
+    applyFilters();
+})();
 </script>
 {% endblock %}

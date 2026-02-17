@@ -1,7 +1,9 @@
+import json
 from datetime import date
 from flask import Blueprint, render_template, request
 from flask_login import login_required
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 from app import db
 from app.models import Transaction, Category, RevenueStream
 
@@ -26,77 +28,35 @@ def index():
 
     base_filters = [Transaction.date.between(date_from, date_to)] + _official_filter(filter_type)
 
-    total_income = db.session.query(func.coalesce(func.sum(Transaction.amount), 0)).filter(
-        Transaction.type == "entrata", *base_filters
-    ).scalar()
+    # Fetch all transactions in period with eager loading
+    transactions = Transaction.query.options(
+        joinedload(Transaction.category),
+        joinedload(Transaction.revenue_stream),
+        joinedload(Transaction.contact),
+    ).filter(*base_filters).order_by(Transaction.date.desc()).all()
 
-    total_expense = db.session.query(func.coalesce(func.sum(Transaction.amount), 0)).filter(
-        Transaction.type == "uscita", *base_filters
-    ).scalar()
-
-    total_iva = db.session.query(func.coalesce(func.sum(Transaction.iva_amount), 0)).filter(
-        *base_filters
-    ).scalar()
-
-    by_category_income = db.session.query(
-        Category.name, Category.color, func.sum(Transaction.amount)
-    ).join(Transaction, Transaction.category_id == Category.id).filter(
-        Transaction.type == "entrata", *base_filters
-    ).group_by(Category.id).order_by(func.sum(Transaction.amount).desc()).all()
-
-    by_category_expense = db.session.query(
-        Category.name, Category.color, func.sum(Transaction.amount)
-    ).join(Transaction, Transaction.category_id == Category.id).filter(
-        Transaction.type == "uscita", *base_filters
-    ).group_by(Category.id).order_by(func.sum(Transaction.amount).desc()).all()
-
-    by_stream = db.session.query(
-        RevenueStream.name, RevenueStream.color, func.sum(Transaction.amount)
-    ).join(Transaction, Transaction.revenue_stream_id == RevenueStream.id).filter(
-        Transaction.type == "entrata", *base_filters
-    ).group_by(RevenueStream.id).order_by(func.sum(Transaction.amount).desc()).all()
-
-    by_method = db.session.query(
-        Transaction.payment_method, func.sum(Transaction.amount)
-    ).filter(
-        Transaction.payment_method != None, Transaction.payment_method != "",
-        *base_filters
-    ).group_by(Transaction.payment_method).all()
-
-    # Calcola importi non assegnati per ogni raggruppamento
-    _unassigned_color = "#aaaaaa"
-    _unassigned_label = "Non assegnato"
-
-    cat_income_total = sum(r[2] for r in by_category_income)
-    if float(total_income) - cat_income_total > 0.01:
-        by_category_income = list(by_category_income) + [
-            (_unassigned_label, _unassigned_color, float(total_income) - cat_income_total)
-        ]
-
-    cat_expense_total = sum(r[2] for r in by_category_expense)
-    if float(total_expense) - cat_expense_total > 0.01:
-        by_category_expense = list(by_category_expense) + [
-            (_unassigned_label, _unassigned_color, float(total_expense) - cat_expense_total)
-        ]
-
-    stream_total = sum(r[2] for r in by_stream)
-    if float(total_income) - stream_total > 0.01:
-        by_stream = list(by_stream) + [
-            (_unassigned_label, _unassigned_color, float(total_income) - stream_total)
-        ]
-
-    method_total = sum(r[1] for r in by_method)
-    all_total = float(total_income) + float(total_expense)
-    if all_total - method_total > 0.01:
-        by_method = list(by_method) + [
-            (_unassigned_label, all_total - method_total)
-        ]
+    # Build JSON-serializable transaction list for JS
+    tx_data = [{
+        'id': t.id,
+        'date': t.date.isoformat(),
+        'description': t.description or '',
+        'type': t.type,
+        'source': t.source,
+        'amount': float(t.amount),
+        'iva_amount': float(t.iva_amount or 0),
+        'category_id': t.category_id,
+        'category_name': t.category.name if t.category else None,
+        'category_color': t.category.color if t.category else None,
+        'stream_id': t.revenue_stream_id,
+        'stream_name': t.revenue_stream.name if t.revenue_stream else None,
+        'stream_color': t.revenue_stream.color if t.revenue_stream else None,
+        'contact_name': t.contact.name if t.contact else None,
+        'payment_status': t.payment_status,
+        'official': t.official,
+    } for t in transactions]
 
     return render_template("analisi/index.html",
-        total_income=float(total_income), total_expense=float(total_expense),
-        total_iva=float(total_iva), net=float(total_income) - float(total_expense),
-        by_category_income=by_category_income, by_category_expense=by_category_expense,
-        by_stream=by_stream, by_method=by_method,
+        tx_json=json.dumps(tx_data),
         date_from=date_from, date_to=date_to, filter_type=filter_type,
     )
 
