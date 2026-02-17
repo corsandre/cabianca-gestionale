@@ -14,17 +14,20 @@ def index():
     today = date.today()
     status = request.args.get("status", "aperte")
 
-    query = Transaction.query.filter(Transaction.due_date != None)
-
-    if status == "aperte":
+    if status == "senza_scadenza":
+        query = Transaction.query.filter(Transaction.due_date == None)
         query = query.filter(Transaction.payment_status.in_(["da_pagare", "parziale"]))
-    elif status == "scadute":
-        query = query.filter(
-            Transaction.payment_status.in_(["da_pagare", "parziale"]),
-            Transaction.due_date < today,
-        )
-
-    deadlines = query.order_by(Transaction.due_date.asc()).all()
+        deadlines = query.order_by(Transaction.date.desc()).all()
+    else:
+        query = Transaction.query.filter(Transaction.due_date != None)
+        if status == "aperte":
+            query = query.filter(Transaction.payment_status.in_(["da_pagare", "parziale"]))
+        elif status == "scadute":
+            query = query.filter(
+                Transaction.payment_status.in_(["da_pagare", "parziale"]),
+                Transaction.due_date < today,
+            )
+        deadlines = query.order_by(Transaction.due_date.asc()).all()
     return render_template("scadenzario/index.html", deadlines=deadlines, today=today)
 
 
