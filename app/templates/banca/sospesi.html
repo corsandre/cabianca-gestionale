@@ -42,6 +42,7 @@
             {% if bt.counterpart_name %}<strong>{{ bt.counterpart_name }}</strong>{% endif %}
             {% if bt.causale_description %}<span class="text-muted ms-1">| {{ bt.causale_description }}</span>{% endif %}
         </div>
+        {% if bt.description %}<div class="small text-muted mt-1">{{ bt.description[:150] }}</div>{% endif %}
         {% if bt.remittance_info %}<div class="small text-muted mt-1">{{ bt.remittance_info[:150] }}</div>{% endif %}
     </div>
 

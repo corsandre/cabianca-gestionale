@@ -175,6 +175,7 @@ def _init_db(app):
         ("auto_rules", "action_date_end_prev_month", "BOOLEAN DEFAULT 0"),
         ("bank_transactions", "ignore_reason_id", "INTEGER REFERENCES ignore_reasons(id)"),
         ("transactions", "recurring_expense_id", "INTEGER REFERENCES recurring_expenses(id)"),
+        ("bank_transactions", "description", "TEXT"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

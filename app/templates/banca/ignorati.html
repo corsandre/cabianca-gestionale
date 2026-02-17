@@ -109,6 +109,7 @@
                         <th>Data</th>
                         <th>Controparte</th>
                         <th>Causale</th>
+                        <th>Descrizione</th>
                         <th class="text-end">Importo</th>
                         <th>Motivo</th>
                         <th></th>
@@ -119,6 +120,7 @@
                         <td class="text-nowrap">{{ bt.operation_date.strftime('%d/%m/%Y') }}</td>
                         <td>{{ bt.counterpart_name or '-' }}</td>
                         <td class="small">{{ bt.causale_description or bt.causale_abi or '-' }}</td>
+                        <td class="small text-muted">{{ (bt.description or '-')[:60] }}</td>
                         <td class="text-end fw-bold text-cb-dark-green">+&euro;{{ "{:,.2f}".format(bt.amount) }}</td>
                         <td>
                             {% if bt.ignore_reason %}
@@ -159,6 +161,7 @@
                         <th>Data</th>
                         <th>Controparte</th>
                         <th>Causale</th>
+                        <th>Descrizione</th>
                         <th class="text-end">Importo</th>
                         <th>Motivo</th>
                         <th></th>
@@ -169,6 +172,7 @@
                         <td class="text-nowrap">{{ bt.operation_date.strftime('%d/%m/%Y') }}</td>
                         <td>{{ bt.counterpart_name or '-' }}</td>
                         <td class="small">{{ bt.causale_description or bt.causale_abi or '-' }}</td>
+                        <td class="small text-muted">{{ (bt.description or '-')[:60] }}</td>
                         <td class="text-end fw-bold text-cb-gold">-&euro;{{ "{:,.2f}".format(bt.amount) }}</td>
                         <td>
                             {% if bt.ignore_reason %}

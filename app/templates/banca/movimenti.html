@@ -80,7 +80,10 @@
                 <tr data-bs-toggle="collapse" data-bs-target="#mov-{{ bt.id }}" role="button" class="cursor-pointer">
                     <td class="text-center"><i class="bi bi-chevron-down small text-muted"></i></td>
                     <td class="text-nowrap">{{ bt.operation_date.strftime('%d/%m/%Y') }}</td>
-                    <td>{{ bt.counterpart_name or '-' }}</td>
+                    <td>
+                        {{ bt.counterpart_name or '-' }}
+                        {% if bt.description %}<div class="text-muted small text-truncate" style="max-width:300px" title="{{ bt.description }}">{{ bt.description[:80] }}</div>{% endif %}
+                    </td>
                     <td class="small">{{ bt.causale_description or bt.causale_abi or '-' }}</td>
                     <td class="text-end fw-bold text-nowrap {{ 'text-cb-dark-green' if bt.direction == 'C' else 'text-cb-gold' }}">
                         {{ '+' if bt.direction == 'C' else '-' }}&euro;{{ "{:,.2f}".format(bt.amount) }}

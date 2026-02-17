@@ -307,6 +307,7 @@ class BankTransaction(db.Model):
     counterpart_address = db.Column(db.String(300))
     ordinante_abi_cab = db.Column(db.String(20))
     remittance_info = db.Column(db.Text)
+    description = db.Column(db.Text)
     reference_code = db.Column(db.String(100))
     raw_data = db.Column(db.Text)
     dedup_hash = db.Column(db.String(64), unique=True)

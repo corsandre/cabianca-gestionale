@@ -137,6 +137,7 @@ def upload():
                 counterpart_address=tx_data["counterpart_address"],
                 ordinante_abi_cab=tx_data.get("ordinante_abi_cab", ""),
                 remittance_info=tx_data["remittance_info"],
+                description=tx_data.get("description", ""),
                 reference_code=tx_data["reference_code"],
                 raw_data=tx_data["raw_data"],
                 dedup_hash=tx_data["dedup_hash"],
@@ -250,6 +251,7 @@ def movimenti():
             BankTransaction.counterpart_name.ilike(like_q),
             BankTransaction.remittance_info.ilike(like_q),
             BankTransaction.causale_description.ilike(like_q),
+            BankTransaction.description.ilike(like_q),
         ))
 
     # Range importo

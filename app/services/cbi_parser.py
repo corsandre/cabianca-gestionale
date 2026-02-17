@@ -331,7 +331,16 @@ def _build_transaction(line_62, lines_63, header_date):
                         name = _extract_counterpart_from_text(full_line_text)
                         if name and not counterpart_name:
                             counterpart_name = name
-                        extra_parts.append(full_line_text[:80])
+                        # Sempre cattura il testo nella descrizione
+                        extra_parts.append(full_line_text[:120])
+
+        # Descrizioni generiche che non devono diventare controparte
+        GENERIC_DESCRIPTIONS = {
+            "COMMISSIONI", "COMPETENZE", "COMM.SU BONIFICI", "COMM/SPESE SU PORTAF",
+            "SPESE", "PAGAMENTO INTERNET", "DEBIT PAGAMENTO", "EFFETTI RITIRATI",
+            "SPESE E COMM.", "INT. E COMP.", "IMP. BOLLO CC/LR",
+            "EMISS/ATTIV CARTA", "VERS. CONTANTI",
+        }
 
         # Fallback: se non abbiamo controparte, prova a estrarla dalla descrizione del 62
         if not counterpart_name and description:
@@ -340,9 +349,22 @@ def _build_transaction(line_62, lines_63, header_date):
             m = re.match(r"[A-Z0-9]+\s{2,}(.+?)(?:\s{2,}|$)", description)
             if m:
                 candidate = m.group(1).strip()
-                # Ignora descrizioni generiche
-                if candidate and candidate not in ("COMMISSIONI", "COMPETENZE"):
+                if candidate and candidate.upper() not in GENERIC_DESCRIPTIONS:
                     counterpart_name = candidate
+
+        # Causali dove la controparte e' sempre la banca
+        BANK_OWN_CAUSALI = {"662", "16G", "16H", "16I", "16X", "195", "660", "430", "16K"}
+        # Causali dove la controparte e' la banca se non c'e' un nome reale
+        BANK_FALLBACK_CAUSALI = {"780"}
+
+        if causale_abi in BANK_OWN_CAUSALI:
+            counterpart_name = "Banco BPM S.p.A."
+        elif causale_abi in BANK_FALLBACK_CAUSALI and (
+            not counterpart_name or counterpart_name.upper() in GENERIC_DESCRIPTIONS
+        ):
+            counterpart_name = "Banco BPM S.p.A."
+        elif causale_abi == "198":
+            counterpart_name = "Agenzia delle Entrate"
 
         # Descrizione completa
         full_description = description
@@ -489,20 +511,29 @@ def _get_causale_abi_description(code):
         "480": "Bonifico ricevuto",
         "260": "Disposizione di pagamento",
         "110": "Utenze",
+        "118": "Pagamento POS/carta debito",
         "780": "Versamento contanti",
         "198": "Agenzia delle Entrate",
+        "195": "Imposta di bollo",
         "50C": "SDD addebito diretto",
         "050": "Assegno",
         "270": "Stipendi",
+        "310": "Effetti ritirati",
         "450": "Effetti",
         "010": "Versamento",
         "090": "Prelevamento",
         "120": "Pagamento POS",
+        "437": "Pagamento internet/carta",
         "540": "Carte di credito",
+        "660": "Spese bancarie",
+        "662": "Commissioni su bonifici",
         "680": "Commissioni",
         "430": "Interessi",
         "16G": "Commissioni",
+        "16H": "Commissioni SDD",
+        "16I": "Commissioni/spese su portafoglio",
         "16K": "Emissione/attivazione carta",
+        "16X": "Interessi e competenze",
         "48": "Bonifico ricevuto",
         "26": "Disposizione di pagamento",
         "11": "Utenze",

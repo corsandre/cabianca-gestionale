@@ -352,6 +352,8 @@ def _build_description(bt):
         parts.append(bt.counterpart_name)
     if bt.causale_description:
         parts.append(bt.causale_description)
-    if bt.remittance_info:
+    if bt.description:
+        parts.append(bt.description[:100])
+    elif bt.remittance_info:
         parts.append(bt.remittance_info[:100])
     return " - ".join(parts) if parts else f"Movimento bancario {bt.operation_date}"
