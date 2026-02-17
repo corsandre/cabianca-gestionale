@@ -319,7 +319,7 @@
                 '<td class="d-none d-lg-table-cell">' + (t.stream_name || '-') + '</td>' +
                 '<td class="d-none d-md-table-cell"><span class="badge ' + badgeStatus + '">' + (t.payment_status || 'da_pagare').replace('_', ' ') + '</span></td>' +
                 '<td class="text-end fw-bold ' + amtClass + ' text-nowrap">' + sign + fmt(t.amount) + '</td>' +
-                '<td><a href="/prima-nota/' + t.id + '/modifica" class="btn btn-sm btn-outline-secondary py-0 px-1"><i class="bi bi-pencil"></i></a></td>' +
+                '<td><a href="/movimenti/' + t.id + '/modifica" class="btn btn-sm btn-outline-secondary py-0 px-1"><i class="bi bi-pencil"></i></a></td>' +
             '</tr>';
         }).join('');
     }
