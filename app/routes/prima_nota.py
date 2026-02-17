@@ -26,6 +26,10 @@ def index():
         query = query.filter(Transaction.date >= date_from)
     if date_to:
         query = query.filter(Transaction.date <= date_to)
+    elif not date_from:
+        # Default: show up to 30 days in the future (user can override with filters)
+        default_horizon = date.today() + timedelta(days=30)
+        query = query.filter(Transaction.date <= default_horizon)
     if tipo:
         query = query.filter(Transaction.type == tipo)
     if fonte:
