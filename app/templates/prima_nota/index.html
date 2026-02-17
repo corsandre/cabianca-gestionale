@@ -33,6 +33,7 @@
                 <option value="cassa" {% if request.args.get('fonte')=='cassa' %}selected{% endif %}>Cassa</option>
                 <option value="manuale" {% if request.args.get('fonte')=='manuale' %}selected{% endif %}>Manuale</option>
                 <option value="banca" {% if request.args.get('fonte')=='banca' %}selected{% endif %}>Banca</option>
+                <option value="ricorrente" {% if request.args.get('fonte')=='ricorrente' %}selected{% endif %}>Ricorrente</option>
             </select>
         </div>
         <div class="col-6 col-md-2">

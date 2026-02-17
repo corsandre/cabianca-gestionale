@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Spese Ricorrenti - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-arrow-repeat text-cb-green"></i> Spese Ricorrenti</h1>
+    <a href="{{ url_for('ricorrenti.new') }}" class="btn btn-cb"><i class="bi bi-plus-lg"></i> Nuovo</a>
+</div>
+
+<div class="mb-3">
+    <div class="btn-group btn-group-sm">
+        <a href="{{ url_for('ricorrenti.index', filtro='attivi') }}" class="btn {% if filtro == 'attivi' %}btn-cb{% else %}btn-outline-secondary{% endif %}">Attivi</a>
+        <a href="{{ url_for('ricorrenti.index', filtro='tutti') }}" class="btn {% if filtro == 'tutti' %}btn-cb{% else %}btn-outline-secondary{% endif %}">Tutti</a>
+        <a href="{{ url_for('ricorrenti.index', filtro='disattivati') }}" class="btn {% if filtro == 'disattivati' %}btn-cb{% else %}btn-outline-secondary{% endif %}">Disattivati</a>
+    </div>
+</div>
+
+<div class="cb-table">
+    {% if templates %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr>
+                <th>Nome</th>
+                <th>Tipo</th>
+                <th>Frequenza</th>
+                <th class="text-end">Importo</th>
+                <th>Categoria</th>
+                <th>Prossima</th>
+                <th class="text-center">Generati</th>
+                <th class="text-center">Finestra</th>
+                <th>Stato</th>
+                <th></th>
+            </tr></thead>
+            <tbody>
+                {% for tpl in templates %}
+                <tr class="{% if not tpl.active %}table-secondary{% endif %}">
+                    <td><a href="{{ url_for('ricorrenti.transactions', id=tpl.id) }}">{{ tpl.name }}</a></td>
+                    <td><span class="badge {% if tpl.type == 'entrata' %}bg-success{% else %}bg-warning text-dark{% endif %}">{{ tpl.type|title }}</span></td>
+                    <td>
+                        {{ freq_labels.get(tpl.frequency, tpl.frequency) }}
+                        {% if tpl.frequency == 'custom' and tpl.custom_days %}
+                        <small class="text-muted">({{ tpl.custom_days }}gg)</small>
+                        {% endif %}
+                    </td>
+                    <td class="text-end fw-bold text-nowrap">
+                        &euro;{{ "{:,.2f}".format(tpl.amount) }}
+                    </td>
+                    <td>
+                        {% if tpl.category %}
+                        <span class="cb-chip" style="background:{{ tpl.category.color }}">{{ tpl.category.name }}</span>
+                        {% else %}-{% endif %}
+                    </td>
+                    <td class="small text-nowrap">
+                        {% if tpl.last_generated_date %}
+                        {{ tpl.last_generated_date.strftime('%d/%m/%Y') }}
+                        {% else %}
+                        {{ tpl.start_date.strftime('%d/%m/%Y') }}
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <a href="{{ url_for('ricorrenti.transactions', id=tpl.id) }}">{{ tpl.generated_transactions|length }}</a>
+                    </td>
+                    <td class="text-center">{{ tpl.generation_months }} mesi</td>
+                    <td>
+                        {% if tpl.active %}
+                        <span class="badge bg-success">Attivo</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Disattivato</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-nowrap">
+                        <a href="{{ url_for('ricorrenti.edit', id=tpl.id) }}" class="btn btn-sm btn-outline-secondary" title="Modifica"><i class="bi bi-pencil"></i></a>
+                        {% if tpl.active %}
+                        <form method="POST" action="{{ url_for('ricorrenti.generate', id=tpl.id) }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-primary" title="Genera ora"><i class="bi bi-play-fill"></i></button>
+                        </form>
+                        {% endif %}
+                        <form method="POST" action="{{ url_for('ricorrenti.toggle', id=tpl.id) }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm {% if tpl.active %}btn-outline-warning{% else %}btn-outline-success{% endif %}" title="{{ 'Disattiva' if tpl.active else 'Riattiva' }}">
+                                <i class="bi {% if tpl.active %}bi-pause-fill{% else %}bi-play-fill{% endif %}"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="cb-empty">
+        <i class="bi bi-arrow-repeat d-block"></i>
+        <p>Nessun template ricorrente.</p>
+        <a href="{{ url_for('ricorrenti.new') }}" class="btn btn-cb">Crea template</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

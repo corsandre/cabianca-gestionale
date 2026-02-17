@@ -25,6 +25,11 @@
         </a>
     </li>
     <li class="nav-item">
+        <a class="nav-link {% if request.blueprint == 'ricorrenti' %}active{% endif %}" href="{{ url_for('ricorrenti.index') }}">
+            <i class="bi bi-arrow-repeat"></i> Spese Ricorrenti
+        </a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link {% if request.blueprint == 'banca' %}active{% endif %}" href="{{ url_for('banca.index') }}">
             <i class="bi bi-bank"></i> Banca
         </a>

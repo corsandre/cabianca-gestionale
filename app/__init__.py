@@ -56,6 +56,7 @@ def create_app():
     from app.routes.scadenzario import bp as scadenzario_bp
     from app.routes.impostazioni import bp as impostazioni_bp
     from app.routes.banca import bp as banca_bp
+    from app.routes.ricorrenti import bp as ricorrenti_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -70,6 +71,7 @@ def create_app():
     app.register_blueprint(scadenzario_bp)
     app.register_blueprint(impostazioni_bp)
     app.register_blueprint(banca_bp)
+    app.register_blueprint(ricorrenti_bp)
 
     # Logging
     logging.basicConfig(level=logging.INFO)
@@ -172,6 +174,7 @@ def _init_db(app):
         ("auto_rules", "action_date_offset", "INTEGER"),
         ("auto_rules", "action_date_end_prev_month", "BOOLEAN DEFAULT 0"),
         ("bank_transactions", "ignore_reason_id", "INTEGER REFERENCES ignore_reasons(id)"),
+        ("transactions", "recurring_expense_id", "INTEGER REFERENCES recurring_expenses(id)"),
     ]
     for table, col, col_type in _migrate_columns:
         try:
@@ -273,6 +276,18 @@ def _init_scheduler(app):
                 except Exception as e:
                     app.logger.error(f"Errore sync cassa automatica: {e}")
 
+        # Generate recurring expenses at 3:00 AM
+        def generate_recurring():
+            with app.app_context():
+                try:
+                    from app.services.recurring_generator import generate_all
+                    count = generate_all()
+                    if count:
+                        app.logger.info(f"Spese ricorrenti: {count} transazioni generate")
+                except Exception as e:
+                    app.logger.error(f"Errore generazione ricorrenti: {e}")
+
+        scheduler.add_job(generate_recurring, "cron", hour=3, minute=0)
         scheduler.add_job(run_backup, "cron", hour=2, minute=0)
         if app.config.get("CLOUD_OFFICE_USER") and app.config.get("CLOUD_OFFICE_PASSWORD"):
             scheduler.add_job(sync_cassa, "cron", hour=4, minute=0)

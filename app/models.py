@@ -95,7 +95,7 @@ class Transaction(db.Model):
     __tablename__ = "transactions"
     id = db.Column(db.Integer, primary_key=True)
     type = db.Column(db.String(10), nullable=False)  # entrata, uscita
-    source = db.Column(db.String(10), nullable=False)  # sdi, cassa, manuale, banca
+    source = db.Column(db.String(20), nullable=False)  # sdi, cassa, manuale, banca, ricorrente
     official = db.Column(db.Boolean, default=True)
     amount = db.Column(db.Float, nullable=False)
     iva_amount = db.Column(db.Float, default=0)
@@ -111,6 +111,7 @@ class Transaction(db.Model):
     payment_date = db.Column(db.Date)
     due_date = db.Column(db.Date)
     invoice_id = db.Column(db.Integer, db.ForeignKey("sdi_invoices.id"))
+    recurring_expense_id = db.Column(db.Integer, db.ForeignKey("recurring_expenses.id"))
     notes = db.Column(db.Text)
     attachment_path = db.Column(db.String(300))
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"))
@@ -119,6 +120,7 @@ class Transaction(db.Model):
 
     tags = db.relationship("Tag", secondary=transaction_tags, backref="transactions")
     creator = db.relationship("User", backref="transactions")
+    recurring_template = db.relationship("RecurringExpense", backref="generated_transactions")
 
     @property
     def bank_match(self):
@@ -198,6 +200,46 @@ class CashRegisterDaily(db.Model):
     details = db.Column(db.Text)  # JSON
     synced_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# === RECURRING EXPENSES (Templates) ===
+
+class RecurringExpense(db.Model):
+    __tablename__ = "recurring_expenses"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    active = db.Column(db.Boolean, default=True)
+
+    # Frequenza
+    frequency = db.Column(db.String(20), nullable=False, default="mensile")  # mensile, bimestrale, trimestrale, semestrale, annuale, custom
+    custom_days = db.Column(db.Integer)  # solo per frequency=custom
+    generation_months = db.Column(db.Integer, default=3)  # finestra di generazione
+    start_date = db.Column(db.Date, nullable=False)
+    end_date = db.Column(db.Date)  # opzionale
+    last_generated_date = db.Column(db.Date)
+
+    # Template transazione
+    type = db.Column(db.String(10), nullable=False, default="uscita")  # entrata, uscita
+    amount = db.Column(db.Float, nullable=False)
+    iva_rate = db.Column(db.Float, default=0)
+    description = db.Column(db.String(500))
+    contact_id = db.Column(db.Integer, db.ForeignKey("contacts.id"))
+    category_id = db.Column(db.Integer, db.ForeignKey("categories.id"))
+    revenue_stream_id = db.Column(db.Integer, db.ForeignKey("revenue_streams.id"))
+    payment_method = db.Column(db.String(20))
+    payment_status = db.Column(db.String(20), default="da_pagare")
+    due_days_offset = db.Column(db.Integer, default=0)  # giorni dopo la data per scadenza
+    notes = db.Column(db.Text)
+    official = db.Column(db.Boolean, default=True)
+
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    contact = db.relationship("Contact")
+    category = db.relationship("Category")
+    revenue_stream = db.relationship("RevenueStream")
+    creator = db.relationship("User")
 
 
 # === BANK RECONCILIATION ===

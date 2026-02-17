@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Transazioni - {{ tpl.name }} - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-arrow-repeat text-cb-green"></i> {{ tpl.name }}</h1>
+    <a href="{{ url_for('ricorrenti.index') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Torna ai template</a>
+</div>
+
+<div class="mb-3">
+    <span class="badge {% if tpl.active %}bg-success{% else %}bg-secondary{% endif %}">{{ "Attivo" if tpl.active else "Disattivato" }}</span>
+    <span class="text-muted ms-2">&euro;{{ "{:,.2f}".format(tpl.amount) }} &middot; {{ tpl.frequency|title }}</span>
+</div>
+
+<div class="cb-table">
+    {% if transactions %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr>
+                <th>Data</th>
+                <th>Descrizione</th>
+                <th>Categoria</th>
+                <th>Stato</th>
+                <th>Banca</th>
+                <th class="text-end">Importo</th>
+                <th></th>
+            </tr></thead>
+            <tbody>
+                {% for t in transactions %}
+                <tr>
+                    <td class="small text-nowrap">{{ t.date.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ t.description[:50] if t.description else '-' }}</td>
+                    <td>{% if t.category %}<span class="cb-chip" style="background:{{ t.category.color }}">{{ t.category.name }}</span>{% else %}-{% endif %}</td>
+                    <td><span class="badge badge-{{ t.payment_status }}">{{ t.payment_status|replace('_',' ')|title }}</span></td>
+                    <td class="text-center">
+                        {% if t.bank_match %}
+                        <a href="{{ url_for('banca.movimenti') }}#mov-{{ t.bank_match.id }}" title="Riconciliato">
+                            <i class="bi bi-bank text-success"></i>
+                        </a>
+                        {% endif %}
+                    </td>
+                    <td class="text-end fw-bold text-nowrap {% if t.type == 'entrata' %}text-cb-dark-green{% else %}text-cb-gold{% endif %}">
+                        {% if t.type == 'uscita' %}-{% endif %}&euro;{{ "{:,.2f}".format(t.amount) }}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('movimenti.edit', id=t.id, next=url_for('ricorrenti.transactions', id=tpl.id)) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="cb-empty">
+        <i class="bi bi-journal d-block"></i>
+        <p>Nessuna transazione generata.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
