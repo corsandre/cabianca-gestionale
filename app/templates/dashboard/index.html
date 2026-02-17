@@ -132,6 +132,8 @@
                     <td class="text-center">
                         {% if t.bank_match %}
                         <i class="bi bi-bank text-success" title="Riconciliato"></i>
+                        {% elif t.payment_method == 'contanti' and t.payment_status == 'pagato' %}
+                        <i class="bi bi-cash-coin text-muted" title="Pagato in contanti"></i>
                         {% endif %}
                     </td>
                     <td class="text-end fw-bold {% if t.type == 'entrata' %}text-cb-dark-green{% else %}text-cb-gold{% endif %}">

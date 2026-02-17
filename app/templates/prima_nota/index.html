@@ -102,6 +102,8 @@
                         <a href="{{ url_for('banca.movimenti') }}#mov-{{ t.bank_match.id }}" title="Riconciliato - {{ t.bank_match.operation_date.strftime('%d/%m/%Y') }}">
                             <i class="bi bi-bank text-success"></i>
                         </a>
+                        {% elif t.payment_method == 'contanti' and t.payment_status == 'pagato' %}
+                        <i class="bi bi-cash-coin text-muted" title="Pagato in contanti"></i>
                         {% endif %}
                     </td>
                     <td class="text-end fw-bold text-nowrap {% if t.type == 'entrata' %}text-cb-dark-green{% else %}text-cb-gold{% endif %}">
