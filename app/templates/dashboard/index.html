@@ -30,11 +30,13 @@
         </div>
     </div>
     <div class="col-6 col-lg-3">
+        <a href="{{ url_for('scadenzario.index') }}" class="text-decoration-none">
         <div class="cb-card cb-stat-card">
             <div class="cb-stat-icon {% if overdue > 0 %}text-danger{% else %}text-cb-green{% endif %}"><i class="bi bi-exclamation-triangle"></i></div>
             <div class="cb-stat-value {% if overdue > 0 %}text-danger{% else %}text-cb-green{% endif %}">{{ overdue }}</div>
             <div class="cb-stat-label">Scadenze arretrate</div>
         </div>
+        </a>
     </div>
 </div>
 

@@ -15,20 +15,20 @@ def index():
     first_of_month = today.replace(day=1)
     first_of_year = today.replace(month=1, day=1)
 
-    # Monthly totals
+    # Monthly totals (only up to today, exclude future)
     month_income = db.session.query(func.coalesce(func.sum(Transaction.amount), 0)).filter(
-        Transaction.type == "entrata", Transaction.date >= first_of_month
+        Transaction.type == "entrata", Transaction.date >= first_of_month, Transaction.date <= today
     ).scalar()
     month_expense = db.session.query(func.coalesce(func.sum(Transaction.amount), 0)).filter(
-        Transaction.type == "uscita", Transaction.date >= first_of_month
+        Transaction.type == "uscita", Transaction.date >= first_of_month, Transaction.date <= today
     ).scalar()
 
-    # Yearly totals
+    # Yearly totals (only up to today, exclude future)
     year_income = db.session.query(func.coalesce(func.sum(Transaction.amount), 0)).filter(
-        Transaction.type == "entrata", Transaction.date >= first_of_year
+        Transaction.type == "entrata", Transaction.date >= first_of_year, Transaction.date <= today
     ).scalar()
     year_expense = db.session.query(func.coalesce(func.sum(Transaction.amount), 0)).filter(
-        Transaction.type == "uscita", Transaction.date >= first_of_year
+        Transaction.type == "uscita", Transaction.date >= first_of_year, Transaction.date <= today
     ).scalar()
 
     # Overdue payments
@@ -65,8 +65,11 @@ def index():
         months_it = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"]
         monthly_data.append({"label": f"{months_it[m-1]} {y}", "income": float(m_income), "expense": float(m_expense)})
 
-    # Recent transactions
-    recent = Transaction.query.order_by(Transaction.date.desc(), Transaction.id.desc()).limit(10).all()
+    # Recent transactions (up to 30 days in the future)
+    horizon = today + timedelta(days=30)
+    recent = Transaction.query.filter(
+        Transaction.date <= horizon
+    ).order_by(Transaction.date.desc(), Transaction.id.desc()).limit(10).all()
 
     return render_template("dashboard/index.html",
         month_income=month_income, month_expense=month_expense,
