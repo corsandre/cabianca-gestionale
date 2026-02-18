@@ -94,6 +94,9 @@
             <tbody></tbody>
         </table>
     </div>
+    <nav id="txPagination" class="p-3" style="display:none">
+        <ul class="pagination pagination-sm justify-content-center mb-0"></ul>
+    </nav>
 </div>
 {% endblock %}
 
@@ -102,8 +105,11 @@
 (function() {
     const ALL_TX = {{ tx_json|safe }};
     const NONE = '__none__';  // sentinella per "Non assegnato"
+    const PER_PAGE = 50;
     let filters = { type: null, category_id: null, stream_id: null };
     let charts = {};  // chiave -> Chart instance
+    let currentPage = 1;
+    let currentFilteredTxs = [];
 
     function fmt(n) {
         return '\u20AC' + n.toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -297,14 +303,8 @@
         document.getElementById('breakdownContainer').innerHTML = html;
     }
 
-    function updateTxTable(txs) {
-        var tbody = document.querySelector('#txTable tbody');
-        document.getElementById('txCount').textContent = '(' + txs.length + ')';
-        if (!txs.length) {
-            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">Nessuna transazione trovata.</td></tr>';
-            return;
-        }
-        tbody.innerHTML = txs.map(function(t) {
+    function renderTxRows(txs) {
+        return txs.map(function(t) {
             var badgeSrc = 'badge-' + t.source;
             var badgeStatus = 'badge-' + (t.payment_status || 'da_pagare');
             var sign = t.type === 'entrata' ? '+' : '-';
@@ -322,6 +322,43 @@
                 '<td><a href="/movimenti/' + t.id + '/modifica" class="btn btn-sm btn-outline-secondary py-0 px-1"><i class="bi bi-pencil"></i></a></td>' +
             '</tr>';
         }).join('');
+    }
+
+    function renderTxPagination(total, page, pages) {
+        var nav = document.getElementById('txPagination');
+        if (pages <= 1) { nav.style.display = 'none'; return; }
+        nav.style.display = '';
+        var ul = nav.querySelector('ul');
+        var html = '';
+        if (page > 1) html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (page - 1) + '">&laquo;</a></li>';
+        var start = Math.max(1, page - 2), end = Math.min(pages, page + 2);
+        if (start > 1) { html += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>'; if (start > 2) html += '<li class="page-item disabled"><span class="page-link">&hellip;</span></li>'; }
+        for (var p = start; p <= end; p++) {
+            html += '<li class="page-item ' + (p === page ? 'active' : '') + '"><a class="page-link" href="#" data-page="' + p + '">' + p + '</a></li>';
+        }
+        if (end < pages) { if (end < pages - 1) html += '<li class="page-item disabled"><span class="page-link">&hellip;</span></li>'; html += '<li class="page-item"><a class="page-link" href="#" data-page="' + pages + '">' + pages + '</a></li>'; }
+        if (page < pages) html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (page + 1) + '">&raquo;</a></li>';
+        ul.innerHTML = html;
+    }
+
+    function updateTxTable(txs) {
+        currentFilteredTxs = txs;
+        var total = txs.length;
+        var pages = Math.ceil(total / PER_PAGE) || 1;
+        if (currentPage > pages) currentPage = 1;
+        var start = (currentPage - 1) * PER_PAGE;
+        var pageItems = txs.slice(start, start + PER_PAGE);
+        var tbody = document.querySelector('#txTable tbody');
+        var countText = total + ' movimenti trovati';
+        if (pages > 1) countText += ' (pagina ' + currentPage + ' di ' + pages + ')';
+        document.getElementById('txCount').textContent = countText;
+        if (!total) {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">Nessuna transazione trovata.</td></tr>';
+            renderTxPagination(total, currentPage, pages);
+            return;
+        }
+        tbody.innerHTML = renderTxRows(pageItems);
+        renderTxPagination(total, currentPage, pages);
     }
 
     function updateFilterBadge() {
@@ -355,6 +392,7 @@
     }
 
     function applyFilters() {
+        currentPage = 1;
         var txs = getFiltered();
         updateCards(txs);
         renderCharts();
@@ -385,6 +423,16 @@
         filters.stream_id = (filters.stream_id === id) ? null : id;
         applyFilters();
     };
+
+    // Click paginazione tabella
+    document.getElementById('txPagination').addEventListener('click', function(e) {
+        var link = e.target.closest('[data-page]');
+        if (!link) return;
+        e.preventDefault();
+        currentPage = parseInt(link.dataset.page);
+        updateTxTable(currentFilteredTxs);
+        document.getElementById('txTable').scrollIntoView({behavior: 'smooth', block: 'start'});
+    });
 
     // Render iniziale
     applyFilters();
