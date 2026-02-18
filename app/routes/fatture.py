@@ -54,6 +54,11 @@ def index():
             Transaction.payment_status == "pagato",
             Transaction.invoice_id.isnot(None),
         ).subquery()
+        # Subquery: fatture con metodo "non applicabile" (passaggi interni)
+        na_sq = db.session.query(Transaction.invoice_id).filter(
+            Transaction.payment_method == "non_applicabile",
+            Transaction.invoice_id.isnot(None),
+        ).subquery()
 
         conditions = []
         if "riconciliato" in banca_filter:
@@ -70,6 +75,7 @@ def index():
                 db.and_(
                     ~SdiInvoice.id.in_(db.select(riconciliato_sq)),
                     ~SdiInvoice.id.in_(db.select(contanti_sq)),
+                    ~SdiInvoice.id.in_(db.select(na_sq)),
                 )
             )
         query = query.filter(db.or_(*conditions))
@@ -95,6 +101,7 @@ def index():
             Transaction.invoice_id.in_(invoice_ids)
         ).all()
         cash_paid = set()
+        na_paid = set()
         for inv_id, bt_id, bt_status, pay_method, pay_status in results:
             if bt_id:
                 bank_status[inv_id] = "riconciliato"
@@ -102,15 +109,19 @@ def index():
                 bank_status[inv_id] = None
             if pay_method == "contanti" and pay_status == "pagato":
                 cash_paid.add(inv_id)
+            if pay_method == "non_applicabile":
+                na_paid.add(inv_id)
     else:
         cash_paid = set()
+        na_paid = set()
 
     # Tipi fattura distinti per il filtro
     invoice_types = [r[0] for r in db.session.query(SdiInvoice.invoice_type).distinct().order_by(SdiInvoice.invoice_type).all() if r[0]]
 
     return render_template("fatture/index.html", invoices=pagination.items,
                           pagination=pagination, bank_status=bank_status,
-                          cash_paid=cash_paid, total_count=total_count,
+                          cash_paid=cash_paid, na_paid=na_paid,
+                          total_count=total_count,
                           invoice_types=invoice_types)
 
 

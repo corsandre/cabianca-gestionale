@@ -106,6 +106,9 @@ def import_sdi_file(content: bytes, filename: str, uploaded_by: int = None) -> d
             stream_vendita = RevenueStream.query.filter_by(name="Vendita diretta").first()
             stream_agriturismo = RevenueStream.query.filter_by(name="Agriturismo").first()
 
+            # Numero progressivo fatture interne
+            internal_count = SdiInvoice.query.filter_by(direction="interna").count()
+
             # Ensure self-contact exists
             self_contact = Contact.query.filter_by(
                 partita_iva=Config.COMPANY_PIVA
@@ -129,7 +132,7 @@ def import_sdi_file(content: bytes, filename: str, uploaded_by: int = None) -> d
                 net_amount=data["taxable_amount"],
                 iva_rate=iva_rate,
                 date=data["invoice_date"],
-                description=f"Fattura interna {data['invoice_number']} - Vendita a Agriturismo",
+                description=f"Trasferimento interno {internal_count} - Vendita a Agriturismo",
                 contact_id=self_contact.id,
                 invoice_id=invoice.id,
                 category_id=cat_id,
@@ -151,7 +154,7 @@ def import_sdi_file(content: bytes, filename: str, uploaded_by: int = None) -> d
                 net_amount=data["taxable_amount"],
                 iva_rate=iva_rate,
                 date=data["invoice_date"],
-                description=f"Fattura interna {data['invoice_number']} - Acquisto da Azienda Agricola",
+                description=f"Trasferimento interno {internal_count} - Acquisto da Azienda Agricola",
                 contact_id=self_contact.id,
                 invoice_id=invoice.id,
                 category_id=cat_id,

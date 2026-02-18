@@ -93,6 +93,8 @@
                         <i class="bi bi-check-circle-fill text-success" title="Riconciliato in banca"></i>
                         {% elif inv.id in cash_paid %}
                         <i class="bi bi-cash-coin text-muted" title="Pagato in contanti"></i>
+                        {% elif inv.id in na_paid %}
+                        <i class="bi bi-dash-circle text-muted" title="Non applicabile"></i>
                         {% else %}
                         <i class="bi bi-clock text-warning" title="In attesa di riconciliazione"></i>
                         {% endif %}
