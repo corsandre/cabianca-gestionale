@@ -15,12 +15,11 @@
     <a href="{{ url_for('banca.index') }}" class="btn btn-cb btn-sm">Torna alla dashboard</a>
 </div>
 {% else %}
-<p class="text-muted mb-3">{{ items | length }} movimenti da riconciliare</p>
+<p class="text-muted mb-3">{{ total_count }} movimenti da riconciliare{% if pagination.pages > 1 %} (pagina {{ pagination.page }} di {{ pagination.pages }}){% endif %}</p>
 
 {% for item in items %}
 {% set bt = item.bt %}
 {% set proposals = item.proposals %}
-{% set available = item.available %}
 <div class="cb-card mb-3">
     {# Intestazione movimento bancario #}
     <div class="p-3 border-bottom" style="background:#f8f9fa; border-radius:12px 12px 0 0">
@@ -49,7 +48,7 @@
     {# Due colonne: proposte + abbinamento manuale #}
     <div class="row g-0">
         {# Colonna sinistra: Proposte automatiche #}
-        <div class="col-lg-6 p-3 {% if available.sdi or available.altre %}border-end{% endif %}">
+        <div class="col-lg-6 p-3 border-end">
             <h6 class="text-muted mb-2"><i class="bi bi-lightning"></i> Proposte automatiche</h6>
             {% if proposals %}
             {% for p in proposals %}
@@ -84,8 +83,8 @@
 
             {# Tabs fonte #}
             <ul class="nav nav-tabs nav-tabs-sm mb-2" role="tablist" style="font-size:0.8rem">
-                <li class="nav-item"><a class="nav-link active search-tab" data-bs-toggle="tab" href="#sdi-{{ bt.id }}" data-source="sdi" data-bt="{{ bt.id }}">Fatture SDI{% if available.sdi %} ({{ available.sdi|length }}){% endif %}</a></li>
-                <li class="nav-item"><a class="nav-link search-tab" data-bs-toggle="tab" href="#altre-{{ bt.id }}" data-source="altre" data-bt="{{ bt.id }}">Manuali/Banca{% if available.altre %} ({{ available.altre|length }}){% endif %}</a></li>
+                <li class="nav-item"><a class="nav-link active search-tab" data-bs-toggle="tab" href="#sdi-{{ bt.id }}" data-source="sdi" data-bt="{{ bt.id }}">Fatture SDI</a></li>
+                <li class="nav-item"><a class="nav-link search-tab" data-bs-toggle="tab" href="#altre-{{ bt.id }}" data-source="altre" data-bt="{{ bt.id }}">Manuali/Banca</a></li>
             </ul>
 
             {# Barra ricerca #}
@@ -110,42 +109,16 @@
                 </div>
             </div>
 
-            {# Risultati #}
+            {# Risultati (caricati via AJAX) #}
             <div class="tab-content" style="max-height:280px; overflow-y:auto">
                 <div class="tab-pane fade show active" id="sdi-{{ bt.id }}">
                     <div class="search-results" data-bt="{{ bt.id }}" data-source="sdi">
-                    {% for tx in available.sdi %}
-                    <div class="d-flex align-items-center justify-content-between border-bottom py-1">
-                        <div class="small flex-grow-1 me-2">
-                            <div>{{ tx.description[:55] if tx.description else '-' }}</div>
-                            <div class="text-muted">{{ tx.date.strftime('%d/%m/%Y') }} | &euro;{{ "{:,.2f}".format(tx.amount) }}{% if tx.contact %} | {{ tx.contact.name[:25] }}{% endif %}</div>
-                        </div>
-                        <form method="POST" action="{{ url_for('banca.riconcilia', id=bt.id) }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="transaction_id" value="{{ tx.id }}">
-                            <button class="btn btn-sm btn-outline-success" title="Abbina"><i class="bi bi-link-45deg"></i></button>
-                        </form>
-                    </div>
-                    {% endfor %}
-                    {% if not available.sdi %}<p class="small text-muted mb-0">Nessuna fattura SDI trovata.</p>{% endif %}
+                        <p class="small text-muted mb-0">Caricamento...</p>
                     </div>
                 </div>
                 <div class="tab-pane fade" id="altre-{{ bt.id }}">
                     <div class="search-results" data-bt="{{ bt.id }}" data-source="altre">
-                    {% for tx in available.altre %}
-                    <div class="d-flex align-items-center justify-content-between border-bottom py-1">
-                        <div class="small flex-grow-1 me-2">
-                            <div>{{ tx.description[:55] if tx.description else '-' }}</div>
-                            <div class="text-muted">{{ tx.date.strftime('%d/%m/%Y') }} | &euro;{{ "{:,.2f}".format(tx.amount) }}{% if tx.contact %} | {{ tx.contact.name[:25] }}{% endif %}</div>
-                        </div>
-                        <form method="POST" action="{{ url_for('banca.riconcilia', id=bt.id) }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="transaction_id" value="{{ tx.id }}">
-                            <button class="btn btn-sm btn-outline-success" title="Abbina"><i class="bi bi-link-45deg"></i></button>
-                        </form>
-                    </div>
-                    {% endfor %}
-                    {% if not available.altre %}<p class="small text-muted mb-0">Nessuna transazione trovata.</p>{% endif %}
+                        <p class="small text-muted mb-0">Caricamento...</p>
                     </div>
                 </div>
             </div>
@@ -155,70 +128,126 @@
     {# Azioni in fondo #}
     <div class="p-3 border-top" style="background:#fafafa; border-radius:0 0 12px 12px">
         <div class="d-flex gap-2 flex-wrap">
-            <button class="btn btn-sm btn-cb-outline" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#crea-{{ bt.id }}">
+            <button class="btn btn-sm btn-cb-outline btn-crea-mov"
+                    data-bt-id="{{ bt.id }}"
+                    data-desc="{{ bt.counterpart_name or '' }} - {{ bt.causale_description or '' }}">
                 <i class="bi bi-plus-circle"></i> Crea movimento
             </button>
-            <form method="POST" action="{{ url_for('banca.ignora', id=bt.id) }}" class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <select name="ignore_reason_id" class="form-select form-select-sm d-inline-block" style="width:auto; font-size:0.78rem">
-                    <option value="">-- Motivo --</option>
-                    {% for r in reasons %}
-                    <option value="{{ r.id }}">{{ r.name }}</option>
-                    {% endfor %}
-                </select>
-                <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-dash-circle"></i> Ignora</button>
-            </form>
+            <button class="btn btn-sm btn-outline-secondary btn-ignora"
+                    data-bt-id="{{ bt.id }}">
+                <i class="bi bi-dash-circle"></i> Ignora
+            </button>
             <a href="{{ url_for('banca.regola_nuova', counterpart=bt.counterpart_name or '', causale=bt.causale_abi or '', direction=bt.direction) }}"
                class="btn btn-sm btn-outline-info">
                 <i class="bi bi-gear"></i> Crea regola
             </a>
         </div>
+    </div>
+</div>
+{% endfor %}
 
-        {# Form creazione transazione (collassato) #}
-        <div class="collapse mt-2" id="crea-{{ bt.id }}">
-            <form method="POST" action="{{ url_for('banca.crea_movimento', id=bt.id) }}" class="bg-light rounded p-3">
+{# Modal condiviso: Crea movimento #}
+<div class="modal fade" id="modalCrea" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="formCrea" method="POST">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="row g-2">
-                    <div class="col-md-6">
-                        <label class="form-label small">Categoria</label>
-                        <select name="category_id" class="form-select form-select-sm">
-                            <option value="">-- Nessuna --</option>
-                            {% for c in categories %}
-                            <option value="{{ c.id }}">{{ c.name }} ({{ c.type }})</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small">Contatto</label>
-                        <select name="contact_id" class="form-select form-select-sm">
-                            <option value="">-- Nessuno --</option>
-                            {% for c in contacts %}
-                            <option value="{{ c.id }}">{{ c.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small">Flusso ricavi</label>
-                        <select name="revenue_stream_id" class="form-select form-select-sm">
-                            <option value="">-- Nessuno --</option>
-                            {% for rs in revenue_streams %}
-                            <option value="{{ rs.id }}">{{ rs.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small">Descrizione</label>
-                        <input type="text" name="description" class="form-control form-control-sm"
-                               value="{{ bt.counterpart_name or '' }} - {{ bt.causale_description or '' }}">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title"><i class="bi bi-plus-circle"></i> Crea movimento</h6>
+                    <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label small">Categoria</label>
+                            <select name="category_id" class="form-select form-select-sm">
+                                <option value="">-- Nessuna --</option>
+                                {% for c in categories %}
+                                <option value="{{ c.id }}">{{ c.name }} ({{ c.type }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small">Contatto</label>
+                            <select name="contact_id" class="form-select form-select-sm">
+                                <option value="">-- Nessuno --</option>
+                                {% for c in contacts %}
+                                <option value="{{ c.id }}">{{ c.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small">Flusso ricavi</label>
+                            <select name="revenue_stream_id" class="form-select form-select-sm">
+                                <option value="">-- Nessuno --</option>
+                                {% for rs in revenue_streams %}
+                                <option value="{{ rs.id }}">{{ rs.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small">Descrizione</label>
+                            <input type="text" name="description" id="creaDescrizione" class="form-control form-control-sm">
+                        </div>
                     </div>
                 </div>
-                <button class="btn btn-cb btn-sm mt-2"><i class="bi bi-plus"></i> Crea e riconcilia</button>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button class="btn btn-cb btn-sm"><i class="bi bi-plus"></i> Crea e riconcilia</button>
+                </div>
             </form>
         </div>
     </div>
 </div>
-{% endfor %}
+
+{# Modal condiviso: Ignora #}
+<div class="modal fade" id="modalIgnora" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <form id="formIgnora" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title"><i class="bi bi-dash-circle"></i> Ignora movimento</h6>
+                    <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label small">Motivo</label>
+                    <select name="ignore_reason_id" class="form-select form-select-sm">
+                        <option value="">-- Senza motivo --</option>
+                        {% for r in reasons %}
+                        <option value="{{ r.id }}">{{ r.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button class="btn btn-sm btn-outline-danger"><i class="bi bi-dash-circle"></i> Ignora</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if pagination.pages > 1 %}
+{% macro page_url(p) %}?page={{ p }}{% endmacro %}
+<nav class="my-3">
+    <ul class="pagination pagination-sm justify-content-center mb-0">
+        {% if pagination.has_prev %}
+        <li class="page-item"><a class="page-link" href="{{ page_url(pagination.prev_num) }}">&laquo;</a></li>
+        {% endif %}
+        {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if p %}
+            <li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="{{ page_url(p) }}">{{ p }}</a></li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+            {% endif %}
+        {% endfor %}
+        {% if pagination.has_next %}
+        <li class="page-item"><a class="page-link" href="{{ page_url(pagination.next_num) }}">&raquo;</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
 {% endif %}
 {% endblock %}
 
@@ -315,6 +344,30 @@ document.querySelectorAll('.search-q').forEach(input => {
 // Toggle "includi pagate": rilancia ricerca
 document.querySelectorAll('.search-paid').forEach(cb => {
     cb.addEventListener('change', () => doSearch(cb.dataset.bt));
+});
+
+// Carica transazioni disponibili via AJAX al caricamento pagina
+document.querySelectorAll('.search-results[data-source="sdi"]').forEach(el => {
+    const btId = el.dataset.bt;
+    fetchSource(btId, 'sdi');
+    fetchSource(btId, 'altre');
+});
+
+// Modal "Crea movimento": imposta action URL e descrizione
+document.querySelectorAll('.btn-crea-mov').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.getElementById('formCrea').action = `/banca/crea-movimento/${btn.dataset.btId}`;
+        document.getElementById('creaDescrizione').value = btn.dataset.desc;
+        new bootstrap.Modal(document.getElementById('modalCrea')).show();
+    });
+});
+
+// Modal "Ignora": imposta action URL
+document.querySelectorAll('.btn-ignora').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.getElementById('formIgnora').action = `/banca/ignora/${btn.dataset.btId}`;
+        new bootstrap.Modal(document.getElementById('modalIgnora')).show();
+    });
 });
 
 </script>

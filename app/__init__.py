@@ -184,6 +184,26 @@ def _init_db(app):
         except sqlalchemy.exc.OperationalError:
             db.session.rollback()  # Column already exists
 
+    # Indici per prestazioni query frequenti
+    _indexes = [
+        ("ix_bt_status", "bank_transactions", "status"),
+        ("ix_bt_op_date", "bank_transactions", "operation_date"),
+        ("ix_bt_matched_tx", "bank_transactions", "matched_transaction_id"),
+        ("ix_tx_source", "transactions", "source"),
+        ("ix_tx_date", "transactions", "date"),
+        ("ix_tx_payment_status", "transactions", "payment_status"),
+        ("ix_tx_invoice_id", "transactions", "invoice_id"),
+        ("ix_sdi_date", "sdi_invoices", "invoice_date"),
+    ]
+    for ix_name, table, col in _indexes:
+        try:
+            db.session.execute(sqlalchemy.text(
+                f"CREATE INDEX IF NOT EXISTS {ix_name} ON {table}({col})"
+            ))
+            db.session.commit()
+        except sqlalchemy.exc.OperationalError:
+            db.session.rollback()
+
     from app.models import User, RevenueStream, Category
     import bcrypt
 

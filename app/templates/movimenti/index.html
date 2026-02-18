@@ -29,6 +29,8 @@
                         </a>
                         {% elif t.payment_method == 'contanti' and t.payment_status == 'pagato' %}
                         <i class="bi bi-cash-coin text-muted" title="Pagato in contanti"></i>
+                        {% else %}
+                        <i class="bi bi-clock text-warning" title="In attesa di riconciliazione"></i>
                         {% endif %}
                     </td>
                     <td class="text-end fw-bold text-nowrap {% if t.type == 'entrata' %}text-cb-dark-green{% else %}text-cb-gold{% endif %}">

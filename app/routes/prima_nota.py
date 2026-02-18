@@ -2,7 +2,7 @@ from datetime import date, timedelta
 from flask import Blueprint, render_template, request
 from flask_login import login_required
 from app import db
-from app.models import Transaction, Category, RevenueStream, Tag
+from app.models import Transaction, Category, RevenueStream, Tag, BankTransaction
 
 bp = Blueprint("prima_nota", __name__, url_prefix="/prima-nota")
 
@@ -45,6 +45,40 @@ def index():
     if search:
         query = query.filter(Transaction.description.ilike(f"%{search}%"))
 
+    # Filtro stato banca (multi-select)
+    banca_filter = request.args.getlist("banca")
+    if banca_filter:
+        # Subquery: transaction IDs riconciliati
+        riconciliato_sq = db.session.query(
+            BankTransaction.matched_transaction_id
+        ).filter(
+            BankTransaction.matched_transaction_id.isnot(None)
+        ).subquery()
+
+        conditions = []
+        if "riconciliato" in banca_filter:
+            conditions.append(Transaction.id.in_(db.select(riconciliato_sq)))
+        if "contanti" in banca_filter:
+            conditions.append(
+                db.and_(
+                    Transaction.payment_method == "contanti",
+                    Transaction.payment_status == "pagato",
+                    ~Transaction.id.in_(db.select(riconciliato_sq)),
+                )
+            )
+        if "in_attesa" in banca_filter:
+            conditions.append(
+                db.and_(
+                    ~Transaction.id.in_(db.select(riconciliato_sq)),
+                    db.not_(db.and_(
+                        Transaction.payment_method == "contanti",
+                        Transaction.payment_status == "pagato",
+                    )),
+                )
+            )
+        query = query.filter(db.or_(*conditions))
+
+    total_count = query.count()
     page = request.args.get("page", 1, type=int)
     pagination = query.order_by(Transaction.date.desc(), Transaction.id.desc()).paginate(page=page, per_page=50)
 
@@ -53,5 +87,6 @@ def index():
 
     return render_template("prima_nota/index.html",
         transactions=pagination.items, pagination=pagination,
+        total_count=total_count,
         categories=categories, streams=streams,
     )

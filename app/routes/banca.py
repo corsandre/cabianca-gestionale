@@ -270,7 +270,11 @@ def movimenti():
     if causale_filter:
         query = query.filter(BankTransaction.causale_abi == causale_filter)
 
-    movimenti_list = query.order_by(BankTransaction.operation_date.desc()).all()
+    total_count = query.count()
+    page = request.args.get("page", 1, type=int)
+    pagination = query.order_by(
+        BankTransaction.operation_date.desc()
+    ).paginate(page=page, per_page=50)
 
     # Valori distinti causale ABI per il filtro
     causali_abi = db.session.query(
@@ -282,7 +286,9 @@ def movimenti():
 
     return render_template(
         "banca/movimenti.html",
-        movimenti=movimenti_list,
+        movimenti=pagination.items,
+        pagination=pagination,
+        total_count=total_count,
         date_from=date_from,
         date_to=date_to,
         status_filter=status_filter,
@@ -299,16 +305,22 @@ def movimenti():
 @login_required
 def sospesi():
     """Movimenti da riconciliare con proposte di abbinamento."""
-    pending = BankTransaction.query.filter_by(
+    query = BankTransaction.query.filter_by(
         status="non_riconciliato"
-    ).order_by(BankTransaction.operation_date.desc()).all()
+    ).order_by(BankTransaction.operation_date.desc())
 
-    # Genera proposte e transazioni disponibili per ogni movimento
+    total_count = query.count()
+    page = request.args.get("page", 1, type=int)
+    pagination = query.paginate(page=page, per_page=20)
+
+    # Genera solo proposte (leggere e specifiche per BT).
+    # Le transazioni disponibili per abbinamento manuale vengono caricate
+    # on-demand via AJAX (/banca/cerca-transazioni/<bt_id>) per evitare
+    # di duplicare gli stessi dati N volte nella pagina.
     items = []
-    for bt in pending:
+    for bt in pagination.items:
         proposals = get_match_proposals(bt)
-        available = get_available_transactions(bt)
-        items.append({"bt": bt, "proposals": proposals, "available": available})
+        items.append({"bt": bt, "proposals": proposals})
 
     categories = Category.query.filter_by(active=True).order_by(Category.name).all()
     contacts = Contact.query.filter_by(active=True).order_by(Contact.name).all()
@@ -318,6 +330,8 @@ def sospesi():
     return render_template(
         "banca/sospesi.html",
         items=items,
+        pagination=pagination,
+        total_count=total_count,
         categories=categories,
         contacts=contacts,
         revenue_streams=revenue_streams,

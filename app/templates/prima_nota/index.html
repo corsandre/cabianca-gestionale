@@ -66,6 +66,23 @@
             <label class="form-label small">Cerca</label>
             <input type="text" name="q" class="form-control form-control-sm" placeholder="Descrizione..." value="{{ request.args.get('q', '') }}">
         </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small">Banca</label>
+            <div class="d-flex flex-column gap-1">
+                <div class="form-check form-check-inline mb-0">
+                    <input class="form-check-input" type="checkbox" name="banca" value="riconciliato" id="banca_ric" {% if 'riconciliato' in request.args.getlist('banca') %}checked{% endif %}>
+                    <label class="form-check-label small" for="banca_ric"><i class="bi bi-bank text-success"></i> Riconciliate</label>
+                </div>
+                <div class="form-check form-check-inline mb-0">
+                    <input class="form-check-input" type="checkbox" name="banca" value="contanti" id="banca_cash" {% if 'contanti' in request.args.getlist('banca') %}checked{% endif %}>
+                    <label class="form-check-label small" for="banca_cash"><i class="bi bi-cash-coin text-muted"></i> Contanti</label>
+                </div>
+                <div class="form-check form-check-inline mb-0">
+                    <input class="form-check-input" type="checkbox" name="banca" value="in_attesa" id="banca_attesa" {% if 'in_attesa' in request.args.getlist('banca') %}checked{% endif %}>
+                    <label class="form-check-label small" for="banca_attesa"><i class="bi bi-clock text-warning"></i> In attesa</label>
+                </div>
+            </div>
+        </div>
         <div class="col-auto">
             <button class="btn btn-cb btn-sm">Filtra</button>
             <a href="{{ url_for('prima_nota.index') }}" class="btn btn-sm btn-outline-secondary">Reset</a>
@@ -76,6 +93,7 @@
 <!-- TABLE -->
 <div class="cb-table">
     {% if transactions %}
+    <p class="text-muted px-3 pt-2 mb-0 small">{{ total_count }} movimenti trovati{% if pagination.pages > 1 %} (pagina {{ pagination.page }} di {{ pagination.pages }}){% endif %}</p>
     <div class="table-responsive">
         <table class="table table-hover mb-0">
             <thead><tr>
@@ -104,6 +122,8 @@
                         </a>
                         {% elif t.payment_method == 'contanti' and t.payment_status == 'pagato' %}
                         <i class="bi bi-cash-coin text-muted" title="Pagato in contanti"></i>
+                        {% else %}
+                        <i class="bi bi-clock text-warning" title="In attesa di riconciliazione"></i>
                         {% endif %}
                     </td>
                     <td class="text-end fw-bold text-nowrap {% if t.type == 'entrata' %}text-cb-dark-green{% else %}text-cb-gold{% endif %}">
@@ -118,20 +138,22 @@
 
     <!-- PAGINATION -->
     {% if pagination.pages > 1 %}
+    {% set banca_qs = request.args.getlist('banca')|join('&banca=') %}
+    {% macro page_url(p) %}?page={{ p }}&date_from={{ request.args.get('date_from','') }}&date_to={{ request.args.get('date_to','') }}&tipo={{ request.args.get('tipo','') }}&fonte={{ request.args.get('fonte','') }}&ufficiale={{ request.args.get('ufficiale','') }}&categoria={{ request.args.get('categoria','') }}&flusso={{ request.args.get('flusso','') }}&q={{ request.args.get('q','') }}{% if banca_qs %}&banca={{ banca_qs }}{% endif %}{% endmacro %}
     <nav class="p-3">
         <ul class="pagination pagination-sm justify-content-center mb-0">
             {% if pagination.has_prev %}
-            <li class="page-item"><a class="page-link" href="?page={{ pagination.prev_num }}">&laquo;</a></li>
+            <li class="page-item"><a class="page-link" href="{{ page_url(pagination.prev_num) }}">&laquo;</a></li>
             {% endif %}
             {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                 {% if p %}
-                <li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="?page={{ p }}">{{ p }}</a></li>
+                <li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="{{ page_url(p) }}">{{ p }}</a></li>
                 {% else %}
                 <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
                 {% endif %}
             {% endfor %}
             {% if pagination.has_next %}
-            <li class="page-item"><a class="page-link" href="?page={{ pagination.next_num }}">&raquo;</a></li>
+            <li class="page-item"><a class="page-link" href="{{ page_url(pagination.next_num) }}">&raquo;</a></li>
             {% endif %}
         </ul>
     </nav>

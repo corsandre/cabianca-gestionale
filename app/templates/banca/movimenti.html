@@ -65,6 +65,7 @@
 
 <div class="cb-table">
     {% if movimenti %}
+    <p class="text-muted px-3 pt-2 mb-0 small">{{ total_count }} movimenti trovati{% if pagination.pages > 1 %} (pagina {{ pagination.page }} di {{ pagination.pages }}){% endif %}</p>
     <div class="table-responsive">
         <table class="table table-hover mb-0">
             <thead><tr>
@@ -103,6 +104,27 @@
             </tbody>
         </table>
     </div>
+
+    {% if pagination.pages > 1 %}
+    {% macro page_url(p) %}?page={{ p }}&date_from={{ date_from }}&date_to={{ date_to }}&q={{ search }}&status={{ status_filter }}&direction={{ direction_filter }}&amount_min={{ amount_min }}&amount_max={{ amount_max }}&causale={{ causale_filter }}{% endmacro %}
+    <nav class="p-3">
+        <ul class="pagination pagination-sm justify-content-center mb-0">
+            {% if pagination.has_prev %}
+            <li class="page-item"><a class="page-link" href="{{ page_url(pagination.prev_num) }}">&laquo;</a></li>
+            {% endif %}
+            {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if p %}
+                <li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="{{ page_url(p) }}">{{ p }}</a></li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                {% endif %}
+            {% endfor %}
+            {% if pagination.has_next %}
+            <li class="page-item"><a class="page-link" href="{{ page_url(pagination.next_num) }}">&raquo;</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
     {% else %}
     <div class="cb-empty">
         <i class="bi bi-bank d-block"></i>

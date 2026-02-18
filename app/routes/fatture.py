@@ -65,7 +65,7 @@ def index():
                     ~SdiInvoice.id.in_(db.select(riconciliato_sq)),
                 )
             )
-        if "vuoto" in banca_filter:
+        if "in_attesa" in banca_filter:
             conditions.append(
                 db.and_(
                     ~SdiInvoice.id.in_(db.select(riconciliato_sq)),

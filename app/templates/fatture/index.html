@@ -52,8 +52,8 @@
                     <label class="form-check-label small" for="banca_cash"><i class="bi bi-cash-coin text-muted"></i> Contanti</label>
                 </div>
                 <div class="form-check form-check-inline mb-0">
-                    <input class="form-check-input" type="checkbox" name="banca" value="vuoto" id="banca_vuoto" {% if 'vuoto' in request.args.getlist('banca') %}checked{% endif %}>
-                    <label class="form-check-label small" for="banca_vuoto"><i class="bi bi-dash text-muted"></i> Non riconciliate</label>
+                    <input class="form-check-input" type="checkbox" name="banca" value="in_attesa" id="banca_attesa" {% if 'in_attesa' in request.args.getlist('banca') %}checked{% endif %}>
+                    <label class="form-check-label small" for="banca_attesa"><i class="bi bi-clock text-warning"></i> In attesa</label>
                 </div>
             </div>
         </div>
@@ -93,7 +93,7 @@
                         <i class="bi bi-check-circle-fill text-success" title="Riconciliato in banca"></i>
                         {% elif inv.id in cash_paid %}
                         <i class="bi bi-cash-coin text-muted" title="Pagato in contanti"></i>
-                        {% elif inv.id in bank_status %}
+                        {% else %}
                         <i class="bi bi-clock text-warning" title="In attesa di riconciliazione"></i>
                         {% endif %}
                     </td>
