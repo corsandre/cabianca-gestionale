@@ -83,6 +83,7 @@
                     <option value="carta" {% if tpl and tpl.payment_method == 'carta' %}selected{% endif %}>Carta</option>
                     <option value="assegno" {% if tpl and tpl.payment_method == 'assegno' %}selected{% endif %}>Assegno</option>
                     <option value="altro" {% if tpl and tpl.payment_method == 'altro' %}selected{% endif %}>Altro</option>
+                    <option value="non_applicabile" {% if tpl and tpl.payment_method == 'non_applicabile' %}selected{% endif %}>Non applicabile</option>
                 </select>
             </div>
             <div class="col-md-4">

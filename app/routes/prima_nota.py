@@ -71,8 +71,8 @@ def index():
                 db.and_(
                     ~Transaction.id.in_(db.select(riconciliato_sq)),
                     db.or_(
-                        Transaction.payment_method != "contanti",
                         Transaction.payment_method.is_(None),
+                        ~Transaction.payment_method.in_(["contanti", "non_applicabile"]),
                         Transaction.payment_status != "pagato",
                         Transaction.payment_status.is_(None),
                     ),

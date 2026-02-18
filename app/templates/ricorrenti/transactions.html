@@ -38,6 +38,8 @@
                         </a>
                         {% elif t.payment_method == 'contanti' and t.payment_status == 'pagato' %}
                         <i class="bi bi-cash-coin text-muted" title="Pagato in contanti"></i>
+                        {% elif t.payment_method == 'non_applicabile' %}
+                        <i class="bi bi-dash-circle text-muted" title="Non applicabile"></i>
                         {% else %}
                         <i class="bi bi-clock text-warning" title="In attesa di riconciliazione"></i>
                         {% endif %}

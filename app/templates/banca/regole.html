@@ -300,7 +300,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <select name="action_payment_method" class="form-select form-select-sm">
                     <option value="">-- Default (bonifico) --</option>
                     {% set pm_val = rule.action_payment_method if rule and rule.action_payment_method else '' %}
-                    {% for val, label in [('contanti','Contanti'), ('bonifico','Bonifico'), ('carta','Carta'), ('assegno','Assegno'), ('altro','Altro')] %}
+                    {% for val, label in [('contanti','Contanti'), ('bonifico','Bonifico'), ('carta','Carta'), ('assegno','Assegno'), ('altro','Altro'), ('non_applicabile','Non applicabile')] %}
                     <option value="{{ val }}" {{ 'selected' if pm_val == val }}>{{ label }}</option>
                     {% endfor %}
                 </select>
