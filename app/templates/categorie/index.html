@@ -17,15 +17,9 @@
             <div class="collapse mb-3" id="newCatForm">
                 <form method="POST" action="{{ url_for('categorie.new_category') }}" class="row g-2 align-items-end p-2 bg-light rounded">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="type" value="entrambi">
                     <div class="col">
                         <input type="text" name="name" class="form-control form-control-sm" placeholder="Nome categoria" required>
-                    </div>
-                    <div class="col-auto">
-                        <select name="type" class="form-select form-select-sm">
-                            <option value="uscita">Uscita</option>
-                            <option value="entrata">Entrata</option>
-                            <option value="entrambi">Entrambi</option>
-                        </select>
                     </div>
                     <div class="col-auto">
                         <input type="color" name="color" class="form-control form-control-sm form-control-color" value="#7f8c8d">
@@ -38,13 +32,12 @@
 
             <div class="table-responsive">
                 <table class="table table-sm table-hover mb-0">
-                    <thead><tr><th></th><th>Nome</th><th>Tipo</th><th></th></tr></thead>
+                    <thead><tr><th></th><th>Nome</th><th></th></tr></thead>
                     <tbody>
                         {% for cat in categories %}
                         <tr>
                             <td><span class="cb-chip" style="background:{{ cat.color }}">&nbsp;&nbsp;</span></td>
                             <td>{{ cat.name }}</td>
-                            <td><span class="badge bg-secondary">{{ cat.type }}</span></td>
                             <td class="text-end">
                                 <form method="POST" action="{{ url_for('categorie.delete_category', id=cat.id) }}" class="d-inline" onsubmit="return confirm('Disattivare questa categoria?')">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

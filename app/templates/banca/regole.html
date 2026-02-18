@@ -263,7 +263,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <option value="">-- Nessuna --</option>
                     {% for c in categories %}
                     <option value="{{ c.id }}" {{ 'selected' if rule and rule.action_category_id == c.id }}>
-                        {{ c.name }} ({{ c.type }})
+                        {{ c.name }}
                     </option>
                     {% endfor %}
                 </select>
