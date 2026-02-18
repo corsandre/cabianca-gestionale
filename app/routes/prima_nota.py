@@ -70,10 +70,12 @@ def index():
             conditions.append(
                 db.and_(
                     ~Transaction.id.in_(db.select(riconciliato_sq)),
-                    db.not_(db.and_(
-                        Transaction.payment_method == "contanti",
-                        Transaction.payment_status == "pagato",
-                    )),
+                    db.or_(
+                        Transaction.payment_method != "contanti",
+                        Transaction.payment_method.is_(None),
+                        Transaction.payment_status != "pagato",
+                        Transaction.payment_status.is_(None),
+                    ),
                 )
             )
         query = query.filter(db.or_(*conditions))
