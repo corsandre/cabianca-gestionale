@@ -215,8 +215,8 @@ def _link_transaction(bt, tx, matched_by):
     bt.matched_transaction_id = tx.id
     bt.matched_by = matched_by
 
-    # Aggiorna stato pagamento fattura
-    if tx.source == "sdi" and tx.payment_status in ("da_pagare", "parziale"):
+    # Aggiorna stato pagamento
+    if tx.payment_status in ("da_pagare", "parziale"):
         tx.payment_status = "pagato"
         tx.payment_date = bt.operation_date
 

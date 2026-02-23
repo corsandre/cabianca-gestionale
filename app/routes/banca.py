@@ -435,8 +435,8 @@ def riconcilia(id):
     bt.matched_transaction_id = tx.id
     bt.matched_by = "manuale"
 
-    # Aggiorna stato pagamento se fattura SDI
-    if tx.source == "sdi" and tx.payment_status in ("da_pagare", "parziale"):
+    # Aggiorna stato pagamento
+    if tx.payment_status in ("da_pagare", "parziale"):
         tx.payment_status = "pagato"
         tx.payment_date = bt.operation_date
 
