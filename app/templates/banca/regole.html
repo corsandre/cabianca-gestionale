@@ -206,7 +206,59 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
 
         <hr class="my-3">
-        <h6 class="text-muted"><i class="bi bi-funnel"></i> Condizioni (AND)</h6>
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <h6 class="text-muted mb-0"><i class="bi bi-funnel"></i> Condizioni (AND)</h6>
+            <a class="text-muted small" data-bs-toggle="collapse" href="#helpCondizioni" role="button" aria-expanded="false">
+                <i class="bi bi-question-circle"></i> Come funzionano i filtri?
+            </a>
+        </div>
+        <div class="collapse mb-3" id="helpCondizioni">
+            <div class="card card-body small bg-light border-0 text-muted">
+                <p class="mb-2">Tutti i campi compilati sono combinati in <strong>AND</strong>: la regola scatta solo se <em>tutti</em> i filtri corrispondono contemporaneamente.</p>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <strong><i class="bi bi-card-text"></i> Testo nella descrizione</strong>
+                        <ul class="mb-1 ps-3">
+                            <li>Match <strong>parziale, case-insensitive</strong>: basta che il testo sia contenuto nella descrizione.</li>
+                            <li>Cerca sia nella causale principale che nelle informazioni aggiuntive del bonifico.</li>
+                            <li>Esempio: <code>IRPEF</code> matcha <em>"I24 AGENZIA ENTRATE F24 ACCONTO IRPEF"</em>.</li>
+                            <li>Usa parole brevi e distintive per essere piu' flessibile.</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <strong><i class="bi bi-person"></i> Nome controparte</strong>
+                        <ul class="mb-1 ps-3">
+                            <li>Match <strong>parziale, case-insensitive</strong>: funziona come la descrizione.</li>
+                            <li>Esempio: <code>TIM</code> matcha <em>"TIM SPA DIREZIONE CLIENTI"</em>.</li>
+                            <li>La sottostringa deve essere <em>continua</em>: <code>tim spa</code> non matcha <em>"TIM ITALIA SPA"</em>.</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <strong><i class="bi bi-building"></i> P.IVA</strong>
+                        <ul class="mb-1 ps-3">
+                            <li>Match <strong>esatto</strong>: deve corrispondere perfettamente.</li>
+                            <li>Utile per identificare un fornitore in modo univoco.</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <strong><i class="bi bi-bank"></i> Causale ABI</strong>
+                        <ul class="mb-1 ps-3">
+                            <li>Match <strong>esatto</strong>: inserire solo il codice numerico (es. <code>198</code>).</li>
+                            <li>Codici comuni: <code>198</code> Agenzia delle Entrate, <code>480</code> Stipendi, <code>260</code> Utenze.</li>
+                            <li>Il codice e' visibile nei dettagli del movimento bancario.</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <strong><i class="bi bi-arrows-exchange"></i> Direzione</strong>
+                        <ul class="mb-1 ps-3">
+                            <li>Match <strong>esatto</strong>: <code>D</code> = uscita, <code>C</code> = entrata.</li>
+                            <li>Consigliato combinarlo con altri filtri per evitare falsi positivi.</li>
+                        </ul>
+                    </div>
+                </div>
+                <p class="mt-2 mb-0"><i class="bi bi-lightbulb text-warning"></i> <strong>Consiglio:</strong> usa il minor numero di condizioni necessarie. La causale ABI da sola e' sufficiente per la maggior parte dei pagamenti fiscali.</p>
+            </div>
+        </div>
         <div class="row g-3">
             <div class="col-md-6">
                 <label class="form-label small">Testo nella descrizione</label>
