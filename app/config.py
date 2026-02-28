@@ -23,9 +23,11 @@ class Config:
     CLOUD_OFFICE_USER = os.getenv("CLOUD_OFFICE_USER", "")
     CLOUD_OFFICE_PASSWORD = os.getenv("CLOUD_OFFICE_PASSWORD", "")
 
-    # Google Drive
-    GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "")
-    GOOGLE_DRIVE_CREDENTIALS_JSON = os.getenv("GOOGLE_DRIVE_CREDENTIALS_JSON", "")
+    # SMTP - Backup via email
+    SMTP_HOST = os.getenv("SMTP_HOST", "smtp.hostinger.com")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 
     # IMAP - Recupero fatture SDI via email
     IMAP_HOST = os.getenv("IMAP_HOST", "")

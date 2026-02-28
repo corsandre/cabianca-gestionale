@@ -15,4 +15,4 @@ dist/
 build/
 .DS_Store
 *.log
-google_credentials.json
+*credentials*.json

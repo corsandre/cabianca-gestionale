@@ -281,6 +281,17 @@ def _init_db(app):
         for name, typ, color in cats:
             db.session.add(Category(name=name, type=typ, color=color))
 
+    # Seed default backup settings
+    from app.models import Setting
+    defaults = {
+        "backup_email_to": "support@cabianca.eu",
+        "backup_hour": "2",
+        "backup_minute": "0",
+        "backup_frequency_days": "1",
+    }
+    for key, value in defaults.items():
+        if not Setting.query.get(key):
+            db.session.add(Setting(key=key, value=value))
     db.session.commit()
 
 
@@ -290,25 +301,29 @@ def _init_scheduler(app):
 
         scheduler = BackgroundScheduler()
 
-        # Daily backup at 2:00 AM
+        # Legge ora backup da impostazioni DB
+        with app.app_context():
+            from app.models import Setting
+            hour_s = Setting.query.get("backup_hour")
+            minute_s = Setting.query.get("backup_minute")
+            backup_hour = int(hour_s.value) if hour_s else 2
+            backup_minute = int(minute_s.value) if minute_s else 0
+
         def run_backup():
             with app.app_context():
                 from app.services.backup import run_backup
                 run_backup()
 
-        # Check deadlines every morning at 8:00 AM
         def check_deadlines():
             with app.app_context():
                 from app.services.telegram_bot import check_and_notify_deadlines
                 check_and_notify_deadlines()
 
-        # Fetch fatture SDI da email (3 volte al giorno)
         def fetch_emails():
             with app.app_context():
                 from app.services.email_fetcher import fetch_sdi_emails
                 fetch_sdi_emails(app)
 
-        # Sync cassa da 4CloudOffice ogni mattina alle 4:00
         def sync_cassa():
             with app.app_context():
                 try:
@@ -318,7 +333,6 @@ def _init_scheduler(app):
                 except Exception as e:
                     app.logger.error(f"Errore sync cassa automatica: {e}")
 
-        # Generate recurring expenses at 3:00 AM
         def generate_recurring():
             with app.app_context():
                 try:
@@ -330,12 +344,13 @@ def _init_scheduler(app):
                     app.logger.error(f"Errore generazione ricorrenti: {e}")
 
         scheduler.add_job(generate_recurring, "cron", hour=3, minute=0)
-        scheduler.add_job(run_backup, "cron", hour=2, minute=0)
+        scheduler.add_job(run_backup, "cron", hour=backup_hour, minute=backup_minute, id="backup")
         if app.config.get("CLOUD_OFFICE_USER") and app.config.get("CLOUD_OFFICE_PASSWORD"):
             scheduler.add_job(sync_cassa, "cron", hour=4, minute=0)
         scheduler.add_job(check_deadlines, "cron", hour=8, minute=0)
         if app.config.get("IMAP_HOST") and app.config.get("IMAP_USER"):
             scheduler.add_job(fetch_emails, "cron", hour="8,14,20", minute=30)
         scheduler.start()
+        app.scheduler = scheduler
     except Exception:
         pass  # Scheduler is optional, don't crash the app

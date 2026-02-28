@@ -29,7 +29,7 @@ L'applicazione e' strutturata in sezioni indipendenti, ciascuna con tema visivo 
 
 - **Esportazione** - CSV per il commercialista
 - **Notifiche Telegram** - Alert scadenze, scorte basse, backup
-- **Backup automatico** - Google Drive, giornaliero
+- **Backup automatico** - Via email, frequenza e orario configurabili dal pannello
 - **Multi-utente** - Ruoli (admin, operatore, consulente) + accesso per sezione configurabile
 - **PWA** - Installabile su smartphone
 
@@ -63,7 +63,7 @@ docker compose up -d         # Avvia
 - **Frontend**: Jinja2 + Bootstrap 5 + Chart.js
 - **Deploy**: Docker
 - **Notifiche**: Telegram Bot API
-- **Backup**: Google Drive API
+- **Backup**: SMTP (smtplib)
 
 ## Struttura progetto
 

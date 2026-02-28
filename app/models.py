@@ -346,3 +346,12 @@ class BankBalance(db.Model):
     source = db.Column(db.String(10), default="manuale")  # cbi, manuale
     notes = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# === APP SETTINGS ===
+
+class Setting(db.Model):
+    """Impostazioni applicazione (chiave-valore)."""
+    __tablename__ = "settings"
+    key = db.Column(db.String(64), primary_key=True)
+    value = db.Column(db.String(512))

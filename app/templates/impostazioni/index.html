@@ -98,11 +98,71 @@
         <!-- BACKUP -->
         <div class="cb-card p-3">
             <h5 class="mb-3">Backup</h5>
-            <p class="small text-muted">Il backup automatico viene eseguito ogni notte alle 2:00 su Google Drive.</p>
-            <form method="POST" action="{{ url_for('impostazioni.backup_now') }}">
+
+            <!-- Impostazioni backup -->
+            <form method="POST" action="{{ url_for('impostazioni.save_backup_settings') }}" class="mb-3">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-cb btn-sm"><i class="bi bi-cloud-upload"></i> Esegui backup ora</button>
+                <div class="mb-2">
+                    <label class="form-label form-label-sm">Invia backup a</label>
+                    <input type="email" name="backup_email_to" class="form-control form-control-sm"
+                           value="{{ backup_settings.email_to }}" required>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-4">
+                        <label class="form-label form-label-sm">Ora</label>
+                        <select name="backup_hour" class="form-select form-select-sm">
+                            {% for h in range(24) %}
+                            <option value="{{ h }}" {% if backup_settings.hour == h|string %}selected{% endif %}>{{ "%02d"|format(h) }}:00</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label form-label-sm">Minuti</label>
+                        <select name="backup_minute" class="form-select form-select-sm">
+                            <option value="0" {% if backup_settings.minute == "0" %}selected{% endif %}>:00</option>
+                            <option value="30" {% if backup_settings.minute == "30" %}selected{% endif %}>:30</option>
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label form-label-sm">Frequenza</label>
+                        <select name="backup_frequency_days" class="form-select form-select-sm">
+                            <option value="1" {% if backup_settings.frequency_days == "1" %}selected{% endif %}>Ogni giorno</option>
+                            <option value="2" {% if backup_settings.frequency_days == "2" %}selected{% endif %}>Ogni 2 giorni</option>
+                            <option value="7" {% if backup_settings.frequency_days == "7" %}selected{% endif %}>Ogni settimana</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-cb btn-sm">Salva impostazioni</button>
+                    <form method="POST" action="{{ url_for('impostazioni.backup_now') }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-outline-secondary btn-sm"><i class="bi bi-send"></i> Esegui backup ora</button>
+                    </form>
+                </div>
             </form>
+
+            <!-- Ripristino da backup -->
+            {% if backup_files %}
+            <hr>
+            <h6 class="mb-2">Ripristina da backup</h6>
+            <p class="small text-muted mb-2">Il ripristino sovrascrive il database corrente. Verrai disconnesso al termine.</p>
+            <form method="POST" action="{{ url_for('impostazioni.restore_backup') }}"
+                  onsubmit="return confirm('Sei sicuro di voler ripristinare il database? Tutti i dati successivi al backup selezionato andranno persi.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row g-2 align-items-end">
+                    <div class="col">
+                        <select name="backup_file" class="form-select form-select-sm">
+                            {% for f in backup_files %}
+                            <option value="{{ f }}">{{ f }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-arrow-counterclockwise"></i> Ripristina</button>
+                    </div>
+                </div>
+            </form>
+            {% endif %}
         </div>
     </div>
 </div>

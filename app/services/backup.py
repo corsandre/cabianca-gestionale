@@ -1,19 +1,26 @@
-"""Google Drive backup service for Ca Bianca Gestionale."""
+"""Email backup service for Ca Bianca Gestionale."""
 
 import os
 import shutil
 import logging
-from datetime import datetime
+import smtplib
+from datetime import datetime, timedelta
+from email.message import EmailMessage
 from flask import current_app
 
 logger = logging.getLogger(__name__)
 
 
 def run_backup():
-    """Backup the SQLite database to Google Drive."""
+    """Backup del database SQLite e invio via email."""
     db_path = _get_db_path()
     if not db_path or not os.path.exists(db_path):
         logger.warning("Database file not found, skipping backup.")
+        return
+
+    # Controlla frequenza: salta se il backup e' gia' stato fatto di recente
+    if not _should_run_backup():
+        logger.info("Backup saltato: eseguito di recente secondo la frequenza configurata.")
         return
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -22,22 +29,17 @@ def run_backup():
     os.makedirs(backup_dir, exist_ok=True)
     local_backup_path = os.path.join(backup_dir, backup_filename)
 
-    # Copy database (SQLite safe copy)
     shutil.copy2(db_path, local_backup_path)
     logger.info(f"Local backup created: {local_backup_path}")
 
-    # Clean old local backups (keep last 7)
     _cleanup_local_backups(backup_dir, keep=7)
 
-    # Upload to Google Drive
     try:
-        _upload_to_gdrive(local_backup_path, backup_filename)
-        logger.info("Google Drive backup completed.")
+        _send_backup_email(local_backup_path, backup_filename)
+        logger.info("Email backup completato.")
     except Exception as e:
-        logger.error(f"Google Drive upload failed: {e}")
-        # Local backup still exists, so not a total failure
+        logger.error(f"Invio email backup fallito: {e}")
 
-    # Send Telegram notification
     try:
         from app.services.telegram_bot import send_telegram_message
         send_telegram_message(f"Backup completato: {backup_filename}")
@@ -45,8 +47,37 @@ def run_backup():
         pass
 
 
+def _should_run_backup():
+    """Controlla se il backup deve essere eseguito in base alla frequenza configurata."""
+    try:
+        from app.models import Setting
+        freq_setting = Setting.query.get("backup_frequency_days")
+        frequency_days = int(freq_setting.value) if freq_setting else 1
+        if frequency_days <= 1:
+            return True
+
+        backup_dir = os.path.join(current_app.root_path, "..", "backups")
+        if not os.path.exists(backup_dir):
+            return True
+
+        files = sorted(
+            [f for f in os.listdir(backup_dir) if f.startswith("gestionale_backup_")],
+            reverse=True,
+        )
+        if not files:
+            return True
+
+        # Estrae la data dal nome del file piu' recente
+        latest = files[0]
+        date_str = latest.replace("gestionale_backup_", "").replace(".db", "")[:8]
+        last_backup_date = datetime.strptime(date_str, "%Y%m%d")
+        return datetime.now() - last_backup_date >= timedelta(days=frequency_days)
+    except Exception:
+        return True
+
+
 def _get_db_path():
-    """Extract the actual file path from the SQLAlchemy URI."""
+    """Estrae il percorso del file dal URI SQLAlchemy."""
     uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
     if uri.startswith("sqlite:///"):
         return uri.replace("sqlite:///", "")
@@ -54,7 +85,7 @@ def _get_db_path():
 
 
 def _cleanup_local_backups(backup_dir, keep=7):
-    """Remove old local backup files, keeping the most recent ones."""
+    """Rimuove i vecchi backup locali, mantenendo i piu' recenti."""
     files = sorted(
         [f for f in os.listdir(backup_dir) if f.startswith("gestionale_backup_")],
         reverse=True,
@@ -63,48 +94,41 @@ def _cleanup_local_backups(backup_dir, keep=7):
         os.remove(os.path.join(backup_dir, old_file))
 
 
-def _upload_to_gdrive(filepath, filename):
-    """Upload a file to Google Drive."""
-    creds_json = current_app.config.get("GOOGLE_DRIVE_CREDENTIALS_JSON", "")
-    folder_id = current_app.config.get("GOOGLE_DRIVE_FOLDER_ID", "")
+def _send_backup_email(filepath, filename):
+    """Invia il file di backup come allegato email."""
+    smtp_host = current_app.config.get("SMTP_HOST", "")
+    smtp_port = int(current_app.config.get("SMTP_PORT", 587))
+    smtp_user = current_app.config.get("SMTP_USER", "")
+    smtp_password = current_app.config.get("SMTP_PASSWORD", "")
 
-    if not creds_json or not folder_id:
-        logger.debug("Google Drive not configured, skipping upload.")
+    from app.models import Setting
+    setting = Setting.query.get("backup_email_to")
+    email_to = setting.value if setting else ""
+
+    if not smtp_host or not smtp_user or not email_to:
+        logger.debug("Email backup non configurato, salto invio.")
         return
 
-    import json
-    from google.oauth2 import service_account
-    from googleapiclient.discovery import build
-    from googleapiclient.http import MediaFileUpload
+    msg = EmailMessage()
+    msg["Subject"] = f"[Ca Bianca] Backup Gestionale - {datetime.now().strftime('%d/%m/%Y')}"
+    msg["From"] = smtp_user
+    msg["To"] = email_to
+    msg.set_content(
+        f"Backup automatico del gestionale Ca Bianca.\n\n"
+        f"File: {filename}\n"
+        f"Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}\n"
+    )
 
-    # Load credentials from JSON string or file path
-    if os.path.isfile(creds_json):
-        credentials = service_account.Credentials.from_service_account_file(
-            creds_json, scopes=["https://www.googleapis.com/auth/drive.file"]
+    with open(filepath, "rb") as f:
+        msg.add_attachment(
+            f.read(),
+            maintype="application",
+            subtype="octet-stream",
+            filename=filename,
         )
-    else:
-        creds_dict = json.loads(creds_json)
-        credentials = service_account.Credentials.from_service_account_info(
-            creds_dict, scopes=["https://www.googleapis.com/auth/drive.file"]
-        )
 
-    service = build("drive", "v3", credentials=credentials)
-
-    file_metadata = {
-        "name": filename,
-        "parents": [folder_id],
-    }
-    media = MediaFileUpload(filepath, mimetype="application/x-sqlite3")
-    service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-
-    # Clean old Drive backups (keep last 14)
-    results = service.files().list(
-        q=f"'{folder_id}' in parents and name contains 'gestionale_backup_'",
-        orderBy="createdTime desc",
-        fields="files(id, name)",
-        pageSize=50,
-    ).execute()
-
-    files = results.get("files", [])
-    for old_file in files[14:]:
-        service.files().delete(fileId=old_file["id"]).execute()
+    with smtplib.SMTP(smtp_host, smtp_port) as smtp:
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.login(smtp_user, smtp_password)
+        smtp.send_message(msg)

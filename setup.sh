@@ -81,11 +81,6 @@ IMAP_FOLDER=${IMAP_FOLDER:-INBOX}
 read -p "Filtra per mittente (opzionale): " IMAP_FROM
 
 echo ""
-echo -e "${GREEN}Google Drive Backup (opzionale)${NC}"
-read -p "Google Drive Folder ID: " GD_FOLDER
-read -p "Percorso file credenziali JSON (o premi Invio): " GD_CREDS
-
-echo ""
 read -p "Porta applicazione [8080]: " APP_PORT
 APP_PORT=${APP_PORT:-8080}
 
@@ -105,8 +100,10 @@ TELEGRAM_CHAT_ID=${TG_CHAT}
 CLOUD_OFFICE_URL=${CO_URL}
 CLOUD_OFFICE_USER=${CO_USER}
 CLOUD_OFFICE_PASSWORD=${CO_PASS}
-GOOGLE_DRIVE_FOLDER_ID=${GD_FOLDER}
-GOOGLE_DRIVE_CREDENTIALS_JSON=${GD_CREDS}
+SMTP_HOST=smtp.hostinger.com
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
 IMAP_HOST=${IMAP_HOST}
 IMAP_PORT=${IMAP_PORT}
 IMAP_USER=${IMAP_USER}
