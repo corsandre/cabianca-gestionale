@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}{{ lotto.lotto_id }} – Dettaglio Lotto{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-arrow-repeat" style="color:#c2185b"></i> {{ lotto.lotto_id }}</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('allevamento.report_ciclo', id=lotto.id) }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-bar-chart"></i> Report
+        </a>
+        {% if lotto.stato == 'attivo' %}
+        <form method="POST" action="{{ url_for('allevamento.lotti_chiudi', id=lotto.id) }}"
+              onsubmit="return confirm('Chiudere il lotto?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline-danger btn-sm">
+                <i class="bi bi-x-circle"></i> Chiudi lotto
+            </button>
+        </form>
+        {% endif %}
+        <a href="{{ url_for('allevamento.lotti_index') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i>
+        </a>
+    </div>
+</div>
+
+{# Info lotto #}
+<div class="row g-3 mb-3">
+    <div class="col-md-6">
+        <div class="cb-card p-3">
+            <table class="table table-sm mb-0">
+                <tr><th>ID Lotto</th><td><strong>{{ lotto.lotto_id }}</strong></td></tr>
+                <tr><th>Data inizio</th><td>{{ lotto.data_inizio.strftime('%d/%m/%Y') }}</td></tr>
+                <tr><th>Chiusura</th><td>{{ lotto.data_chiusura.strftime('%d/%m/%Y') if lotto.data_chiusura else '–' }}</td></tr>
+                <tr><th>Stato</th><td><span class="badge {% if lotto.stato == 'attivo' %}bg-success{% else %}bg-secondary{% endif %}">{{ lotto.stato }}</span></td></tr>
+                {% if lotto.note %}<tr><th>Note</th><td>{{ lotto.note }}</td></tr>{% endif %}
+            </table>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="cb-card p-3">
+            <h6 class="mb-2">Box coinvolti</h6>
+            <div class="d-flex flex-wrap gap-2">
+            {% for bc in box_cicli %}
+            <div class="border rounded p-2 text-center" style="min-width:90px;background:{% if bc.stato == 'attivo' %}#e8f5e9{% elif bc.stato == 'chiuso' %}#f5f5f5{% else %}#fff9c4{% endif %}">
+                <div class="fw-bold">Box {{ bc.box.numero }}</div>
+                <div class="small">{{ bc.capi_presenti or 0 }} / {{ bc.capi_iniziali }}</div>
+                <div class="badge {% if bc.stato == 'attivo' %}bg-success{% else %}bg-secondary{% endif %} mt-1">{{ bc.stato }}</div>
+                {% if bc.stato in ['attivo', 'in_uscita'] %}
+                <div class="mt-1">
+                    <a href="{{ url_for('allevamento.eventi_nuovo') }}?bc={{ bc.id }}" class="btn btn-xs btn-outline-danger" style="font-size:.7rem;padding:.15rem .4rem">Evento</a>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Timeline eventi #}
+<div class="cb-card p-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0">Timeline eventi</h6>
+        {% if lotto.stato == 'attivo' %}
+        <a href="{{ url_for('allevamento.eventi_nuovo') }}" class="btn btn-sm btn-outline-danger">
+            <i class="bi bi-plus"></i> Registra evento
+        </a>
+        {% endif %}
+    </div>
+    {% if eventi %}
+    <div class="table-responsive">
+        <table class="table table-sm">
+            <thead><tr><th>Data</th><th>Tipo</th><th>Box</th><th class="text-end">Capi</th><th class="text-end">Peso (kg)</th><th>Operatore</th><th>Note</th></tr></thead>
+            <tbody>
+            {% for e in eventi %}
+            <tr>
+                <td>{{ e.data.strftime('%d/%m/%Y') }}</td>
+                <td>
+                    <span class="badge {% if e.tipo == 'mortalita' %}bg-danger{% elif 'frazionamento' in e.tipo %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                        {{ e.tipo|replace('_', ' ') }}
+                    </span>
+                </td>
+                <td>{{ e.box_ciclo.box.numero if e.box_ciclo and e.box_ciclo.box else '–' }}</td>
+                <td class="text-end">{{ e.quantita or '–' }}</td>
+                <td class="text-end">{{ '%.1f'|format(e.peso_totale) if e.peso_totale else '–' }}</td>
+                <td>{{ e.operatore.display_name if e.operatore else '–' }}</td>
+                <td class="small text-muted">{{ e.note or '' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted text-center py-3">Nessun evento registrato.</p>
+    {% endif %}
+</div>
+{% endblock %}

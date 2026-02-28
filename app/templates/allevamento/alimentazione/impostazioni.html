@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Impostazioni Alimentazione{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-sliders" style="color:#c2185b"></i> Impostazioni Alimentazione</h1>
+    <a href="{{ url_for('allevamento.alimentazione_index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Indietro
+    </a>
+</div>
+
+{# Parametri siero #}
+<div class="cb-card p-3 mb-3">
+    <h6 class="mb-3">Parametri Siero</h6>
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="azione" value="parametri_siero">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">% Sostanza Secca siero (default: 6%)</label>
+                <div class="input-group">
+                    <input type="number" name="perc_ss" class="form-control" step="0.1" min="0" max="100" value="{{ perc_ss }}">
+                    <span class="input-group-text">%</span>
+                </div>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm" style="background:#c2185b;color:white">Salva</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+{# Tabella sostituzione siero #}
+<div class="cb-card p-3 mb-3">
+    <h6 class="mb-3">Tabella Sostituzione Siero</h6>
+    <form method="POST" id="form-siero">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="azione" value="siero_tabella">
+        <div class="table-responsive">
+            <table class="table table-sm" id="tab-siero">
+                <thead><tr><th>Età min (gg)</th><th>Età max (gg)</th><th>% siero/SS</th><th></th></tr></thead>
+                <tbody>
+                {% for ts in tabella_siero %}
+                <tr>
+                    <td><input type="number" name="eta_min[]" class="form-control form-control-sm" value="{{ ts.eta_min }}" required></td>
+                    <td><input type="number" name="eta_max[]" class="form-control form-control-sm" value="{{ ts.eta_max }}" required></td>
+                    <td><input type="number" name="percentuale[]" class="form-control form-control-sm" step="0.1" value="{{ ts.percentuale_siero }}" required></td>
+                    <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()">✕</button></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary mb-2" onclick="aggiungiRigaSiero()">+ Riga</button>
+        <br><button type="submit" class="btn btn-sm" style="background:#c2185b;color:white">Salva tabella siero</button>
+    </form>
+</div>
+
+{# Curva accrescimento #}
+<div class="cb-card p-3">
+    <h6 class="mb-3">Curva di Accrescimento</h6>
+    <form method="POST" id="form-curva">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="azione" value="curva">
+        <div class="table-responsive">
+            <table class="table table-sm" id="tab-curva">
+                <thead><tr><th>Età (gg)</th><th>Peso (kg)</th><th>Razione (kg/gg)</th><th></th></tr></thead>
+                <tbody>
+                {% for c in curva %}
+                <tr>
+                    <td><input type="number" name="eta_giorni[]" class="form-control form-control-sm" value="{{ c.eta_giorni }}" required></td>
+                    <td><input type="number" name="peso_kg[]" class="form-control form-control-sm" step="0.1" value="{{ c.peso_kg }}" required></td>
+                    <td><input type="number" name="razione_kg[]" class="form-control form-control-sm" step="0.01" value="{{ c.razione_kg_giorno }}" required></td>
+                    <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()">✕</button></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary mb-2" onclick="aggiungiRigaCurva()">+ Punto</button>
+        <br><button type="submit" class="btn btn-sm" style="background:#c2185b;color:white">Salva curva</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function aggiungiRigaSiero() {
+    const tbody = document.querySelector('#tab-siero tbody');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td><input type="number" name="eta_min[]" class="form-control form-control-sm" required></td>
+        <td><input type="number" name="eta_max[]" class="form-control form-control-sm" required></td>
+        <td><input type="number" name="percentuale[]" class="form-control form-control-sm" step="0.1" required></td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()">✕</button></td>`;
+    tbody.appendChild(tr);
+}
+function aggiungiRigaCurva() {
+    const tbody = document.querySelector('#tab-curva tbody');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td><input type="number" name="eta_giorni[]" class="form-control form-control-sm" required></td>
+        <td><input type="number" name="peso_kg[]" class="form-control form-control-sm" step="0.1" required></td>
+        <td><input type="number" name="razione_kg[]" class="form-control form-control-sm" step="0.01" required></td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()">✕</button></td>`;
+    tbody.appendChild(tr);
+}
+</script>
+{% endblock %}

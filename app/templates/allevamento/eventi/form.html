@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Registra Evento – Allevamento{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-pencil-square" style="color:#c2185b"></i> Registra Evento</h1>
+    <a href="{{ url_for('allevamento.lotti_index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Indietro
+    </a>
+</div>
+
+<div class="cb-card p-4" style="max-width:600px">
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="mb-3">
+        <label class="form-label fw-bold">Tipo evento</label>
+        <select name="tipo" class="form-select" id="tipo-evento" onchange="aggiornaForm()" required>
+            <option value="">– seleziona –</option>
+            <option value="mortalita">Mortalità</option>
+            <option value="frazionamento_out">Frazionamento (origine)</option>
+            <option value="uscita_macello">Uscita macello</option>
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label fw-bold">Box / Ciclo</label>
+        <select name="box_ciclo_id" class="form-select" required>
+            <option value="">– seleziona –</option>
+            {% for bc in cicli_attivi %}
+            <option value="{{ bc.id }}" {% if preselect_bc == bc.id|string %}selected{% endif %}>
+                Box {{ bc.box.numero }} ({{ bc.lotto.lotto_id }}) – {{ bc.capi_presenti or 0 }} capi
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6">
+            <label class="form-label fw-bold">N° capi</label>
+            <input type="number" name="quantita" class="form-control" min="1" required>
+        </div>
+        <div class="col-6">
+            <label class="form-label fw-bold">Data</label>
+            <input type="date" name="data" class="form-control" value="{{ today }}" required>
+        </div>
+    </div>
+
+    <div class="mb-3" id="peso-field">
+        <label class="form-label">Peso totale (kg) <small class="text-muted">(opzionale per mortalità)</small></label>
+        <input type="number" name="peso_totale" class="form-control" step="0.1" min="0">
+    </div>
+
+    <div class="mb-3 d-none" id="dest-box-field">
+        <label class="form-label fw-bold">Box destinazione (frazionamento)</label>
+        <select name="dest_box_ciclo_id" class="form-select">
+            <option value="">– seleziona box destinazione –</option>
+            {% for bc in cicli_attivi %}
+            <option value="{{ bc.id }}">Box {{ bc.box.numero }} – {{ bc.capi_presenti or 0 }} capi</option>
+            {% endfor %}
+        </select>
+        <div class="form-text">Lascia vuoto se il box destinazione non ha ancora un ciclo.</div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Note</label>
+        <textarea name="note" class="form-control" rows="2"></textarea>
+    </div>
+
+    <button type="submit" class="btn" style="background:#c2185b;color:white">
+        <i class="bi bi-check-lg"></i> Registra
+    </button>
+</form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function aggiornaForm() {
+    const tipo = document.getElementById('tipo-evento').value;
+    const destField = document.getElementById('dest-box-field');
+    destField.classList.toggle('d-none', tipo !== 'frazionamento_out');
+}
+document.querySelector('[name=data]').value = new Date().toISOString().split('T')[0];
+</script>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Inserisci Consumi – Alimentazione{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-pencil-square" style="color:#c2185b"></i> Inserisci Consumi Giornalieri</h1>
+    <a href="{{ url_for('allevamento.alimentazione_index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Indietro
+    </a>
+</div>
+
+<div class="cb-card p-4" style="max-width:640px">
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="mb-4">
+        <label class="form-label fw-bold">Data</label>
+        <input type="date" name="data" class="form-control" value="{{ oggi }}" required>
+    </div>
+
+    {% set colori = {1: '#1976d2', 2: '#d32f2f', 3: '#388e3c'} %}
+    {% set nomi = {1: 'Linea 1 (CAP 1-2-3)', 2: 'Linea 2 (CAP 4)', 3: 'Linea 3 (CAP 5-6-7)'} %}
+    {% for linea in [1, 2, 3] %}
+    {% set rt = razioni_teoriche[linea] %}
+    <div class="mb-4 p-3 border rounded" style="border-left: 4px solid {{ colori[linea] }} !important">
+        <h6 style="color:{{ colori[linea] }}">{{ nomi[linea] }}</h6>
+        <div class="small text-muted mb-2">
+            Teorico: mangime {{ rt.mangime }} kg | siero {{ rt.siero }} L
+        </div>
+        <div class="row g-3">
+            <div class="col-6">
+                <label class="form-label">Mangime consumato (kg)</label>
+                <input type="number" name="mangime_{{ linea }}" class="form-control" step="0.1" min="0"
+                       placeholder="{{ rt.mangime }}">
+            </div>
+            <div class="col-6">
+                <label class="form-label">Siero consumato (L)</label>
+                <input type="number" name="siero_{{ linea }}" class="form-control" step="0.1" min="0"
+                       placeholder="{{ rt.siero }}">
+            </div>
+            <div class="col-12">
+                <label class="form-label">Note</label>
+                <input type="text" name="note_{{ linea }}" class="form-control" placeholder="Opzionale">
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <button type="submit" class="btn" style="background:#c2185b;color:white">
+        <i class="bi bi-check-lg"></i> Salva consumi
+    </button>
+</form>
+</div>
+{% endblock %}

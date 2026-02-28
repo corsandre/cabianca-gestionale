@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Ordini – Allevamento{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-clipboard-check" style="color:#c2185b"></i> Ordini Alimentari</h1>
+    <a href="{{ url_for('allevamento.ordini_nuovo') }}" class="btn btn-sm" style="background:#c2185b;color:white">
+        <i class="bi bi-plus-lg"></i> Nuovo ordine
+    </a>
+</div>
+
+<div class="cb-table">
+{% if ordini %}
+<div class="table-responsive">
+    <table class="table table-sm table-hover">
+        <thead><tr>
+            <th>Data ordine</th><th>Tipo</th><th class="text-end">Q.tà (q)</th>
+            <th>Fornitore</th><th>Stato</th><th>Consegna prevista</th><th>Azioni</th>
+        </tr></thead>
+        <tbody>
+        {% set badge_stato = {'bozza': 'bg-secondary', 'inviato': 'bg-primary', 'confermato': 'bg-info', 'validato': 'bg-success'} %}
+        {% for o in ordini %}
+        <tr>
+            <td>{{ o.data_ordine.strftime('%d/%m/%Y') }}</td>
+            <td>{{ o.tipo|capitalize }}</td>
+            <td class="text-end fw-bold">{{ o.quantita_q }}</td>
+            <td>{{ o.fornitore or '–' }}</td>
+            <td><span class="badge {{ badge_stato.get(o.stato, 'bg-secondary') }}">{{ o.stato }}</span></td>
+            <td>{{ o.data_consegna.strftime('%d/%m/%Y') if o.data_consegna else '–' }}</td>
+            <td>
+                {% if o.stato != 'validato' %}
+                <form method="POST" action="{{ url_for('allevamento.ordini_stato', id=o.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {% set next_stati = {'bozza': 'inviato', 'inviato': 'confermato', 'confermato': 'validato'} %}
+                    {% set ns = next_stati.get(o.stato) %}
+                    {% if ns %}
+                    <button name="stato" value="{{ ns }}" class="btn btn-xs btn-outline-secondary" style="font-size:.75rem;padding:.15rem .4rem">
+                        → {{ ns }}
+                    </button>
+                    {% endif %}
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="cb-empty">
+    <i class="bi bi-clipboard-check d-block"></i>
+    <p>Nessun ordine presente.</p>
+</div>
+{% endif %}
+</div>
+{% endblock %}

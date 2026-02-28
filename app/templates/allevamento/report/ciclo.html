@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Report Ciclo {{ lotto.lotto_id }}{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-bar-chart" style="color:#c2185b"></i> Report Ciclo {{ lotto.lotto_id }}</h1>
+    <a href="{{ url_for('allevamento.lotti_detail', id=lotto.id) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Dettaglio lotto
+    </a>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-3 fw-bold" style="color:#c2185b">{{ capi_iniziali_tot }}</div>
+            <div class="small text-muted">Capi iniziali</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-3 fw-bold text-success">{{ capi_finali }}</div>
+            <div class="small text-muted">Capi finali</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-3 fw-bold {% if mortalita_perc > 5 %}text-danger{% else %}text-success{% endif %}">
+                {{ '%.1f'|format(mortalita_perc) }}%
+            </div>
+            <div class="small text-muted">Mortalità ({{ morti }} capi)</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-3 fw-bold">{{ durata_gg or '–' }}</div>
+            <div class="small text-muted">Durata (gg)</div>
+        </div>
+    </div>
+</div>
+
+{% if peso_uscita_tot and capi_usciti %}
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-3 fw-bold">{{ '%.0f'|format(peso_uscita_tot) }} kg</div>
+            <div class="small text-muted">Peso totale uscita macello</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-3 fw-bold">{{ '%.1f'|format(peso_uscita_tot / capi_usciti) }} kg</div>
+            <div class="small text-muted">Peso medio uscita</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# Dettaglio box #}
+<div class="cb-card p-3 mb-3">
+    <h6 class="mb-3">Box coinvolti</h6>
+    <div class="table-responsive">
+        <table class="table table-sm">
+            <thead><tr>
+                <th>Box</th><th>Accasamento</th><th>Capi ini.</th>
+                <th>Capi presenti</th><th>Peso medio ini.</th><th>Età ini. (gg)</th><th>Stato</th>
+            </tr></thead>
+            <tbody>
+            {% for bc in box_cicli %}
+            <tr>
+                <td><strong>Box {{ bc.box.numero }}</strong><br><small class="text-muted">{{ bc.box.capannone.nome }}</small></td>
+                <td>{{ bc.data_accasamento.strftime('%d/%m/%Y') }}</td>
+                <td>{{ bc.capi_iniziali }}</td>
+                <td>{{ bc.capi_presenti or 0 }}</td>
+                <td>{{ '%.1f'|format(bc.peso_medio_iniziale) + ' kg' if bc.peso_medio_iniziale else '–' }}</td>
+                <td>{{ bc.eta_stimata_gg or '–' }}</td>
+                <td><span class="badge {% if bc.stato == 'attivo' %}bg-success{% else %}bg-secondary{% endif %}">{{ bc.stato }}</span></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# Tutti gli eventi #}
+{% if eventi %}
+<div class="cb-card p-3">
+    <h6 class="mb-3">Registro eventi</h6>
+    <div class="table-responsive">
+        <table class="table table-sm">
+            <thead><tr><th>Data</th><th>Tipo</th><th>Box</th><th class="text-end">Capi</th><th class="text-end">Peso (kg)</th><th>Note</th></tr></thead>
+            <tbody>
+            {% for e in eventi %}
+            <tr>
+                <td>{{ e.data.strftime('%d/%m/%Y') }}</td>
+                <td><span class="badge {% if e.tipo == 'mortalita' %}bg-danger{% elif 'frazionamento' in e.tipo %}bg-warning text-dark{% else %}bg-success{% endif %}">{{ e.tipo|replace('_',' ') }}</span></td>
+                <td>{{ e.box_ciclo.box.numero if e.box_ciclo and e.box_ciclo.box else '–' }}</td>
+                <td class="text-end">{{ e.quantita or '–' }}</td>
+                <td class="text-end">{{ '%.1f'|format(e.peso_totale) if e.peso_totale else '–' }}</td>
+                <td class="small text-muted">{{ e.note or '' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

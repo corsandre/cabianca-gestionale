@@ -1,13 +1,225 @@
 {% extends "base.html" %}
-{% block title %}Allevamento Suini - Ca Bianca Gestionale{% endblock %}
+{% block title %}Allevamento Suini – Panoramica{% endblock %}
+
+{% block extra_head %}
+<style>
+/* Mappa SVG */
+.mappa-wrapper {
+    background: #fff;
+    border-radius: 12px;
+    padding: 1rem;
+    overflow-x: auto;
+    box-shadow: 0 1px 6px rgba(0,0,0,.08);
+}
+.mappa-svg { min-width: 700px; }
+
+/* Box SVG */
+.box-rect { cursor: pointer; stroke-width: 1.5; transition: opacity .15s; }
+.box-rect:hover { opacity: 0.75; }
+.box-libero     { fill: #e0e0e0; stroke: #9e9e9e; }
+.box-linea1     { fill: #bbdefb; stroke: #1976d2; }
+.box-linea2     { fill: #ffcdd2; stroke: #d32f2f; }
+.box-linea3     { fill: #c8e6c9; stroke: #388e3c; }
+.box-allarme    { fill: #ffe0b2; stroke: #e65100; }
+.box-in_attesa  { fill: #fff9c4; stroke: #f57f17; }
+
+.box-label { font-size: 10px; text-anchor: middle; dominant-baseline: central; fill: #333; font-family: 'Varela Round', sans-serif; pointer-events: none; }
+.box-capi  { font-size: 9px;  text-anchor: middle; dominant-baseline: central; fill: #555; font-family: 'Varela Round', sans-serif; pointer-events: none; font-weight: bold; }
+.cap-label { font-size: 11px; font-family: 'Yeseva One', serif; fill: #444; }
+.linea-label { font-size: 9px; fill: #666; }
+
+/* Legend */
+.legend-dot { width: 14px; height: 14px; border-radius: 3px; display: inline-block; border: 1.5px solid rgba(0,0,0,.2); }
+
+/* KPI cards */
+.kpi-card { background: #fff; border-radius: 10px; padding: 1rem 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,.07); text-align: center; }
+.kpi-value { font-size: 1.6rem; font-weight: bold; font-family: 'Yeseva One', serif; }
+.kpi-label { font-size: 0.78rem; color: #888; margin-top: .1rem; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="cb-page-header">
-    <h1><i class="bi bi-house-heart" style="color: var(--cb-pink)"></i> Allevamento Suini</h1>
+    <h1><i class="bi bi-house-heart" style="color: #c2185b"></i> Allevamento Suini – Panoramica</h1>
+    <div class="d-flex gap-2">
+        {% if allarmi_count > 0 %}
+        <a href="{{ url_for('allevamento.allarmi_index') }}" class="btn btn-warning btn-sm">
+            <i class="bi bi-bell-fill"></i> {{ allarmi_count }} allarmi
+        </a>
+        {% endif %}
+        <a href="{{ url_for('allevamento.lotti_nuovo') }}" class="btn btn-sm" style="background:#c2185b;color:white">
+            <i class="bi bi-plus-lg"></i> Nuovo Accasamento
+        </a>
+    </div>
 </div>
 
-<div class="cb-card p-4 text-center" style="max-width: 500px; margin: 2rem auto;">
-    <i class="bi bi-hammer" style="font-size: 3rem; color: #c2185b; opacity: 0.5;"></i>
-    <h3 class="mt-3">Sezione in costruzione</h3>
-    <p class="text-muted">La gestione dell'allevamento suini sarà disponibile prossimamente.</p>
+{# ─── KPI ─────────────────────────────────────────────────────────── #}
+{% set capi_tot = namespace(v=0) %}
+{% set box_attivi = namespace(v=0) %}
+{% set box_tot = namespace(v=0) %}
+{% for b in boxes %}
+    {% set box_tot.v = box_tot.v + 1 %}
+    {% set bd = box_data[b.numero] %}
+    {% if bd.stato != 'libero' %}
+        {% set box_attivi.v = box_attivi.v + 1 %}
+        {% set capi_tot.v = capi_tot.v + bd.capi %}
+    {% endif %}
+{% endfor %}
+
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+        <div class="kpi-card">
+            <div class="kpi-value" style="color:#c2185b">{{ capi_tot.v }}</div>
+            <div class="kpi-label">Capi Presenti</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="kpi-card">
+            <div class="kpi-value" style="color:#388e3c">{{ box_attivi.v }}/{{ box_tot.v }}</div>
+            <div class="kpi-label">Box Occupati</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="kpi-card">
+            <div class="kpi-value" style="color:#1976d2">{{ capannoni|length }}</div>
+            <div class="kpi-label">Capannoni</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="kpi-card">
+            <div class="kpi-value" style="color:{% if allarmi_count > 0 %}#e65100{% else %}#388e3c{% endif %}">{{ allarmi_count }}</div>
+            <div class="kpi-label">Allarmi Attivi</div>
+        </div>
+    </div>
 </div>
+
+{# ─── Legenda ─────────────────────────────────────────────────────── #}
+<div class="d-flex flex-wrap gap-3 mb-3 small">
+    <span><span class="legend-dot" style="background:#e0e0e0;border-color:#9e9e9e"></span> Libero</span>
+    <span><span class="legend-dot" style="background:#bbdefb;border-color:#1976d2"></span> Linea 1 (blu)</span>
+    <span><span class="legend-dot" style="background:#ffcdd2;border-color:#d32f2f"></span> Linea 2 (rossa)</span>
+    <span><span class="legend-dot" style="background:#c8e6c9;border-color:#388e3c"></span> Linea 3 (verde)</span>
+    <span><span class="legend-dot" style="background:#ffe0b2;border-color:#e65100"></span> Allarme</span>
+    <span><span class="legend-dot" style="background:#fff9c4;border-color:#f57f17"></span> In uscita</span>
+</div>
+
+{# ─── Mappa SVG ───────────────────────────────────────────────────── #}
+<div class="mappa-wrapper">
+<svg class="mappa-svg" viewBox="0 0 1150 612" xmlns="http://www.w3.org/2000/svg">
+
+{# Costanti layout: BW=85, BH=50, STEP=90, MX=15 #}
+{% macro box_rect(num, cx, cy) %}
+{% set bd = box_data[num] %}
+<g onclick="showBoxModal({{ num }}, '{{ bd.lotto_id or '' }}', {{ bd.capi }}, '{{ bd.stato }}', {{ bd.ciclo_id or 'null' }})" style="cursor:pointer" role="button" aria-label="Box {{ num }}">
+  <rect x="{{ cx }}" y="{{ cy }}" width="85" height="50" rx="6"
+        class="box-rect box-{{ bd.stato }}" />
+  <text x="{{ cx + 42 }}" y="{{ cy + 18 }}" class="box-label">{{ num }}</text>
+  {% if bd.capi > 0 %}
+  <text x="{{ cx + 42 }}" y="{{ cy + 36 }}" class="box-capi">{{ bd.capi }}♟</text>
+  {% endif %}
+</g>
+{% endmacro %}
+
+{# ── CAP 1 ── y=20 label, y=42 boxes (linea 1, box 1-9) #}
+<text x="15" y="35" class="cap-label">CAP 1</text>
+<text x="735" y="35" class="linea-label" style="fill:#1976d2">■ Linea 1</text>
+{% for i in range(9) %}{{ box_rect(i+1, 15+i*90, 42) }}{% endfor %}
+
+{# ── CAP 2 ── y=107 label, y=129 boxes (linea 1, box 10-15) #}
+<text x="15" y="122" class="cap-label">CAP 2</text>
+{% for i in range(6) %}{{ box_rect(i+10, 15+i*90, 129) }}{% endfor %}
+
+{# ── CAP 3 ── y=194 label, y=216 boxes (linea 1, box 16-21) #}
+<text x="15" y="209" class="cap-label">CAP 3</text>
+{% for i in range(6) %}{{ box_rect(i+16, 15+i*90, 216) }}{% endfor %}
+
+{# ── CAP 4 ── y=281 label, row A y=303 (22-29), row B y=358 (30-36) linea 2 #}
+<text x="15" y="296" class="cap-label">CAP 4</text>
+<text x="750" y="296" class="linea-label" style="fill:#d32f2f">■ Linea 2</text>
+{% for i in range(8) %}{{ box_rect(i+22, 15+i*90, 303) }}{% endfor %}
+{% for i in range(7) %}{{ box_rect(i+30, 15+i*90, 358) }}{% endfor %}
+
+{# ── CAP 5 ── y=423 label, y=445 boxes (linea 3, box 37-42) #}
+<text x="15" y="438" class="cap-label">CAP 5</text>
+<text x="565" y="438" class="linea-label" style="fill:#388e3c">■ Linea 3</text>
+{% for i in range(6) %}{{ box_rect(i+37, 15+i*90, 445) }}{% endfor %}
+
+{# ── CAP 7 ── y=510 label, y=532 boxes (linea 3, box 43-49) #}
+<text x="15" y="523" class="cap-label">CAP 7</text>
+{% for i in range(7) %}{{ box_rect(i+43, 15+i*90, 532) }}{% endfor %}
+
+{# ── CAP 6 ── y=510 label, y=532 boxes (linea 3, box 50-54) #}
+<text x="690" y="523" class="cap-label">CAP 6</text>
+{% for i in range(5) %}{{ box_rect(i+50, 690+i*90, 532) }}{% endfor %}
+
+</svg>
+</div>
+
+{# ─── Modal box detail ────────────────────────────────────────────── #}
+<div class="modal fade" id="boxModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#c2185b;color:white">
+        <h5 class="modal-title"><i class="bi bi-box"></i> Box <span id="bm-num"></span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="bm-body">
+        <div class="text-center py-3"><div class="spinner-border text-secondary"></div></div>
+      </div>
+      <div class="modal-footer" id="bm-footer"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const boxModal = new bootstrap.Modal(document.getElementById('boxModal'));
+
+function showBoxModal(num, lottoId, capi, stato, cicloId) {
+    document.getElementById('bm-num').textContent = num;
+    document.getElementById('bm-footer').innerHTML = '';
+    document.getElementById('bm-body').innerHTML = '<div class="text-center py-3"><div class="spinner-border text-secondary"></div></div>';
+    boxModal.show();
+
+    fetch(`/allevamento/box/${num}/modal`)
+        .then(r => r.json())
+        .then(d => {
+            let html = `<table class="table table-sm mb-0">
+                <tr><th>Capannone</th><td>${d.capannone}</td></tr>
+                <tr><th>Linea alimentazione</th><td>${d.linea}</td></tr>
+                <tr><th>Superficie</th><td>${d.superficie ? d.superficie + ' m²' : '–'}</td></tr>`;
+            let footer = '';
+            if (d.ciclo) {
+                const c = d.ciclo;
+                html += `<tr><th>Lotto</th><td><strong>${c.lotto_id}</strong></td></tr>
+                    <tr><th>Accasamento</th><td>${c.data_accasamento}</td></tr>
+                    <tr><th>Capi iniziali</th><td>${c.capi_iniziali}</td></tr>
+                    <tr><th>Capi presenti</th><td><strong>${c.capi_presenti}</strong></td></tr>
+                    ${c.peso_medio_iniziale ? `<tr><th>Peso medio arrivo</th><td>${c.peso_medio_iniziale.toFixed(1)} kg</td></tr>` : ''}
+                    ${c.eta_oggi ? `<tr><th>Età stimata oggi</th><td>${c.eta_oggi} gg</td></tr>` : ''}`;
+                footer = `<a href="/allevamento/eventi/nuovo?bc=${c.id}" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-pencil-square"></i> Registra evento
+                </a>
+                <a href="/allevamento/sanita/trattamento/nuovo?bc=${c.id}" class="btn btn-sm btn-outline-warning">
+                    <i class="bi bi-capsule"></i> Trattamento
+                </a>
+                <a href="/allevamento/lotti/${lottoId ? c.id : ''}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-list-ul"></i> Dettaglio lotto
+                </a>`;
+            } else {
+                html += `<tr><td colspan="2" class="text-muted text-center py-2">Box libero</td></tr>`;
+                footer = `<a href="/allevamento/lotti/nuovo" class="btn btn-sm btn-outline-success">
+                    <i class="bi bi-plus-lg"></i> Nuovo accasamento
+                </a>`;
+            }
+            html += '</table>';
+            document.getElementById('bm-body').innerHTML = html;
+            document.getElementById('bm-footer').innerHTML = footer;
+        })
+        .catch(() => {
+            document.getElementById('bm-body').innerHTML = '<div class="alert alert-danger">Errore caricamento dati.</div>';
+        });
+}
+</script>
 {% endblock %}

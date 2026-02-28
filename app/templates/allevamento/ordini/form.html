@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Nuovo Ordine – Allevamento{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-clipboard-plus" style="color:#c2185b"></i> Nuovo Ordine</h1>
+    <a href="{{ url_for('allevamento.ordini_index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Indietro
+    </a>
+</div>
+
+<div class="cb-card p-4" style="max-width:500px">
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="mb-3">
+        <label class="form-label fw-bold">Prodotto</label>
+        <select name="tipo" class="form-select" required>
+            <option value="mangime">Mangime</option>
+            <option value="siero">Siero</option>
+        </select>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6">
+            <label class="form-label fw-bold">Quantità (q)</label>
+            <input type="number" name="quantita_q" class="form-control" step="0.1" min="0.1" required>
+        </div>
+        <div class="col-6">
+            <label class="form-label fw-bold">Data ordine</label>
+            <input type="date" name="data_ordine" class="form-control" value="{{ today }}" required>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Fornitore</label>
+        <input type="text" name="fornitore" class="form-control">
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Consegna prevista</label>
+        <input type="date" name="data_consegna" class="form-control">
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Note</label>
+        <textarea name="note" class="form-control" rows="2"></textarea>
+    </div>
+
+    <button type="submit" class="btn" style="background:#c2185b;color:white">
+        <i class="bi bi-check-lg"></i> Crea ordine
+    </button>
+</form>
+</div>
+{% endblock %}

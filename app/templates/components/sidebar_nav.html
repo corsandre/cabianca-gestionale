@@ -113,11 +113,52 @@
                     <i class="bi bi-house-heart"></i> Panoramica
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint and 'lotti' in request.endpoint %}active{% endif %}" href="{{ url_for('allevamento.lotti_index') }}">
+                    <i class="bi bi-arrow-repeat"></i> Cicli Produttivi
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint and 'sanita' in request.endpoint %}active{% endif %}" href="{{ url_for('allevamento.sanita_index') }}">
+                    <i class="bi bi-capsule"></i> Sanità
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint and 'alimentazione' in request.endpoint %}active{% endif %}" href="{{ url_for('allevamento.alimentazione_index') }}">
+                    <i class="bi bi-basket"></i> Alimentazione
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'allevamento.magazzino_index' %}active{% endif %}" href="{{ url_for('allevamento.magazzino_index') }}">
+                    <i class="bi bi-box-seam"></i> Magazzino
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint and 'ordini' in request.endpoint %}active{% endif %}" href="{{ url_for('allevamento.ordini_index') }}">
+                    <i class="bi bi-clipboard-check"></i> Ordini
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'allevamento.allarmi_index' %}active{% endif %}" href="{{ url_for('allevamento.allarmi_index') }}">
+                    <i class="bi bi-bell"></i> Allarmi
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint and 'manutenzioni' in request.endpoint %}active{% endif %}" href="{{ url_for('allevamento.manutenzioni_index') }}">
+                    <i class="bi bi-tools"></i> Manutenzioni
+                </a>
+            </li>
+            <li class="cb-nav-divider"></li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint and 'report' in request.endpoint %}active{% endif %}" href="{{ url_for('allevamento.report_trattamenti') }}">
+                    <i class="bi bi-bar-chart"></i> Report
+                </a>
+            </li>
             {% if current_user.role == 'admin' %}
             <li class="cb-nav-divider"></li>
             <li class="nav-item">
                 <a class="nav-link {% if request.endpoint == 'allevamento.impostazioni' %}active{% endif %}" href="{{ url_for('allevamento.impostazioni') }}">
-                    <i class="bi bi-sliders"></i> Impostazioni Allevamento
+                    <i class="bi bi-sliders"></i> Impostazioni
                 </a>
             </li>
             {% endif %}

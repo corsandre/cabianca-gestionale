@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Storico Trattamenti – Sanità{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-clock-history" style="color:#c2185b"></i> Storico Trattamenti</h1>
+    <a href="{{ url_for('allevamento.sanita_index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Sanità
+    </a>
+</div>
+
+<div class="cb-table">
+{% if trattamenti %}
+<div class="table-responsive">
+    <table class="table table-sm table-hover">
+        <thead><tr>
+            <th>Data inizio</th><th>Box</th><th>Lotto</th>
+            <th>Tipo</th><th>Farmaco</th><th>Via</th><th>Durata</th><th>Operatore</th>
+        </tr></thead>
+        <tbody>
+        {% for t in trattamenti %}
+        <tr>
+            <td>{{ t.data_inizio.strftime('%d/%m/%Y') }}</td>
+            <td>{{ t.box_ciclo.box.numero if t.box_ciclo and t.box_ciclo.box else '?' }}</td>
+            <td class="small text-muted">{{ t.box_ciclo.lotto.lotto_id if t.box_ciclo and t.box_ciclo.lotto else '?' }}</td>
+            <td>{{ t.tipo or '–' }}</td>
+            <td><strong>{{ t.farmaco or '–' }}</strong></td>
+            <td>{{ t.via_somministrazione or '–' }}</td>
+            <td>{{ t.durata_giorni }} gg</td>
+            <td>{{ t.operatore.display_name if t.operatore else '–' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="cb-empty">
+    <i class="bi bi-capsule d-block"></i>
+    <p>Nessun trattamento registrato.</p>
+</div>
+{% endif %}
+</div>
+{% endblock %}

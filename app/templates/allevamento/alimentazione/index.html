@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Alimentazione – Allevamento{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-basket" style="color:#c2185b"></i> Alimentazione</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('allevamento.alimentazione_consumi') }}" class="btn btn-sm" style="background:#c2185b;color:white">
+            <i class="bi bi-pencil-square"></i> Inserisci Consumi
+        </a>
+        <a href="{{ url_for('allevamento.alimentazione_storico') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-clock-history"></i> Storico
+        </a>
+        {% if current_user.role == 'admin' %}
+        <a href="{{ url_for('allevamento.alimentazione_impostazioni') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-sliders"></i>
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<p class="text-muted small mb-3">Razioni calcolate per oggi: <strong>{{ oggi.strftime('%d/%m/%Y') }}</strong></p>
+
+<div class="row g-3">
+{% for linea, r in razioni.items() %}
+{% set colori = {1: '#1976d2', 2: '#d32f2f', 3: '#388e3c'} %}
+{% set nomi_linea = {1: 'Linea 1 (blu) – CAP 1-2-3', 2: 'Linea 2 (rossa) – CAP 4', 3: 'Linea 3 (verde) – CAP 5-6-7'} %}
+<div class="col-md-4">
+    <div class="cb-card p-3" style="border-left: 4px solid {{ colori[linea] }}">
+        <h6 class="mb-3" style="color:{{ colori[linea] }}">{{ nomi_linea[linea] }}</h6>
+        <table class="table table-sm mb-0">
+            <tr>
+                <th>Razione teorica mangime</th>
+                <td class="text-end fw-bold">{{ r.teorica_mangime }} kg</td>
+            </tr>
+            <tr>
+                <th>Razione teorica siero</th>
+                <td class="text-end fw-bold">{{ r.teorica_siero }} L</td>
+            </tr>
+            {% if r.consumo_mangime is not none %}
+            <tr class="{% if r.consumo_mangime and r.teorica_mangime %}
+                {% set diff = ((r.consumo_mangime - r.teorica_mangime) / r.teorica_mangime * 100) if r.teorica_mangime else 0 %}
+                {% if diff|abs > 15 %}table-warning{% endif %}
+            {% endif %}">
+                <th>Consumo mangime reale</th>
+                <td class="text-end">{{ r.consumo_mangime }} kg
+                    {% if r.consumo_mangime and r.teorica_mangime and r.teorica_mangime > 0 %}
+                    {% set pct = ((r.consumo_mangime - r.teorica_mangime) / r.teorica_mangime * 100)|round(1) %}
+                    <span class="small {% if pct > 0 %}text-success{% else %}text-danger{% endif %}">
+                        ({{ '+' if pct > 0 else '' }}{{ pct }}%)
+                    </span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endif %}
+            {% if r.consumo_siero is not none %}
+            <tr>
+                <th>Consumo siero reale</th>
+                <td class="text-end">{{ r.consumo_siero }} L</td>
+            </tr>
+            {% endif %}
+        </table>
+        {% if r.note %}<p class="small text-muted mt-2 mb-0">{{ r.note }}</p>{% endif %}
+        {% if r.consumo_mangime is none %}
+        <a href="{{ url_for('allevamento.alimentazione_consumi') }}"
+           class="btn btn-outline-secondary btn-sm mt-2 w-100">
+            <i class="bi bi-pencil"></i> Inserisci consumi
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Registra Inappetenza – Sanità{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-exclamation-circle" style="color:#c2185b"></i> Registra Inappetenza</h1>
+    <a href="{{ url_for('allevamento.sanita_index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Indietro
+    </a>
+</div>
+
+<div class="cb-card p-4" style="max-width:500px">
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="mb-3">
+        <label class="form-label fw-bold">Box / Ciclo</label>
+        <select name="box_ciclo_id" class="form-select" required>
+            <option value="">– seleziona –</option>
+            {% for bc in cicli_attivi %}
+            <option value="{{ bc.id }}">Box {{ bc.box.numero }} ({{ bc.lotto.lotto_id }})</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label fw-bold">% razione consumata
+            <span class="text-muted fw-normal">(100 = normale, 50 = metà razione)</span>
+        </label>
+        <div class="d-flex align-items-center gap-2">
+            <input type="range" name="percentuale_razione" class="form-range flex-grow-1"
+                   min="0" max="100" step="5" value="70" id="perc-range"
+                   oninput="document.getElementById('perc-val').textContent=this.value+'%'">
+            <span id="perc-val" class="fw-bold" style="min-width:40px">70%</span>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6">
+            <label class="form-label fw-bold">Data inizio</label>
+            <input type="date" name="data_inizio" class="form-control" value="{{ today }}" required>
+        </div>
+        <div class="col-6">
+            <label class="form-label">Data fine <small class="text-muted">(vuoto = aperta)</small></label>
+            <input type="date" name="data_fine" class="form-control">
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Note</label>
+        <textarea name="note" class="form-control" rows="2"></textarea>
+    </div>
+
+    <button type="submit" class="btn" style="background:#c2185b;color:white">
+        <i class="bi bi-check-lg"></i> Registra
+    </button>
+</form>
+</div>
+{% endblock %}

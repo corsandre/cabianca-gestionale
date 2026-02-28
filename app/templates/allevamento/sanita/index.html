@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Sanità – Allevamento{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-capsule" style="color:#c2185b"></i> Sanità</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('allevamento.sanita_trattamento_nuovo') }}" class="btn btn-sm" style="background:#c2185b;color:white">
+            <i class="bi bi-plus-lg"></i> Nuovo trattamento
+        </a>
+        <a href="{{ url_for('allevamento.sanita_inappetenza_nuovo') }}" class="btn btn-sm btn-outline-warning">
+            <i class="bi bi-exclamation-circle"></i> Inappetenza
+        </a>
+        <a href="{{ url_for('allevamento.sanita_storico') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-clock-history"></i> Storico
+        </a>
+    </div>
+</div>
+
+<div class="cb-card p-3">
+    <h6 class="mb-3">Trattamenti in corso oggi</h6>
+    {% if trattamenti_oggi %}
+    <div class="table-responsive">
+        <table class="table table-sm">
+            <thead><tr>
+                <th>Box</th><th>Farmaco / Tipo</th><th>Via</th>
+                <th>Inizio</th><th>Fine</th><th>Operatore</th>
+            </tr></thead>
+            <tbody>
+            {% for t in trattamenti_oggi %}
+            {% set fine = t.data_inizio + timedelta(days=t.durata_giorni - 1) %}
+            <tr class="{% if fine == today %}table-warning{% endif %}">
+                <td><strong>Box {{ t.box_ciclo.box.numero if t.box_ciclo and t.box_ciclo.box else '?' }}</strong></td>
+                <td>{{ t.farmaco or '–' }}<br><small class="text-muted">{{ t.tipo or '' }}</small></td>
+                <td>{{ t.via_somministrazione or '–' }}</td>
+                <td>{{ t.data_inizio.strftime('%d/%m/%Y') }}</td>
+                <td>{{ fine.strftime('%d/%m/%Y') }}
+                    {% if fine == today %}<span class="badge bg-warning text-dark ms-1">Ultimo giorno</span>{% endif %}
+                </td>
+                <td>{{ t.operatore.display_name if t.operatore else '–' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted text-center py-3">Nessun trattamento attivo oggi.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Passa today come variabile Python
+const today = new Date('{{ today }}');
+</script>
+{% endblock %}

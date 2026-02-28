@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Nuovo Trattamento – Sanità{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-capsule" style="color:#c2185b"></i> Nuovo Trattamento Sanitario</h1>
+    <a href="{{ url_for('allevamento.sanita_index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Indietro
+    </a>
+</div>
+
+<div class="cb-card p-4" style="max-width:600px">
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="mb-3">
+        <label class="form-label fw-bold">Box / Ciclo</label>
+        <select name="box_ciclo_id" class="form-select" required>
+            <option value="">– seleziona –</option>
+            {% for bc in cicli_attivi %}
+            <option value="{{ bc.id }}" {% if preselect_bc == bc.id|string %}selected{% endif %}>
+                Box {{ bc.box.numero }} ({{ bc.lotto.lotto_id }}) – {{ bc.capi_presenti or 0 }} capi
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <label class="form-label fw-bold">Tipo trattamento</label>
+            <input type="text" name="tipo" class="form-control" placeholder="es. Antibiotico, Vitamina..." list="tipi-list">
+            <datalist id="tipi-list">
+                <option value="Antibiotico"><option value="Antiparassitario">
+                <option value="Vaccinazione"><option value="Vitamina/Integratore">
+                <option value="Antinfiammatorio">
+            </datalist>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label fw-bold">Farmaco</label>
+            <input type="text" name="farmaco" class="form-control" placeholder="Nome commerciale">
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label fw-bold">Via di somministrazione</label>
+        <select name="via" class="form-select">
+            <option value="orale">Orale (acqua/mangime)</option>
+            <option value="iniettiva">Iniettiva</option>
+            <option value="topica">Topica</option>
+        </select>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <label class="form-label fw-bold">Data inizio</label>
+            <input type="date" name="data_inizio" class="form-control" value="{{ today }}" required>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label fw-bold">Durata (giorni)</label>
+            <input type="number" name="durata_giorni" class="form-control" min="1" value="3">
+        </div>
+        <div class="col-md-4">
+            <label class="form-label fw-bold">Intervallo (ore)</label>
+            <input type="number" name="intervallo_ore" class="form-control" min="1" value="24">
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Note</label>
+        <textarea name="note" class="form-control" rows="2"></textarea>
+    </div>
+
+    <button type="submit" class="btn" style="background:#c2185b;color:white">
+        <i class="bi bi-check-lg"></i> Salva Trattamento
+    </button>
+</form>
+</div>
+{% endblock %}

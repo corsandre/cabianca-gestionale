@@ -294,6 +294,77 @@ def _init_db(app):
             db.session.add(Setting(key=key, value=value))
     db.session.commit()
 
+    # Seed allevamento struttura fisica (solo se non esiste)
+    from app.models import Capannone, Box, MagazzinoProdotto, CurvaAccrescimento, TabellaSostSiero
+    try:
+        if Box.query.count() == 0:
+            _seed_allevamento()
+    except Exception:
+        db.session.rollback()
+
+
+def _seed_allevamento():
+    from app.models import Capannone, Box, MagazzinoProdotto, CurvaAccrescimento, TabellaSostSiero
+
+    # Capannoni
+    caps = {}
+    for numero, nome in [(1, "CAP 1"), (2, "CAP 2"), (3, "CAP 3"), (4, "CAP 4"),
+                         (5, "CAP 5"), (6, "CAP 6"), (7, "CAP 7")]:
+        c = Capannone(numero=numero, nome=nome)
+        db.session.add(c)
+        db.session.flush()
+        caps[numero] = c.id
+
+    # Box: (numero, cap_numero, linea, superficie_m2, trogolo_m)
+    boxes_data = (
+        # CAP 1: box 1-9, linea 1, 40 posti cad.
+        [(i, 1, 1, 40.0, 13.2) for i in range(1, 10)] +
+        # CAP 2: box 10-15, linea 1, 26 posti cad.
+        [(i, 2, 1, 26.0, 8.6) for i in range(10, 16)] +
+        # CAP 3: box 16-21, linea 1, 10 posti cad.
+        [(i, 3, 1, 10.0, 3.3) for i in range(16, 22)] +
+        # CAP 4: box 22-36, linea 2, 38 posti cad.
+        [(i, 4, 2, 38.0, 12.5) for i in range(22, 37)] +
+        # CAP 5: box 37-42, linea 3, 38 posti cad.
+        [(i, 5, 3, 38.0, 12.5) for i in range(37, 43)] +
+        # CAP 7: box 43-48 (31 posti), box 49 (deposito 32 posti), linea 3
+        [(i, 7, 3, 31.0, 10.2) for i in range(43, 49)] +
+        [(49, 7, 3, 32.0, 10.6)] +
+        # CAP 6: box 50-54, linea 3, ~46 posti cad.
+        [(50, 6, 3, 47.0, 15.5), (51, 6, 3, 47.0, 15.5), (52, 6, 3, 46.0, 15.2),
+         (53, 6, 3, 45.0, 14.8), (54, 6, 3, 45.0, 14.8)]
+    )
+    for numero, cap_num, linea, sup, trogolo in boxes_data:
+        db.session.add(Box(
+            numero=numero,
+            capannone_id=caps[cap_num],
+            linea_alimentazione=linea,
+            superficie_m2=sup,
+            lunghezza_trogolo_m=trogolo,
+        ))
+
+    # Magazzino prodotti
+    for tipo, cap_max, soglia in [("mangime", 300.0, 30.0), ("siero", 200.0, 20.0)]:
+        db.session.add(MagazzinoProdotto(tipo=tipo, capacita_massima_q=cap_max, soglia_minima_q=soglia))
+
+    # Curva accrescimento (suino pesante italiano, giorni-peso-razione)
+    curva = [
+        (60, 20.0, 0.80), (70, 25.0, 0.90), (80, 30.0, 1.05), (90, 35.0, 1.20),
+        (100, 42.0, 1.38), (110, 48.0, 1.52), (120, 55.0, 1.67), (130, 62.0, 1.82),
+        (140, 70.0, 2.00), (150, 78.0, 2.17), (160, 87.0, 2.36), (170, 95.0, 2.50),
+        (180, 104.0, 2.65), (190, 112.0, 2.78), (200, 120.0, 2.88), (210, 128.0, 2.97),
+        (220, 135.0, 3.04), (230, 142.0, 3.10), (240, 149.0, 3.14), (250, 155.0, 3.17),
+        (260, 160.0, 3.18),
+    ]
+    for eta, peso, razione in curva:
+        db.session.add(CurvaAccrescimento(eta_giorni=eta, peso_kg=peso, razione_kg_giorno=razione))
+
+    # Tabella sostituzione siero
+    for eta_min, eta_max, perc in [(0, 90, 35.0), (91, 150, 25.0), (151, 999, 15.0)]:
+        db.session.add(TabellaSostSiero(eta_min=eta_min, eta_max=eta_max, percentuale_siero=perc))
+
+    db.session.commit()
+
 
 def _init_scheduler(app):
     try:
@@ -343,7 +414,16 @@ def _init_scheduler(app):
                 except Exception as e:
                     app.logger.error(f"Errore generazione ricorrenti: {e}")
 
+        def generate_allevamento_alarms():
+            with app.app_context():
+                try:
+                    from app.services.allevamento_alarms import rigenera_allarmi
+                    rigenera_allarmi()
+                except Exception as e:
+                    app.logger.error(f"Errore generazione allarmi allevamento: {e}")
+
         scheduler.add_job(generate_recurring, "cron", hour=3, minute=0)
+        scheduler.add_job(generate_allevamento_alarms, "cron", hour=6, minute=0)
         scheduler.add_job(run_backup, "cron", hour=backup_hour, minute=backup_minute, id="backup")
         if app.config.get("CLOUD_OFFICE_USER") and app.config.get("CLOUD_OFFICE_PASSWORD"):
             scheduler.add_job(sync_cassa, "cron", hour=4, minute=0)

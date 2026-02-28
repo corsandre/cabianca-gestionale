@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Storico Razioni – Alimentazione{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-clock-history" style="color:#c2185b"></i> Storico Razioni</h1>
+    <a href="{{ url_for('allevamento.alimentazione_index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Indietro
+    </a>
+</div>
+
+<div class="cb-table">
+{% if razioni %}
+<div class="table-responsive">
+    <table class="table table-sm table-hover">
+        <thead><tr>
+            <th>Data</th><th>Linea</th>
+            <th class="text-end">Teorica mangime (kg)</th>
+            <th class="text-end">Consumo mangime (kg)</th>
+            <th class="text-end">Consumo siero (L)</th>
+            <th>Note</th>
+        </tr></thead>
+        <tbody>
+        {% set colori = {1: '#1976d2', 2: '#d32f2f', 3: '#388e3c'} %}
+        {% for r in razioni %}
+        <tr>
+            <td>{{ r.data.strftime('%d/%m/%Y') }}</td>
+            <td><span style="color:{{ colori[r.linea] }};font-weight:bold">Linea {{ r.linea }}</span></td>
+            <td class="text-end">{{ '%.1f'|format(r.razione_teorica_kg) if r.razione_teorica_kg else '–' }}</td>
+            <td class="text-end">{{ '%.1f'|format(r.consumo_mangime_kg) if r.consumo_mangime_kg else '–' }}</td>
+            <td class="text-end">{{ '%.1f'|format(r.consumo_siero_litri) if r.consumo_siero_litri else '–' }}</td>
+            <td class="small text-muted">{{ r.note or '' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="cb-empty">
+    <i class="bi bi-basket d-block"></i>
+    <p>Nessun dato disponibile.</p>
+</div>
+{% endif %}
+</div>
+{% endblock %}

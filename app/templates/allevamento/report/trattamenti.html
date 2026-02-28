@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Registro Trattamenti – Report{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-capsule" style="color:#c2185b"></i> Registro Sanitario</h1>
+</div>
+<div class="cb-table">
+{% if trattamenti %}
+<div class="table-responsive">
+    <table class="table table-sm table-hover">
+        <thead><tr>
+            <th>Data</th><th>Box</th><th>Lotto</th><th>Tipo</th><th>Farmaco</th>
+            <th>Via</th><th>Durata (gg)</th><th>Operatore</th><th>Note</th>
+        </tr></thead>
+        <tbody>
+        {% for t in trattamenti %}
+        <tr>
+            <td>{{ t.data_inizio.strftime('%d/%m/%Y') }}</td>
+            <td>{{ t.box_ciclo.box.numero if t.box_ciclo and t.box_ciclo.box else '?' }}</td>
+            <td class="small text-muted">{{ t.box_ciclo.lotto.lotto_id if t.box_ciclo and t.box_ciclo.lotto else '?' }}</td>
+            <td>{{ t.tipo or '–' }}</td>
+            <td><strong>{{ t.farmaco or '–' }}</strong></td>
+            <td>{{ t.via_somministrazione or '–' }}</td>
+            <td>{{ t.durata_giorni }}</td>
+            <td>{{ t.operatore.display_name if t.operatore else '–' }}</td>
+            <td class="small text-muted">{{ t.note or '' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="cb-empty"><p>Nessun trattamento registrato.</p></div>
+{% endif %}
+</div>
+{% endblock %}

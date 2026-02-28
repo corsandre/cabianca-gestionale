@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Struttura Fisica – Impostazioni Allevamento{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-diagram-3" style="color:#c2185b"></i> Struttura Fisica</h1>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-4">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-2 fw-bold" style="color:#c2185b">{{ capannoni|length }}</div>
+            <div class="small text-muted">Capannoni</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-2 fw-bold" style="color:#388e3c">{{ boxes|length }}</div>
+            <div class="small text-muted">Box totali</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-2 fw-bold" style="color:#1976d2">{{ boxes|sum(attribute='superficie_m2')|round|int }}</div>
+            <div class="small text-muted">Superficie totale (m²)</div>
+        </div>
+    </div>
+</div>
+
+{% for cap in capannoni %}
+<div class="cb-card p-3 mb-3">
+    <h6 class="mb-3" style="color:#c2185b">{{ cap.nome }}</h6>
+    <div class="table-responsive">
+        <table class="table table-sm">
+            <thead><tr>
+                <th>Box</th><th>Linea</th><th>Superficie (m²)</th><th>Trogolo (m)</th><th>Note</th><th></th>
+            </tr></thead>
+            <tbody>
+            {% for b in boxes if b.capannone_id == cap.id %}
+            <tr>
+                <td><strong>Box {{ b.numero }}</strong></td>
+                <td>
+                    {% set lcolore = {1: '#1976d2', 2: '#d32f2f', 3: '#388e3c'} %}
+                    <span style="color:{{ lcolore.get(b.linea_alimentazione,'#333') }}">
+                        Linea {{ b.linea_alimentazione }}
+                    </span>
+                </td>
+                <td>{{ b.superficie_m2 }}</td>
+                <td>{{ b.lunghezza_trogolo_m }}</td>
+                <td>{{ b.note or '–' }}</td>
+                <td>
+                    <button class="btn btn-xs btn-outline-secondary" style="font-size:.75rem;padding:.15rem .4rem"
+                            data-bs-toggle="modal" data-bs-target="#editBox{{ b.id }}">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+
+{# Modal modifica box #}
+{% for b in boxes %}
+<div class="modal fade" id="editBox{{ b.id }}" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header"><h6 class="modal-title">Modifica Box {{ b.numero }}</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('allevamento.impostazioni_box_modifica', id=b.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label">Superficie (m²)</label>
+                        <input type="number" name="superficie_m2" class="form-control form-control-sm"
+                               step="0.1" value="{{ b.superficie_m2 }}">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Trogolo (m)</label>
+                        <input type="number" name="lunghezza_trogolo_m" class="form-control form-control-sm"
+                               step="0.1" value="{{ b.lunghezza_trogolo_m }}">
+                    </div>
+                    <div>
+                        <label class="form-label">Note</label>
+                        <input type="text" name="note" class="form-control form-control-sm" value="{{ b.note or '' }}">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-sm" style="background:#c2185b;color:white">Salva</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

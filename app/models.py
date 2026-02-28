@@ -355,3 +355,214 @@ class Setting(db.Model):
     __tablename__ = "settings"
     key = db.Column(db.String(64), primary_key=True)
     value = db.Column(db.String(512))
+
+
+# === ALLEVAMENTO - Struttura Fisica ===
+
+class Capannone(db.Model):
+    __tablename__ = "capannoni"
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(50), nullable=False)
+    numero = db.Column(db.Integer, nullable=False, unique=True)
+    note = db.Column(db.Text)
+
+    boxes = db.relationship("Box", backref="capannone", lazy="dynamic")
+
+
+class Box(db.Model):
+    __tablename__ = "boxes"
+    id = db.Column(db.Integer, primary_key=True)
+    numero = db.Column(db.Integer, nullable=False, unique=True)
+    capannone_id = db.Column(db.Integer, db.ForeignKey("capannoni.id"), nullable=False)
+    linea_alimentazione = db.Column(db.Integer, nullable=False)  # 1, 2, 3
+    superficie_m2 = db.Column(db.Float)
+    lunghezza_trogolo_m = db.Column(db.Float)
+    note = db.Column(db.Text)
+
+    cicli = db.relationship("BoxCiclo", backref="box", lazy="dynamic")
+    manutenzioni = db.relationship("ManutenzioneBox", backref="box", lazy="dynamic",
+                                   foreign_keys="ManutenzioneBox.box_id")
+
+
+# === ALLEVAMENTO - Cicli Produttivi ===
+
+class LottoProduttivo(db.Model):
+    __tablename__ = "lotti_produttivi"
+    id = db.Column(db.Integer, primary_key=True)
+    lotto_id = db.Column(db.String(50), unique=True, nullable=False)
+    numero_ciclo = db.Column(db.Integer)
+    data_inizio = db.Column(db.Date, nullable=False)
+    data_chiusura = db.Column(db.Date)
+    stato = db.Column(db.String(20), default="attivo")  # attivo, chiuso
+    note = db.Column(db.Text)
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    box_cicli = db.relationship("BoxCiclo", backref="lotto", lazy="dynamic")
+    creator = db.relationship("User")
+
+
+class BoxCiclo(db.Model):
+    __tablename__ = "box_cicli"
+    id = db.Column(db.Integer, primary_key=True)
+    lotto_id = db.Column(db.Integer, db.ForeignKey("lotti_produttivi.id"), nullable=False)
+    box_id = db.Column(db.Integer, db.ForeignKey("boxes.id"), nullable=False)
+    data_accasamento = db.Column(db.Date, nullable=False)
+    capi_iniziali = db.Column(db.Integer, nullable=False)
+    peso_totale_iniziale = db.Column(db.Float)
+    peso_medio_iniziale = db.Column(db.Float)
+    eta_stimata_gg = db.Column(db.Integer)
+    capi_presenti = db.Column(db.Integer)
+    stato = db.Column(db.String(20), default="attivo")  # attivo, in_uscita, chiuso
+    note = db.Column(db.Text)
+
+    eventi = db.relationship("EventoCiclo", backref="box_ciclo", lazy="dynamic")
+    trattamenti = db.relationship("TrattamentoSanitario", backref="box_ciclo", lazy="dynamic")
+    inappetenze = db.relationship("InappetenzaBox", backref="box_ciclo", lazy="dynamic")
+
+
+class EventoCiclo(db.Model):
+    __tablename__ = "eventi_ciclo"
+    id = db.Column(db.Integer, primary_key=True)
+    box_ciclo_id = db.Column(db.Integer, db.ForeignKey("box_cicli.id"), nullable=False)
+    tipo = db.Column(db.String(30), nullable=False)  # mortalita, frazionamento_in, frazionamento_out, uscita_macello
+    data = db.Column(db.Date, nullable=False, default=date.today)
+    quantita = db.Column(db.Integer)
+    peso_totale = db.Column(db.Float)
+    note = db.Column(db.Text)
+    operatore_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    operatore = db.relationship("User")
+
+
+# === ALLEVAMENTO - Sanità ===
+
+class TrattamentoSanitario(db.Model):
+    __tablename__ = "trattamenti_sanitari"
+    id = db.Column(db.Integer, primary_key=True)
+    box_ciclo_id = db.Column(db.Integer, db.ForeignKey("box_cicli.id"), nullable=False)
+    tipo = db.Column(db.String(100))
+    farmaco = db.Column(db.String(200))
+    via_somministrazione = db.Column(db.String(50))  # orale, iniettiva, topica
+    data_inizio = db.Column(db.Date, nullable=False, default=date.today)
+    durata_giorni = db.Column(db.Integer, default=1)
+    intervallo_ore = db.Column(db.Integer, default=24)
+    note = db.Column(db.Text)
+    operatore_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    operatore = db.relationship("User")
+
+
+class InappetenzaBox(db.Model):
+    __tablename__ = "inappetenza_box"
+    id = db.Column(db.Integer, primary_key=True)
+    box_ciclo_id = db.Column(db.Integer, db.ForeignKey("box_cicli.id"), nullable=False)
+    percentuale_razione = db.Column(db.Float, default=100.0)
+    data_inizio = db.Column(db.Date, nullable=False, default=date.today)
+    data_fine = db.Column(db.Date)
+    note = db.Column(db.Text)
+
+
+# === ALLEVAMENTO - Alimentazione ===
+
+class CurvaAccrescimento(db.Model):
+    __tablename__ = "curva_accrescimento"
+    id = db.Column(db.Integer, primary_key=True)
+    eta_giorni = db.Column(db.Integer, nullable=False, unique=True)
+    peso_kg = db.Column(db.Float, nullable=False)
+    razione_kg_giorno = db.Column(db.Float, nullable=False)
+
+
+class TabellaSostSiero(db.Model):
+    __tablename__ = "tabella_sost_siero"
+    id = db.Column(db.Integer, primary_key=True)
+    eta_min = db.Column(db.Integer, nullable=False)
+    eta_max = db.Column(db.Integer, nullable=False)
+    percentuale_siero = db.Column(db.Float, nullable=False)
+
+
+class RazioneGiornaliera(db.Model):
+    __tablename__ = "razioni_giornaliere"
+    id = db.Column(db.Integer, primary_key=True)
+    data = db.Column(db.Date, nullable=False)
+    linea = db.Column(db.Integer, nullable=False)
+    razione_teorica_kg = db.Column(db.Float)
+    consumo_mangime_kg = db.Column(db.Float)
+    consumo_siero_litri = db.Column(db.Float)
+    note = db.Column(db.Text)
+
+    __table_args__ = (db.UniqueConstraint("data", "linea", name="_data_linea_uc"),)
+
+
+# === ALLEVAMENTO - Magazzino & Ordini ===
+
+class MagazzinoProdotto(db.Model):
+    __tablename__ = "magazzino_prodotti"
+    id = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(db.String(20), nullable=False, unique=True)  # mangime, siero
+    quantita_attuale_q = db.Column(db.Float, default=0.0)
+    capacita_massima_q = db.Column(db.Float)
+    soglia_minima_q = db.Column(db.Float, default=10.0)
+
+
+class ConsegnaAlimentare(db.Model):
+    __tablename__ = "consegne_alimentari"
+    id = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(db.String(20), nullable=False)  # mangime, siero
+    data = db.Column(db.Date, nullable=False, default=date.today)
+    quantita_q = db.Column(db.Float, nullable=False)
+    fornitore = db.Column(db.String(200))
+    percentuale_ss_siero = db.Column(db.Float)
+    note = db.Column(db.Text)
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    creator = db.relationship("User")
+
+
+class OrdineAlimentare(db.Model):
+    __tablename__ = "ordini_alimentari"
+    id = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(db.String(20), nullable=False)  # mangime, siero
+    data_ordine = db.Column(db.Date, nullable=False, default=date.today)
+    quantita_q = db.Column(db.Float, nullable=False)
+    fornitore = db.Column(db.String(200))
+    stato = db.Column(db.String(20), default="bozza")  # bozza, inviato, confermato, validato
+    data_consegna = db.Column(db.Date)
+    note = db.Column(db.Text)
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    creator = db.relationship("User")
+
+
+# === ALLEVAMENTO - Allarmi & Manutenzioni ===
+
+class Allarme(db.Model):
+    __tablename__ = "allarmi"
+    id = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(db.String(50), nullable=False)
+    messaggio = db.Column(db.String(500), nullable=False)
+    riferimento_tipo = db.Column(db.String(50))
+    riferimento_id = db.Column(db.Integer)
+    data_creazione = db.Column(db.DateTime, default=datetime.utcnow)
+    data_scadenza = db.Column(db.DateTime)
+    stato = db.Column(db.String(20), default="attivo")  # attivo, risolto, silenziato
+    silenziato_fino = db.Column(db.DateTime)
+
+
+class ManutenzioneBox(db.Model):
+    __tablename__ = "manutenzioni_box"
+    id = db.Column(db.Integer, primary_key=True)
+    box_id = db.Column(db.Integer, db.ForeignKey("boxes.id"))
+    capannone_id = db.Column(db.Integer, db.ForeignKey("capannoni.id"))
+    tipo_attivita = db.Column(db.String(200), nullable=False)
+    scadenza = db.Column(db.Date)
+    stato = db.Column(db.String(20), default="da_fare")  # da_fare, eseguita
+    data_esecuzione = db.Column(db.Date)
+    note = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    capannone = db.relationship("Capannone", backref="manutenzioni")

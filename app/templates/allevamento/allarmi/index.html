@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Allarmi – Allevamento{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1>
+        <i class="bi bi-bell{% if count > 0 %}-fill text-warning{% endif %}" style="color:{% if count == 0 %}#c2185b{% endif %}"></i>
+        Allarmi Attivi
+        {% if count > 0 %}<span class="badge bg-warning text-dark">{{ count }}</span>{% endif %}
+    </h1>
+    {% if current_user.role == 'admin' %}
+    <form method="POST" action="{{ url_for('allevamento.allarmi_rigenera') }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-clockwise"></i> Rigenera
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+{% if allarmi %}
+<div class="d-flex flex-column gap-3">
+{% for a in allarmi %}
+{% set icone = {
+    'trattamento_in_corso': 'capsule', 'scorta_bassa': 'box-seam',
+    'fine_ciclo_imminente': 'clock-history', 'manutenzione_scaduta': 'tools',
+    'densita_eccessiva': 'people'
+} %}
+<div class="cb-card p-3 border-start border-4 {% if a.tipo == 'scorta_bassa' %}border-danger{% elif a.tipo == 'manutenzione_scaduta' %}border-warning{% else %}border-info{% endif %}">
+    <div class="d-flex justify-content-between align-items-start">
+        <div>
+            <i class="bi bi-{{ icone.get(a.tipo, 'exclamation-triangle') }} me-2"></i>
+            <span class="badge bg-secondary me-2">{{ a.tipo|replace('_', ' ') }}</span>
+            <span>{{ a.messaggio }}</span>
+            <div class="small text-muted mt-1">
+                Creato: {{ a.data_creazione.strftime('%d/%m/%Y %H:%M') if a.data_creazione else '–' }}
+                {% if a.data_scadenza %}| Scade: {{ a.data_scadenza.strftime('%d/%m/%Y') }}{% endif %}
+            </div>
+        </div>
+        <div class="d-flex gap-1 flex-shrink-0 ms-3">
+            <form method="POST" action="{{ url_for('allevamento.allarmi_silenzia', id=a.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="ore" value="24">
+                <button class="btn btn-sm btn-outline-secondary" title="Silenzia 24h">
+                    <i class="bi bi-bell-slash"></i>
+                </button>
+            </form>
+            <form method="POST" action="{{ url_for('allevamento.allarmi_risolvi', id=a.id) }}"
+                  onsubmit="return confirm('Segnare come risolto?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-success" title="Risolto">
+                    <i class="bi bi-check-lg"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+</div>
+{% else %}
+<div class="cb-empty">
+    <i class="bi bi-check-circle d-block text-success" style="font-size:3rem"></i>
+    <p class="mt-2">Nessun allarme attivo.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Magazzino – Allevamento{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-box-seam" style="color:#c2185b"></i> Magazzino</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('allevamento.magazzino_consegna_nuova') }}" class="btn btn-sm" style="background:#c2185b;color:white">
+            <i class="bi bi-truck"></i> Registra consegna
+        </a>
+        <a href="{{ url_for('allevamento.ordini_index') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-clipboard-check"></i> Ordini
+        </a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+{% for mp in prodotti %}
+{% set colore = '#1976d2' if mp.tipo == 'siero' else '#388e3c' %}
+{% set perc = (mp.quantita_attuale_q / mp.capacita_massima_q * 100)|round if mp.capacita_massima_q else 0 %}
+<div class="col-md-6">
+    <div class="cb-card p-4" style="border-left: 4px solid {{ colore }}">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+                <h5 class="mb-0" style="color:{{ colore }}">{{ mp.tipo|capitalize }}</h5>
+                <div class="small text-muted">Cap. max: {{ mp.capacita_massima_q }} q | Soglia min: {{ mp.soglia_minima_q }} q</div>
+            </div>
+            <div class="text-end">
+                <div class="fs-2 fw-bold {% if mp.quantita_attuale_q < mp.soglia_minima_q %}text-danger{% endif %}">
+                    {{ mp.quantita_attuale_q }} q
+                </div>
+                {% if mp.quantita_attuale_q < mp.soglia_minima_q %}
+                <span class="badge bg-danger">Sotto soglia!</span>
+                {% endif %}
+            </div>
+        </div>
+        {% if mp.capacita_massima_q %}
+        <div class="progress" style="height:10px">
+            <div class="progress-bar {% if perc < 20 %}bg-danger{% elif perc < 40 %}bg-warning{% else %}bg-success{% endif %}"
+                 style="width:{{ [perc, 100]|min }}%"></div>
+        </div>
+        <div class="small text-muted mt-1">{{ perc }}% della capacità</div>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+</div>
+
+<div class="cb-card p-3">
+    <h6 class="mb-3">Ultime consegne</h6>
+    {% if ultime_consegne %}
+    <div class="table-responsive">
+        <table class="table table-sm">
+            <thead><tr><th>Data</th><th>Tipo</th><th>Q.tà (q)</th><th>Fornitore</th><th>% SS siero</th><th>Note</th></tr></thead>
+            <tbody>
+            {% for c in ultime_consegne %}
+            <tr>
+                <td>{{ c.data.strftime('%d/%m/%Y') }}</td>
+                <td>{{ c.tipo|capitalize }}</td>
+                <td class="fw-bold">{{ c.quantita_q }}</td>
+                <td>{{ c.fornitore or '–' }}</td>
+                <td>{{ '%.1f'|format(c.percentuale_ss_siero) + '%' if c.percentuale_ss_siero else '–' }}</td>
+                <td class="small text-muted">{{ c.note or '' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted text-center py-2">Nessuna consegna registrata.</p>
+    {% endif %}
+</div>
+{% endblock %}

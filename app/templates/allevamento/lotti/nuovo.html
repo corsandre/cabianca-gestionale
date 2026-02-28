@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Nuovo Accasamento – Allevamento{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-plus-lg" style="color:#c2185b"></i> Nuovo Accasamento</h1>
+    <a href="{{ url_for('allevamento.lotti_index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Indietro
+    </a>
+</div>
+
+<div class="cb-card p-4" style="max-width:700px">
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="mb-3">
+        <label class="form-label fw-bold">Data arrivo</label>
+        <input type="date" name="data_arrivo" class="form-control" value="{{ today.isoformat() }}" required>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6">
+            <label class="form-label fw-bold">Capi totali</label>
+            <input type="number" name="capi_totali" class="form-control" min="1" required
+                   oninput="aggiornaPeso()">
+        </div>
+        <div class="col-6">
+            <label class="form-label fw-bold">Peso totale bolla (kg)</label>
+            <input type="number" name="peso_totale_bolla" class="form-control" step="0.1" min="0"
+                   id="peso-bolla" oninput="aggiornaPeso()">
+        </div>
+    </div>
+
+    <div class="alert alert-info py-2 small" id="peso-info" style="display:none">
+        Peso medio: <strong id="peso-medio-val">–</strong> kg
+        &nbsp;→&nbsp; Età stimata: <strong id="eta-stimata-val">–</strong> gg
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label fw-bold">Seleziona box <small class="text-muted">(solo liberi)</small></label>
+        {% if boxes_liberi %}
+        <div class="row g-2">
+            {% for b in boxes_liberi %}
+            <div class="col-4 col-sm-3 col-md-2">
+                <label class="d-flex align-items-center gap-1 border rounded p-2 bg-light" style="cursor:pointer">
+                    <input type="checkbox" name="box_ids" value="{{ b.id }}" class="box-check">
+                    <span class="small fw-bold">Box {{ b.numero }}</span>
+                </label>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="mt-2 small text-muted">
+            <span id="box-count">0</span> box selezionati
+        </div>
+        {% else %}
+        <div class="alert alert-warning">Nessun box libero disponibile.</div>
+        {% endif %}
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Note</label>
+        <textarea name="note" class="form-control" rows="2"></textarea>
+    </div>
+
+    <button type="submit" class="btn" style="background:#c2185b;color:white">
+        <i class="bi bi-check-lg"></i> Crea Accasamento
+    </button>
+</form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Curva accrescimento approssimata per stima età nel browser
+// (la stima precisa è sul server, questa è solo indicativa)
+const CURVA = [
+    [60,20],[70,25],[80,30],[90,35],[100,42],[110,48],[120,55],
+    [130,62],[140,70],[150,78],[160,87],[170,95],[180,104],
+    [190,112],[200,120],[210,128],[220,135],[230,142],[240,149],[250,155],[260,160]
+];
+function etaDaPeso(pesoKg) {
+    if (!pesoKg || pesoKg <= 0) return null;
+    if (pesoKg <= CURVA[0][1]) return CURVA[0][0];
+    if (pesoKg >= CURVA[CURVA.length-1][1]) return CURVA[CURVA.length-1][0];
+    for (let i=0; i<CURVA.length-1; i++) {
+        const [e1,p1] = CURVA[i], [e2,p2] = CURVA[i+1];
+        if (p1 <= pesoKg && pesoKg <= p2) {
+            return Math.round(e1 + (pesoKg-p1)/(p2-p1)*(e2-e1));
+        }
+    }
+    return null;
+}
+
+function aggiornaPeso() {
+    const capi = parseInt(document.querySelector('[name=capi_totali]').value) || 0;
+    const bolla = parseFloat(document.getElementById('peso-bolla').value) || 0;
+    const info = document.getElementById('peso-info');
+    if (capi > 0 && bolla > 0) {
+        const medio = bolla / capi;
+        const eta = etaDaPeso(medio);
+        document.getElementById('peso-medio-val').textContent = medio.toFixed(1);
+        document.getElementById('eta-stimata-val').textContent = eta ? eta + ' gg' : '–';
+        info.style.display = '';
+    } else {
+        info.style.display = 'none';
+    }
+}
+
+// Contatore box selezionati
+document.querySelectorAll('.box-check').forEach(cb => {
+    cb.addEventListener('change', () => {
+        const count = document.querySelectorAll('.box-check:checked').length;
+        document.getElementById('box-count').textContent = count;
+    });
+});
+
+// Imposta data odierna se non impostata
+document.addEventListener('DOMContentLoaded', () => {
+    const d = document.querySelector('[name=data_arrivo]');
+    if (!d.value) d.value = new Date().toISOString().split('T')[0];
+});
+</script>
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Manutenzioni – Allevamento{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-tools" style="color:#c2185b"></i> Manutenzioni</h1>
+</div>
+
+{# Form nuova manutenzione (collapsable) #}
+<div class="cb-card p-3 mb-3">
+    <a class="d-flex justify-content-between align-items-center text-decoration-none text-dark"
+       data-bs-toggle="collapse" href="#nuova-manut">
+        <span class="fw-bold"><i class="bi bi-plus-lg"></i> Nuova manutenzione</span>
+        <i class="bi bi-chevron-down"></i>
+    </a>
+    <div class="collapse" id="nuova-manut">
+        <hr>
+        <form method="POST" action="{{ url_for('allevamento.manutenzioni_nuova') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Box (opzionale)</label>
+                    <select name="box_id" class="form-select form-select-sm">
+                        <option value="">– Generale –</option>
+                        {% for b in boxes %}
+                        <option value="{{ b.id }}">Box {{ b.numero }} ({{ b.capannone.nome }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Capannone (opzionale)</label>
+                    <select name="capannone_id" class="form-select form-select-sm">
+                        <option value="">– –</option>
+                        {% for c in capannoni %}
+                        <option value="{{ c.id }}">{{ c.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Scadenza</label>
+                    <input type="date" name="scadenza" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label fw-bold">Tipo attività</label>
+                    <input type="text" name="tipo_attivita" class="form-control form-control-sm"
+                           placeholder="es. Pulizia trogoli, Controllo impianto..." required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Note</label>
+                    <input type="text" name="note" class="form-control form-control-sm">
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-sm" style="background:#c2185b;color:white">Aggiungi</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# Filtri #}
+<div class="cb-filters">
+    <div class="d-flex gap-2">
+        {% for s, lbl in [('da_fare','Da fare'), ('eseguita','Eseguite'), ('tutte','Tutte')] %}
+        <a href="{{ url_for('allevamento.manutenzioni_index', stato=s) }}"
+           class="btn btn-sm {% if stato_filter == s %}btn-dark{% else %}btn-outline-secondary{% endif %}">{{ lbl }}</a>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="cb-table">
+{% if manutenzioni %}
+<div class="table-responsive">
+    <table class="table table-sm table-hover">
+        <thead><tr>
+            <th>Attività</th><th>Box / Capannone</th><th>Scadenza</th>
+            <th>Stato</th><th>Eseguita il</th><th>Note</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for m in manutenzioni %}
+        {% set scaduta = m.scadenza and m.scadenza < today and m.stato == 'da_fare' %}
+        <tr class="{% if scaduta %}table-danger{% endif %}">
+            <td><strong>{{ m.tipo_attivita }}</strong></td>
+            <td>
+                {% if m.box %}Box {{ m.box.numero }}{% elif m.capannone %}{{ m.capannone.nome }}{% else %}Generale{% endif %}
+            </td>
+            <td>{{ m.scadenza.strftime('%d/%m/%Y') if m.scadenza else '–' }}
+                {% if scaduta %}<span class="badge bg-danger ms-1">Scaduta</span>{% endif %}
+            </td>
+            <td><span class="badge {% if m.stato == 'da_fare' %}bg-warning text-dark{% else %}bg-success{% endif %}">{{ m.stato|replace('_',' ') }}</span></td>
+            <td>{{ m.data_esecuzione.strftime('%d/%m/%Y') if m.data_esecuzione else '–' }}</td>
+            <td class="small text-muted">{{ m.note or '' }}</td>
+            <td>
+                {% if m.stato == 'da_fare' %}
+                <form method="POST" action="{{ url_for('allevamento.manutenzioni_esegui', id=m.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-success">
+                        <i class="bi bi-check-lg"></i>
+                    </button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="cb-empty"><p>Nessuna manutenzione.</p></div>
+{% endif %}
+</div>
+{% endblock %}
