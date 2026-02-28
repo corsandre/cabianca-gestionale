@@ -5,11 +5,12 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app import db
 from app.models import Transaction, Category, RevenueStream, Contact, Tag
-from app.utils.decorators import write_required
+from app.utils.decorators import write_required, section_required
 
 ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "webp"}
 
 bp = Blueprint("movimenti", __name__, url_prefix="/movimenti")
+bp.before_request(section_required("finanza"))
 
 
 @bp.route("/")

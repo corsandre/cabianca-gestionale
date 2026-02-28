@@ -17,11 +17,12 @@ from app.services.reconciliation import (
     get_available_transactions, create_transaction_from_rule,
 )
 from app.services.rules_engine import apply_specific_rules
-from app.utils.decorators import write_required
+from app.utils.decorators import write_required, section_required
 
 logger = logging.getLogger(__name__)
 
 bp = Blueprint("banca", __name__, url_prefix="/banca")
+bp.before_request(section_required("finanza"))
 
 
 @bp.route("/")

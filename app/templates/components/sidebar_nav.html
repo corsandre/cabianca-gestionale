@@ -1,67 +1,133 @@
 <ul class="nav flex-column cb-nav">
+    <!-- CRUSCOTTO (fuori dai gruppi) -->
     <li class="nav-item">
         <a class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
             <i class="bi bi-grid-1x2"></i> Cruscotto
         </a>
     </li>
-    <li class="nav-item">
-        <a class="nav-link {% if request.blueprint == 'prima_nota' %}active{% endif %}" href="{{ url_for('prima_nota.index') }}">
-            <i class="bi bi-journal-text"></i> Libro Mastro
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link {% if request.blueprint == 'fatture' %}active{% endif %}" href="{{ url_for('fatture.index') }}">
-            <i class="bi bi-file-earmark-text"></i> Fatture SDI
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link {% if request.blueprint == 'cassa' %}active{% endif %}" href="{{ url_for('cassa.index') }}">
-            <i class="bi bi-cash-stack"></i> Cassa
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link {% if request.blueprint == 'movimenti' %}active{% endif %}" href="{{ url_for('movimenti.index') }}">
-            <i class="bi bi-pencil-square"></i> Movimenti Manuali
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link {% if request.blueprint == 'ricorrenti' %}active{% endif %}" href="{{ url_for('ricorrenti.index') }}">
-            <i class="bi bi-arrow-repeat"></i> Spese Ricorrenti
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link {% if request.blueprint == 'banca' %}active{% endif %}" href="{{ url_for('banca.index') }}">
-            <i class="bi bi-bank"></i> Banca
-        </a>
-    </li>
+
     <li class="cb-nav-divider"></li>
+
+    {% set finanza_blueprints = ['prima_nota','fatture','cassa','movimenti','ricorrenti','banca','anagrafica','inventario','categorie','analisi','scadenzario','finanza_impostazioni'] %}
+    {% set finanza_active = request.blueprint in finanza_blueprints %}
+    {% if current_user.has_section('finanza') %}
+    <!-- FINANZA GROUP -->
     <li class="nav-item">
-        <a class="nav-link {% if request.blueprint == 'anagrafica' %}active{% endif %}" href="{{ url_for('anagrafica.index') }}">
-            <i class="bi bi-people"></i> Anagrafica
-        </a>
+        <div class="cb-nav-group-header" data-bs-toggle="collapse" data-bs-target="#nav-finanza"
+             aria-expanded="{{ 'true' if finanza_active else 'false' }}" aria-controls="nav-finanza">
+            <span>
+                <span class="cb-nav-group-dot" style="background: var(--cb-green)"></span>
+                Finanza
+            </span>
+            <i class="bi bi-chevron-down cb-nav-group-chevron"></i>
+        </div>
     </li>
+    <div class="collapse {% if finanza_active %}show{% endif %}" id="nav-finanza">
+        <ul class="nav flex-column cb-nav" style="padding-top:0">
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'prima_nota' %}active{% endif %}" href="{{ url_for('prima_nota.index') }}">
+                    <i class="bi bi-journal-text"></i> Libro Mastro
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'fatture' %}active{% endif %}" href="{{ url_for('fatture.index') }}">
+                    <i class="bi bi-file-earmark-text"></i> Fatture SDI
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'cassa' %}active{% endif %}" href="{{ url_for('cassa.index') }}">
+                    <i class="bi bi-cash-stack"></i> Cassa
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'movimenti' %}active{% endif %}" href="{{ url_for('movimenti.index') }}">
+                    <i class="bi bi-pencil-square"></i> Movimenti Manuali
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'ricorrenti' %}active{% endif %}" href="{{ url_for('ricorrenti.index') }}">
+                    <i class="bi bi-arrow-repeat"></i> Spese Ricorrenti
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'banca' %}active{% endif %}" href="{{ url_for('banca.index') }}">
+                    <i class="bi bi-bank"></i> Banca
+                </a>
+            </li>
+            <li class="cb-nav-divider"></li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'anagrafica' %}active{% endif %}" href="{{ url_for('anagrafica.index') }}">
+                    <i class="bi bi-people"></i> Anagrafica
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'inventario' %}active{% endif %}" href="{{ url_for('inventario.index') }}">
+                    <i class="bi bi-box-seam"></i> Inventario
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'categorie' %}active{% endif %}" href="{{ url_for('categorie.index') }}">
+                    <i class="bi bi-tags"></i> Categorie & Tag
+                </a>
+            </li>
+            <li class="cb-nav-divider"></li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'analisi' %}active{% endif %}" href="{{ url_for('analisi.index') }}">
+                    <i class="bi bi-graph-up"></i> Analisi
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'scadenzario' %}active{% endif %}" href="{{ url_for('scadenzario.index') }}">
+                    <i class="bi bi-calendar-check"></i> Scadenzario
+                </a>
+            </li>
+            {% if current_user.role == 'admin' %}
+            <li class="cb-nav-divider"></li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'finanza_impostazioni' %}active{% endif %}" href="{{ url_for('finanza_impostazioni.index') }}">
+                    <i class="bi bi-sliders"></i> Impostazioni Finanza
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% set allevamento_active = request.blueprint == 'allevamento' %}
+    {% if current_user.has_section('allevamento') %}
+    <!-- ALLEVAMENTO GROUP -->
     <li class="nav-item">
-        <a class="nav-link {% if request.blueprint == 'inventario' %}active{% endif %}" href="{{ url_for('inventario.index') }}">
-            <i class="bi bi-box-seam"></i> Inventario
-        </a>
+        <div class="cb-nav-group-header" data-bs-toggle="collapse" data-bs-target="#nav-allevamento"
+             aria-expanded="{{ 'true' if allevamento_active else 'false' }}" aria-controls="nav-allevamento">
+            <span>
+                <span class="cb-nav-group-dot" style="background: #c2185b"></span>
+                Allevamento Suini
+            </span>
+            <i class="bi bi-chevron-down cb-nav-group-chevron"></i>
+        </div>
     </li>
-    <li class="nav-item">
-        <a class="nav-link {% if request.blueprint == 'categorie' %}active{% endif %}" href="{{ url_for('categorie.index') }}">
-            <i class="bi bi-tags"></i> Categorie & Tag
-        </a>
-    </li>
+    <div class="collapse {% if allevamento_active %}show{% endif %}" id="nav-allevamento">
+        <ul class="nav flex-column cb-nav" style="padding-top:0">
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'allevamento.index' %}active{% endif %}" href="{{ url_for('allevamento.index') }}">
+                    <i class="bi bi-house-heart"></i> Panoramica
+                </a>
+            </li>
+            {% if current_user.role == 'admin' %}
+            <li class="cb-nav-divider"></li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'allevamento.impostazioni' %}active{% endif %}" href="{{ url_for('allevamento.impostazioni') }}">
+                    <i class="bi bi-sliders"></i> Impostazioni Allevamento
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+
     <li class="cb-nav-divider"></li>
-    <li class="nav-item">
-        <a class="nav-link {% if request.blueprint == 'analisi' %}active{% endif %}" href="{{ url_for('analisi.index') }}">
-            <i class="bi bi-graph-up"></i> Analisi
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link {% if request.blueprint == 'scadenzario' %}active{% endif %}" href="{{ url_for('scadenzario.index') }}">
-            <i class="bi bi-calendar-check"></i> Scadenzario
-        </a>
-    </li>
-    <li class="cb-nav-divider"></li>
+
+    <!-- IMPOSTAZIONI GENERALI (solo admin, fuori dai gruppi) -->
     {% if current_user.role == 'admin' %}
     <li class="nav-item">
         <a class="nav-link {% if request.blueprint == 'impostazioni' %}active{% endif %}" href="{{ url_for('impostazioni.index') }}">

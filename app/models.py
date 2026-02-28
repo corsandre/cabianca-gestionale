@@ -16,6 +16,17 @@ class User(UserMixin, db.Model):
     telegram_chat_id = db.Column(db.String(50))
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    sections = db.Column(db.Text, default='["finanza"]')
+
+    def has_section(self, section):
+        """Returns True if user has access to the given section. Admins always have access."""
+        import json
+        if self.role == "admin":
+            return True
+        try:
+            return section in json.loads(self.sections or '["finanza"]')
+        except (ValueError, TypeError):
+            return section == "finanza"
 
 
 # === CONTACTS (Clienti + Fornitori) ===

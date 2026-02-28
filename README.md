@@ -2,23 +2,35 @@
 
 Applicazione gestionale per **Fattoria Ca Bianca** - sistema di contabilita, fatturazione elettronica e gestione aziendale.
 
-## Funzionalita
+## Sezioni
+
+L'applicazione e' strutturata in sezioni indipendenti, ciascuna con tema visivo dedicato e accesso per utente configurabile.
+
+### Finanza (tema verde)
 
 - **Cruscotto** - Panoramica entrate/uscite, grafici, scadenze
 - **Prima Nota** - Registro cronologico di tutti i movimenti con filtri avanzati
 - **Fatture SDI** - Upload e parsing automatico fatture elettroniche XML (FatturaPA)
 - **Registratore di Cassa** - Integrazione con 4CloudOffice per corrispettivi giornalieri
 - **Movimenti Manuali** - Registrazione entrate/uscite extra-contabili con allegati
+- **Spese Ricorrenti** - Generazione automatica di transazioni periodiche
+- **Banca** - Import CBI, riconciliazione automatica/manuale, confronto saldo banca vs contabile
 - **Anagrafica** - Gestione clienti (privati, B2B, scuole) e fornitori
 - **Inventario** - Prodotti, giacenze, movimenti di magazzino, alert scorte
 - **Categorie & Tag** - Categorizzazione flessibile dei movimenti
 - **Analisi** - Report con filtro ufficiali/extra-contabili/tutti, grafici per categoria e flusso di ricavo
 - **Scadenzario** - Gestione scadenze pagamenti
-- **Riconciliazione Bancaria** - Import CBI, abbinamento automatico (regole, SDI, manuali), riconciliazione manuale a due colonne con ricerca AJAX, confronto saldo banca vs contabile, storico saldi giornalieri
+
+### Allevamento Suini (tema rosa) — scaffold
+
+- Sezione in sviluppo
+
+## Funzionalita trasversali
+
 - **Esportazione** - CSV per il commercialista
 - **Notifiche Telegram** - Alert scadenze, scorte basse, backup
 - **Backup automatico** - Google Drive, giornaliero
-- **Multi-utente** - Ruoli: admin, operatore, consulente (sola lettura)
+- **Multi-utente** - Ruoli (admin, operatore, consulente) + accesso per sezione configurabile
 - **PWA** - Installabile su smartphone
 
 ## Requisiti
@@ -57,13 +69,24 @@ docker compose up -d         # Avvia
 
 ```
 app/
-  routes/        # Route handlers (un file per sezione)
+  routes/        # Route handlers (un file per blueprint)
+    finanza_impostazioni.py   # Impostazioni sezione Finanza (flussi di ricavo)
+    allevamento.py            # Sezione Allevamento Suini
+    ...                       # Un file per ogni area funzionale
   templates/     # Template HTML Jinja2
+    allevamento/              # Template sezione allevamento
+    finanza_impostazioni/     # Template impostazioni finanza
   services/      # Servizi (SDI parser, Telegram, backup, export)
   static/        # CSS, JS, immagini, uploads
   models.py      # Modelli database SQLAlchemy
   config.py      # Configurazione da .env
+  utils/
+    decorators.py  # role_required, write_required, section_required
 ```
+
+## Controllo accesso sezioni
+
+Ogni utente ha un campo `sections` (JSON) che elenca le sezioni accessibili (es. `["finanza", "allevamento"]`). Gli admin hanno accesso a tutto. Il decorator `section_required` e' registrato come `before_request` su ogni blueprint di sezione.
 
 ## Licenza
 

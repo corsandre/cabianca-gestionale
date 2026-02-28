@@ -57,6 +57,8 @@ def create_app():
     from app.routes.impostazioni import bp as impostazioni_bp
     from app.routes.banca import bp as banca_bp
     from app.routes.ricorrenti import bp as ricorrenti_bp
+    from app.routes.finanza_impostazioni import bp as finanza_impostazioni_bp
+    from app.routes.allevamento import bp as allevamento_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -72,6 +74,8 @@ def create_app():
     app.register_blueprint(impostazioni_bp)
     app.register_blueprint(banca_bp)
     app.register_blueprint(ricorrenti_bp)
+    app.register_blueprint(finanza_impostazioni_bp)
+    app.register_blueprint(allevamento_bp)
 
     # Logging
     logging.basicConfig(level=logging.INFO)
@@ -144,9 +148,18 @@ def create_app():
             message="Si e' verificato un errore. Riprova tra qualche istante."), 500
 
     # Template context
+    BLUEPRINT_SECTION_MAP = {
+        'prima_nota': 'finanza', 'fatture': 'finanza', 'cassa': 'finanza',
+        'movimenti': 'finanza', 'anagrafica': 'finanza', 'inventario': 'finanza',
+        'categorie': 'finanza', 'analisi': 'finanza', 'scadenzario': 'finanza',
+        'banca': 'finanza', 'ricorrenti': 'finanza', 'finanza_impostazioni': 'finanza',
+        'allevamento': 'allevamento',
+    }
+
     @app.context_processor
     def inject_globals():
-        return {"app_name": "Ca Bianca Gestionale"}
+        current_section = BLUEPRINT_SECTION_MAP.get(request.blueprint, 'finanza')
+        return {"app_name": "Ca Bianca Gestionale", "current_section": current_section}
 
     # Create tables and seed data on first run
     with app.app_context():
@@ -176,6 +189,7 @@ def _init_db(app):
         ("bank_transactions", "ignore_reason_id", "INTEGER REFERENCES ignore_reasons(id)"),
         ("transactions", "recurring_expense_id", "INTEGER REFERENCES recurring_expenses(id)"),
         ("bank_transactions", "description", "TEXT"),
+        ("users", "sections", "TEXT DEFAULT '[\"finanza\"]'"),
     ]
     for table, col, col_type in _migrate_columns:
         try:
@@ -183,6 +197,13 @@ def _init_db(app):
             db.session.commit()
         except sqlalchemy.exc.OperationalError:
             db.session.rollback()  # Column already exists
+
+    # Backfill: ensure existing users have sections set
+    try:
+        db.session.execute(sqlalchemy.text("UPDATE users SET sections = '[\"finanza\"]' WHERE sections IS NULL"))
+        db.session.commit()
+    except sqlalchemy.exc.OperationalError:
+        db.session.rollback()
 
     # Indici per prestazioni query frequenti
     _indexes = [

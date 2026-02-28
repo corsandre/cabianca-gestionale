@@ -3,8 +3,10 @@ from flask import Blueprint, render_template, request
 from flask_login import login_required
 from app import db
 from app.models import Transaction, Category, RevenueStream, Tag, BankTransaction
+from app.utils.decorators import section_required
 
 bp = Blueprint("prima_nota", __name__, url_prefix="/prima-nota")
+bp.before_request(section_required("finanza"))
 
 
 @bp.route("/")

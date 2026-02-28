@@ -2,9 +2,10 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from app import db
 from app.models import Category, Tag
-from app.utils.decorators import write_required, admin_required
+from app.utils.decorators import write_required, admin_required, section_required
 
 bp = Blueprint("categorie", __name__, url_prefix="/categorie")
+bp.before_request(section_required("finanza"))
 
 
 @bp.route("/")

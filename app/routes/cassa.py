@@ -6,9 +6,10 @@ from flask_login import login_required
 from app import db
 from app.models import CashRegisterDaily, Transaction
 from app.services.cloud_office import sync_cash_register, REPARTI
-from app.utils.decorators import write_required
+from app.utils.decorators import write_required, section_required
 
 bp = Blueprint("cassa", __name__, url_prefix="/cassa")
+bp.before_request(section_required("finanza"))
 
 
 def _parse_details(record):

@@ -4,9 +4,10 @@ from flask_login import login_required, current_user
 from app import db
 from app.models import RecurringExpense, Transaction, Category, RevenueStream, Contact
 from app.services.recurring_generator import generate_for_template
-from app.utils.decorators import write_required
+from app.utils.decorators import write_required, section_required
 
 bp = Blueprint("ricorrenti", __name__, url_prefix="/ricorrenti")
+bp.before_request(section_required("finanza"))
 
 FREQ_LABELS = {
     "mensile": "Mensile",

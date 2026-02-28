@@ -6,11 +6,12 @@ from flask_login import login_required, current_user
 from app import db
 from app.models import SdiInvoice, Transaction, BankTransaction
 from app.services.sdi_importer import import_sdi_xml
-from app.utils.decorators import write_required
+from app.utils.decorators import write_required, section_required
 
 logger = logging.getLogger(__name__)
 
 bp = Blueprint("fatture", __name__, url_prefix="/fatture")
+bp.before_request(section_required("finanza"))
 
 
 @bp.route("/")

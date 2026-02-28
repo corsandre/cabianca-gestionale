@@ -6,8 +6,10 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from app import db
 from app.models import Transaction, Category, RevenueStream
+from app.utils.decorators import section_required
 
 bp = Blueprint("analisi", __name__, url_prefix="/analisi")
+bp.before_request(section_required("finanza"))
 
 
 def _official_filter(filter_type):

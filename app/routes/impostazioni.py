@@ -1,8 +1,9 @@
+import json
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 import bcrypt
 from app import db
-from app.models import User, RevenueStream
+from app.models import User
 from app.utils.decorators import admin_required
 
 bp = Blueprint("impostazioni", __name__, url_prefix="/impostazioni")
@@ -13,8 +14,7 @@ bp = Blueprint("impostazioni", __name__, url_prefix="/impostazioni")
 @admin_required
 def index():
     users = User.query.order_by(User.username).all()
-    streams = RevenueStream.query.order_by(RevenueStream.name).all()
-    return render_template("impostazioni/index.html", users=users, streams=streams)
+    return render_template("impostazioni/index.html", users=users)
 
 
 @bp.route("/utente/nuovo", methods=["POST"])
@@ -25,6 +25,7 @@ def new_user():
     password = request.form.get("password", "")
     display_name = request.form.get("display_name", "").strip()
     role = request.form.get("role", "operatore")
+    sections = request.form.getlist("sections") or ["finanza"]
 
     if not username or not password:
         flash("Username e password sono obbligatori.", "warning")
@@ -39,6 +40,7 @@ def new_user():
         password_hash=bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
         display_name=display_name or username,
         role=role,
+        sections=json.dumps(sections),
         active=True,
     )
     db.session.add(user)
@@ -78,20 +80,6 @@ def change_password():
     current_user.password_hash = bcrypt.hashpw(new_pw.encode(), bcrypt.gensalt()).decode()
     db.session.commit()
     flash("Password aggiornata.", "success")
-    return redirect(url_for("impostazioni.index"))
-
-
-@bp.route("/flusso/nuovo", methods=["POST"])
-@login_required
-@admin_required
-def new_stream():
-    name = request.form.get("name", "").strip()
-    color = request.form.get("color", "#009d5a")
-    description = request.form.get("description", "").strip()
-    if name:
-        db.session.add(RevenueStream(name=name, color=color, description=description))
-        db.session.commit()
-        flash("Flusso di ricavo creato.", "success")
     return redirect(url_for("impostazioni.index"))
 
 

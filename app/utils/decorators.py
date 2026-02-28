@@ -24,3 +24,13 @@ def admin_required(f):
 def write_required(f):
     """Admin and operatore can write; consulente is read-only."""
     return role_required("admin", "operatore")(f)
+
+
+def section_required(section):
+    """Restrict access to users who have access to the given section."""
+    def _check():
+        if not current_user.is_authenticated:
+            return  # Let login_required handle this
+        if not current_user.has_section(section):
+            abort(403)
+    return _check

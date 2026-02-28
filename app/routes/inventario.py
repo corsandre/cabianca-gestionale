@@ -3,9 +3,10 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app import db
 from app.models import Product, StockMovement
-from app.utils.decorators import write_required
+from app.utils.decorators import write_required, section_required
 
 bp = Blueprint("inventario", __name__, url_prefix="/inventario")
+bp.before_request(section_required("finanza"))
 
 
 @bp.route("/")
