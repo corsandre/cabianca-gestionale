@@ -190,6 +190,8 @@ def _init_db(app):
         ("transactions", "recurring_expense_id", "INTEGER REFERENCES recurring_expenses(id)"),
         ("bank_transactions", "description", "TEXT"),
         ("users", "sections", "TEXT DEFAULT '[\"finanza\"]'"),
+        ("razioni_giornaliere", "consumo_acqua_litri", "REAL"),
+        ("razioni_giornaliere", "acqua_teorica_litri", "REAL"),
     ]
     for table, col, col_type in _migrate_columns:
         try:
@@ -288,11 +290,26 @@ def _init_db(app):
         "backup_hour": "2",
         "backup_minute": "0",
         "backup_frequency_days": "1",
+        "numero_pasti": "3",
+        "rapporto_ss": "10",
+        "rapporto_liquido": "31",
+        "cisterna_buffer_minuti": "60",
     }
     for key, value in defaults.items():
         if not Setting.query.get(key):
             db.session.add(Setting(key=key, value=value))
     db.session.commit()
+
+    # Seed orari pasto (solo se non esistono)
+    from app.models import OrarioPasto
+    from datetime import time as dt_time
+    try:
+        if OrarioPasto.query.count() == 0:
+            for n, h in [(1, 7), (2, 13), (3, 18)]:
+                db.session.add(OrarioPasto(numero=n, ora=dt_time(h, 0), attivo=True))
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
 
     # Seed allevamento struttura fisica (solo se non esiste)
     from app.models import Capannone, Box, MagazzinoProdotto, CurvaAccrescimento, TabellaSostSiero

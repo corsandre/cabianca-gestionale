@@ -8,6 +8,25 @@
     </a>
 </div>
 
+{# Vista toggle #}
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link {% if vista == 'giornaliera' %}active{% endif %}"
+           href="{{ url_for('allevamento.alimentazione_storico', vista='giornaliera') }}">
+            <i class="bi bi-calendar-day"></i> Riepilogo giornaliero
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if vista == 'pasto' %}active{% endif %}"
+           href="{{ url_for('allevamento.alimentazione_storico', vista='pasto') }}">
+            <i class="bi bi-list-columns"></i> Per pasto
+        </a>
+    </li>
+</ul>
+
+{% set colori = {1: '#1976d2', 2: '#d32f2f', 3: '#388e3c'} %}
+
+{% if vista == 'giornaliera' %}
 <div class="cb-table">
 {% if razioni %}
 <div class="table-responsive">
@@ -17,10 +36,11 @@
             <th class="text-end">Teorica mangime (kg)</th>
             <th class="text-end">Consumo mangime (kg)</th>
             <th class="text-end">Consumo siero (L)</th>
+            <th class="text-end" style="color:#0288d1">Acqua reale (L)</th>
+            <th class="text-end" style="color:#0288d1">Acqua stimata (L)</th>
             <th>Note</th>
         </tr></thead>
         <tbody>
-        {% set colori = {1: '#1976d2', 2: '#d32f2f', 3: '#388e3c'} %}
         {% for r in razioni %}
         <tr>
             <td>{{ r.data.strftime('%d/%m/%Y') }}</td>
@@ -28,6 +48,8 @@
             <td class="text-end">{{ '%.1f'|format(r.razione_teorica_kg) if r.razione_teorica_kg else '–' }}</td>
             <td class="text-end">{{ '%.1f'|format(r.consumo_mangime_kg) if r.consumo_mangime_kg else '–' }}</td>
             <td class="text-end">{{ '%.1f'|format(r.consumo_siero_litri) if r.consumo_siero_litri else '–' }}</td>
+            <td class="text-end" style="color:#0288d1">{{ '%.0f'|format(r.consumo_acqua_litri) if r.consumo_acqua_litri else '–' }}</td>
+            <td class="text-end" style="color:#0288d1">{{ '%.0f'|format(r.acqua_teorica_litri) if r.acqua_teorica_litri else '–' }}</td>
             <td class="small text-muted">{{ r.note or '' }}</td>
         </tr>
         {% endfor %}
@@ -41,4 +63,42 @@
 </div>
 {% endif %}
 </div>
+
+{% else %}
+{# Vista per pasto #}
+<div class="cb-table">
+{% if pasti %}
+<div class="table-responsive">
+    <table class="table table-sm table-hover">
+        <thead><tr>
+            <th>Data</th><th>Pasto</th><th>Linea</th>
+            <th class="text-end">Mangime (kg)</th>
+            <th class="text-end">Siero (L)</th>
+            <th class="text-end" style="color:#0288d1">Acqua (L)</th>
+            <th>Note</th>
+        </tr></thead>
+        <tbody>
+        {% for p in pasti %}
+        <tr>
+            <td>{{ p.data.strftime('%d/%m/%Y') }}</td>
+            <td><span class="badge bg-secondary">P{{ p.numero_pasto }}</span></td>
+            <td><span style="color:{{ colori[p.linea] }};font-weight:bold">Linea {{ p.linea }}</span></td>
+            <td class="text-end">{{ '%.1f'|format(p.consumo_mangime_kg) if p.consumo_mangime_kg else '–' }}</td>
+            <td class="text-end">{{ '%.1f'|format(p.consumo_siero_litri) if p.consumo_siero_litri else '–' }}</td>
+            <td class="text-end" style="color:#0288d1">{{ '%.0f'|format(p.consumo_acqua_litri) if p.consumo_acqua_litri else '–' }}</td>
+            <td class="small text-muted">{{ p.note or '' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="cb-empty">
+    <i class="bi bi-basket d-block"></i>
+    <p>Nessun dato disponibile.</p>
+</div>
+{% endif %}
+</div>
+{% endif %}
+
 {% endblock %}

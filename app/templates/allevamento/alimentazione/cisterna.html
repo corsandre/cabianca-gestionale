@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Logistica Cisterna Siero{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-droplet-half" style="color:#c2185b"></i> Logistica Cisterna Siero</h1>
+    <a href="{{ url_for('allevamento.alimentazione_index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Indietro
+    </a>
+</div>
+
+{% set stato_colori = {'verde': '#388e3c', 'arancio': '#f57c00', 'rosso': '#c62828'} %}
+{% set stato_icone = {'verde': 'bi-check-circle-fill', 'arancio': 'bi-exclamation-triangle-fill', 'rosso': 'bi-x-circle-fill'} %}
+{% set stato_badge = {'verde': 'success', 'arancio': 'warning', 'rosso': 'danger'} %}
+
+{# Finestra consegna siero #}
+<div class="cb-card p-3 mb-3">
+    <h6 class="mb-3"><i class="bi bi-clock-history"></i> Finestra Consegna Siero – Oggi {{ now.strftime('%d/%m/%Y') }}</h6>
+    <p class="small text-muted mb-3">
+        Buffer configurato: <strong>{{ buffer_min }} min</strong> prima del pasto.
+        Il siero deve arrivare entro l'<em>orario limite</em> per lavare la cisterna, caricare e servire.
+    </p>
+
+    {% if pasti_info %}
+    <div class="row g-3">
+        {% for p in pasti_info %}
+        <div class="col-md-4">
+            <div class="p-3 border rounded" style="border-left: 4px solid {{ stato_colori[p.status] }} !important">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="mb-1">Pasto {{ p.numero }}</h6>
+                        <div class="small text-muted">Orario pasto: <strong>{{ p.ora_pasto.strftime('%H:%M') }}</strong></div>
+                        <div class="small text-muted">Consegna entro: <strong>{{ p.ora_limite.strftime('%H:%M') }}</strong></div>
+                    </div>
+                    <i class="bi {{ stato_icone[p.status] }} fs-4" style="color:{{ stato_colori[p.status] }}"></i>
+                </div>
+                <div class="mt-2">
+                    <span class="badge bg-{{ stato_badge[p.status] }}">
+                        {% if p.status == 'verde' %}In tempo
+                        {% elif p.status == 'arancio' %}Finestra ridotta
+                        {% else %}Troppo tardi
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="cb-empty">
+        <i class="bi bi-clock d-block"></i>
+        <p>Nessun pasto attivo configurato.</p>
+        <a href="{{ url_for('allevamento.alimentazione_impostazioni') }}" class="btn btn-sm btn-outline-secondary">
+            Configura orari pasti
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+{# Ordini siero in corso #}
+<div class="cb-card p-3">
+    <h6 class="mb-3"><i class="bi bi-truck"></i> Ordini Siero in Corso</h6>
+    {% if ordini_siero %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover">
+            <thead><tr>
+                <th>Data ordine</th>
+                <th>Fornitore</th>
+                <th class="text-end">Quantità (q)</th>
+                <th>Consegna prevista</th>
+                <th>Stato</th>
+            </tr></thead>
+            <tbody>
+            {% for o in ordini_siero %}
+            {% set oggi_d = now.date() %}
+            {% set is_late = o.data_consegna and o.data_consegna < oggi_d and o.stato != 'validato' %}
+            <tr class="{{ 'table-warning' if is_late else '' }}">
+                <td>{{ o.data_ordine.strftime('%d/%m/%Y') }}</td>
+                <td>{{ o.fornitore or '–' }}</td>
+                <td class="text-end">{{ o.quantita_q }}</td>
+                <td>
+                    {% if o.data_consegna %}
+                    {{ o.data_consegna.strftime('%d/%m/%Y') }}
+                    {% if is_late %}<span class="badge bg-danger ms-1">In ritardo</span>{% endif %}
+                    {% else %}–{% endif %}
+                </td>
+                <td>
+                    {% set badge_map = {'bozza': 'secondary', 'inviato': 'info', 'confermato': 'primary', 'validato': 'success'} %}
+                    <span class="badge bg-{{ badge_map.get(o.stato, 'secondary') }}">{{ o.stato }}</span>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="cb-empty">
+        <i class="bi bi-clipboard d-block"></i>
+        <p>Nessun ordine siero in corso.</p>
+        <a href="{{ url_for('allevamento.ordini_nuovo') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-plus"></i> Nuovo ordine
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

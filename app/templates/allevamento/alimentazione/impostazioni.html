@@ -8,6 +8,80 @@
     </a>
 </div>
 
+{# Orari Pasti #}
+<div class="cb-card p-3 mb-3">
+    <h6 class="mb-3"><i class="bi bi-clock"></i> Orari Pasti</h6>
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="azione" value="orari_pasto">
+        <div class="row g-3 align-items-end mb-3">
+            <div class="col-md-3">
+                <label class="form-label">Numero pasti giornalieri</label>
+                <select name="numero_pasti" class="form-select">
+                    {% for n in [1, 2, 3] %}
+                    <option value="{{ n }}" {% if n == numero_pasti %}selected{% endif %}>{{ n }} pasti</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="row g-3">
+            {% for n in [1, 2, 3] %}
+            {% set op = orari_pasto.get(n) %}
+            <div class="col-md-4">
+                <div class="p-2 border rounded">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <input class="form-check-input" type="checkbox" name="attivo_pasto_{{ n }}" value="1"
+                               id="attivo-pasto-{{ n }}" {% if op and op.attivo %}checked{% endif %}>
+                        <label class="form-check-label fw-bold" for="attivo-pasto-{{ n }}">Pasto {{ n }}</label>
+                    </div>
+                    <input type="time" name="ora_pasto_{{ n }}" class="form-control"
+                           value="{{ op.ora.strftime('%H:%M') if op else '' }}">
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="mt-3">
+            <button type="submit" class="btn btn-sm" style="background:#c2185b;color:white">Salva orari</button>
+        </div>
+    </form>
+</div>
+
+{# Diluizione Pastone (Rapporto SS:Liquido) #}
+<div class="cb-card p-3 mb-3">
+    <h6 class="mb-3"><i class="bi bi-droplet-half"></i> Diluizione Pastone (Rapporto SS:Liquido)</h6>
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="azione" value="parametri_acqua">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Parti SS (es. 10)</label>
+                <input type="number" name="rapporto_ss" class="form-control" step="1" min="1"
+                       id="input-rss" value="{{ rapporto_ss|int }}" oninput="aggiornaPreviw()">
+            </div>
+            <div class="col-auto d-flex align-items-center" style="padding-top:2rem">
+                <span class="fw-bold text-muted">:</span>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Parti Liquido (es. 31)</label>
+                <input type="number" name="rapporto_liquido" class="form-control" step="1" min="1"
+                       id="input-rl" value="{{ rapporto_liquido|int }}" oninput="aggiornaPreviw()">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Buffer cisterna (min)</label>
+                <input type="number" name="cisterna_buffer_minuti" class="form-control" step="5" min="0"
+                       value="{{ buffer_min }}">
+            </div>
+        </div>
+        <div class="mt-2 p-2 bg-light rounded small" id="preview-acqua">
+            Con 100 kg mangime + 100 L siero ({{ perc_ss }}% SS) →
+            <strong id="preview-litri">{{ acqua_preview }}</strong> L acqua da aggiungere
+        </div>
+        <div class="mt-2">
+            <button type="submit" class="btn btn-sm" style="background:#c2185b;color:white">Salva parametri acqua</button>
+        </div>
+    </form>
+</div>
+
 {# Parametri siero #}
 <div class="cb-card p-3 mb-3">
     <h6 class="mb-3">Parametri Siero</h6>
@@ -84,6 +158,19 @@
 
 {% block extra_js %}
 <script>
+const PERC_SS_SIERO = {{ perc_ss }} / 100.0;
+
+function aggiornaPreviw() {
+    const rss = parseFloat(document.getElementById('input-rss').value) || 10;
+    const rl = parseFloat(document.getElementById('input-rl').value) || 31;
+    const mangime = 100, siero = 100;
+    const ssTotale = mangime + siero * PERC_SS_SIERO;
+    const liquidoTotale = ssTotale * (rl / rss);
+    const acquaDaSiero = siero * (1 - PERC_SS_SIERO);
+    const acqua = Math.max(0, liquidoTotale - acquaDaSiero);
+    document.getElementById('preview-litri').textContent = acqua.toFixed(1);
+}
+
 function aggiungiRigaSiero() {
     const tbody = document.querySelector('#tab-siero tbody');
     const tr = document.createElement('tr');

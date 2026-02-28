@@ -6,7 +6,8 @@ from app import db
 from app.models import (
     Allarme, Box, BoxCiclo, Capannone, ConsegnaAlimentare, CurvaAccrescimento,
     EventoCiclo, InappetenzaBox, LottoProduttivo, MagazzinoProdotto,
-    ManutenzioneBox, OrdineAlimentare, RazioneGiornaliera, Setting,
+    ManutenzioneBox, OrdineAlimentare, OrarioPasto, RazionePasto,
+    RazioneGiornaliera, Setting,
     TabellaSostSiero, TrattamentoSanitario, User,
 )
 from app.utils.decorators import section_required, write_required
@@ -70,7 +71,7 @@ def _perc_siero_da_eta(eta_gg):
 
 
 def _calcola_razioni_linea(linea):
-    """Calcola razione teorica totale per una linea (kg mangime + litri siero)."""
+    """Calcola razione teorica totale per una linea (kg mangime, litri siero, litri acqua)."""
     oggi = date.today()
     # Box attivi sulla linea
     boxes_linea = Box.query.filter_by(linea_alimentazione=linea).all()
@@ -109,7 +110,10 @@ def _calcola_razioni_linea(linea):
         totale_mangime_kg += mangime_kg
         totale_siero_litri += siero_litri
 
-    return round(totale_mangime_kg, 1), round(totale_siero_litri, 1)
+    totale_mangime_kg = round(totale_mangime_kg, 1)
+    totale_siero_litri = round(totale_siero_litri, 1)
+    totale_acqua_litri = _calcola_acqua(totale_mangime_kg, totale_siero_litri)
+    return totale_mangime_kg, totale_siero_litri, totale_acqua_litri
 
 
 def _get_setting_float(key, default):
@@ -118,6 +122,26 @@ def _get_setting_float(key, default):
         return float(s.value) if s else default
     except (TypeError, ValueError):
         return default
+
+
+def _calcola_acqua(mangime_kg, siero_litri):
+    """Calcola acqua aggiuntiva (L) necessaria dal rapporto SS:Liquido.
+
+    Formula:
+      ss_totale = mangime_kg + siero_litri * (perc_ss/100)
+      liquido_totale = ss_totale * (rapporto_liquido / rapporto_ss)
+      acqua_da_siero = siero_litri * (1 - perc_ss/100)
+      acqua_aggiuntiva = max(0, liquido_totale - acqua_da_siero)
+    """
+    rapporto_ss = _get_setting_float("rapporto_ss", 10.0)
+    rapporto_liquido = _get_setting_float("rapporto_liquido", 31.0)
+    perc_ss = _get_setting_float("allevamento_perc_ss_siero", 6.0) / 100.0
+    if rapporto_ss <= 0:
+        return 0.0
+    ss_totale = mangime_kg + siero_litri * perc_ss
+    liquido_totale = ss_totale * (rapporto_liquido / rapporto_ss)
+    acqua_da_siero = siero_litri * (1.0 - perc_ss)
+    return round(max(0.0, liquido_totale - acqua_da_siero), 1)
 
 
 def _genera_lotto_id():
@@ -501,66 +525,168 @@ def sanita_storico():
 @login_required
 def alimentazione_index():
     oggi = date.today()
+    orari_pasto = OrarioPasto.query.filter_by(attivo=True).order_by(OrarioPasto.numero).all()
     razioni = {}
     for linea in [1, 2, 3]:
-        mangime, siero = _calcola_razioni_linea(linea)
+        mangime, siero, acqua = _calcola_razioni_linea(linea)
         razione_db = RazioneGiornaliera.query.filter_by(data=oggi, linea=linea).first()
+        pasti_oggi = RazionePasto.query.filter_by(data=oggi, linea=linea).order_by(RazionePasto.numero_pasto).all()
         razioni[linea] = {
             "teorica_mangime": mangime,
             "teorica_siero": siero,
+            "teorica_acqua": acqua,
             "consumo_mangime": razione_db.consumo_mangime_kg if razione_db else None,
             "consumo_siero": razione_db.consumo_siero_litri if razione_db else None,
+            "consumo_acqua": razione_db.consumo_acqua_litri if razione_db else None,
             "note": razione_db.note if razione_db else "",
+            "pasti": pasti_oggi,
         }
     return render_template("allevamento/alimentazione/index.html",
-                           razioni=razioni, oggi=oggi)
+                           razioni=razioni, oggi=oggi, orari_pasto=orari_pasto)
 
 
 @bp.route("/alimentazione/consumi", methods=["GET", "POST"])
 @login_required
 @write_required
 def alimentazione_consumi():
+    """Redirect al form pasti multipli (legacy: mantiene compatibilità URL)."""
+    return redirect(url_for("allevamento.alimentazione_consumi_pasto"))
+
+
+@bp.route("/alimentazione/consumi/pasto", methods=["GET", "POST"])
+@login_required
+@write_required
+def alimentazione_consumi_pasto():
     oggi = date.today()
+    numero_pasti = int(_get_setting_float("numero_pasti", 3))
+    orari_pasto = {op.numero: op for op in OrarioPasto.query.filter_by(attivo=True).order_by(OrarioPasto.numero).all()}
+
     if request.method == "POST":
         data_str = request.form.get("data", str(oggi))
         data_razione = date.fromisoformat(data_str)
+
+        for pasto in range(1, numero_pasti + 1):
+            for linea in [1, 2, 3]:
+                mangime_s = request.form.get(f"mangime_{pasto}_{linea}", "").strip()
+                siero_s = request.form.get(f"siero_{pasto}_{linea}", "").strip()
+                acqua_s = request.form.get(f"acqua_{pasto}_{linea}", "").strip()
+                note_s = request.form.get(f"note_{pasto}_{linea}", "").strip()
+                if not mangime_s and not siero_s and not acqua_s:
+                    continue
+                mangime_val = float(mangime_s) if mangime_s else None
+                siero_val = float(siero_s) if siero_s else None
+                acqua_val = float(acqua_s) if acqua_s else None
+
+                rp = RazionePasto.query.filter_by(data=data_razione, numero_pasto=pasto, linea=linea).first()
+                if rp is None:
+                    rp = RazionePasto(data=data_razione, numero_pasto=pasto, linea=linea,
+                                      created_by=current_user.id)
+                    db.session.add(rp)
+                rp.consumo_mangime_kg = mangime_val
+                rp.consumo_siero_litri = siero_val
+                rp.consumo_acqua_litri = acqua_val
+                rp.note = note_s
+
+        db.session.flush()
+
+        # Aggiorna RazioneGiornaliera aggregata per ogni linea
         for linea in [1, 2, 3]:
-            mangime_s = request.form.get(f"mangime_{linea}", "").strip()
-            siero_s = request.form.get(f"siero_{linea}", "").strip()
-            note_s = request.form.get(f"note_{linea}", "").strip()
-            if not mangime_s and not siero_s:
+            pasti_linea = RazionePasto.query.filter_by(data=data_razione, linea=linea).all()
+            if not pasti_linea:
                 continue
-            mangime_val = float(mangime_s) if mangime_s else None
-            siero_val = float(siero_s) if siero_s else None
-            teorica_m, teorica_s = _calcola_razioni_linea(linea)
-            razione = RazioneGiornaliera.query.filter_by(data=data_razione, linea=linea).first()
-            if razione is None:
-                razione = RazioneGiornaliera(data=data_razione, linea=linea)
-                db.session.add(razione)
-            razione.razione_teorica_kg = teorica_m
-            razione.consumo_mangime_kg = mangime_val
-            razione.consumo_siero_litri = siero_val
-            razione.note = note_s
+            sum_mangime = sum(p.consumo_mangime_kg or 0 for p in pasti_linea)
+            sum_siero = sum(p.consumo_siero_litri or 0 for p in pasti_linea)
+            sum_acqua = sum(p.consumo_acqua_litri or 0 for p in pasti_linea)
+            teorica_m, teorica_s, teorica_a = _calcola_razioni_linea(linea)
+
+            rg = RazioneGiornaliera.query.filter_by(data=data_razione, linea=linea).first()
+            if rg is None:
+                rg = RazioneGiornaliera(data=data_razione, linea=linea)
+                db.session.add(rg)
+            rg.razione_teorica_kg = teorica_m
+            rg.consumo_mangime_kg = sum_mangime if sum_mangime else None
+            rg.consumo_siero_litri = sum_siero if sum_siero else None
+            rg.consumo_acqua_litri = sum_acqua if sum_acqua else None
+            rg.acqua_teorica_litri = teorica_a
+
         db.session.commit()
         flash("Consumi registrati.", "success")
         return redirect(url_for("allevamento.alimentazione_index"))
 
-    # Pre-calcola razioni teoriche per il form
+    # GET: pre-carica razioni teoriche e pasti esistenti per oggi
     razioni_teoriche = {}
+    pasti_esistenti = {}
     for linea in [1, 2, 3]:
-        m, s = _calcola_razioni_linea(linea)
-        razioni_teoriche[linea] = {"mangime": m, "siero": s}
-    return render_template("allevamento/alimentazione/consumi.html",
-                           oggi=oggi, razioni_teoriche=razioni_teoriche)
+        m, s, a = _calcola_razioni_linea(linea)
+        razioni_teoriche[linea] = {"mangime": m, "siero": s, "acqua": a}
+        for pasto in range(1, numero_pasti + 1):
+            rp = RazionePasto.query.filter_by(data=oggi, numero_pasto=pasto, linea=linea).first()
+            if rp:
+                pasti_esistenti[(pasto, linea)] = rp
+
+    rapporto_ss = _get_setting_float("rapporto_ss", 10.0)
+    rapporto_liquido = _get_setting_float("rapporto_liquido", 31.0)
+    perc_ss_siero = _get_setting_float("allevamento_perc_ss_siero", 6.0)
+
+    return render_template("allevamento/alimentazione/consumi_pasto.html",
+                           oggi=oggi, numero_pasti=numero_pasti,
+                           orari_pasto=orari_pasto,
+                           razioni_teoriche=razioni_teoriche,
+                           pasti_esistenti=pasti_esistenti,
+                           rapporto_ss=rapporto_ss,
+                           rapporto_liquido=rapporto_liquido,
+                           perc_ss_siero=perc_ss_siero)
 
 
 @bp.route("/alimentazione/storico")
 @login_required
 def alimentazione_storico():
+    vista = request.args.get("vista", "giornaliera")
     razioni = RazioneGiornaliera.query.order_by(
         RazioneGiornaliera.data.desc(), RazioneGiornaliera.linea
     ).limit(90).all()
-    return render_template("allevamento/alimentazione/storico.html", razioni=razioni)
+    pasti = RazionePasto.query.order_by(
+        RazionePasto.data.desc(), RazionePasto.linea, RazionePasto.numero_pasto
+    ).limit(270).all()
+    return render_template("allevamento/alimentazione/storico.html",
+                           razioni=razioni, pasti=pasti, vista=vista)
+
+
+@bp.route("/alimentazione/cisterna")
+@login_required
+def alimentazione_cisterna():
+    from datetime import time as dt_time
+    orari = OrarioPasto.query.order_by(OrarioPasto.numero).all()
+    buffer_min = int(_get_setting_float("cisterna_buffer_minuti", 60))
+
+    now = datetime.now()
+    pasti_info = []
+    for op in orari:
+        if not op.attivo:
+            continue
+        ora_limite = datetime.combine(now.date(), op.ora)
+        ora_limite -= timedelta(minutes=buffer_min)
+        if now < ora_limite:
+            status = "verde"
+        elif now < datetime.combine(now.date(), op.ora):
+            status = "arancio"
+        else:
+            status = "rosso"
+        pasti_info.append({
+            "numero": op.numero,
+            "ora_pasto": op.ora,
+            "ora_limite": ora_limite.time(),
+            "status": status,
+        })
+
+    ordini_siero = OrdineAlimentare.query.filter(
+        OrdineAlimentare.tipo == "siero",
+        OrdineAlimentare.stato.in_(["bozza", "inviato", "confermato"]),
+    ).order_by(OrdineAlimentare.data_consegna).limit(10).all()
+
+    return render_template("allevamento/alimentazione/cisterna.html",
+                           pasti_info=pasti_info, ordini_siero=ordini_siero,
+                           buffer_min=buffer_min, now=now)
 
 
 @bp.route("/alimentazione/impostazioni", methods=["GET", "POST"])
@@ -608,13 +734,56 @@ def alimentazione_impostazioni():
             _set_setting("allevamento_perc_ss_siero", perc_ss)
             db.session.commit()
             flash("Parametri siero aggiornati.", "success")
+        elif azione == "orari_pasto":
+            from datetime import time as dt_time
+            numero_pasti_new = int(request.form.get("numero_pasti", 3))
+            _set_setting("numero_pasti", str(numero_pasti_new))
+            for n in range(1, 4):
+                ora_s = request.form.get(f"ora_pasto_{n}", "").strip()
+                attivo = request.form.get(f"attivo_pasto_{n}") == "1"
+                if not ora_s:
+                    continue
+                try:
+                    h, m = map(int, ora_s.split(":"))
+                    op = OrarioPasto.query.get(n)
+                    if op is None:
+                        op = OrarioPasto(numero=n, ora=dt_time(h, m), attivo=attivo)
+                        db.session.add(op)
+                    else:
+                        op.ora = dt_time(h, m)
+                        op.attivo = attivo
+                except (ValueError, TypeError):
+                    continue
+            db.session.commit()
+            flash("Orari pasti aggiornati.", "success")
+        elif azione == "parametri_acqua":
+            rapporto_ss = request.form.get("rapporto_ss", "10").strip()
+            rapporto_liquido = request.form.get("rapporto_liquido", "31").strip()
+            buffer_min = request.form.get("cisterna_buffer_minuti", "60").strip()
+            _set_setting("rapporto_ss", rapporto_ss)
+            _set_setting("rapporto_liquido", rapporto_liquido)
+            _set_setting("cisterna_buffer_minuti", buffer_min)
+            db.session.commit()
+            flash("Parametri acqua/cisterna aggiornati.", "success")
         return redirect(url_for("allevamento.alimentazione_impostazioni"))
 
     curva = CurvaAccrescimento.query.order_by(CurvaAccrescimento.eta_giorni).all()
     tabella_siero = TabellaSostSiero.query.order_by(TabellaSostSiero.eta_min).all()
     perc_ss = _get_setting_float("allevamento_perc_ss_siero", 6.0)
+    orari_pasto = {op.numero: op for op in OrarioPasto.query.order_by(OrarioPasto.numero).all()}
+    numero_pasti = int(_get_setting_float("numero_pasti", 3))
+    rapporto_ss = _get_setting_float("rapporto_ss", 10.0)
+    rapporto_liquido = _get_setting_float("rapporto_liquido", 31.0)
+    buffer_min = int(_get_setting_float("cisterna_buffer_minuti", 60))
+
+    # Anteprima calcolo acqua con 100 kg mangime + 100 L siero
+    acqua_preview = _calcola_acqua(100.0, 100.0)
+
     return render_template("allevamento/alimentazione/impostazioni.html",
-                           curva=curva, tabella_siero=tabella_siero, perc_ss=perc_ss)
+                           curva=curva, tabella_siero=tabella_siero, perc_ss=perc_ss,
+                           orari_pasto=orari_pasto, numero_pasti=numero_pasti,
+                           rapporto_ss=rapporto_ss, rapporto_liquido=rapporto_liquido,
+                           buffer_min=buffer_min, acqua_preview=acqua_preview)
 
 
 def _set_setting(key, value):

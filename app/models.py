@@ -491,9 +491,35 @@ class RazioneGiornaliera(db.Model):
     razione_teorica_kg = db.Column(db.Float)
     consumo_mangime_kg = db.Column(db.Float)
     consumo_siero_litri = db.Column(db.Float)
+    consumo_acqua_litri = db.Column(db.Float)
+    acqua_teorica_litri = db.Column(db.Float)
     note = db.Column(db.Text)
 
     __table_args__ = (db.UniqueConstraint("data", "linea", name="_data_linea_uc"),)
+
+
+class OrarioPasto(db.Model):
+    __tablename__ = "orari_pasto"
+    numero = db.Column(db.Integer, primary_key=True)  # 1, 2, 3
+    ora = db.Column(db.Time, nullable=False)
+    attivo = db.Column(db.Boolean, default=True)
+
+
+class RazionePasto(db.Model):
+    __tablename__ = "razioni_pasto"
+    id = db.Column(db.Integer, primary_key=True)
+    data = db.Column(db.Date, nullable=False)
+    numero_pasto = db.Column(db.Integer, nullable=False)  # 1, 2, 3
+    linea = db.Column(db.Integer, nullable=False)  # 1, 2, 3
+    consumo_mangime_kg = db.Column(db.Float)
+    consumo_siero_litri = db.Column(db.Float)
+    consumo_acqua_litri = db.Column(db.Float)
+    note = db.Column(db.Text)
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    creator = db.relationship("User")
+    __table_args__ = (db.UniqueConstraint("data", "numero_pasto", "linea", name="_data_pasto_linea_uc"),)
 
 
 # === ALLEVAMENTO - Magazzino & Ordini ===

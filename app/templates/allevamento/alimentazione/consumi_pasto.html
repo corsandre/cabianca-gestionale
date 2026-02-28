@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Inserisci Consumi Pasti – Alimentazione{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-pencil-square" style="color:#c2185b"></i> Inserisci Consumi Pasti</h1>
+    <a href="{{ url_for('allevamento.alimentazione_index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Indietro
+    </a>
+</div>
+
+{% set colori = {1: '#1976d2', 2: '#d32f2f', 3: '#388e3c'} %}
+{% set nomi_linea = {1: 'Linea 1 (CAP 1-2-3)', 2: 'Linea 2 (CAP 4)', 3: 'Linea 3 (CAP 5-6-7)'} %}
+
+<form method="POST" id="form-pasti">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="mb-3 cb-card p-3" style="max-width:300px">
+        <label class="form-label fw-bold">Data</label>
+        <input type="date" name="data" id="input-data" class="form-control" value="{{ oggi }}" required>
+    </div>
+
+    {# Tabs per ogni pasto #}
+    <ul class="nav nav-tabs mb-3" id="tabs-pasti" role="tablist">
+        {% for pasto in range(1, numero_pasti + 1) %}
+        {% set op = orari_pasto.get(pasto) %}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if loop.first %}active{% endif %}" id="tab-pasto-{{ pasto }}-btn"
+                    data-bs-toggle="tab" data-bs-target="#tab-pasto-{{ pasto }}"
+                    type="button" role="tab">
+                <i class="bi bi-clock"></i> Pasto {{ pasto }}
+                {% if op %}<small class="ms-1 text-muted">{{ op.ora.strftime('%H:%M') }}</small>{% endif %}
+            </button>
+        </li>
+        {% endfor %}
+    </ul>
+
+    <div class="tab-content" id="tabs-pasti-content">
+        {% for pasto in range(1, numero_pasti + 1) %}
+        <div class="tab-pane fade {% if loop.first %}show active{% endif %}" id="tab-pasto-{{ pasto }}" role="tabpanel">
+            <div class="row g-3">
+                {% for linea in [1, 2, 3] %}
+                {% set rt = razioni_teoriche[linea] %}
+                {% set ep = pasti_esistenti.get((pasto, linea)) %}
+                <div class="col-md-4">
+                    <div class="cb-card p-3" style="border-left: 4px solid {{ colori[linea] }}">
+                        <h6 style="color:{{ colori[linea] }}" class="mb-1">{{ nomi_linea[linea] }}</h6>
+                        <div class="small text-muted mb-3">
+                            Teorico giornaliero: {{ rt.mangime }} kg mangime · {{ rt.siero }} L siero · <span style="color:#0288d1">{{ rt.acqua }} L acqua</span>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label small">Mangime (kg)</label>
+                                <input type="number" name="mangime_{{ pasto }}_{{ linea }}"
+                                       class="form-control form-control-sm feed-input"
+                                       data-pasto="{{ pasto }}" data-linea="{{ linea }}" data-tipo="mangime"
+                                       step="0.1" min="0"
+                                       value="{{ ep.consumo_mangime_kg if ep and ep.consumo_mangime_kg else '' }}"
+                                       placeholder="{{ (rt.mangime / numero_pasti)|round(1) }}">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">Siero (L)</label>
+                                <input type="number" name="siero_{{ pasto }}_{{ linea }}"
+                                       class="form-control form-control-sm feed-input"
+                                       data-pasto="{{ pasto }}" data-linea="{{ linea }}" data-tipo="siero"
+                                       step="0.1" min="0"
+                                       value="{{ ep.consumo_siero_litri if ep and ep.consumo_siero_litri else '' }}"
+                                       placeholder="{{ (rt.siero / numero_pasti)|round(1) }}">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">Acqua (L)
+                                    <span class="badge ms-1" style="background:#0288d1;font-size:.65rem"
+                                          id="acqua-stimata-{{ pasto }}-{{ linea }}">Stima: —</span>
+                                </label>
+                                <input type="number" name="acqua_{{ pasto }}_{{ linea }}"
+                                       class="form-control form-control-sm"
+                                       id="acqua-input-{{ pasto }}-{{ linea }}"
+                                       step="1" min="0"
+                                       value="{{ ep.consumo_acqua_litri|int if ep and ep.consumo_acqua_litri else '' }}"
+                                       placeholder="Auto">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">Note</label>
+                                <input type="text" name="note_{{ pasto }}_{{ linea }}"
+                                       class="form-control form-control-sm"
+                                       value="{{ ep.note if ep and ep.note else '' }}"
+                                       placeholder="Opzionale">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if pasto == 1 and numero_pasti > 1 %}
+            <div class="mt-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="autoFillPasti()">
+                    <i class="bi bi-copy"></i> Copia Pasto 1 negli altri pasti
+                </button>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="mt-3">
+        <button type="submit" class="btn" style="background:#c2185b;color:white">
+            <i class="bi bi-check-lg"></i> Salva tutti i consumi
+        </button>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const RAPPORTO_SS = {{ rapporto_ss }};
+const RAPPORTO_LIQUIDO = {{ rapporto_liquido }};
+const PERC_SS_SIERO = {{ perc_ss_siero }} / 100.0;
+const NUMERO_PASTI = {{ numero_pasti }};
+
+function calcolaAcqua(mangime, siero) {
+    if (RAPPORTO_SS <= 0) return 0;
+    const ssTotale = mangime + siero * PERC_SS_SIERO;
+    const liquidoTotale = ssTotale * (RAPPORTO_LIQUIDO / RAPPORTO_SS);
+    const acquaDaSiero = siero * (1 - PERC_SS_SIERO);
+    return Math.max(0, liquidoTotale - acquaDaSiero);
+}
+
+function aggiornaStima(pasto, linea) {
+    const mangimeEl = document.querySelector(`[name="mangime_${pasto}_${linea}"]`);
+    const sieroEl = document.querySelector(`[name="siero_${pasto}_${linea}"]`);
+    const badgeEl = document.getElementById(`acqua-stimata-${pasto}-${linea}`);
+    if (!mangimeEl || !sieroEl || !badgeEl) return;
+    const mangime = parseFloat(mangimeEl.value) || 0;
+    const siero = parseFloat(sieroEl.value) || 0;
+    if (mangime > 0 || siero > 0) {
+        const stima = calcolaAcqua(mangime, siero);
+        badgeEl.textContent = `Stima: ${stima.toFixed(0)} L`;
+        badgeEl.style.background = '#0288d1';
+    } else {
+        badgeEl.textContent = 'Stima: —';
+    }
+}
+
+// Attacca listener a tutti gli input feed
+document.querySelectorAll('.feed-input').forEach(el => {
+    el.addEventListener('input', function() {
+        const pasto = this.dataset.pasto;
+        const linea = this.dataset.linea;
+        aggiornaStima(pasto, linea);
+    });
+});
+
+// Inizializza le stime per valori esistenti
+for (let pasto = 1; pasto <= NUMERO_PASTI; pasto++) {
+    for (let linea = 1; linea <= 3; linea++) {
+        aggiornaStima(pasto, linea);
+    }
+}
+
+// Auto-fill pasti 2 e 3 da pasto 1
+function autoFillPasti() {
+    for (let linea = 1; linea <= 3; linea++) {
+        const m1 = document.querySelector(`[name="mangime_1_${linea}"]`);
+        const s1 = document.querySelector(`[name="siero_1_${linea}"]`);
+        const a1 = document.querySelector(`[name="acqua_1_${linea}"]`);
+        const n1 = document.querySelector(`[name="note_1_${linea}"]`);
+        if (!m1) continue;
+        for (let pasto = 2; pasto <= NUMERO_PASTI; pasto++) {
+            const mp = document.querySelector(`[name="mangime_${pasto}_${linea}"]`);
+            const sp = document.querySelector(`[name="siero_${pasto}_${linea}"]`);
+            const ap = document.querySelector(`[name="acqua_${pasto}_${linea}"]`);
+            const np = document.querySelector(`[name="note_${pasto}_${linea}"]`);
+            if (mp) mp.value = m1.value;
+            if (sp) sp.value = s1.value;
+            if (ap) ap.value = a1.value;
+            if (np) np.value = n1 ? n1.value : '';
+            aggiornaStima(pasto, linea);
+        }
+    }
+}
+</script>
+{% endblock %}

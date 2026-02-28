@@ -4,8 +4,11 @@
 <div class="cb-page-header">
     <h1><i class="bi bi-basket" style="color:#c2185b"></i> Alimentazione</h1>
     <div class="d-flex gap-2">
-        <a href="{{ url_for('allevamento.alimentazione_consumi') }}" class="btn btn-sm" style="background:#c2185b;color:white">
+        <a href="{{ url_for('allevamento.alimentazione_consumi_pasto') }}" class="btn btn-sm" style="background:#c2185b;color:white">
             <i class="bi bi-pencil-square"></i> Inserisci Consumi
+        </a>
+        <a href="{{ url_for('allevamento.alimentazione_cisterna') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-droplet-half"></i> Cisterna
         </a>
         <a href="{{ url_for('allevamento.alimentazione_storico') }}" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-clock-history"></i> Storico
@@ -20,6 +23,17 @@
 
 <p class="text-muted small mb-3">Razioni calcolate per oggi: <strong>{{ oggi.strftime('%d/%m/%Y') }}</strong></p>
 
+{% if orari_pasto %}
+<div class="mb-3">
+    <small class="text-muted">
+        <i class="bi bi-clock"></i> Orari pasti:
+        {% for op in orari_pasto %}
+        <span class="badge" style="background:#c2185b">Pasto {{ op.numero }}: {{ op.ora.strftime('%H:%M') }}</span>
+        {% endfor %}
+    </small>
+</div>
+{% endif %}
+
 <div class="row g-3">
 {% for linea, r in razioni.items() %}
 {% set colori = {1: '#1976d2', 2: '#d32f2f', 3: '#388e3c'} %}
@@ -29,19 +43,23 @@
         <h6 class="mb-3" style="color:{{ colori[linea] }}">{{ nomi_linea[linea] }}</h6>
         <table class="table table-sm mb-0">
             <tr>
-                <th>Razione teorica mangime</th>
+                <th>Mangime teorico</th>
                 <td class="text-end fw-bold">{{ r.teorica_mangime }} kg</td>
             </tr>
             <tr>
-                <th>Razione teorica siero</th>
+                <th>Siero teorico</th>
                 <td class="text-end fw-bold">{{ r.teorica_siero }} L</td>
+            </tr>
+            <tr class="table-light">
+                <th>Acqua stimata</th>
+                <td class="text-end fw-bold" style="color:#0288d1">{{ r.teorica_acqua }} L</td>
             </tr>
             {% if r.consumo_mangime is not none %}
             <tr class="{% if r.consumo_mangime and r.teorica_mangime %}
                 {% set diff = ((r.consumo_mangime - r.teorica_mangime) / r.teorica_mangime * 100) if r.teorica_mangime else 0 %}
                 {% if diff|abs > 15 %}table-warning{% endif %}
             {% endif %}">
-                <th>Consumo mangime reale</th>
+                <th>Mangime reale</th>
                 <td class="text-end">{{ r.consumo_mangime }} kg
                     {% if r.consumo_mangime and r.teorica_mangime and r.teorica_mangime > 0 %}
                     {% set pct = ((r.consumo_mangime - r.teorica_mangime) / r.teorica_mangime * 100)|round(1) %}
@@ -54,14 +72,44 @@
             {% endif %}
             {% if r.consumo_siero is not none %}
             <tr>
-                <th>Consumo siero reale</th>
+                <th>Siero reale</th>
                 <td class="text-end">{{ r.consumo_siero }} L</td>
+            </tr>
+            {% endif %}
+            {% if r.consumo_acqua is not none %}
+            <tr>
+                <th>Acqua reale</th>
+                <td class="text-end" style="color:#0288d1">{{ r.consumo_acqua }} L</td>
             </tr>
             {% endif %}
         </table>
         {% if r.note %}<p class="small text-muted mt-2 mb-0">{{ r.note }}</p>{% endif %}
-        {% if r.consumo_mangime is none %}
-        <a href="{{ url_for('allevamento.alimentazione_consumi') }}"
+
+        {# Breakdown per pasto se presenti #}
+        {% if r.pasti %}
+        <div class="mt-2">
+            <small class="text-muted fw-bold">Dettaglio pasti oggi:</small>
+            <table class="table table-sm table-borderless mt-1 mb-0" style="font-size:.8rem">
+                <thead><tr>
+                    <th class="text-muted">Pasto</th>
+                    <th class="text-end text-muted">Mangime</th>
+                    <th class="text-end text-muted">Siero</th>
+                    <th class="text-end" style="color:#0288d1">Acqua</th>
+                </tr></thead>
+                <tbody>
+                {% for p in r.pasti %}
+                <tr>
+                    <td>{{ p.numero_pasto }}</td>
+                    <td class="text-end">{{ '%.1f'|format(p.consumo_mangime_kg) if p.consumo_mangime_kg else '–' }} kg</td>
+                    <td class="text-end">{{ '%.1f'|format(p.consumo_siero_litri) if p.consumo_siero_litri else '–' }} L</td>
+                    <td class="text-end" style="color:#0288d1">{{ '%.1f'|format(p.consumo_acqua_litri) if p.consumo_acqua_litri else '–' }} L</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <a href="{{ url_for('allevamento.alimentazione_consumi_pasto') }}"
            class="btn btn-outline-secondary btn-sm mt-2 w-100">
             <i class="bi bi-pencil"></i> Inserisci consumi
         </a>
