@@ -36,7 +36,7 @@
             <td>{{ l.data_inizio.strftime('%d/%m/%Y') }}</td>
             <td>{{ l.data_chiusura.strftime('%d/%m/%Y') if l.data_chiusura else '–' }}</td>
             <td class="text-end">{{ bc_list|length }}</td>
-            <td class="text-end">{{ bc_list|sum(attribute='capi_presenti') or 0 }}</td>
+            <td class="text-end">{{ bc_list|selectattr('capi_presenti')|sum(attribute='capi_presenti')|int }}</td>
             <td>
                 <span class="badge {% if l.stato == 'attivo' %}bg-success{% else %}bg-secondary{% endif %}">
                     {{ l.stato }}

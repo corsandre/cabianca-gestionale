@@ -204,7 +204,7 @@ function showBoxModal(num, lottoId, capi, stato, cicloId) {
                 <a href="/allevamento/sanita/trattamento/nuovo?bc=${c.id}" class="btn btn-sm btn-outline-warning">
                     <i class="bi bi-capsule"></i> Trattamento
                 </a>
-                <a href="/allevamento/lotti/${lottoId ? c.id : ''}" class="btn btn-sm btn-outline-secondary">
+                <a href="/allevamento/lotti/${c.lotto_db_id}" class="btn btn-sm btn-outline-secondary">
                     <i class="bi bi-list-ul"></i> Dettaglio lotto
                 </a>`;
             } else {

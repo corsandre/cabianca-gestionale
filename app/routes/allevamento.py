@@ -183,11 +183,11 @@ def index():
                            capannoni=capannoni, allarmi_count=allarmi_count)
 
 
-@bp.route("/box/<int:id>/modal")
+@bp.route("/box/<int:numero>/modal")
 @login_required
-def box_modal(id):
-    """API JSON per il modal del box sulla mappa."""
-    box = Box.query.get_or_404(id)
+def box_modal(numero):
+    """API JSON per il modal del box sulla mappa (numero = numero box 1-54)."""
+    box = Box.query.filter_by(numero=numero).first_or_404()
     ciclo = box.cicli.filter(BoxCiclo.stato.in_(["attivo", "in_uscita"])).first()
     data = {
         "numero": box.numero,
@@ -203,6 +203,7 @@ def box_modal(id):
             eta_oggi = ciclo.eta_stimata_gg + (oggi - ciclo.data_accasamento).days
         data["ciclo"] = {
             "id": ciclo.id,
+            "lotto_db_id": ciclo.lotto_id,
             "lotto_id": ciclo.lotto.lotto_id,
             "data_accasamento": ciclo.data_accasamento.strftime("%d/%m/%Y"),
             "capi_iniziali": ciclo.capi_iniziali,
