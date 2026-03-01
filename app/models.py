@@ -432,6 +432,7 @@ class EventoCiclo(db.Model):
     note = db.Column(db.Text)
     operatore_id = db.Column(db.Integer, db.ForeignKey("users.id"))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_scarti = db.Column(db.Boolean, default=False, nullable=False)
 
     operatore = db.relationship("User")
 

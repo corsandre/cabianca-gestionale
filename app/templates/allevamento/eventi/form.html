@@ -61,6 +61,17 @@
         <div class="form-text">Lascia vuoto se il box destinazione non ha ancora un ciclo.</div>
     </div>
 
+    <div class="mb-3 d-none" id="scarti-field">
+        <div class="form-check">
+            <input type="checkbox" name="is_scarti" value="1"
+                   class="form-check-input" id="is-scarti-check">
+            <label class="form-check-label fw-bold text-warning" for="is-scarti-check">
+                <i class="bi bi-exclamation-triangle"></i>
+                Carico scarti (kg contati al 50% nei calcoli economici)
+            </label>
+        </div>
+    </div>
+
     <div class="mb-3">
         <label class="form-label">Note</label>
         <textarea name="note" class="form-control" rows="2"></textarea>
@@ -77,8 +88,11 @@
 <script>
 function aggiornaForm() {
     const tipo = document.getElementById('tipo-evento').value;
-    const destField = document.getElementById('dest-box-field');
-    destField.classList.toggle('d-none', tipo !== 'frazionamento_out');
+    document.getElementById('dest-box-field').classList.toggle('d-none', tipo !== 'frazionamento_out');
+    document.getElementById('scarti-field').classList.toggle('d-none', tipo !== 'uscita_macello');
+    if (tipo !== 'uscita_macello') {
+        document.getElementById('is-scarti-check').checked = false;
+    }
 }
 document.querySelector('[name=data]').value = new Date().toISOString().split('T')[0];
 </script>

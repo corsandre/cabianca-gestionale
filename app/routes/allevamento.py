@@ -505,6 +505,7 @@ def eventi_nuovo():
         peso_totale = float(request.form.get("peso_totale", 0) or 0)
         data_str = request.form.get("data", str(date.today()))
         note = request.form.get("note", "").strip()
+        is_scarti = request.form.get("is_scarti") == "1"
 
         bc = BoxCiclo.query.get_or_404(box_ciclo_id)
         ev = EventoCiclo(
@@ -515,6 +516,7 @@ def eventi_nuovo():
             peso_totale=peso_totale if peso_totale else None,
             note=note,
             operatore_id=current_user.id,
+            is_scarti=is_scarti,
         )
         db.session.add(ev)
 
@@ -1107,12 +1109,21 @@ def report_ciclo(id):
     )
     mortalita_perc = (morti / capi_iniziali_tot * 100) if capi_iniziali_tot else 0
 
-    peso_uscita_tot = sum(
-        e.peso_totale for e in eventi if e.tipo == "uscita_macello" and e.peso_totale
-    )
-    capi_usciti = sum(
-        e.quantita for e in eventi if e.tipo == "uscita_macello" and e.quantita
-    )
+    uscite_normali = [e for e in eventi if e.tipo == "uscita_macello" and not e.is_scarti]
+    uscite_scarti  = [e for e in eventi if e.tipo == "uscita_macello" and e.is_scarti]
+
+    peso_uscita_normale = sum(e.peso_totale for e in uscite_normali if e.peso_totale)
+    capi_usciti_normale = sum(e.quantita for e in uscite_normali if e.quantita)
+
+    peso_uscita_scarti  = sum(e.peso_totale for e in uscite_scarti if e.peso_totale)
+    capi_usciti_scarti  = sum(e.quantita for e in uscite_scarti if e.quantita)
+
+    peso_uscita_effettivo = peso_uscita_normale + peso_uscita_scarti * 0.5
+    capi_usciti_tot = capi_usciti_normale + capi_usciti_scarti
+
+    # Mantenuto per compatibilità template (totale grezzo)
+    peso_uscita_tot = peso_uscita_normale + peso_uscita_scarti
+    capi_usciti = capi_usciti_tot
 
     durata_gg = None
     if lotto.data_chiusura:
@@ -1124,7 +1135,13 @@ def report_ciclo(id):
                            capi_finali=capi_finali, morti=morti,
                            mortalita_perc=mortalita_perc,
                            peso_uscita_tot=peso_uscita_tot,
+                           peso_uscita_normale=peso_uscita_normale,
+                           peso_uscita_scarti=peso_uscita_scarti,
+                           peso_uscita_effettivo=peso_uscita_effettivo,
+                           capi_usciti_normale=capi_usciti_normale,
+                           capi_usciti_scarti=capi_usciti_scarti,
                            capi_usciti=capi_usciti,
+                           capi_usciti_tot=capi_usciti_tot,
                            durata_gg=durata_gg)
 
 

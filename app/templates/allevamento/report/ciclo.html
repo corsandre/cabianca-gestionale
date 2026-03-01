@@ -37,20 +37,45 @@
     </div>
 </div>
 
-{% if peso_uscita_tot and capi_usciti %}
+{% if capi_usciti_tot %}
 <div class="row g-3 mb-4">
-    <div class="col-md-4">
+    <div class="col-6 col-md-3">
         <div class="cb-card p-3 text-center">
-            <div class="fs-3 fw-bold">{{ '%.0f'|format(peso_uscita_tot) }} kg</div>
-            <div class="small text-muted">Peso totale uscita macello</div>
+            <div class="fs-3 fw-bold">{{ '%.0f'|format(peso_uscita_normale) }} kg</div>
+            <div class="small text-muted">Kg normali ({{ capi_usciti_normale }} capi)</div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="cb-card p-3 text-center">
-            <div class="fs-3 fw-bold">{{ '%.1f'|format(peso_uscita_tot / capi_usciti) }} kg</div>
-            <div class="small text-muted">Peso medio uscita</div>
+    {% if capi_usciti_scarti %}
+    <div class="col-6 col-md-3">
+        <div class="cb-card p-3 text-center" style="border-color:#ffc107">
+            <div class="fs-3 fw-bold text-warning">{{ '%.0f'|format(peso_uscita_scarti) }} kg</div>
+            <div class="small text-muted">
+                <i class="bi bi-exclamation-triangle text-warning"></i>
+                Kg scarti reali ({{ capi_usciti_scarti }} capi)
+            </div>
         </div>
     </div>
+    <div class="col-6 col-md-3">
+        <div class="cb-card p-3 text-center" style="border-color:#009d5a">
+            <div class="fs-3 fw-bold" style="color:#009d5a">{{ '%.0f'|format(peso_uscita_effettivo) }} kg</div>
+            <div class="small text-muted">Kg effettivi (scarti ×0.5)</div>
+        </div>
+    </div>
+    {% endif %}
+    <div class="col-6 col-md-3">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-3 fw-bold">{{ capi_usciti_tot }}</div>
+            <div class="small text-muted">Capi usciti totali</div>
+        </div>
+    </div>
+    {% if peso_uscita_normale and capi_usciti_normale %}
+    <div class="col-6 col-md-3">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-3 fw-bold">{{ '%.1f'|format(peso_uscita_normale / capi_usciti_normale) }} kg</div>
+            <div class="small text-muted">Peso medio (normali)</div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endif %}
 
@@ -91,7 +116,13 @@
             {% for e in eventi %}
             <tr>
                 <td>{{ e.data.strftime('%d/%m/%Y') }}</td>
-                <td><span class="badge {% if e.tipo == 'mortalita' %}bg-danger{% elif 'frazionamento' in e.tipo %}bg-warning text-dark{% else %}bg-success{% endif %}">{{ e.tipo|replace('_',' ') }}</span></td>
+                <td>
+                    {% if e.tipo == 'uscita_macello' and e.is_scarti %}
+                    <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> scarti</span>
+                    {% else %}
+                    <span class="badge {% if e.tipo == 'mortalita' %}bg-danger{% elif 'frazionamento' in e.tipo %}bg-warning text-dark{% else %}bg-success{% endif %}">{{ e.tipo|replace('_',' ') }}</span>
+                    {% endif %}
+                </td>
                 <td>{{ e.box_ciclo.box.numero if e.box_ciclo and e.box_ciclo.box else '–' }}</td>
                 <td class="text-end">{{ e.quantita or '–' }}</td>
                 <td class="text-end">{{ '%.1f'|format(e.peso_totale) if e.peso_totale else '–' }}</td>

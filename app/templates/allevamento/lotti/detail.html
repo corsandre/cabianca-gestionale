@@ -79,9 +79,15 @@
             <tr>
                 <td>{{ e.data.strftime('%d/%m/%Y') }}</td>
                 <td>
+                    {% if e.tipo == 'uscita_macello' and e.is_scarti %}
+                    <span class="badge bg-warning text-dark">
+                        <i class="bi bi-exclamation-triangle"></i> uscita scarti
+                    </span>
+                    {% else %}
                     <span class="badge {% if e.tipo == 'mortalita' %}bg-danger{% elif 'frazionamento' in e.tipo %}bg-warning text-dark{% elif e.tipo == 'riaccasamento' %}bg-info text-dark{% else %}bg-success{% endif %}">
                         {{ e.tipo|replace('_', ' ') }}
                     </span>
+                    {% endif %}
                 </td>
                 <td>{{ e.box_ciclo.box.numero if e.box_ciclo and e.box_ciclo.box else '–' }}</td>
                 <td class="text-end">{{ e.quantita or '–' }}</td>

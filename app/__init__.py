@@ -192,6 +192,7 @@ def _init_db(app):
         ("users", "sections", "TEXT DEFAULT '[\"finanza\"]'"),
         ("razioni_giornaliere", "consumo_acqua_litri", "REAL"),
         ("razioni_giornaliere", "acqua_teorica_litri", "REAL"),
+        ("eventi_ciclo", "is_scarti", "INTEGER DEFAULT 0 NOT NULL"),
     ]
     for table, col, col_type in _migrate_columns:
         try:
