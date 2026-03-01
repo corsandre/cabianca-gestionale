@@ -73,6 +73,44 @@
 
     <!-- MOBILE BOTTOM NAV -->
     <nav class="cb-bottomnav d-md-none">
+        {% if request.blueprint == 'allevamento' %}
+        <a href="{{ url_for('allevamento.lotti_index') }}" class="cb-bottomnav-item {% if request.endpoint and 'lotti' in request.endpoint %}active{% endif %}">
+            <i class="bi bi-arrow-repeat"></i><span>Cicli</span>
+        </a>
+        <a href="{{ url_for('allevamento.alimentazione_index') }}" class="cb-bottomnav-item {% if request.endpoint and 'alimentazione' in request.endpoint %}active{% endif %}">
+            <i class="bi bi-basket"></i><span>Alimentazione</span>
+        </a>
+        <div class="dropup d-flex flex-column align-items-center">
+            <button type="button" class="cb-bottomnav-item cb-bottomnav-fab border-0"
+                    data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-plus-lg"></i>
+            </button>
+            <ul class="dropdown-menu mb-1">
+                <li>
+                    <a class="dropdown-item" href="{{ url_for('allevamento.ordini_nuovo') }}">
+                        <i class="bi bi-clipboard-plus me-2"></i>Nuovo ordine
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" href="{{ url_for('allevamento.magazzino_consegna_nuova') }}">
+                        <i class="bi bi-truck me-2"></i>Nuova consegna
+                    </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <a class="dropdown-item text-danger" href="{{ url_for('allevamento.eventi_nuovo') }}">
+                        <i class="bi bi-heartbreak me-2"></i>Registra morte
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <a href="{{ url_for('allevamento.ordini_index') }}" class="cb-bottomnav-item {% if request.endpoint and 'ordini' in request.endpoint %}active{% endif %}">
+            <i class="bi bi-clipboard-check"></i><span>Ordini</span>
+        </a>
+        <a href="{{ url_for('allevamento.magazzino_index') }}" class="cb-bottomnav-item {% if request.endpoint == 'allevamento.magazzino_index' %}active{% endif %}">
+            <i class="bi bi-box-seam"></i><span>Magazzino</span>
+        </a>
+        {% else %}
         <a href="{{ url_for('dashboard.index') }}" class="cb-bottomnav-item {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
             <i class="bi bi-grid"></i><span>Home</span>
         </a>
@@ -88,6 +126,7 @@
         <a href="{{ url_for('fatture.index') }}" class="cb-bottomnav-item {% if request.blueprint == 'fatture' %}active{% endif %}">
             <i class="bi bi-file-earmark-text"></i><span>Fatture</span>
         </a>
+        {% endif %}
     </nav>
     {% else %}
     {% block public_content %}{% endblock %}

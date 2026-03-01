@@ -49,34 +49,36 @@
                         </div>
                         <div class="row g-2">
                             <div class="col-6">
-                                <label class="form-label small">Mangime (kg)</label>
+                                <label class="form-label small">Mangime (kg)
+                                    <span class="badge ms-1" style="background:#0288d1;font-size:.65rem">Stima: {{ (rt.mangime / numero_pasti)|round(1) }} kg</span>
+                                </label>
                                 <input type="number" name="mangime_{{ pasto }}_{{ linea }}"
                                        class="form-control form-control-sm feed-input"
                                        data-pasto="{{ pasto }}" data-linea="{{ linea }}" data-tipo="mangime"
                                        step="0.1" min="0"
                                        value="{{ ep.consumo_mangime_kg if ep and ep.consumo_mangime_kg else '' }}"
-                                       placeholder="{{ (rt.mangime / numero_pasti)|round(1) }}">
+                                       placeholder="">
                             </div>
                             <div class="col-6">
-                                <label class="form-label small">Siero (L)</label>
+                                <label class="form-label small">Siero (L)
+                                    <span class="badge ms-1" style="background:#0288d1;font-size:.65rem">Stima: {{ (rt.siero / numero_pasti)|round(1) }} L</span>
+                                </label>
                                 <input type="number" name="siero_{{ pasto }}_{{ linea }}"
                                        class="form-control form-control-sm feed-input"
                                        data-pasto="{{ pasto }}" data-linea="{{ linea }}" data-tipo="siero"
                                        step="0.1" min="0"
                                        value="{{ ep.consumo_siero_litri if ep and ep.consumo_siero_litri else '' }}"
-                                       placeholder="{{ (rt.siero / numero_pasti)|round(1) }}">
+                                       placeholder="">
                             </div>
                             <div class="col-6">
                                 <label class="form-label small">Acqua (L)
-                                    <span class="badge ms-1" style="background:#0288d1;font-size:.65rem"
-                                          id="acqua-stimata-{{ pasto }}-{{ linea }}">Stima: —</span>
+                                    <span class="badge ms-1" style="background:#0288d1;font-size:.65rem">Stima: {{ (rt.acqua / numero_pasti)|round(0)|int }} L</span>
                                 </label>
                                 <input type="number" name="acqua_{{ pasto }}_{{ linea }}"
                                        class="form-control form-control-sm"
-                                       id="acqua-input-{{ pasto }}-{{ linea }}"
                                        step="1" min="0"
                                        value="{{ ep.consumo_acqua_litri|int if ep and ep.consumo_acqua_litri else '' }}"
-                                       placeholder="Auto">
+                                       placeholder="">
                             </div>
                             <div class="col-6">
                                 <label class="form-label small">Note</label>
@@ -112,51 +114,6 @@
 
 {% block extra_js %}
 <script>
-const RAPPORTO_SS = {{ rapporto_ss }};
-const RAPPORTO_LIQUIDO = {{ rapporto_liquido }};
-const PERC_SS_SIERO = {{ perc_ss_siero }} / 100.0;
-const NUMERO_PASTI = {{ numero_pasti }};
-
-function calcolaAcqua(mangime, siero) {
-    if (RAPPORTO_SS <= 0) return 0;
-    const ssTotale = mangime + siero * PERC_SS_SIERO;
-    const liquidoTotale = ssTotale * (RAPPORTO_LIQUIDO / RAPPORTO_SS);
-    const acquaDaSiero = siero * (1 - PERC_SS_SIERO);
-    return Math.max(0, liquidoTotale - acquaDaSiero);
-}
-
-function aggiornaStima(pasto, linea) {
-    const mangimeEl = document.querySelector(`[name="mangime_${pasto}_${linea}"]`);
-    const sieroEl = document.querySelector(`[name="siero_${pasto}_${linea}"]`);
-    const badgeEl = document.getElementById(`acqua-stimata-${pasto}-${linea}`);
-    if (!mangimeEl || !sieroEl || !badgeEl) return;
-    const mangime = parseFloat(mangimeEl.value) || 0;
-    const siero = parseFloat(sieroEl.value) || 0;
-    if (mangime > 0 || siero > 0) {
-        const stima = calcolaAcqua(mangime, siero);
-        badgeEl.textContent = `Stima: ${stima.toFixed(0)} L`;
-        badgeEl.style.background = '#0288d1';
-    } else {
-        badgeEl.textContent = 'Stima: —';
-    }
-}
-
-// Attacca listener a tutti gli input feed
-document.querySelectorAll('.feed-input').forEach(el => {
-    el.addEventListener('input', function() {
-        const pasto = this.dataset.pasto;
-        const linea = this.dataset.linea;
-        aggiornaStima(pasto, linea);
-    });
-});
-
-// Inizializza le stime per valori esistenti
-for (let pasto = 1; pasto <= NUMERO_PASTI; pasto++) {
-    for (let linea = 1; linea <= 3; linea++) {
-        aggiornaStima(pasto, linea);
-    }
-}
-
 // Auto-fill pasti 2 e 3 da pasto 1
 function autoFillPasti() {
     for (let linea = 1; linea <= 3; linea++) {
@@ -165,7 +122,7 @@ function autoFillPasti() {
         const a1 = document.querySelector(`[name="acqua_1_${linea}"]`);
         const n1 = document.querySelector(`[name="note_1_${linea}"]`);
         if (!m1) continue;
-        for (let pasto = 2; pasto <= NUMERO_PASTI; pasto++) {
+        for (let pasto = 2; pasto <= {{ numero_pasti }}; pasto++) {
             const mp = document.querySelector(`[name="mangime_${pasto}_${linea}"]`);
             const sp = document.querySelector(`[name="siero_${pasto}_${linea}"]`);
             const ap = document.querySelector(`[name="acqua_${pasto}_${linea}"]`);
@@ -174,7 +131,6 @@ function autoFillPasti() {
             if (sp) sp.value = s1.value;
             if (ap) ap.value = a1.value;
             if (np) np.value = n1 ? n1.value : '';
-            aggiornaStima(pasto, linea);
         }
     }
 }

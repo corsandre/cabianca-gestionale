@@ -8,6 +8,10 @@
             <i class="bi bi-bar-chart"></i> Report
         </a>
         {% if lotto.stato == 'attivo' %}
+        <a href="{{ url_for('allevamento.lotti_riaccasamento', id=lotto.id) }}"
+           class="btn btn-sm" style="background:#c2185b;color:white">
+            <i class="bi bi-shuffle"></i> Riaccasamento
+        </a>
         <form method="POST" action="{{ url_for('allevamento.lotti_chiudi', id=lotto.id) }}"
               onsubmit="return confirm('Chiudere il lotto?')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -75,7 +79,7 @@
             <tr>
                 <td>{{ e.data.strftime('%d/%m/%Y') }}</td>
                 <td>
-                    <span class="badge {% if e.tipo == 'mortalita' %}bg-danger{% elif 'frazionamento' in e.tipo %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                    <span class="badge {% if e.tipo == 'mortalita' %}bg-danger{% elif 'frazionamento' in e.tipo %}bg-warning text-dark{% elif e.tipo == 'riaccasamento' %}bg-info text-dark{% else %}bg-success{% endif %}">
                         {{ e.tipo|replace('_', ' ') }}
                     </span>
                 </td>

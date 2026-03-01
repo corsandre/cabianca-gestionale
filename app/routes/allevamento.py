@@ -258,36 +258,46 @@ def lotti_index():
 @login_required
 @write_required
 def lotti_nuovo():
-    boxes = Box.query.order_by(Box.numero).all()
-    # Prefiltra box liberi (senza ciclo attivo)
-    boxes_liberi = [
-        b for b in boxes
-        if not b.cicli.filter(BoxCiclo.stato.in_(["attivo", "in_uscita"])).first()
-    ]
+    all_boxes = Box.query.order_by(Box.numero).all()
+
+    # Mappa box_numero -> info (usata anche nel template)
+    box_map = {}
+    for b in all_boxes:
+        libero = not b.cicli.filter(BoxCiclo.stato.in_(["attivo", "in_uscita"])).first()
+        box_map[b.numero] = {
+            "id": b.id,
+            "capannone": b.capannone.numero,
+            "linea": b.linea_alimentazione,
+            "capienza": int(b.superficie_m2) if b.superficie_m2 else 0,
+            "libero": libero,
+        }
 
     if request.method == "POST":
-        box_ids_raw = request.form.getlist("box_ids")
         data_arrivo_str = request.form.get("data_arrivo", str(date.today()))
-        capi_totali = int(request.form.get("capi_totali", 0))
         peso_totale_bolla = float(request.form.get("peso_totale_bolla", 0) or 0)
         note = request.form.get("note", "").strip()
 
-        if not box_ids_raw:
-            flash("Seleziona almeno un box.", "danger")
+        # Leggi capi per singolo box
+        box_capi = {}
+        for b in all_boxes:
+            val = request.form.get(f"capi_box_{b.id}", "").strip()
+            if val:
+                try:
+                    n = int(val)
+                    if n > 0:
+                        box_capi[b.id] = n
+                except ValueError:
+                    pass
+
+        if not box_capi:
+            flash("Seleziona almeno un box e inserisci i capi.", "danger")
             return render_template("allevamento/lotti/nuovo.html",
-                                   boxes_liberi=boxes_liberi, today=date.today())
+                                   box_map=box_map, today=date.today())
 
-        box_ids = [int(x) for x in box_ids_raw]
+        capi_effettivi = sum(box_capi.values())
         data_arrivo = date.fromisoformat(data_arrivo_str)
-
-        # Calcolo peso medio e età stimata
-        peso_medio = (peso_totale_bolla / capi_totali) if capi_totali > 0 else 0.0
+        peso_medio = (peso_totale_bolla / capi_effettivi) if capi_effettivi > 0 else 0.0
         eta_stimata = _eta_da_peso(peso_medio) if peso_medio > 0 else None
-
-        # Distribuzione capi tra i box
-        n_boxes = len(box_ids)
-        capi_base = capi_totali // n_boxes
-        extra = capi_totali % n_boxes
 
         lotto = LottoProduttivo(
             lotto_id=_genera_lotto_id(),
@@ -300,9 +310,8 @@ def lotti_nuovo():
         db.session.add(lotto)
         db.session.flush()
 
-        for i, bid in enumerate(box_ids):
-            capi_box = capi_base + (1 if i < extra else 0)
-            peso_box = (peso_totale_bolla / capi_totali * capi_box) if capi_totali else 0
+        for bid, capi_box in box_capi.items():
+            peso_box = (peso_totale_bolla / capi_effettivi * capi_box) if capi_effettivi else 0
             bc = BoxCiclo(
                 lotto_id=lotto.id,
                 box_id=bid,
@@ -317,11 +326,11 @@ def lotti_nuovo():
             db.session.add(bc)
 
         db.session.commit()
-        flash(f"Lotto {lotto.lotto_id} creato con {capi_totali} capi in {n_boxes} box.", "success")
+        flash(f"Lotto {lotto.lotto_id} creato con {capi_effettivi} capi in {len(box_capi)} box.", "success")
         return redirect(url_for("allevamento.lotti_detail", id=lotto.id))
 
     return render_template("allevamento/lotti/nuovo.html",
-                           boxes_liberi=boxes_liberi, today=date.today())
+                           box_map=box_map, today=date.today())
 
 
 @bp.route("/lotti/<int:id>")
@@ -336,6 +345,131 @@ def lotti_detail(id):
     ).order_by(EventoCiclo.data.desc()).all() if bc_ids else []
     return render_template("allevamento/lotti/detail.html",
                            lotto=lotto, box_cicli=box_cicli, eventi=eventi)
+
+
+@bp.route("/lotti/<int:id>/riaccasamento", methods=["GET", "POST"])
+@login_required
+@write_required
+def lotti_riaccasamento(id):
+    lotto = LottoProduttivo.query.get_or_404(id)
+    if lotto.stato != "attivo":
+        flash("Il lotto non è attivo.", "warning")
+        return redirect(url_for("allevamento.lotti_detail", id=id))
+
+    all_boxes = Box.query.order_by(Box.numero).all()
+
+    # BoxCiclo attivi/in_uscita del lotto: numero_box -> bc
+    lotto_bc = {
+        bc.box.numero: bc
+        for bc in lotto.box_cicli.filter(BoxCiclo.stato.in_(["attivo", "in_uscita"])).all()
+    }
+
+    # Mappa completa per SVG: numero_box -> info
+    box_map = {}
+    for b in all_boxes:
+        if b.numero in lotto_bc:
+            bc = lotto_bc[b.numero]
+            box_map[b.numero] = {
+                "id": b.id, "bc_id": bc.id,
+                "capannone": b.capannone.numero, "linea": b.linea_alimentazione,
+                "capienza": int(b.superficie_m2) if b.superficie_m2 else 0,
+                "stato": "in_lotto",
+                "capi_presenti": bc.capi_presenti or 0,
+                "peso_medio": bc.peso_medio_iniziale or 0,
+            }
+        else:
+            altro_ciclo = b.cicli.filter(BoxCiclo.stato.in_(["attivo", "in_uscita"])).first()
+            box_map[b.numero] = {
+                "id": b.id, "bc_id": None,
+                "capannone": b.capannone.numero, "linea": b.linea_alimentazione,
+                "capienza": int(b.superficie_m2) if b.superficie_m2 else 0,
+                "stato": "libero" if not altro_ciclo else "occupato",
+                "capi_presenti": 0, "peso_medio": 0,
+            }
+
+    capi_totali_prima = sum(bc.capi_presenti or 0 for bc in lotto_bc.values())
+
+    if request.method == "POST":
+        data_str = request.form.get("data_riaccasamento", str(date.today()))
+        data_riaccasamento = date.fromisoformat(data_str)
+
+        # Aggiorna box già nel lotto
+        for box_num, bc in lotto_bc.items():
+            val_capi = request.form.get(f"capi_bc_{bc.id}", "").strip()
+            val_peso = request.form.get(f"peso_bc_{bc.id}", "").strip()
+            if not val_capi:
+                continue
+            nuovi_capi = int(val_capi)
+            nuovi_peso = float(val_peso) if val_peso else None
+            capi_prima = bc.capi_presenti or 0
+
+            bc.capi_presenti = nuovi_capi
+            bc.stato = "chiuso" if nuovi_capi == 0 else bc.stato
+            if nuovi_peso:
+                bc.peso_medio_iniziale = round(nuovi_peso, 2)
+                bc.eta_stimata_gg = _eta_da_peso(nuovi_peso)
+
+            nota = f"Riaccasamento: {capi_prima}→{nuovi_capi} capi"
+            if nuovi_peso:
+                nota += f", peso medio {nuovi_peso:.1f} kg"
+            db.session.add(EventoCiclo(
+                box_ciclo_id=bc.id, tipo="riaccasamento",
+                data=data_riaccasamento, quantita=nuovi_capi,
+                peso_totale=round(nuovi_peso * nuovi_capi, 1) if nuovi_peso and nuovi_capi else None,
+                note=nota, operatore_id=current_user.id,
+            ))
+
+        # Aggiunge box nuovi (liberi selezionati)
+        for b in all_boxes:
+            if b.numero in lotto_bc:
+                continue
+            val_capi = request.form.get(f"capi_box_{b.id}", "").strip()
+            val_peso = request.form.get(f"peso_box_{b.id}", "").strip()
+            if not val_capi or int(val_capi) <= 0:
+                continue
+            if b.cicli.filter(BoxCiclo.stato.in_(["attivo", "in_uscita"])).first():
+                continue
+
+            nuovi_capi = int(val_capi)
+            nuovi_peso = float(val_peso) if val_peso else None
+            # Se peso non specificato, eredita media del lotto
+            if not nuovi_peso:
+                pesi = [bc.peso_medio_iniziale for bc in lotto_bc.values() if bc.peso_medio_iniziale]
+                nuovi_peso = round(sum(pesi) / len(pesi), 2) if pesi else None
+            eta = _eta_da_peso(nuovi_peso) if nuovi_peso else None
+
+            bc_new = BoxCiclo(
+                lotto_id=lotto.id, box_id=b.id,
+                data_accasamento=data_riaccasamento,
+                capi_iniziali=nuovi_capi,
+                peso_totale_iniziale=round((nuovi_peso or 0) * nuovi_capi, 1),
+                peso_medio_iniziale=nuovi_peso,
+                eta_stimata_gg=eta,
+                capi_presenti=nuovi_capi,
+                stato="attivo",
+            )
+            db.session.add(bc_new)
+            db.session.flush()
+
+            nota = f"Riaccasamento: nuovo box con {nuovi_capi} capi"
+            if nuovi_peso:
+                nota += f", peso medio {nuovi_peso:.1f} kg"
+            db.session.add(EventoCiclo(
+                box_ciclo_id=bc_new.id, tipo="riaccasamento",
+                data=data_riaccasamento, quantita=nuovi_capi,
+                peso_totale=round((nuovi_peso or 0) * nuovi_capi, 1) if nuovi_peso else None,
+                note=nota, operatore_id=current_user.id,
+            ))
+
+        db.session.commit()
+        flash("Riaccasamento registrato.", "success")
+        return redirect(url_for("allevamento.lotti_detail", id=id))
+
+    return render_template("allevamento/lotti/riaccasamento.html",
+                           lotto=lotto, box_map=box_map,
+                           lotto_bc=lotto_bc,
+                           capi_totali_prima=capi_totali_prima,
+                           today=date.today())
 
 
 @bp.route("/lotti/<int:id>/chiudi", methods=["POST"])
