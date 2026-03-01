@@ -319,6 +319,62 @@ def _init_db(app):
     except Exception:
         db.session.rollback()
 
+    # Migrazione: sostituisci curva accrescimento default con dati reali utente
+    # Il seed default inizia da eta_giorni=60; se troviamo quello, sostituiamo tutto.
+    try:
+        first_curva = CurvaAccrescimento.query.order_by(CurvaAccrescimento.eta_giorni).first()
+        if first_curva and first_curva.eta_giorni == 60:
+            CURVA_REALE = [
+                (0,   20.0, 1.00), (7,   30.0, 1.30), (14,  34.0, 1.50), (21,  38.2, 1.70),
+                (28,  42.8, 1.85), (35,  47.5, 2.00), (42,  52.3, 2.00), (49,  57.2, 2.10),
+                (56,  62.2, 2.20), (63,  67.3, 2.30), (70,  72.5, 2.40), (77,  77.7, 2.50),
+                (84,  83.0, 2.60), (91,  88.4, 2.60), (98,  93.8, 2.70), (105, 99.3, 2.70),
+                (112, 104.8, 2.80), (119, 110.3, 2.80), (126, 115.8, 2.85), (133, 121.2, 2.85),
+                (140, 126.5, 2.90), (147, 131.7, 2.90), (154, 136.8, 2.90), (161, 141.8, 2.90),
+                (168, 146.8, 2.95), (175, 151.6, 2.95), (182, 156.2, 2.95),
+                (189, 160.6, 3.00), (196, 164.9, 3.00),
+                (203, 169.1, 3.10), (210, 173.0, 3.10), (217, 174.0, 3.10),
+            ]
+            # percentuale_siero = kg_siero_die * perc_ss_siero(5%) / razione_kg * 100
+            SIERO_REALE = [
+                (0,   27,  0.00),   # sett. 1-4: nessun siero
+                (28,  34,  2.70),   # sett. 5:  1.0 kg/die
+                (35,  41,  3.75),   # sett. 6:  1.5 kg/die
+                (42,  48,  5.00),   # sett. 7:  2.0 kg/die
+                (49,  55,  5.95),   # sett. 8:  2.5 kg/die
+                (56,  62,  7.95),   # sett. 9:  3.5 kg/die
+                (63,  69,  9.78),   # sett. 10: 4.5 kg/die
+                (70,  76, 11.46),   # sett. 11: 5.5 kg/die
+                (77,  83, 13.00),   # sett. 12: 6.5 kg/die
+                (84,  90, 15.38),   # sett. 13: 8.0 kg/die
+                (91,  97, 17.31),   # sett. 14: 9.0 kg/die
+                (98,  111, 18.52),  # sett. 15-16: 10.0 kg/die
+                (112, 125, 19.64),  # sett. 17-18: 11.0 kg/die
+                (126, 139, 21.05),  # sett. 19-20: 12.0 kg/die (raz=2.85)
+                (140, 167, 20.69),  # sett. 21-24: 12.0 kg/die (raz=2.90)
+                (168, 188, 20.34),  # sett. 25-27: 12.0 kg/die (raz=2.95)
+                (189, 202, 20.00),  # sett. 28-29: 12.0 kg/die (raz=3.00)
+                (203, 999, 19.35),  # sett. 30+:   12.0 kg/die (raz=3.10)
+            ]
+            CurvaAccrescimento.query.delete()
+            TabellaSostSiero.query.delete()
+            for eta, peso, razione in CURVA_REALE:
+                db.session.add(CurvaAccrescimento(
+                    eta_giorni=eta, peso_kg=peso, razione_kg_giorno=razione))
+            for eta_min, eta_max, perc in SIERO_REALE:
+                db.session.add(TabellaSostSiero(
+                    eta_min=eta_min, eta_max=eta_max, percentuale_siero=perc))
+            s = Setting.query.get("allevamento_perc_ss_siero")
+            if s:
+                s.value = "5.0"
+            else:
+                db.session.add(Setting(key="allevamento_perc_ss_siero", value="5.0"))
+            db.session.commit()
+            app.logger.info("Migrazione curva accrescimento e tabella siero: completata.")
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Errore migrazione curva accrescimento: {e}")
+
 
 def _seed_allevamento():
     from app.models import Capannone, Box, MagazzinoProdotto, CurvaAccrescimento, TabellaSostSiero
