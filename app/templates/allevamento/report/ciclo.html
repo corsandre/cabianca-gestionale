@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Report Ciclo {{ lotto.lotto_id }}{% endblock %}
+{% block title %}Report Ciclo {{ ciclo.ciclo_id }}{% endblock %}
 {% block content %}
 <div class="cb-page-header">
-    <h1><i class="bi bi-bar-chart" style="color:#c2185b"></i> Report Ciclo {{ lotto.lotto_id }}</h1>
-    <a href="{{ url_for('allevamento.lotti_detail', id=lotto.id) }}" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left"></i> Dettaglio lotto
+    <h1><i class="bi bi-bar-chart" style="color:#c2185b"></i> Report Ciclo {{ ciclo.ciclo_id }}</h1>
+    <a href="{{ url_for('allevamento.cicli_detail', id=ciclo.id) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Dettaglio ciclo
     </a>
 </div>
 

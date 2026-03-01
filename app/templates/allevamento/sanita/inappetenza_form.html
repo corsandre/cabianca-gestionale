@@ -17,7 +17,7 @@
         <select name="box_ciclo_id" class="form-select" required>
             <option value="">– seleziona –</option>
             {% for bc in cicli_attivi %}
-            <option value="{{ bc.id }}">Box {{ bc.box.numero }} ({{ bc.lotto.lotto_id }})</option>
+            <option value="{{ bc.id }}">Box {{ bc.box.numero }} ({{ bc.ciclo.ciclo_id }})</option>
             {% endfor %}
         </select>
     </div>

@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}{{ ciclo.ciclo_id }} – Dettaglio Ciclo{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-arrow-repeat" style="color:#c2185b"></i> {{ ciclo.ciclo_id }}</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('allevamento.report_ciclo', id=ciclo.id) }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-bar-chart"></i> Report
+        </a>
+        {% if ciclo.stato == 'attivo' %}
+        <a href="{{ url_for('allevamento.cicli_riaccasamento', id=ciclo.id) }}"
+           class="btn btn-sm" style="background:#c2185b;color:white">
+            <i class="bi bi-shuffle"></i> Riaccasamento
+        </a>
+        <a href="{{ url_for('allevamento.cicli_aggiungi_lotto', id=ciclo.id) }}"
+           class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-plus-circle"></i> Aggiungi Lotto
+        </a>
+        <form method="POST" action="{{ url_for('allevamento.cicli_chiudi', id=ciclo.id) }}"
+              onsubmit="return confirm('Chiudere il ciclo?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline-danger btn-sm">
+                <i class="bi bi-x-circle"></i> Chiudi ciclo
+            </button>
+        </form>
+        {% endif %}
+        <a href="{{ url_for('allevamento.cicli_index') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i>
+        </a>
+    </div>
+</div>
+
+{# Banner traceabilità DOP se lettere miste #}
+{% if lettere_miste %}
+<div class="alert alert-warning d-flex align-items-center mb-3">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    <div>
+        <strong>Attenzione traceabilità DOP:</strong> questo ciclo contiene lotti con lettere di nascita diverse.
+        Verificare la compatibilità con il disciplinare Prosciutto di Parma.
+    </div>
+</div>
+{% endif %}
+
+{# Info ciclo #}
+<div class="row g-3 mb-3">
+    <div class="col-md-5">
+        <div class="cb-card p-3">
+            <table class="table table-sm mb-0">
+                <tr><th>ID Ciclo</th><td><strong>{{ ciclo.ciclo_id }}</strong></td></tr>
+                <tr><th>Data inizio</th><td>{{ ciclo.data_inizio.strftime('%d/%m/%Y') }}</td></tr>
+                <tr><th>Chiusura</th><td>{{ ciclo.data_chiusura.strftime('%d/%m/%Y') if ciclo.data_chiusura else '–' }}</td></tr>
+                <tr><th>Stato</th><td><span class="badge {% if ciclo.stato == 'attivo' %}bg-success{% else %}bg-secondary{% endif %}">{{ ciclo.stato }}</span></td></tr>
+                {% if ciclo.note %}<tr><th>Note</th><td>{{ ciclo.note }}</td></tr>{% endif %}
+            </table>
+        </div>
+    </div>
+    <div class="col-md-7">
+        <div class="cb-card p-3">
+            <h6 class="mb-2">Box coinvolti</h6>
+            <div class="d-flex flex-wrap gap-2">
+            {% for bc in box_cicli %}
+            <div class="border rounded p-2 text-center" style="min-width:90px;background:{% if bc.stato == 'attivo' %}#e8f5e9{% elif bc.stato == 'chiuso' %}#f5f5f5{% else %}#fff9c4{% endif %}">
+                <div class="fw-bold">Box {{ bc.box.numero }}</div>
+                <div class="small">{{ bc.capi_presenti or 0 }} / {{ bc.capi_iniziali }}</div>
+                <div class="badge {% if bc.stato == 'attivo' %}bg-success{% else %}bg-secondary{% endif %} mt-1">{{ bc.stato }}</div>
+                {% if bc.stato in ['attivo', 'in_uscita'] %}
+                <div class="mt-1">
+                    <a href="{{ url_for('allevamento.eventi_nuovo') }}?bc={{ bc.id }}" class="btn btn-xs btn-outline-danger" style="font-size:.7rem;padding:.15rem .4rem">Evento</a>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Sezione Lotti (bolle) #}
+<div class="cb-card p-3 mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0"><i class="bi bi-truck me-1" style="color:#c2185b"></i> Lotti del ciclo</h6>
+        {% if ciclo.stato == 'attivo' %}
+        <a href="{{ url_for('allevamento.cicli_aggiungi_lotto', id=ciclo.id) }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-plus-circle"></i> Aggiungi Lotto
+        </a>
+        {% endif %}
+    </div>
+    {% if lotti_info %}
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead><tr>
+                <th>#</th><th>Data consegna</th><th>Lettera DOP</th>
+                <th>Peso bolla (kg)</th><th>Fornitore</th><th>N° doc.</th>
+                <th>Vendita prevista</th>
+            </tr></thead>
+            <tbody>
+            {% for li in lotti_info %}
+            {% set lt = li.lotto %}
+            <tr>
+                <td><span class="badge bg-secondary">Lotto {{ lt.numero_lotto }}</span></td>
+                <td>{{ lt.data_consegna.strftime('%d/%m/%Y') }}</td>
+                <td>
+                    {% if lt.lettera_nascita %}
+                    <span class="badge" style="background:#c2185b;font-size:.85rem">{{ lt.lettera_nascita }}</span>
+                    <small class="text-muted ms-1">{{ nomi_mesi[lettere_mesi[lt.lettera_nascita]] if lt.lettera_nascita in lettere_mesi else '' }}</small>
+                    {% else %}<span class="text-muted">–</span>{% endif %}
+                </td>
+                <td>{{ '%.0f'|format(lt.peso_totale_bolla_kg) if lt.peso_totale_bolla_kg else '–' }}</td>
+                <td class="small">{{ lt.fornitore or '–' }}</td>
+                <td class="small text-muted">{{ lt.numero_documento or '–' }}</td>
+                <td>
+                    {% if li.data_vendita %}
+                    <span class="badge bg-info text-dark">{{ li.data_vendita.strftime('%b %Y') }}</span>
+                    {% else %}<span class="text-muted">–</span>{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted text-center py-2 mb-0">Nessun lotto registrato.</p>
+    {% endif %}
+</div>
+
+{# Timeline eventi #}
+<div class="cb-card p-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0">Timeline eventi</h6>
+        {% if ciclo.stato == 'attivo' %}
+        <a href="{{ url_for('allevamento.eventi_nuovo') }}" class="btn btn-sm btn-outline-danger">
+            <i class="bi bi-plus"></i> Registra evento
+        </a>
+        {% endif %}
+    </div>
+    {% if eventi %}
+    <div class="table-responsive">
+        <table class="table table-sm">
+            <thead><tr><th>Data</th><th>Tipo</th><th>Box</th><th class="text-end">Capi</th><th class="text-end">Peso (kg)</th><th>Operatore</th><th>Note</th></tr></thead>
+            <tbody>
+            {% for e in eventi %}
+            <tr>
+                <td>{{ e.data.strftime('%d/%m/%Y') }}</td>
+                <td>
+                    {% if e.tipo == 'uscita_macello' and e.is_scarti %}
+                    <span class="badge bg-warning text-dark">
+                        <i class="bi bi-exclamation-triangle"></i> uscita scarti
+                    </span>
+                    {% else %}
+                    <span class="badge {% if e.tipo == 'mortalita' %}bg-danger{% elif 'frazionamento' in e.tipo %}bg-warning text-dark{% elif e.tipo == 'riaccasamento' %}bg-info text-dark{% else %}bg-success{% endif %}">
+                        {{ e.tipo|replace('_', ' ') }}
+                    </span>
+                    {% endif %}
+                </td>
+                <td>{{ e.box_ciclo.box.numero if e.box_ciclo and e.box_ciclo.box else '–' }}</td>
+                <td class="text-end">{{ e.quantita or '–' }}</td>
+                <td class="text-end">{{ '%.1f'|format(e.peso_totale) if e.peso_totale else '–' }}</td>
+                <td>{{ e.operatore.display_name if e.operatore else '–' }}</td>
+                <td class="small text-muted">{{ e.note or '' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted text-center py-3">Nessun evento registrato.</p>
+    {% endif %}
+</div>
+{% endblock %}

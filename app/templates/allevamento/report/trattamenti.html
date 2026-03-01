@@ -17,7 +17,7 @@
         <tr>
             <td>{{ t.data_inizio.strftime('%d/%m/%Y') }}</td>
             <td>{{ t.box_ciclo.box.numero if t.box_ciclo and t.box_ciclo.box else '?' }}</td>
-            <td class="small text-muted">{{ t.box_ciclo.lotto.lotto_id if t.box_ciclo and t.box_ciclo.lotto else '?' }}</td>
+            <td class="small text-muted">{{ t.box_ciclo.ciclo.ciclo_id if t.box_ciclo and t.box_ciclo.ciclo else '?' }}</td>
             <td>{{ t.tipo or '–' }}</td>
             <td><strong>{{ t.farmaco or '–' }}</strong></td>
             <td>{{ t.via_somministrazione or '–' }}</td>

@@ -386,14 +386,34 @@ class Box(db.Model):
 
 # === ALLEVAMENTO - Cicli Produttivi ===
 
-class LottoProduttivo(db.Model):
-    __tablename__ = "lotti_produttivi"
+class CicloProduttivo(db.Model):
+    __tablename__ = "cicli_produttivi"
     id = db.Column(db.Integer, primary_key=True)
-    lotto_id = db.Column(db.String(50), unique=True, nullable=False)
+    ciclo_id = db.Column(db.String(50), unique=True, nullable=False)  # era lotto_id
     numero_ciclo = db.Column(db.Integer)
     data_inizio = db.Column(db.Date, nullable=False)
     data_chiusura = db.Column(db.Date)
     stato = db.Column(db.String(20), default="attivo")  # attivo, chiuso
+    note = db.Column(db.Text)
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    lotti = db.relationship("Lotto", backref="ciclo", lazy="dynamic")
+    box_cicli = db.relationship("BoxCiclo", backref="ciclo", lazy="dynamic")
+    creator = db.relationship("User")
+
+
+class Lotto(db.Model):
+    """Singola consegna di suinetti (bolla). Un ciclo ne contiene N."""
+    __tablename__ = "lotti"
+    id = db.Column(db.Integer, primary_key=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_produttivi.id"), nullable=False)
+    numero_lotto = db.Column(db.Integer, nullable=False)   # 1, 2, 3... per ciclo
+    data_consegna = db.Column(db.Date, nullable=False)
+    peso_totale_bolla_kg = db.Column(db.Float)
+    lettera_nascita = db.Column(db.String(1))              # T,C,B,A,M,P,L,E,S,R,H,D (DOP)
+    fornitore = db.Column(db.String(200))
+    numero_documento = db.Column(db.String(100))           # numero bolla cartacea
     note = db.Column(db.Text)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -405,7 +425,9 @@ class LottoProduttivo(db.Model):
 class BoxCiclo(db.Model):
     __tablename__ = "box_cicli"
     id = db.Column(db.Integer, primary_key=True)
-    lotto_id = db.Column(db.Integer, db.ForeignKey("lotti_produttivi.id"), nullable=False)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_produttivi.id"), nullable=False)
+    lotto_id = db.Column(db.Integer, db.ForeignKey("lotti.id"))        # bolla di riferimento
+    lettera_nascita = db.Column(db.String(1))                          # copia dalla bolla
     box_id = db.Column(db.Integer, db.ForeignKey("boxes.id"), nullable=False)
     data_accasamento = db.Column(db.Date, nullable=False)
     capi_iniziali = db.Column(db.Integer, nullable=False)

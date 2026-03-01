@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Cicli Produttivi – Allevamento{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-arrow-repeat" style="color:#c2185b"></i> Cicli Produttivi</h1>
+    <a href="{{ url_for('allevamento.cicli_nuovo') }}" class="btn btn-sm" style="background:#c2185b;color:white">
+        <i class="bi bi-plus-lg"></i> Nuovo Accasamento
+    </a>
+</div>
+
+<div class="cb-filters">
+    <div class="d-flex gap-2">
+        {% for s, label in [('attivo','Attivi'), ('chiuso','Chiusi'), ('tutti','Tutti')] %}
+        <a href="{{ url_for('allevamento.cicli_index', stato=s) }}"
+           class="btn btn-sm {% if stato_filter == s %}btn-dark{% else %}btn-outline-secondary{% endif %}">
+            {{ label }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="cb-table">
+{% if cicli %}
+<div class="table-responsive">
+    <table class="table table-hover mb-0">
+        <thead><tr>
+            <th>Ciclo</th><th>Inizio</th><th>Chiusura</th>
+            <th class="text-end">Box</th><th class="text-end">Capi tot.</th>
+            <th>Stato</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for c in cicli %}
+        {% set bc_list = c.box_cicli.all() %}
+        <tr>
+            <td><a href="{{ url_for('allevamento.cicli_detail', id=c.id) }}" class="fw-bold text-decoration-none">{{ c.ciclo_id }}</a></td>
+            <td>{{ c.data_inizio.strftime('%d/%m/%Y') }}</td>
+            <td>{{ c.data_chiusura.strftime('%d/%m/%Y') if c.data_chiusura else '–' }}</td>
+            <td class="text-end">{{ bc_list|length }}</td>
+            <td class="text-end">{{ bc_list|selectattr('capi_presenti')|sum(attribute='capi_presenti')|int }}</td>
+            <td>
+                <span class="badge {% if c.stato == 'attivo' %}bg-success{% else %}bg-secondary{% endif %}">
+                    {{ c.stato }}
+                </span>
+            </td>
+            <td>
+                <a href="{{ url_for('allevamento.cicli_detail', id=c.id) }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-eye"></i>
+                </a>
+                <a href="{{ url_for('allevamento.report_ciclo', id=c.id) }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-bar-chart"></i>
+                </a>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="cb-empty">
+    <i class="bi bi-arrow-repeat d-block"></i>
+    <p>Nessun ciclo produttivo.</p>
+    <a href="{{ url_for('allevamento.cicli_nuovo') }}" class="btn btn-sm" style="background:#c2185b;color:white">Crea il primo accasamento</a>
+</div>
+{% endif %}
+</div>
+{% endblock %}

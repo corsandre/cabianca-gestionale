@@ -171,8 +171,28 @@ def create_app():
     return app
 
 
+def _pre_migrate_rename(sqlalchemy):
+    """Rinomina tabelle/colonne legacy prima che create_all usi i nuovi nomi."""
+    try:
+        r = db.session.execute(sqlalchemy.text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='lotti_produttivi'"
+        ))
+        if r.fetchone():
+            db.session.execute(sqlalchemy.text(
+                "ALTER TABLE lotti_produttivi RENAME TO cicli_produttivi"))
+            db.session.execute(sqlalchemy.text(
+                "ALTER TABLE cicli_produttivi RENAME COLUMN lotto_id TO ciclo_id"))
+            db.session.execute(sqlalchemy.text(
+                "ALTER TABLE box_cicli RENAME COLUMN lotto_id TO ciclo_id"))
+            db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+
+
 def _init_db(app):
     import sqlalchemy
+
+    _pre_migrate_rename(sqlalchemy)
 
     try:
         db.create_all()
@@ -193,6 +213,8 @@ def _init_db(app):
         ("razioni_giornaliere", "consumo_acqua_litri", "REAL"),
         ("razioni_giornaliere", "acqua_teorica_litri", "REAL"),
         ("eventi_ciclo", "is_scarti", "INTEGER DEFAULT 0 NOT NULL"),
+        ("box_cicli", "lotto_id", "INTEGER REFERENCES lotti(id)"),
+        ("box_cicli", "lettera_nascita", "VARCHAR(1)"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

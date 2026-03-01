@@ -18,7 +18,7 @@
             <td>{{ e.data.strftime('%d/%m/%Y') }}</td>
             <td><span class="badge {% if 'macello' in e.tipo %}bg-success{% elif 'frazionamento' in e.tipo %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ e.tipo|replace('_',' ') }}</span></td>
             <td>{{ e.box_ciclo.box.numero if e.box_ciclo and e.box_ciclo.box else '?' }}</td>
-            <td class="small">{{ e.box_ciclo.lotto.lotto_id if e.box_ciclo and e.box_ciclo.lotto else '?' }}</td>
+            <td class="small">{{ e.box_ciclo.ciclo.ciclo_id if e.box_ciclo and e.box_ciclo.ciclo else '?' }}</td>
             <td class="text-end">{{ e.quantita or '–' }}</td>
             <td class="text-end">{{ '%.0f'|format(e.peso_totale) if e.peso_totale else '–' }}</td>
             <td class="small text-muted">{{ e.note or '' }}</td>

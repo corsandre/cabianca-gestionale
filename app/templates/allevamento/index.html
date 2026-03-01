@@ -47,7 +47,7 @@
             <i class="bi bi-bell-fill"></i> {{ allarmi_count }} allarmi
         </a>
         {% endif %}
-        <a href="{{ url_for('allevamento.lotti_nuovo') }}" class="btn btn-sm" style="background:#c2185b;color:white">
+        <a href="{{ url_for('allevamento.cicli_nuovo') }}" class="btn btn-sm" style="background:#c2185b;color:white">
             <i class="bi bi-plus-lg"></i> Nuovo Accasamento
         </a>
     </div>
@@ -110,7 +110,7 @@
 {# Costanti layout: BW=85, BH=50, STEP=90, MX=15 #}
 {% macro box_rect(num, cx, cy) %}
 {% set bd = box_data[num] %}
-<g onclick="showBoxModal({{ num }}, '{{ bd.lotto_id or '' }}', {{ bd.capi }}, '{{ bd.stato }}', {{ bd.ciclo_id or 'null' }})" style="cursor:pointer" role="button" aria-label="Box {{ num }}">
+<g onclick="showBoxModal({{ num }})" style="cursor:pointer" role="button" aria-label="Box {{ num }}">
   <rect x="{{ cx }}" y="{{ cy }}" width="85" height="50" rx="6"
         class="box-rect box-{{ bd.stato }}" />
   <text x="{{ cx + 42 }}" y="{{ cy + 18 }}" class="box-label">{{ num }}</text>
@@ -176,7 +176,7 @@
 <script>
 const boxModal = new bootstrap.Modal(document.getElementById('boxModal'));
 
-function showBoxModal(num, lottoId, capi, stato, cicloId) {
+function showBoxModal(num) {
     document.getElementById('bm-num').textContent = num;
     document.getElementById('bm-footer').innerHTML = '';
     document.getElementById('bm-body').innerHTML = '<div class="text-center py-3"><div class="spinner-border text-secondary"></div></div>';
@@ -192,7 +192,7 @@ function showBoxModal(num, lottoId, capi, stato, cicloId) {
             let footer = '';
             if (d.ciclo) {
                 const c = d.ciclo;
-                html += `<tr><th>Lotto</th><td><strong>${c.lotto_id}</strong></td></tr>
+                html += `<tr><th>Ciclo</th><td><strong>${c.ciclo_id}</strong></td></tr>
                     <tr><th>Accasamento</th><td>${c.data_accasamento}</td></tr>
                     <tr><th>Capi iniziali</th><td>${c.capi_iniziali}</td></tr>
                     <tr><th>Capi presenti</th><td><strong>${c.capi_presenti}</strong></td></tr>
@@ -204,12 +204,12 @@ function showBoxModal(num, lottoId, capi, stato, cicloId) {
                 <a href="/allevamento/sanita/trattamento/nuovo?bc=${c.id}" class="btn btn-sm btn-outline-warning">
                     <i class="bi bi-capsule"></i> Trattamento
                 </a>
-                <a href="/allevamento/lotti/${c.lotto_db_id}" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-list-ul"></i> Dettaglio lotto
+                <a href="/allevamento/cicli/${c.ciclo_db_id}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-list-ul"></i> Dettaglio ciclo
                 </a>`;
             } else {
                 html += `<tr><td colspan="2" class="text-muted text-center py-2">Box libero</td></tr>`;
-                footer = `<a href="/allevamento/lotti/nuovo" class="btn btn-sm btn-outline-success">
+                footer = `<a href="/allevamento/cicli/nuovo" class="btn btn-sm btn-outline-success">
                     <i class="bi bi-plus-lg"></i> Nuovo accasamento
                 </a>`;
             }

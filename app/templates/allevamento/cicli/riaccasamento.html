@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+{% block title %}Riaccasamento – {{ ciclo.ciclo_id }}{% endblock %}
+
+{% block extra_head %}
+<style>
+.mappa-svg { min-width: 700px; }
+.box-rect { stroke-width: 1.5; transition: all .12s; }
+.box-occupato   { fill: #eeeeee; stroke: #bdbdbd; cursor: not-allowed; }
+.box-linea1     { fill: #bbdefb; stroke: #1976d2; cursor: pointer; }
+.box-linea2     { fill: #ffcdd2; stroke: #d32f2f; cursor: pointer; }
+.box-linea3     { fill: #c8e6c9; stroke: #388e3c; cursor: pointer; }
+.box-in-lotto-1 { fill: #bbdefb; stroke: #1976d2; stroke-width: 2.5; stroke-dasharray: 5 3; cursor: default; }
+.box-in-lotto-2 { fill: #ffcdd2; stroke: #d32f2f; stroke-width: 2.5; stroke-dasharray: 5 3; cursor: default; }
+.box-in-lotto-3 { fill: #c8e6c9; stroke: #388e3c; stroke-width: 2.5; stroke-dasharray: 5 3; cursor: default; }
+.box-selezionato { fill: #fce4ec !important; stroke: #c2185b !important; stroke-width: 3 !important; stroke-dasharray: none !important; }
+.box-linea1:hover, .box-linea2:hover, .box-linea3:hover { opacity: 0.75; }
+.box-label { font-size: 10px; text-anchor: middle; dominant-baseline: central; fill: #333;
+             font-family: 'Varela Round', sans-serif; pointer-events: none; }
+.box-sub   { font-size: 8px;  text-anchor: middle; dominant-baseline: central; fill: #666;
+             font-family: 'Varela Round', sans-serif; pointer-events: none; }
+.cap-label { font-size: 11px; font-family: 'Yeseva One', serif; fill: #444; }
+.linea-label { font-size: 9px; fill: #666; }
+
+.counter-strip {
+    position: sticky; top: 0; z-index: 50;
+    background: white; border-bottom: 2px solid #c2185b;
+    padding: .5rem 1rem; margin-bottom: 1rem;
+    display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; align-items: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,.1);
+}
+.box-card-lotto { border-left: 3px solid #c2185b !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-shuffle" style="color:#c2185b"></i> Riaccasamento – {{ ciclo.ciclo_id }}</h1>
+    <a href="{{ url_for('allevamento.cicli_detail', id=ciclo.id) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Indietro
+    </a>
+</div>
+
+{# ── Counter strip ── #}
+<div class="counter-strip">
+    <span class="small fw-bold" style="color:#c2185b"><i class="bi bi-shuffle me-1"></i>Riaccasamento</span>
+    <span class="small">Prima: <strong>{{ capi_totali_prima }}</strong></span>
+    <span class="small" style="color:#1976d2">Dopo: <strong id="cnt-dopo">0</strong></span>
+    <span class="small">Differenza: <strong id="cnt-diff">–{{ capi_totali_prima }}</strong></span>
+    <span class="small text-muted ms-auto"><span id="map-sel-count">0</span> box liberi aggiunti</span>
+</div>
+
+<form method="POST" id="form-riaccasamento">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+{# ── Data ── #}
+<div class="cb-card p-3 mb-3" style="max-width:300px">
+    <label class="form-label fw-bold">Data riaccasamento</label>
+    <input type="date" name="data_riaccasamento" class="form-control"
+           value="{{ today.isoformat() }}" required>
+</div>
+
+{# ── Mappa SVG ── #}
+<div class="cb-card p-3 mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0">Box del ciclo (tratteggiati) · Box liberi da aggiungere (click)</h6>
+    </div>
+    <div class="d-flex flex-wrap gap-3 mb-3 small">
+        <span><span style="display:inline-block;width:20px;height:14px;border-radius:3px;background:#bbdefb;border:2.5px dashed #1976d2;vertical-align:middle"></span> Nel ciclo</span>
+        <span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:#bbdefb;border:1.5px solid #1976d2;vertical-align:middle"></span> Libero (aggiungi)</span>
+        <span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:#fce4ec;border:2.5px solid #c2185b;vertical-align:middle"></span> Aggiunto</span>
+        <span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:#eeeeee;border:1.5px solid #bdbdbd;vertical-align:middle"></span> Occupato</span>
+    </div>
+    <div style="overflow-x:auto">
+    <svg class="mappa-svg" viewBox="0 0 1150 612" xmlns="http://www.w3.org/2000/svg">
+
+    {% macro box_item(num, cx, cy) %}
+    {% if num in box_map %}
+    {% set bd = box_map[num] %}
+    {% if bd.stato == 'in_lotto' %}
+    <g data-box-num="{{ num }}">
+      <rect id="box-rect-{{ num }}" x="{{ cx }}" y="{{ cy }}" width="85" height="50" rx="6"
+            class="box-rect box-in-lotto-{{ bd.linea }}" />
+      <text x="{{ cx+42 }}" y="{{ cy+17 }}" class="box-label">{{ num }}</text>
+      <text x="{{ cx+42 }}" y="{{ cy+36 }}" class="box-sub">{{ bd.capi_presenti }}♟</text>
+    </g>
+    {% elif bd.stato == 'libero' %}
+    <g data-box-num="{{ num }}" onclick="toggleBox({{ num }})" role="button">
+      <rect id="box-rect-{{ num }}" x="{{ cx }}" y="{{ cy }}" width="85" height="50" rx="6"
+            class="box-rect box-linea{{ bd.linea }}" />
+      <text x="{{ cx+42 }}" y="{{ cy+17 }}" class="box-label">{{ num }}</text>
+      <text x="{{ cx+42 }}" y="{{ cy+36 }}" class="box-sub">{{ bd.capienza }} posti</text>
+    </g>
+    {% else %}
+    <g data-box-num="{{ num }}">
+      <rect x="{{ cx }}" y="{{ cy }}" width="85" height="50" rx="6" class="box-rect box-occupato" />
+      <text x="{{ cx+42 }}" y="{{ cy+17 }}" class="box-label" style="fill:#aaa">{{ num }}</text>
+      <text x="{{ cx+42 }}" y="{{ cy+36 }}" class="box-sub" style="fill:#bbb">altro ciclo</text>
+    </g>
+    {% endif %}
+    {% endif %}
+    {% endmacro %}
+
+    {# CAP 1 #}
+    <text x="15" y="35" class="cap-label">CAP 1</text>
+    <text x="735" y="35" class="linea-label" style="fill:#1976d2">■ Linea 1</text>
+    {% for i in range(9) %}{{ box_item(i+1, 15+i*90, 42) }}{% endfor %}
+
+    {# CAP 2 #}
+    <text x="15" y="122" class="cap-label">CAP 2</text>
+    {% for i in range(6) %}{{ box_item(i+10, 15+i*90, 129) }}{% endfor %}
+
+    {# CAP 3 #}
+    <text x="15" y="209" class="cap-label">CAP 3</text>
+    {% for i in range(6) %}{{ box_item(i+16, 15+i*90, 216) }}{% endfor %}
+
+    {# CAP 4 #}
+    <text x="15" y="296" class="cap-label">CAP 4</text>
+    <text x="750" y="296" class="linea-label" style="fill:#d32f2f">■ Linea 2</text>
+    {% for i in range(8) %}{{ box_item(i+22, 15+i*90, 303) }}{% endfor %}
+    {% for i in range(7) %}{{ box_item(i+30, 15+i*90, 358) }}{% endfor %}
+
+    {# CAP 5 #}
+    <text x="15" y="438" class="cap-label">CAP 5</text>
+    <text x="565" y="438" class="linea-label" style="fill:#388e3c">■ Linea 3</text>
+    {% for i in range(6) %}{{ box_item(i+37, 15+i*90, 445) }}{% endfor %}
+
+    {# CAP 7 #}
+    <text x="15" y="523" class="cap-label">CAP 7</text>
+    {% for i in range(7) %}{{ box_item(i+43, 15+i*90, 532) }}{% endfor %}
+
+    {# CAP 6 #}
+    <text x="690" y="523" class="cap-label">CAP 6</text>
+    {% for i in range(5) %}{{ box_item(i+50, 690+i*90, 532) }}{% endfor %}
+
+    </svg>
+    </div>
+</div>
+
+{# ── Panel box del ciclo (sempre visibili) ── #}
+<div class="cb-card p-3 mb-3">
+    <h6 class="mb-3"><i class="bi bi-pencil-square me-1" style="color:#c2185b"></i>
+        Inserisci nuovi valori per i box del ciclo
+        <small class="text-muted fw-normal">(lascia vuoto per non modificare · metti 0 per svuotare il box)</small>
+    </h6>
+    <div class="row g-2">
+    {% for box_num, bc in ciclo_bc.items() | sort %}
+    {% set bd = box_map[box_num] %}
+    {% set colori = {1: '#1976d2', 2: '#d32f2f', 3: '#388e3c'} %}
+    {% set c = colori[bd.linea] %}
+    <div class="col-6 col-sm-4 col-md-3">
+        <div class="border rounded p-2 box-card-lotto h-100">
+            <div class="fw-bold small mb-1">Box {{ box_num }}
+                <small class="text-muted" style="font-size:.7rem">L{{ bd.linea }}</small>
+            </div>
+            <div class="text-muted mb-2" style="font-size:.7rem">
+                Presenti: <strong>{{ bc.capi_presenti or 0 }}</strong>
+                {% if bc.peso_medio_iniziale %} · Peso: {{ '%.1f'|format(bc.peso_medio_iniziale) }} kg{% endif %}
+            </div>
+            <label class="form-label" style="font-size:.72rem;margin-bottom:.2rem">Nuovi capi</label>
+            <input type="number"
+                   name="capi_bc_{{ bc.id }}"
+                   id="capi-bc-{{ bc.id }}"
+                   class="form-control form-control-sm lotto-capi-input"
+                   min="0" max="{{ bd.capienza }}"
+                   placeholder="{{ bc.capi_presenti or 0 }}"
+                   oninput="aggiornaContatore()">
+            <label class="form-label mt-1" style="font-size:.72rem;margin-bottom:.2rem">
+                Peso medio (kg) <span class="text-muted">opzionale</span>
+            </label>
+            <input type="number"
+                   name="peso_bc_{{ bc.id }}"
+                   class="form-control form-control-sm"
+                   step="0.1" min="0"
+                   placeholder="{{ '%.1f'|format(bc.peso_medio_iniziale) if bc.peso_medio_iniziale else '–' }}">
+        </div>
+    </div>
+    {% endfor %}
+    </div>
+</div>
+
+{# ── Panel box nuovi (liberi aggiunti dalla mappa) ── #}
+<div class="cb-card p-3 mb-3" id="panel-nuovi" style="display:none">
+    <h6 class="mb-3"><i class="bi bi-plus-circle me-1" style="color:#388e3c"></i>
+        Box liberi aggiunti al ciclo
+    </h6>
+    <div class="row g-2" id="box-nuovi-container"></div>
+</div>
+
+<button type="submit" class="btn mb-4" style="background:#c2185b;color:white">
+    <i class="bi bi-check-lg"></i> Salva Riaccasamento
+</button>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const BOX_MAP_RAW = {{ box_map | tojson }};
+const BOX_MAP = {};
+for (const [k, v] of Object.entries(BOX_MAP_RAW)) BOX_MAP[parseInt(k)] = v;
+
+const CAPI_PRIMA = {{ capi_totali_prima }};
+const COLORI = {1: '#1976d2', 2: '#d32f2f', 3: '#388e3c'};
+const NOMI_L = {1: 'L1', 2: 'L2', 3: 'L3'};
+
+// Box liberi selezionati: boxId -> {num, capienza, linea}
+const selectedFree = new Map();
+
+function toggleBox(boxNum) {
+    const bd = BOX_MAP[boxNum];
+    if (!bd || bd.stato !== 'libero') return;
+    if (selectedFree.has(bd.id)) {
+        selectedFree.delete(bd.id);
+        const rect = document.getElementById(`box-rect-${boxNum}`);
+        if (rect) {
+            rect.classList.remove('box-selezionato');
+            rect.classList.add(`box-linea${bd.linea}`);
+        }
+        const card = document.getElementById(`free-card-${bd.id}`);
+        if (card) card.remove();
+    } else {
+        selectedFree.set(bd.id, {num: boxNum, capienza: bd.capienza, linea: bd.linea});
+        const rect = document.getElementById(`box-rect-${boxNum}`);
+        if (rect) {
+            rect.classList.remove(`box-linea${bd.linea}`);
+            rect.classList.add('box-selezionato');
+        }
+        addFreeCard(bd.id, {num: boxNum, capienza: bd.capienza, linea: bd.linea});
+    }
+    const panel = document.getElementById('panel-nuovi');
+    panel.style.display = selectedFree.size > 0 ? '' : 'none';
+    document.getElementById('map-sel-count').textContent = selectedFree.size;
+    aggiornaContatore();
+}
+
+function addFreeCard(boxId, bd) {
+    const container = document.getElementById('box-nuovi-container');
+    const col = document.createElement('div');
+    col.className = 'col-6 col-sm-4 col-md-3';
+    col.id = `free-card-${boxId}`;
+    const c = COLORI[bd.linea] || '#888';
+    col.innerHTML = `
+        <div class="border rounded p-2 h-100" style="border-left:3px solid ${c} !important">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="fw-bold small">Box ${bd.num}
+                    <small class="text-muted">${NOMI_L[bd.linea]}</small>
+                </span>
+                <button type="button" class="btn-close" style="font-size:.55rem"
+                        onclick="toggleBox(${bd.num})" aria-label="Rimuovi"></button>
+            </div>
+            <div class="text-muted mb-1" style="font-size:.7rem">Cap. ${bd.capienza} posti</div>
+            <label style="font-size:.72rem;margin-bottom:.2rem;display:block">Capi</label>
+            <input type="number"
+                   name="capi_box_${boxId}"
+                   id="capi-free-${boxId}"
+                   class="form-control form-control-sm free-capi-input mb-1"
+                   min="1" max="${bd.capienza}"
+                   placeholder="n° capi"
+                   oninput="aggiornaContatore()">
+            <label style="font-size:.72rem;margin-bottom:.2rem;display:block">
+                Peso medio (kg) <span class="text-muted">opz.</span>
+            </label>
+            <input type="number"
+                   name="peso_box_${boxId}"
+                   class="form-control form-control-sm"
+                   step="0.1" min="0"
+                   placeholder="kg/capo">
+        </div>`;
+    container.appendChild(col);
+}
+
+function aggiornaContatore() {
+    let dopo = 0;
+
+    // Somma box del lotto: usa il nuovo valore se inserito, altrimenti il vecchio
+    document.querySelectorAll('.lotto-capi-input').forEach(el => {
+        if (el.value !== '') {
+            dopo += parseInt(el.value) || 0;
+        } else {
+            dopo += parseInt(el.placeholder) || 0;
+        }
+    });
+
+    // Somma box liberi aggiunti
+    document.querySelectorAll('.free-capi-input').forEach(el => {
+        dopo += parseInt(el.value) || 0;
+    });
+
+    document.getElementById('cnt-dopo').textContent = dopo;
+    const diffEl = document.getElementById('cnt-diff');
+    const diff = dopo - CAPI_PRIMA;
+    diffEl.textContent = (diff >= 0 ? '+' : '') + diff;
+    diffEl.style.color = diff === 0 ? '#388e3c' : diff > 0 ? '#d32f2f' : '#e65100';
+}
+
+// Calcola stato iniziale (box del lotto con valori attuali come placeholder)
+aggiornaContatore();
+</script>
+{% endblock %}

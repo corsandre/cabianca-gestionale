@@ -74,7 +74,7 @@
     <!-- MOBILE BOTTOM NAV -->
     <nav class="cb-bottomnav d-md-none">
         {% if request.blueprint == 'allevamento' %}
-        <a href="{{ url_for('allevamento.lotti_index') }}" class="cb-bottomnav-item {% if request.endpoint and 'lotti' in request.endpoint %}active{% endif %}">
+        <a href="{{ url_for('allevamento.cicli_index') }}" class="cb-bottomnav-item {% if request.endpoint and 'cicli' in request.endpoint %}active{% endif %}">
             <i class="bi bi-arrow-repeat"></i><span>Cicli</span>
         </a>
         <a href="{{ url_for('allevamento.alimentazione_index') }}" class="cb-bottomnav-item {% if request.endpoint and 'alimentazione' in request.endpoint %}active{% endif %}">

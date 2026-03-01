@@ -18,7 +18,7 @@
             <option value="">– seleziona –</option>
             {% for bc in cicli_attivi %}
             <option value="{{ bc.id }}" {% if preselect_bc == bc.id|string %}selected{% endif %}>
-                Box {{ bc.box.numero }} ({{ bc.lotto.lotto_id }}) – {{ bc.capi_presenti or 0 }} capi
+                Box {{ bc.box.numero }} ({{ bc.ciclo.ciclo_id }}) – {{ bc.capi_presenti or 0 }} capi
             </option>
             {% endfor %}
         </select>

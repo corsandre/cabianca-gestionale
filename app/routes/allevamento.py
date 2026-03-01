@@ -4,10 +4,10 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from app import db
 from app.models import (
-    Allarme, Box, BoxCiclo, Capannone, ConsegnaAlimentare, CurvaAccrescimento,
-    EventoCiclo, InappetenzaBox, LottoProduttivo, MagazzinoProdotto,
-    ManutenzioneBox, OrdineAlimentare, OrarioPasto, RazionePasto,
-    RazioneGiornaliera, Setting,
+    Allarme, Box, BoxCiclo, Capannone, CicloProduttivo, ConsegnaAlimentare,
+    CurvaAccrescimento, EventoCiclo, InappetenzaBox, Lotto,
+    MagazzinoProdotto, ManutenzioneBox, OrdineAlimentare, OrarioPasto,
+    RazionePasto, RazioneGiornaliera, Setting,
     TabellaSostSiero, TrattamentoSanitario, User,
 )
 from app.utils.decorators import section_required, write_required
@@ -19,6 +19,19 @@ bp.before_request(section_required("allevamento"))
 # ─────────────────────────────────────────────────────────────────────────────
 # UTILITY
 # ─────────────────────────────────────────────────────────────────────────────
+
+# Tabella lettere mesi DOP (disciplinare Prosciutto di Parma)
+LETTERE_MESI = {
+    'T': 1, 'C': 2, 'B': 3, 'A': 4, 'M': 5, 'P': 6,
+    'L': 7, 'E': 8, 'S': 9, 'R': 10, 'H': 11, 'D': 12,
+}
+MESI_LETTERE = {v: k for k, v in LETTERE_MESI.items()}
+NOMI_MESI = {
+    1: 'Gennaio', 2: 'Febbraio', 3: 'Marzo', 4: 'Aprile',
+    5: 'Maggio', 6: 'Giugno', 7: 'Luglio', 8: 'Agosto',
+    9: 'Settembre', 10: 'Ottobre', 11: 'Novembre', 12: 'Dicembre',
+}
+
 
 def _admin_required():
     if current_user.role != "admin":
@@ -144,25 +157,38 @@ def _calcola_acqua(mangime_kg, siero_litri):
     return round(max(0.0, liquido_totale - acqua_da_siero), 1)
 
 
-def _genera_lotto_id():
+def _genera_ciclo_id():
     anno = date.today().year % 100
-    count = LottoProduttivo.query.count() + 1
+    count = CicloProduttivo.query.count() + 1
     data_str = date.today().strftime("%Y%m%d")
     return f"CICLO{anno:02d}-{count:02d}-{data_str}"
 
 
+def _calcola_data_vendita(lettera, data_arrivo):
+    """Calcola data minima di vendita DOP (9 mesi dalla nascita)."""
+    mese = LETTERE_MESI.get((lettera or '').upper())
+    if not mese:
+        return None
+    # L'anno di nascita: se il mese lettera è ≤ mese arrivo+1, stessa annata; altrimenti anno prima
+    anno_nascita = data_arrivo.year if mese <= data_arrivo.month + 1 else data_arrivo.year - 1
+    mese_vendita = mese + 9
+    anno_vendita = anno_nascita + (1 if mese_vendita > 12 else 0)
+    mese_vendita = mese_vendita - 12 if mese_vendita > 12 else mese_vendita
+    return date(anno_vendita, mese_vendita, 1)
+
+
 def _box_state(box, active_alarms_bc_ids):
     """Restituisce stato box per la mappa SVG."""
-    ciclo = box.cicli.filter(BoxCiclo.stato.in_(["attivo", "in_uscita"])).first()
-    if ciclo is None:
+    bc = box.cicli.filter(BoxCiclo.stato.in_(["attivo", "in_uscita"])).first()
+    if bc is None:
         return "libero", 0, None, None
-    if ciclo.id in active_alarms_bc_ids:
+    if bc.id in active_alarms_bc_ids:
         stato = "allarme"
-    elif ciclo.stato == "in_uscita":
+    elif bc.stato == "in_uscita":
         stato = "in_attesa"
     else:
         stato = f"linea{box.linea_alimentazione}"
-    return stato, ciclo.capi_presenti or 0, ciclo.id, ciclo.lotto.lotto_id
+    return stato, bc.capi_presenti or 0, bc.id, bc.ciclo.ciclo_id
 
 
 def _allarmi_attivi_count():
@@ -190,12 +216,12 @@ def index():
 
     box_data = {}
     for b in boxes:
-        stato, capi, ciclo_id, lotto_codice = _box_state(b, active_alarms_bc_ids)
+        stato, capi, bc_id, ciclo_codice = _box_state(b, active_alarms_bc_ids)
         box_data[b.numero] = {
             "stato": stato,
             "capi": capi,
-            "ciclo_id": ciclo_id,
-            "lotto_id": lotto_codice,
+            "bc_id": bc_id,
+            "ciclo_id": ciclo_codice,
             "linea": b.linea_alimentazione,
             "capannone": b.capannone.nome,
             "superficie": b.superficie_m2,
@@ -212,7 +238,7 @@ def index():
 def box_modal(numero):
     """API JSON per il modal del box sulla mappa (numero = numero box 1-54)."""
     box = Box.query.filter_by(numero=numero).first_or_404()
-    ciclo = box.cicli.filter(BoxCiclo.stato.in_(["attivo", "in_uscita"])).first()
+    bc = box.cicli.filter(BoxCiclo.stato.in_(["attivo", "in_uscita"])).first()
     data = {
         "numero": box.numero,
         "capannone": box.capannone.nome,
@@ -220,21 +246,21 @@ def box_modal(numero):
         "superficie": box.superficie_m2,
         "ciclo": None,
     }
-    if ciclo:
+    if bc:
         oggi = date.today()
         eta_oggi = None
-        if ciclo.eta_stimata_gg and ciclo.data_accasamento:
-            eta_oggi = ciclo.eta_stimata_gg + (oggi - ciclo.data_accasamento).days
+        if bc.eta_stimata_gg and bc.data_accasamento:
+            eta_oggi = bc.eta_stimata_gg + (oggi - bc.data_accasamento).days
         data["ciclo"] = {
-            "id": ciclo.id,
-            "lotto_db_id": ciclo.lotto_id,
-            "lotto_id": ciclo.lotto.lotto_id,
-            "data_accasamento": ciclo.data_accasamento.strftime("%d/%m/%Y"),
-            "capi_iniziali": ciclo.capi_iniziali,
-            "capi_presenti": ciclo.capi_presenti,
-            "peso_medio_iniziale": ciclo.peso_medio_iniziale,
+            "id": bc.id,
+            "ciclo_db_id": bc.ciclo_id,
+            "ciclo_id": bc.ciclo.ciclo_id,
+            "data_accasamento": bc.data_accasamento.strftime("%d/%m/%Y"),
+            "capi_iniziali": bc.capi_iniziali,
+            "capi_presenti": bc.capi_presenti,
+            "peso_medio_iniziale": bc.peso_medio_iniziale,
             "eta_oggi": eta_oggi,
-            "stato": ciclo.stato,
+            "stato": bc.stato,
         }
     return jsonify(data)
 
@@ -243,21 +269,21 @@ def box_modal(numero):
 # FASE 2 — CICLI PRODUTTIVI
 # ─────────────────────────────────────────────────────────────────────────────
 
-@bp.route("/lotti/")
+@bp.route("/cicli/")
 @login_required
-def lotti_index():
+def cicli_index():
     stato_filter = request.args.get("stato", "attivo")
-    q = LottoProduttivo.query
+    q = CicloProduttivo.query
     if stato_filter != "tutti":
         q = q.filter_by(stato=stato_filter)
-    lotti = q.order_by(LottoProduttivo.data_inizio.desc()).all()
-    return render_template("allevamento/lotti/index.html", lotti=lotti, stato_filter=stato_filter)
+    cicli = q.order_by(CicloProduttivo.data_inizio.desc()).all()
+    return render_template("allevamento/cicli/index.html", cicli=cicli, stato_filter=stato_filter)
 
 
-@bp.route("/lotti/nuovo", methods=["GET", "POST"])
+@bp.route("/cicli/nuovo", methods=["GET", "POST"])
 @login_required
 @write_required
-def lotti_nuovo():
+def cicli_nuovo():
     all_boxes = Box.query.order_by(Box.numero).all()
 
     # Mappa box_numero -> info (usata anche nel template)
@@ -276,6 +302,9 @@ def lotti_nuovo():
         data_arrivo_str = request.form.get("data_arrivo", str(date.today()))
         peso_totale_bolla = float(request.form.get("peso_totale_bolla", 0) or 0)
         note = request.form.get("note", "").strip()
+        lettera = request.form.get("lettera_nascita", "").strip().upper() or None
+        fornitore = request.form.get("fornitore", "").strip() or None
+        numero_documento = request.form.get("numero_documento", "").strip() or None
 
         # Leggi capi per singolo box
         box_capi = {}
@@ -291,19 +320,35 @@ def lotti_nuovo():
 
         if not box_capi:
             flash("Seleziona almeno un box e inserisci i capi.", "danger")
-            return render_template("allevamento/lotti/nuovo.html",
-                                   box_map=box_map, today=date.today())
+            return render_template("allevamento/cicli/nuovo.html",
+                                   box_map=box_map, today=date.today(),
+                                   lettere_mesi=LETTERE_MESI, nomi_mesi=NOMI_MESI)
 
         capi_effettivi = sum(box_capi.values())
         data_arrivo = date.fromisoformat(data_arrivo_str)
         peso_medio = (peso_totale_bolla / capi_effettivi) if capi_effettivi > 0 else 0.0
         eta_stimata = _eta_da_peso(peso_medio) if peso_medio > 0 else None
 
-        lotto = LottoProduttivo(
-            lotto_id=_genera_lotto_id(),
-            numero_ciclo=LottoProduttivo.query.count() + 1,
+        ciclo = CicloProduttivo(
+            ciclo_id=_genera_ciclo_id(),
+            numero_ciclo=CicloProduttivo.query.count() + 1,
             data_inizio=data_arrivo,
             stato="attivo",
+            note=note,
+            created_by=current_user.id,
+        )
+        db.session.add(ciclo)
+        db.session.flush()
+
+        # Primo lotto (bolla) del ciclo
+        lotto = Lotto(
+            ciclo_id=ciclo.id,
+            numero_lotto=1,
+            data_consegna=data_arrivo,
+            peso_totale_bolla_kg=peso_totale_bolla if peso_totale_bolla else None,
+            lettera_nascita=lettera,
+            fornitore=fornitore,
+            numero_documento=numero_documento,
             note=note,
             created_by=current_user.id,
         )
@@ -313,7 +358,9 @@ def lotti_nuovo():
         for bid, capi_box in box_capi.items():
             peso_box = (peso_totale_bolla / capi_effettivi * capi_box) if capi_effettivi else 0
             bc = BoxCiclo(
+                ciclo_id=ciclo.id,
                 lotto_id=lotto.id,
+                lettera_nascita=lettera,
                 box_id=bid,
                 data_accasamento=data_arrivo,
                 capi_iniziali=capi_box,
@@ -326,49 +373,178 @@ def lotti_nuovo():
             db.session.add(bc)
 
         db.session.commit()
-        flash(f"Lotto {lotto.lotto_id} creato con {capi_effettivi} capi in {len(box_capi)} box.", "success")
-        return redirect(url_for("allevamento.lotti_detail", id=lotto.id))
+        flash(f"Ciclo {ciclo.ciclo_id} creato con {capi_effettivi} capi in {len(box_capi)} box.", "success")
+        return redirect(url_for("allevamento.cicli_detail", id=ciclo.id))
 
-    return render_template("allevamento/lotti/nuovo.html",
-                           box_map=box_map, today=date.today())
+    return render_template("allevamento/cicli/nuovo.html",
+                           box_map=box_map, today=date.today(),
+                           lettere_mesi=LETTERE_MESI, nomi_mesi=NOMI_MESI)
 
 
-@bp.route("/lotti/<int:id>")
+@bp.route("/cicli/<int:id>")
 @login_required
-def lotti_detail(id):
-    lotto = LottoProduttivo.query.get_or_404(id)
-    box_cicli = lotto.box_cicli.all()
-    # Tutti gli eventi per questo lotto, ordinati per data desc
+def cicli_detail(id):
+    ciclo = CicloProduttivo.query.get_or_404(id)
+    box_cicli = ciclo.box_cicli.all()
+    lotti = ciclo.lotti.order_by(Lotto.numero_lotto).all()
+    # Tutti gli eventi per questo ciclo, ordinati per data desc
     bc_ids = [bc.id for bc in box_cicli]
     eventi = EventoCiclo.query.filter(
         EventoCiclo.box_ciclo_id.in_(bc_ids)
     ).order_by(EventoCiclo.data.desc()).all() if bc_ids else []
-    return render_template("allevamento/lotti/detail.html",
-                           lotto=lotto, box_cicli=box_cicli, eventi=eventi)
+
+    # Calcola data vendita prevista per ogni lotto
+    lotti_info = []
+    for lt in lotti:
+        data_vendita = _calcola_data_vendita(lt.lettera_nascita, lt.data_consegna) if lt.lettera_nascita else None
+        capi_lotto = lt.box_cicli.count()
+        lotti_info.append({"lotto": lt, "data_vendita": data_vendita, "n_box": capi_lotto})
+
+    # Banner warning se lettere diverse tra lotti
+    lettere_uniche = {lt.lettera_nascita for lt in lotti if lt.lettera_nascita}
+    lettere_miste = len(lettere_uniche) > 1
+
+    return render_template("allevamento/cicli/detail.html",
+                           ciclo=ciclo, box_cicli=box_cicli, eventi=eventi,
+                           lotti_info=lotti_info, lettere_miste=lettere_miste,
+                           nomi_mesi=NOMI_MESI, lettere_mesi=LETTERE_MESI)
 
 
-@bp.route("/lotti/<int:id>/riaccasamento", methods=["GET", "POST"])
+@bp.route("/cicli/<int:id>/aggiungi_lotto", methods=["GET", "POST"])
 @login_required
 @write_required
-def lotti_riaccasamento(id):
-    lotto = LottoProduttivo.query.get_or_404(id)
-    if lotto.stato != "attivo":
-        flash("Il lotto non è attivo.", "warning")
-        return redirect(url_for("allevamento.lotti_detail", id=id))
+def cicli_aggiungi_lotto(id):
+    ciclo = CicloProduttivo.query.get_or_404(id)
+    if ciclo.stato != "attivo":
+        flash("Il ciclo non è attivo.", "warning")
+        return redirect(url_for("allevamento.cicli_detail", id=id))
+
+    all_boxes = Box.query.order_by(Box.numero).all()
+    numero_lotto = ciclo.lotti.count() + 1
+
+    # Box già nel ciclo: numero_box -> bc
+    ciclo_bc = {
+        bc.box.numero: bc
+        for bc in ciclo.box_cicli.filter(BoxCiclo.stato.in_(["attivo", "in_uscita"])).all()
+    }
+
+    box_map = {}
+    for b in all_boxes:
+        if b.numero in ciclo_bc:
+            box_map[b.numero] = {
+                "id": b.id,
+                "capannone": b.capannone.numero,
+                "linea": b.linea_alimentazione,
+                "capienza": int(b.superficie_m2) if b.superficie_m2 else 0,
+                "stato": "in_ciclo",
+            }
+        else:
+            altro = b.cicli.filter(BoxCiclo.stato.in_(["attivo", "in_uscita"])).first()
+            box_map[b.numero] = {
+                "id": b.id,
+                "capannone": b.capannone.numero,
+                "linea": b.linea_alimentazione,
+                "capienza": int(b.superficie_m2) if b.superficie_m2 else 0,
+                "stato": "libero" if not altro else "occupato",
+                "libero": not bool(altro),
+            }
+
+    if request.method == "POST":
+        data_cons_str = request.form.get("data_consegna", str(date.today()))
+        peso_totale_bolla = float(request.form.get("peso_totale_bolla", 0) or 0)
+        lettera = request.form.get("lettera_nascita", "").strip().upper() or None
+        fornitore = request.form.get("fornitore", "").strip() or None
+        numero_documento = request.form.get("numero_documento", "").strip() or None
+        note = request.form.get("note", "").strip()
+
+        box_capi = {}
+        for b in all_boxes:
+            if b.numero in ciclo_bc:
+                continue  # box già nel ciclo, non riaccasare
+            val = request.form.get(f"capi_box_{b.id}", "").strip()
+            if val:
+                try:
+                    n = int(val)
+                    if n > 0:
+                        box_capi[b.id] = n
+                except ValueError:
+                    pass
+
+        if not box_capi:
+            flash("Seleziona almeno un box libero con i capi.", "danger")
+            return render_template("allevamento/cicli/aggiungi_lotto.html",
+                                   ciclo=ciclo, box_map=box_map,
+                                   numero_lotto=numero_lotto, today=date.today(),
+                                   lettere_mesi=LETTERE_MESI, nomi_mesi=NOMI_MESI)
+
+        capi_effettivi = sum(box_capi.values())
+        data_consegna = date.fromisoformat(data_cons_str)
+        peso_medio = (peso_totale_bolla / capi_effettivi) if capi_effettivi > 0 else 0.0
+        eta_stimata = _eta_da_peso(peso_medio) if peso_medio > 0 else None
+
+        lotto = Lotto(
+            ciclo_id=ciclo.id,
+            numero_lotto=numero_lotto,
+            data_consegna=data_consegna,
+            peso_totale_bolla_kg=peso_totale_bolla if peso_totale_bolla else None,
+            lettera_nascita=lettera,
+            fornitore=fornitore,
+            numero_documento=numero_documento,
+            note=note,
+            created_by=current_user.id,
+        )
+        db.session.add(lotto)
+        db.session.flush()
+
+        for bid, capi_box in box_capi.items():
+            peso_box = (peso_totale_bolla / capi_effettivi * capi_box) if capi_effettivi else 0
+            bc = BoxCiclo(
+                ciclo_id=ciclo.id,
+                lotto_id=lotto.id,
+                lettera_nascita=lettera,
+                box_id=bid,
+                data_accasamento=data_consegna,
+                capi_iniziali=capi_box,
+                peso_totale_iniziale=round(peso_box, 1),
+                peso_medio_iniziale=round(peso_medio, 2) if peso_medio else None,
+                eta_stimata_gg=eta_stimata,
+                capi_presenti=capi_box,
+                stato="attivo",
+            )
+            db.session.add(bc)
+
+        db.session.commit()
+        flash(f"Lotto {numero_lotto} aggiunto al ciclo con {capi_effettivi} capi.", "success")
+        return redirect(url_for("allevamento.cicli_detail", id=id))
+
+    return render_template("allevamento/cicli/aggiungi_lotto.html",
+                           ciclo=ciclo, box_map=box_map,
+                           numero_lotto=numero_lotto, today=date.today(),
+                           lettere_mesi=LETTERE_MESI, nomi_mesi=NOMI_MESI)
+
+
+@bp.route("/cicli/<int:id>/riaccasamento", methods=["GET", "POST"])
+@login_required
+@write_required
+def cicli_riaccasamento(id):
+    ciclo = CicloProduttivo.query.get_or_404(id)
+    if ciclo.stato != "attivo":
+        flash("Il ciclo non è attivo.", "warning")
+        return redirect(url_for("allevamento.cicli_detail", id=id))
 
     all_boxes = Box.query.order_by(Box.numero).all()
 
-    # BoxCiclo attivi/in_uscita del lotto: numero_box -> bc
-    lotto_bc = {
+    # BoxCiclo attivi/in_uscita del ciclo: numero_box -> bc
+    ciclo_bc = {
         bc.box.numero: bc
-        for bc in lotto.box_cicli.filter(BoxCiclo.stato.in_(["attivo", "in_uscita"])).all()
+        for bc in ciclo.box_cicli.filter(BoxCiclo.stato.in_(["attivo", "in_uscita"])).all()
     }
 
     # Mappa completa per SVG: numero_box -> info
     box_map = {}
     for b in all_boxes:
-        if b.numero in lotto_bc:
-            bc = lotto_bc[b.numero]
+        if b.numero in ciclo_bc:
+            bc = ciclo_bc[b.numero]
             box_map[b.numero] = {
                 "id": b.id, "bc_id": bc.id,
                 "capannone": b.capannone.numero, "linea": b.linea_alimentazione,
@@ -387,14 +563,14 @@ def lotti_riaccasamento(id):
                 "capi_presenti": 0, "peso_medio": 0,
             }
 
-    capi_totali_prima = sum(bc.capi_presenti or 0 for bc in lotto_bc.values())
+    capi_totali_prima = sum(bc.capi_presenti or 0 for bc in ciclo_bc.values())
 
     if request.method == "POST":
         data_str = request.form.get("data_riaccasamento", str(date.today()))
         data_riaccasamento = date.fromisoformat(data_str)
 
-        # Aggiorna box già nel lotto
-        for box_num, bc in lotto_bc.items():
+        # Aggiorna box già nel ciclo
+        for box_num, bc in ciclo_bc.items():
             val_capi = request.form.get(f"capi_bc_{bc.id}", "").strip()
             val_peso = request.form.get(f"peso_bc_{bc.id}", "").strip()
             if not val_capi:
@@ -421,7 +597,7 @@ def lotti_riaccasamento(id):
 
         # Aggiunge box nuovi (liberi selezionati)
         for b in all_boxes:
-            if b.numero in lotto_bc:
+            if b.numero in ciclo_bc:
                 continue
             val_capi = request.form.get(f"capi_box_{b.id}", "").strip()
             val_peso = request.form.get(f"peso_box_{b.id}", "").strip()
@@ -432,14 +608,14 @@ def lotti_riaccasamento(id):
 
             nuovi_capi = int(val_capi)
             nuovi_peso = float(val_peso) if val_peso else None
-            # Se peso non specificato, eredita media del lotto
+            # Se peso non specificato, eredita media del ciclo
             if not nuovi_peso:
-                pesi = [bc.peso_medio_iniziale for bc in lotto_bc.values() if bc.peso_medio_iniziale]
+                pesi = [bc.peso_medio_iniziale for bc in ciclo_bc.values() if bc.peso_medio_iniziale]
                 nuovi_peso = round(sum(pesi) / len(pesi), 2) if pesi else None
             eta = _eta_da_peso(nuovi_peso) if nuovi_peso else None
 
             bc_new = BoxCiclo(
-                lotto_id=lotto.id, box_id=b.id,
+                ciclo_id=ciclo.id, box_id=b.id,
                 data_accasamento=data_riaccasamento,
                 capi_iniziali=nuovi_capi,
                 peso_totale_iniziale=round((nuovi_peso or 0) * nuovi_capi, 1),
@@ -463,30 +639,30 @@ def lotti_riaccasamento(id):
 
         db.session.commit()
         flash("Riaccasamento registrato.", "success")
-        return redirect(url_for("allevamento.lotti_detail", id=id))
+        return redirect(url_for("allevamento.cicli_detail", id=id))
 
-    return render_template("allevamento/lotti/riaccasamento.html",
-                           lotto=lotto, box_map=box_map,
-                           lotto_bc=lotto_bc,
+    return render_template("allevamento/cicli/riaccasamento.html",
+                           ciclo=ciclo, box_map=box_map,
+                           ciclo_bc=ciclo_bc,
                            capi_totali_prima=capi_totali_prima,
                            today=date.today())
 
 
-@bp.route("/lotti/<int:id>/chiudi", methods=["POST"])
+@bp.route("/cicli/<int:id>/chiudi", methods=["POST"])
 @login_required
 @write_required
-def lotti_chiudi(id):
-    lotto = LottoProduttivo.query.get_or_404(id)
-    if lotto.stato == "chiuso":
-        flash("Lotto già chiuso.", "warning")
-        return redirect(url_for("allevamento.lotti_detail", id=id))
-    lotto.stato = "chiuso"
-    lotto.data_chiusura = date.today()
-    for bc in lotto.box_cicli.all():
+def cicli_chiudi(id):
+    ciclo = CicloProduttivo.query.get_or_404(id)
+    if ciclo.stato == "chiuso":
+        flash("Ciclo già chiuso.", "warning")
+        return redirect(url_for("allevamento.cicli_detail", id=id))
+    ciclo.stato = "chiuso"
+    ciclo.data_chiusura = date.today()
+    for bc in ciclo.box_cicli.all():
         bc.stato = "chiuso"
     db.session.commit()
-    flash(f"Lotto {lotto.lotto_id} chiuso.", "success")
-    return redirect(url_for("allevamento.lotti_index"))
+    flash(f"Ciclo {ciclo.ciclo_id} chiuso.", "success")
+    return redirect(url_for("allevamento.cicli_index"))
 
 
 @bp.route("/eventi/nuovo", methods=["GET", "POST"])
@@ -542,15 +718,15 @@ def eventi_nuovo():
             bc.capi_presenti = max(0, (bc.capi_presenti or 0) - quantita)
             if bc.capi_presenti == 0:
                 bc.stato = "chiuso"
-                # Controlla se tutto il lotto è chiuso
-                lotto = bc.lotto
-                if all(b.stato == "chiuso" for b in lotto.box_cicli.all()):
-                    lotto.stato = "chiuso"
-                    lotto.data_chiusura = date.today()
+                # Controlla se tutto il ciclo è chiuso
+                ciclo_obj = bc.ciclo
+                if all(b.stato == "chiuso" for b in ciclo_obj.box_cicli.all()):
+                    ciclo_obj.stato = "chiuso"
+                    ciclo_obj.data_chiusura = date.today()
 
         db.session.commit()
         flash(f"Evento '{tipo}' registrato ({quantita} capi).", "success")
-        return redirect(url_for("allevamento.lotti_detail", id=bc.lotto_id))
+        return redirect(url_for("allevamento.cicli_detail", id=bc.ciclo_id))
 
     # GET: eventuale preselect da query string
     preselect_bc = request.args.get("bc")
@@ -1093,8 +1269,8 @@ def allarmi_rigenera():
 @bp.route("/report/ciclo/<int:id>")
 @login_required
 def report_ciclo(id):
-    lotto = LottoProduttivo.query.get_or_404(id)
-    box_cicli = lotto.box_cicli.all()
+    ciclo = CicloProduttivo.query.get_or_404(id)
+    box_cicli = ciclo.box_cicli.all()
     bc_ids = [bc.id for bc in box_cicli]
 
     eventi = EventoCiclo.query.filter(
@@ -1126,11 +1302,11 @@ def report_ciclo(id):
     capi_usciti = capi_usciti_tot
 
     durata_gg = None
-    if lotto.data_chiusura:
-        durata_gg = (lotto.data_chiusura - lotto.data_inizio).days
+    if ciclo.data_chiusura:
+        durata_gg = (ciclo.data_chiusura - ciclo.data_inizio).days
 
     return render_template("allevamento/report/ciclo.html",
-                           lotto=lotto, box_cicli=box_cicli, eventi=eventi,
+                           ciclo=ciclo, box_cicli=box_cicli, eventi=eventi,
                            capi_iniziali_tot=capi_iniziali_tot,
                            capi_finali=capi_finali, morti=morti,
                            mortalita_perc=mortalita_perc,
