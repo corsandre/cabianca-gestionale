@@ -28,7 +28,19 @@
     display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; align-items: center;
     box-shadow: 0 2px 6px rgba(0,0,0,.1);
 }
-.box-card-lotto { border-left: 3px solid #c2185b !important; }
+
+/* Tabella compatta */
+.tbl-riacc { font-size: .82rem; }
+.tbl-riacc th { font-size: .75rem; text-transform: uppercase; letter-spacing: .03em;
+                background: #fce4ec; color: #c2185b; white-space: nowrap; vertical-align: middle; }
+.tbl-riacc td { vertical-align: middle; padding: .25rem .4rem; }
+.tbl-riacc input[type=number] { font-size: .82rem; padding: .2rem .35rem; height: auto; }
+.badge-linea1 { background: #bbdefb; color: #1976d2; }
+.badge-linea2 { background: #ffcdd2; color: #d32f2f; }
+.badge-linea3 { background: #c8e6c9; color: #388e3c; }
+.eta-peso-sep { color: #aaa; font-size: .75rem; user-select: none; }
+.info-stima { font-size: .75rem; color: #999; }
+.val-stima-today { font-size: .82rem; font-weight: 600; }
 </style>
 {% endblock %}
 
@@ -62,7 +74,7 @@
 {# ── Mappa SVG ── #}
 <div class="cb-card p-3 mb-3">
     <div class="d-flex justify-content-between align-items-center mb-2">
-        <h6 class="mb-0">Box del ciclo (tratteggiati) · Box liberi da aggiungere (click)</h6>
+        <h6 class="mb-0">Mappa farm · box liberi da aggiungere (click)</h6>
     </div>
     <div class="d-flex flex-wrap gap-3 mb-3 small">
         <span><span style="display:inline-block;width:20px;height:14px;border-radius:3px;background:#bbdefb;border:2.5px dashed #1976d2;vertical-align:middle"></span> Nel ciclo</span>
@@ -136,54 +148,111 @@
     </div>
 </div>
 
-{# ── Panel box del ciclo (sempre visibili) ── #}
+{# ── Tabella box del ciclo ── #}
 <div class="cb-card p-3 mb-3">
-    <h6 class="mb-3"><i class="bi bi-pencil-square me-1" style="color:#c2185b"></i>
-        Inserisci nuovi valori per i box del ciclo
-        <small class="text-muted fw-normal">(lascia vuoto per non modificare · metti 0 per svuotare il box)</small>
+    <h6 class="mb-1"><i class="bi bi-table me-1" style="color:#c2185b"></i>
+        Box del ciclo
+        <small class="text-muted fw-normal">– lascia "Nuovi capi" vuoto per non modificare · 0 per svuotare</small>
     </h6>
-    <div class="row g-2">
-    {% for box_num, bc in ciclo_bc.items() | sort %}
-    {% set bd = box_map[box_num] %}
-    {% set colori = {1: '#1976d2', 2: '#d32f2f', 3: '#388e3c'} %}
-    {% set c = colori[bd.linea] %}
-    <div class="col-6 col-sm-4 col-md-3">
-        <div class="border rounded p-2 box-card-lotto h-100">
-            <div class="fw-bold small mb-1">Box {{ box_num }}
-                <small class="text-muted" style="font-size:.7rem">L{{ bd.linea }}</small>
-            </div>
-            <div class="text-muted mb-2" style="font-size:.7rem">
-                Presenti: <strong>{{ bc.capi_presenti or 0 }}</strong>
-                {% if bc.peso_medio_iniziale %} · Peso: {{ '%.1f'|format(bc.peso_medio_iniziale) }} kg{% endif %}
-            </div>
-            <label class="form-label" style="font-size:.72rem;margin-bottom:.2rem">Nuovi capi</label>
-            <input type="number"
-                   name="capi_bc_{{ bc.id }}"
-                   id="capi-bc-{{ bc.id }}"
-                   class="form-control form-control-sm lotto-capi-input"
-                   min="0" max="{{ bd.capienza }}"
-                   placeholder="{{ bc.capi_presenti or 0 }}"
-                   oninput="aggiornaContatore()">
-            <label class="form-label mt-1" style="font-size:.72rem;margin-bottom:.2rem">
-                Peso medio (kg) <span class="text-muted">opzionale</span>
-            </label>
-            <input type="number"
-                   name="peso_bc_{{ bc.id }}"
-                   class="form-control form-control-sm"
-                   step="0.1" min="0"
-                   placeholder="{{ '%.1f'|format(bc.peso_medio_iniziale) if bc.peso_medio_iniziale else '–' }}">
-        </div>
-    </div>
-    {% endfor %}
+    <p class="text-muted small mb-2">
+        <i class="bi bi-info-circle me-1"></i>
+        Peso e Età oggi sono <strong>stime dalla curva di accrescimento</strong>.
+        Inserisci Nuovi capi (obbligatorio) e opzionalmente ricalibra peso <i class="bi bi-arrow-left-right"></i> età.
+    </p>
+    <div class="table-responsive">
+    <table class="table table-sm table-hover tbl-riacc align-middle mb-0">
+        <thead>
+            <tr>
+                <th>Box</th>
+                <th>L</th>
+                <th class="text-end">Presenti</th>
+                <th class="text-end">Età oggi</th>
+                <th class="text-end">Peso stim.</th>
+                <th style="min-width:80px">Nuovi capi</th>
+                <th style="min-width:165px" colspan="3">
+                    Ricalibra &nbsp;<i class="bi bi-arrow-left-right"></i>
+                    <small class="fw-normal text-muted">(opzionale)</small>
+                </th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for box_num, bc in ciclo_bc.items() | sort %}
+        {% set bd = box_map[box_num] %}
+        {% set ex = bc_extra[bc.id] %}
+        <tr>
+            <td>
+                <span class="fw-bold">{{ box_num }}</span>
+                <span class="text-muted" style="font-size:.7rem"> C{{ bd.capannone }}</span>
+            </td>
+            <td>
+                <span class="badge badge-linea{{ bd.linea }} fw-semibold" style="font-size:.7rem">L{{ bd.linea }}</span>
+            </td>
+            <td class="text-end fw-bold">{{ bc.capi_presenti or 0 }}</td>
+            <td class="text-end info-stima">
+                {% if ex.eta_attuale_gg %}{{ ex.eta_attuale_gg }} gg{% else %}–{% endif %}
+            </td>
+            <td class="text-end val-stima-today" style="color:#c2185b">
+                {% if ex.peso_attuale_stima %}{{ ex.peso_attuale_stima }} kg{% else %}–{% endif %}
+            </td>
+            <td>
+                <input type="number"
+                       name="capi_bc_{{ bc.id }}"
+                       id="capi-bc-{{ bc.id }}"
+                       class="form-control form-control-sm lotto-capi-input"
+                       min="0" max="{{ bd.capienza }}"
+                       placeholder="{{ bc.capi_presenti or 0 }}"
+                       oninput="aggiornaContatore()">
+            </td>
+            <td style="min-width:75px">
+                <input type="number"
+                       name="eta_bc_{{ bc.id }}"
+                       id="eta-bc-{{ bc.id }}"
+                       class="form-control form-control-sm eta-input"
+                       step="1" min="1"
+                       placeholder="gg"
+                       data-peer="peso-bc-{{ bc.id }}"
+                       oninput="etaChanged(this)">
+            </td>
+            <td class="eta-peso-sep px-0 text-center" style="width:18px">↔</td>
+            <td style="min-width:75px">
+                <input type="number"
+                       name="peso_bc_{{ bc.id }}"
+                       id="peso-bc-{{ bc.id }}"
+                       class="form-control form-control-sm peso-input"
+                       step="0.1" min="0"
+                       placeholder="kg"
+                       data-peer="eta-bc-{{ bc.id }}"
+                       oninput="pesoChanged(this)">
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
     </div>
 </div>
 
-{# ── Panel box nuovi (liberi aggiunti dalla mappa) ── #}
+{# ── Tabella box nuovi (liberi aggiunti dalla mappa) ── #}
 <div class="cb-card p-3 mb-3" id="panel-nuovi" style="display:none">
-    <h6 class="mb-3"><i class="bi bi-plus-circle me-1" style="color:#388e3c"></i>
+    <h6 class="mb-2"><i class="bi bi-plus-circle me-1" style="color:#388e3c"></i>
         Box liberi aggiunti al ciclo
     </h6>
-    <div class="row g-2" id="box-nuovi-container"></div>
+    <div class="table-responsive">
+    <table class="table table-sm tbl-riacc mb-0">
+        <thead>
+            <tr>
+                <th>Box</th>
+                <th>L</th>
+                <th style="min-width:80px">Capi <span class="text-danger">*</span></th>
+                <th style="min-width:165px" colspan="3">
+                    Età (gg) <i class="bi bi-arrow-left-right"></i> Peso (kg)
+                    <small class="fw-normal text-muted">(opz.)</small>
+                </th>
+                <th style="width:30px"></th>
+            </tr>
+        </thead>
+        <tbody id="box-nuovi-tbody"></tbody>
+    </table>
+    </div>
 </div>
 
 <button type="submit" class="btn mb-4" style="background:#c2185b;color:white">
@@ -200,9 +269,59 @@ for (const [k, v] of Object.entries(BOX_MAP_RAW)) BOX_MAP[parseInt(k)] = v;
 
 const CAPI_PRIMA = {{ capi_totali_prima }};
 const COLORI = {1: '#1976d2', 2: '#d32f2f', 3: '#388e3c'};
-const NOMI_L = {1: 'L1', 2: 'L2', 3: 'L3'};
 
-// Box liberi selezionati: boxId -> {num, capienza, linea}
+// Curva di accrescimento reale dal DB: [{eta, peso}, ...]
+const CURVA = {{ curva_json | tojson }};
+
+function pesoDaEta(eta) {
+    if (!eta || eta <= 0 || !CURVA.length) return null;
+    if (eta <= CURVA[0].eta) return CURVA[0].peso;
+    if (eta >= CURVA[CURVA.length-1].eta) return CURVA[CURVA.length-1].peso;
+    for (let i = 0; i < CURVA.length-1; i++) {
+        const a = CURVA[i], b = CURVA[i+1];
+        if (a.eta <= eta && eta <= b.eta) {
+            const ratio = (eta - a.eta) / (b.eta - a.eta);
+            return Math.round((a.peso + ratio * (b.peso - a.peso)) * 10) / 10;
+        }
+    }
+    return null;
+}
+
+function etaDaPeso(peso) {
+    if (!peso || peso <= 0 || !CURVA.length) return null;
+    if (peso <= CURVA[0].peso) return CURVA[0].eta;
+    if (peso >= CURVA[CURVA.length-1].peso) return CURVA[CURVA.length-1].eta;
+    for (let i = 0; i < CURVA.length-1; i++) {
+        const a = CURVA[i], b = CURVA[i+1];
+        if (a.peso <= peso && peso <= b.peso) {
+            const ratio = (peso - a.peso) / (b.peso - a.peso);
+            return Math.round(a.eta + ratio * (b.eta - a.eta));
+        }
+    }
+    return null;
+}
+
+function etaChanged(el) {
+    const eta = parseFloat(el.value);
+    const peerId = el.dataset.peer;
+    const peerEl = document.getElementById(peerId);
+    if (!peerEl) return;
+    if (el.value === '') { peerEl.value = ''; return; }
+    const p = pesoDaEta(eta);
+    if (p !== null) peerEl.value = p.toFixed(1);
+}
+
+function pesoChanged(el) {
+    const peso = parseFloat(el.value);
+    const peerId = el.dataset.peer;
+    const peerEl = document.getElementById(peerId);
+    if (!peerEl) return;
+    if (el.value === '') { peerEl.value = ''; return; }
+    const e = etaDaPeso(peso);
+    if (e !== null) peerEl.value = e;
+}
+
+// Box liberi selezionati dalla mappa
 const selectedFree = new Map();
 
 function toggleBox(boxNum) {
@@ -215,8 +334,8 @@ function toggleBox(boxNum) {
             rect.classList.remove('box-selezionato');
             rect.classList.add(`box-linea${bd.linea}`);
         }
-        const card = document.getElementById(`free-card-${bd.id}`);
-        if (card) card.remove();
+        const row = document.getElementById(`free-row-${bd.id}`);
+        if (row) row.remove();
     } else {
         selectedFree.set(bd.id, {num: boxNum, capienza: bd.capienza, linea: bd.linea});
         const rect = document.getElementById(`box-rect-${boxNum}`);
@@ -224,7 +343,7 @@ function toggleBox(boxNum) {
             rect.classList.remove(`box-linea${bd.linea}`);
             rect.classList.add('box-selezionato');
         }
-        addFreeCard(bd.id, {num: boxNum, capienza: bd.capienza, linea: bd.linea});
+        addFreeRow(bd.id, {num: boxNum, capienza: bd.capienza, linea: bd.linea});
     }
     const panel = document.getElementById('panel-nuovi');
     panel.style.display = selectedFree.size > 0 ? '' : 'none';
@@ -232,59 +351,61 @@ function toggleBox(boxNum) {
     aggiornaContatore();
 }
 
-function addFreeCard(boxId, bd) {
-    const container = document.getElementById('box-nuovi-container');
-    const col = document.createElement('div');
-    col.className = 'col-6 col-sm-4 col-md-3';
-    col.id = `free-card-${boxId}`;
+function addFreeRow(boxId, bd) {
+    const tbody = document.getElementById('box-nuovi-tbody');
+    const tr = document.createElement('tr');
+    tr.id = `free-row-${boxId}`;
     const c = COLORI[bd.linea] || '#888';
-    col.innerHTML = `
-        <div class="border rounded p-2 h-100" style="border-left:3px solid ${c} !important">
-            <div class="d-flex justify-content-between align-items-center mb-1">
-                <span class="fw-bold small">Box ${bd.num}
-                    <small class="text-muted">${NOMI_L[bd.linea]}</small>
-                </span>
-                <button type="button" class="btn-close" style="font-size:.55rem"
-                        onclick="toggleBox(${bd.num})" aria-label="Rimuovi"></button>
-            </div>
-            <div class="text-muted mb-1" style="font-size:.7rem">Cap. ${bd.capienza} posti</div>
-            <label style="font-size:.72rem;margin-bottom:.2rem;display:block">Capi</label>
+    tr.innerHTML = `
+        <td><strong>${bd.num}</strong></td>
+        <td><span class="badge badge-linea${bd.linea} fw-semibold" style="font-size:.7rem">L${bd.linea}</span></td>
+        <td>
             <input type="number"
                    name="capi_box_${boxId}"
                    id="capi-free-${boxId}"
-                   class="form-control form-control-sm free-capi-input mb-1"
+                   class="form-control form-control-sm free-capi-input"
                    min="1" max="${bd.capienza}"
                    placeholder="n° capi"
                    oninput="aggiornaContatore()">
-            <label style="font-size:.72rem;margin-bottom:.2rem;display:block">
-                Peso medio (kg) <span class="text-muted">opz.</span>
-            </label>
+        </td>
+        <td style="min-width:75px">
+            <input type="number"
+                   name="eta_box_${boxId}"
+                   id="eta-free-${boxId}"
+                   class="form-control form-control-sm eta-input"
+                   step="1" min="1"
+                   placeholder="gg"
+                   data-peer="peso-free-${boxId}"
+                   oninput="etaChanged(this)">
+        </td>
+        <td class="eta-peso-sep px-0 text-center" style="width:18px">↔</td>
+        <td style="min-width:75px">
             <input type="number"
                    name="peso_box_${boxId}"
-                   class="form-control form-control-sm"
+                   id="peso-free-${boxId}"
+                   class="form-control form-control-sm peso-input"
                    step="0.1" min="0"
-                   placeholder="kg/capo">
-        </div>`;
-    container.appendChild(col);
+                   placeholder="kg"
+                   data-peer="eta-free-${boxId}"
+                   oninput="pesoChanged(this)">
+        </td>
+        <td>
+            <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1"
+                    onclick="toggleBox(${bd.num})" title="Rimuovi">
+                <i class="bi bi-x"></i>
+            </button>
+        </td>`;
+    tbody.appendChild(tr);
 }
 
 function aggiornaContatore() {
     let dopo = 0;
-
-    // Somma box del lotto: usa il nuovo valore se inserito, altrimenti il vecchio
     document.querySelectorAll('.lotto-capi-input').forEach(el => {
-        if (el.value !== '') {
-            dopo += parseInt(el.value) || 0;
-        } else {
-            dopo += parseInt(el.placeholder) || 0;
-        }
+        dopo += el.value !== '' ? (parseInt(el.value) || 0) : (parseInt(el.placeholder) || 0);
     });
-
-    // Somma box liberi aggiunti
     document.querySelectorAll('.free-capi-input').forEach(el => {
         dopo += parseInt(el.value) || 0;
     });
-
     document.getElementById('cnt-dopo').textContent = dopo;
     const diffEl = document.getElementById('cnt-diff');
     const diff = dopo - CAPI_PRIMA;
@@ -292,7 +413,11 @@ function aggiornaContatore() {
     diffEl.style.color = diff === 0 ? '#388e3c' : diff > 0 ? '#d32f2f' : '#e65100';
 }
 
-// Calcola stato iniziale (box del lotto con valori attuali come placeholder)
+// Gestione campo eta_bc_ (nel POST il backend usa peso_bc_)
+// I campi eta_bc_* vengono ignorati dal backend, ma il valore calcolato
+// viene scritto nel campo peso_bc_* corrispondente via JS
+// Quindi nessuna modifica al backend necessaria.
+
 aggiornaContatore();
 </script>
 {% endblock %}

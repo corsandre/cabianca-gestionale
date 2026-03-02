@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Report Allevamento{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-bar-chart" style="color:#c2185b"></i> Report</h1>
+</div>
+
+{% if cicli %}
+<div class="row g-3">
+    {% for ciclo in cicli %}
+    {% set box_cicli = ciclo.box_cicli.all() %}
+    {% set capi_ini = box_cicli | sum(attribute='capi_iniziali') %}
+    {% set capi_att = box_cicli | selectattr('stato', 'equalto', 'attivo') | sum(attribute='capi_presenti') %}
+    <div class="col-12 col-md-6 col-lg-4">
+        <div class="cb-card p-3 h-100 d-flex flex-column">
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background:#c2185b; font-size:.9rem">
+                    {{ ciclo.ciclo_id }}
+                </span>
+                {% if ciclo.data_chiusura %}
+                <span class="badge bg-secondary">Chiuso</span>
+                {% else %}
+                <span class="badge bg-success">In corso</span>
+                {% endif %}
+            </div>
+            <div class="row g-2 mb-3 text-center flex-grow-1">
+                <div class="col-6">
+                    <div class="fw-bold fs-5" style="color:#c2185b">{{ capi_ini }}</div>
+                    <div class="small text-muted">Capi iniziali</div>
+                </div>
+                <div class="col-6">
+                    <div class="fw-bold fs-5 text-success">{{ capi_att }}</div>
+                    <div class="small text-muted">Capi attivi</div>
+                </div>
+                <div class="col-6">
+                    <div class="small text-muted mt-1">Inizio</div>
+                    <div class="fw-semibold small">{{ ciclo.data_inizio.strftime('%d/%m/%Y') }}</div>
+                </div>
+                <div class="col-6">
+                    <div class="small text-muted mt-1">Fine</div>
+                    <div class="fw-semibold small">
+                        {{ ciclo.data_chiusura.strftime('%d/%m/%Y') if ciclo.data_chiusura else '—' }}
+                    </div>
+                </div>
+            </div>
+            <a href="{{ url_for('allevamento.report_ciclo', id=ciclo.id) }}"
+               class="btn btn-sm w-100"
+               style="background:#c2185b; color:#fff; border:none">
+                <i class="bi bi-bar-chart"></i> Apri report
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-muted text-center py-5">
+    <i class="bi bi-bar-chart fs-1 d-block mb-2"></i>
+    Nessun ciclo produttivo registrato.
+</div>
+{% endif %}
+{% endblock %}

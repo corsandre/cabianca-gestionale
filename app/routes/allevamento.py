@@ -34,6 +34,7 @@ NOMI_MESI = {
 
 
 def _admin_required():
+    """Guard helper: restituisce un redirect se l'utente corrente non è admin, altrimenti None."""
     if current_user.role != "admin":
         flash("Accesso riservato agli amministratori.", "danger")
         return redirect(url_for("allevamento.index"))
@@ -54,6 +55,23 @@ def _eta_da_peso(peso_kg):
         if a.peso_kg <= peso_kg <= b.peso_kg:
             ratio = (peso_kg - a.peso_kg) / (b.peso_kg - a.peso_kg)
             return int(a.eta_giorni + ratio * (b.eta_giorni - a.eta_giorni))
+    return None
+
+
+def _peso_da_eta(eta_gg):
+    """Interpola la curva di accrescimento per stimare il peso in kg da un'età in giorni."""
+    curva = CurvaAccrescimento.query.order_by(CurvaAccrescimento.eta_giorni).all()
+    if not curva:
+        return None
+    if eta_gg <= curva[0].eta_giorni:
+        return round(curva[0].peso_kg, 1)
+    if eta_gg >= curva[-1].eta_giorni:
+        return round(curva[-1].peso_kg, 1)
+    for i in range(len(curva) - 1):
+        a, b = curva[i], curva[i + 1]
+        if a.eta_giorni <= eta_gg <= b.eta_giorni:
+            ratio = (eta_gg - a.eta_giorni) / (b.eta_giorni - a.eta_giorni)
+            return round(a.peso_kg + ratio * (b.peso_kg - a.peso_kg), 1)
     return None
 
 
@@ -185,6 +203,7 @@ def _calcola_razioni_linea_dettaglio(linea):
 
 
 def _get_setting_float(key, default):
+    """Legge un Setting dal DB per chiave e lo converte in float; ritorna default se assente o non convertibile."""
     s = Setting.query.get(key)
     try:
         return float(s.value) if s else default
@@ -367,6 +386,7 @@ def _calcola_acqua(mangime_kg, siero_litri):
 
 
 def _genera_ciclo_id():
+    """Genera un identificativo univoco per un ciclo produttivo nel formato CICLO{aa}-{nn}-{YYYYMMDD}."""
     anno = date.today().year % 100
     count = CicloProduttivo.query.count() + 1
     data_str = date.today().strftime("%Y%m%d")
@@ -401,6 +421,7 @@ def _box_state(box, active_alarms_bc_ids):
 
 
 def _allarmi_attivi_count():
+    """Conta gli allarmi attivi non silenziati (usato per badge nel menu)."""
     now = datetime.utcnow()
     return Allarme.query.filter(
         Allarme.stato == "attivo",
@@ -832,6 +853,21 @@ def cicli_riaccasamento(id):
 
     capi_totali_prima = sum(bc.capi_presenti or 0 for bc in ciclo_bc.values())
 
+    # Calcola peso ed età attuale stimata per ogni BoxCiclo (per mostrarlo nel form)
+    oggi = date.today()
+    curva_obj = CurvaAccrescimento.query.order_by(CurvaAccrescimento.eta_giorni).all()
+    curva_json = [{"eta": c.eta_giorni, "peso": round(c.peso_kg, 1)} for c in curva_obj]
+    bc_extra = {}
+    for bc in ciclo_bc.values():
+        eta_acc = bc.eta_stimata_gg or 0
+        giorni = (oggi - bc.data_accasamento).days if bc.data_accasamento else 0
+        eta_att = eta_acc + giorni
+        peso_att = _peso_da_eta(eta_att)
+        bc_extra[bc.id] = {
+            "eta_attuale_gg": eta_att,
+            "peso_attuale_stima": peso_att,
+        }
+
     if request.method == "POST":
         data_str = request.form.get("data_riaccasamento", str(date.today()))
         data_riaccasamento = date.fromisoformat(data_str)
@@ -918,6 +954,8 @@ def cicli_riaccasamento(id):
                            ciclo=ciclo, box_map=box_map,
                            ciclo_bc=ciclo_bc,
                            capi_totali_prima=capi_totali_prima,
+                           bc_extra=bc_extra,
+                           curva_json=curva_json,
                            today=date.today())
 
 
@@ -1607,6 +1645,7 @@ def alimentazione_impostazioni():
 
 
 def _set_setting(key, value):
+    """Upsert di un record Setting: crea se non esiste, aggiorna se esiste."""
     s = Setting.query.get(key)
     if s is None:
         s = Setting(key=key, value=str(value))
@@ -1773,6 +1812,13 @@ def allarmi_rigenera():
 # ─────────────────────────────────────────────────────────────────────────────
 # FASE 7 — REPORT & MANUTENZIONI
 # ─────────────────────────────────────────────────────────────────────────────
+
+@bp.route("/report")
+@login_required
+def report_index():
+    cicli = CicloProduttivo.query.order_by(CicloProduttivo.data_inizio.desc()).all()
+    return render_template("allevamento/report/index.html", cicli=cicli)
+
 
 @bp.route("/report/ciclo/<int:id>")
 @login_required
