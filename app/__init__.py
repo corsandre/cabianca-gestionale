@@ -164,6 +164,7 @@ def create_app():
     # Create tables and seed data on first run
     with app.app_context():
         _init_db(app)
+        _backfill_stime(app)
 
     # Start scheduler for backups and notifications
     _init_scheduler(app)
@@ -215,6 +216,7 @@ def _init_db(app):
         ("eventi_ciclo", "is_scarti", "INTEGER DEFAULT 0 NOT NULL"),
         ("box_cicli", "lotto_id", "INTEGER REFERENCES lotti(id)"),
         ("box_cicli", "lettera_nascita", "VARCHAR(1)"),
+        ("razioni_giornaliere", "is_stima", "INTEGER DEFAULT 0 NOT NULL"),
     ]
     for table, col, col_type in _migrate_columns:
         try:
@@ -462,6 +464,56 @@ def _seed_allevamento():
     db.session.commit()
 
 
+def _backfill_stime(app):
+    """Genera stime teoriche mancanti per tutti i cicli attivi.
+
+    Viene chiamata a ogni avvio: per ogni ciclo attivo controlla quante stime
+    esistono rispetto ai giorni attesi; se la copertura è < 50% per qualsiasi
+    linea del ciclo, rigenera tutto lo storico teorico dal data_inizio a oggi.
+    Non tocca mai i record con is_stima=False (dati reali inseriti dall'utente).
+    """
+    try:
+        from datetime import date
+        from app.models import CicloProduttivo, RazioneGiornaliera, BoxCiclo, Box
+        from app.routes.allevamento import _rigenera_stime_ciclo
+
+        cicli_attivi = CicloProduttivo.query.filter_by(stato="attivo").all()
+        today = date.today()
+        for ciclo in cicli_attivi:
+            if not ciclo.data_inizio or ciclo.data_inizio > today:
+                continue
+            days_total = (today - ciclo.data_inizio).days + 1
+
+            # Linee coinvolte dal ciclo
+            linee = set()
+            for bc in ciclo.box_cicli.all():
+                if bc.box and bc.box.linea_alimentazione:
+                    linee.add(bc.box.linea_alimentazione)
+            if not linee:
+                continue
+
+            # Stime esistenti per le linee del ciclo nel periodo
+            n_stime = RazioneGiornaliera.query.filter(
+                RazioneGiornaliera.data >= ciclo.data_inizio,
+                RazioneGiornaliera.data <= today,
+                RazioneGiornaliera.linea.in_(list(linee)),
+                RazioneGiornaliera.is_stima == True,
+            ).count()
+
+            soglia = days_total * len(linee) * 0.5
+            if n_stime < soglia:
+                app.logger.info(
+                    f"Backfill stime ciclo {ciclo.ciclo_id}: "
+                    f"{n_stime} stime su {days_total * len(linee)} attese"
+                )
+                _rigenera_stime_ciclo(ciclo)
+    except Exception as e:
+        try:
+            app.logger.warning(f"_backfill_stime: {e}")
+        except Exception:
+            pass
+
+
 def _init_scheduler(app):
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
@@ -518,7 +570,12 @@ def _init_scheduler(app):
                 except Exception as e:
                     app.logger.error(f"Errore generazione allarmi allevamento: {e}")
 
+        def refresh_stime_giornaliere():
+            with app.app_context():
+                _backfill_stime(app)
+
         scheduler.add_job(generate_recurring, "cron", hour=3, minute=0)
+        scheduler.add_job(refresh_stime_giornaliere, "cron", hour=5, minute=0)
         scheduler.add_job(generate_allevamento_alarms, "cron", hour=6, minute=0)
         scheduler.add_job(run_backup, "cron", hour=backup_hour, minute=backup_minute, id="backup")
         if app.config.get("CLOUD_OFFICE_USER") and app.config.get("CLOUD_OFFICE_PASSWORD"):

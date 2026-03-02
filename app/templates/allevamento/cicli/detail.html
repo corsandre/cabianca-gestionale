@@ -16,6 +16,15 @@
            class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-plus-circle"></i> Aggiungi Lotto
         </a>
+        {% if current_user.role == 'admin' %}
+        <form method="POST" action="{{ url_for('allevamento.cicli_rigenera_stime', id=ciclo.id) }}"
+              onsubmit="return confirm('Rigenera tutte le stime teoriche dall\'inizio del ciclo?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline-secondary btn-sm" title="Rigenera stime teoriche dall'inizio ciclo">
+                <i class="bi bi-arrow-clockwise"></i> Rigenera stime
+            </button>
+        </form>
+        {% endif %}
         <form method="POST" action="{{ url_for('allevamento.cicli_chiudi', id=ciclo.id) }}"
               onsubmit="return confirm('Chiudere il ciclo?')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -87,18 +96,31 @@
     </div>
     {% if lotti_info %}
     <div class="table-responsive">
-        <table class="table table-sm mb-0">
+        <table class="table table-sm table-hover mb-0">
             <thead><tr>
-                <th>#</th><th>Data consegna</th><th>Lettera DOP</th>
+                <th>#</th><th>Data consegna</th><th>Peso medio (kg)</th><th>Età arrivo</th>
+                <th>Lettera DOP</th>
                 <th>Peso bolla (kg)</th><th>Fornitore</th><th>N° doc.</th>
-                <th>Vendita prevista</th>
+                <th>Vendita prevista</th><th></th>
             </tr></thead>
             <tbody>
             {% for li in lotti_info %}
             {% set lt = li.lotto %}
-            <tr>
+            <tr style="cursor:pointer"
+                onclick="apriModaleModificaLotto({{ lt.id }}, {{ lt.numero_lotto }}, '{{ lt.data_consegna.strftime('%Y-%m-%d') }}', '{{ lt.lettera_nascita or '' }}', '{{ lt.peso_totale_bolla_kg or '' }}', '{{ lt.fornitore or '' }}', '{{ lt.numero_documento or '' }}', '{{ lt.note or '' }}')">
                 <td><span class="badge bg-secondary">Lotto {{ lt.numero_lotto }}</span></td>
                 <td>{{ lt.data_consegna.strftime('%d/%m/%Y') }}</td>
+                <td>
+                    {% if li.peso_medio %}
+                    <strong>{{ '%.1f'|format(li.peso_medio) }}</strong> <small class="text-muted">kg</small>
+                    {% else %}<span class="text-muted">–</span>{% endif %}
+                </td>
+                <td>
+                    {% if li.eta_stimata %}
+                    <span class="badge bg-light text-dark border">{{ li.eta_stimata }} gg</span>
+                    <small class="text-muted">({{ (li.eta_stimata / 30)|round(1) }} mesi)</small>
+                    {% else %}<span class="text-muted">–</span>{% endif %}
+                </td>
                 <td>
                     {% if lt.lettera_nascita %}
                     <span class="badge" style="background:#c2185b;font-size:.85rem">{{ lt.lettera_nascita }}</span>
@@ -113,6 +135,7 @@
                     <span class="badge bg-info text-dark">{{ li.data_vendita.strftime('%b %Y') }}</span>
                     {% else %}<span class="text-muted">–</span>{% endif %}
                 </td>
+                <td><i class="bi bi-pencil text-muted" style="font-size:.8rem"></i></td>
             </tr>
             {% endfor %}
             </tbody>
@@ -122,6 +145,74 @@
     <p class="text-muted text-center py-2 mb-0">Nessun lotto registrato.</p>
     {% endif %}
 </div>
+
+{# Modal modifica lotto #}
+<div class="modal fade" id="modaleModificaLotto" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" id="formModificaLotto">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-pencil me-2" style="color:#c2185b"></i>Modifica Lotto <span id="mlNumero"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Data consegna <span class="text-danger">*</span></label>
+            <input type="date" class="form-control" name="data_consegna" id="mlDataConsegna" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Lettera DOP</label>
+            <select class="form-select" name="lettera_nascita" id="mlLettera">
+              <option value="">– nessuna –</option>
+              {% for lettera, mese_idx in lettere_mesi.items() %}
+              <option value="{{ lettera }}">{{ lettera }} – {{ nomi_mesi[mese_idx] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Peso bolla (kg)</label>
+              <input type="number" step="0.1" min="0" class="form-control" name="peso_totale_bolla_kg" id="mlPeso">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">N° documento</label>
+              <input type="text" class="form-control" name="numero_documento" id="mlNDoc">
+            </div>
+          </div>
+          <div class="mb-3 mt-2">
+            <label class="form-label fw-semibold">Fornitore</label>
+            <input type="text" class="form-control" name="fornitore" id="mlFornitore">
+          </div>
+          <div class="mb-1">
+            <label class="form-label fw-semibold">Note</label>
+            <textarea class="form-control" name="note" id="mlNote" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annulla</button>
+          <button type="submit" class="btn btn-sm" style="background:#c2185b;color:white">
+            <i class="bi bi-check-lg"></i> Salva
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+function apriModaleModificaLotto(id, num, data, lettera, peso, fornitore, nDoc, note) {
+    document.getElementById('mlNumero').textContent = num;
+    document.getElementById('mlDataConsegna').value = data;
+    document.getElementById('mlLettera').value = lettera;
+    document.getElementById('mlPeso').value = peso;
+    document.getElementById('mlFornitore').value = fornitore;
+    document.getElementById('mlNDoc').value = nDoc;
+    document.getElementById('mlNote').value = note;
+    document.getElementById('formModificaLotto').action =
+        "{{ url_for('allevamento.cicli_modifica_lotto', id=ciclo.id, lotto_id=0) }}".replace('/0/', '/' + id + '/');
+    new bootstrap.Modal(document.getElementById('modaleModificaLotto')).show();
+}
+</script>
 
 {# Timeline eventi #}
 <div class="cb-card p-3">
@@ -135,11 +226,11 @@
     </div>
     {% if eventi %}
     <div class="table-responsive">
-        <table class="table table-sm">
-            <thead><tr><th>Data</th><th>Tipo</th><th>Box</th><th class="text-end">Capi</th><th class="text-end">Peso (kg)</th><th>Operatore</th><th>Note</th></tr></thead>
+        <table class="table table-sm {% if ciclo.stato == 'attivo' %}table-hover{% endif %}">
+            <thead><tr><th>Data</th><th>Tipo</th><th>Box</th><th class="text-end">Capi</th><th class="text-end">Peso (kg)</th><th>Operatore</th><th>Note</th>{% if ciclo.stato == 'attivo' %}<th></th>{% endif %}</tr></thead>
             <tbody>
             {% for e in eventi %}
-            <tr>
+            <tr {% if ciclo.stato == 'attivo' %}style="cursor:pointer" onclick="apriModaleEvento({{ e.id }}, '{{ e.data.strftime('%Y-%m-%d') }}', {{ e.quantita or 'null' }}, {{ e.peso_totale or 'null' }}, '{{ e.note|replace("'", "\\'") if e.note else '' }}')"{% endif %}>
                 <td>{{ e.data.strftime('%d/%m/%Y') }}</td>
                 <td>
                     {% if e.tipo == 'uscita_macello' and e.is_scarti %}
@@ -157,6 +248,9 @@
                 <td class="text-end">{{ '%.1f'|format(e.peso_totale) if e.peso_totale else '–' }}</td>
                 <td>{{ e.operatore.display_name if e.operatore else '–' }}</td>
                 <td class="small text-muted">{{ e.note or '' }}</td>
+                {% if ciclo.stato == 'attivo' %}
+                <td class="text-end"><i class="bi bi-pencil text-muted" style="font-size:.8rem"></i></td>
+                {% endif %}
             </tr>
             {% endfor %}
             </tbody>
@@ -166,4 +260,80 @@
     <p class="text-muted text-center py-3">Nessun evento registrato.</p>
     {% endif %}
 </div>
+
+{# Modal modifica/elimina evento #}
+{% if ciclo.stato == 'attivo' %}
+<div class="modal fade" id="modaleEvento" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil me-2" style="color:#c2185b"></i>Modifica Evento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" id="formModEvento">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Data <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" name="data" id="evData" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">N° capi</label>
+              <input type="number" class="form-control" name="quantita" id="evQuantita" min="0">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Peso totale (kg)</label>
+            <input type="number" step="0.1" min="0" class="form-control" name="peso_totale" id="evPeso">
+          </div>
+          <div class="mb-1">
+            <label class="form-label fw-semibold">Note</label>
+            <textarea class="form-control" name="note" id="evNote" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer justify-content-between">
+          <button type="button" class="btn btn-outline-danger btn-sm" onclick="eliminaEvento()">
+            <i class="bi bi-trash"></i> Elimina
+          </button>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annulla</button>
+            <button type="submit" class="btn btn-sm" style="background:#c2185b;color:white">
+              <i class="bi bi-check-lg"></i> Salva
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+var _eventoId = null;
+function apriModaleEvento(id, data, quantita, peso, note) {
+    _eventoId = id;
+    document.getElementById('evData').value = data;
+    document.getElementById('evQuantita').value = quantita !== null ? quantita : '';
+    document.getElementById('evPeso').value = peso !== null ? peso : '';
+    document.getElementById('evNote').value = note;
+    var base = "{{ url_for('allevamento.cicli_evento_modifica', id=0) }}".replace('/0', '/' + id);
+    document.getElementById('formModEvento').action = base;
+    new bootstrap.Modal(document.getElementById('modaleEvento')).show();
+}
+function eliminaEvento() {
+    if (!_eventoId) return;
+    if (!confirm('Eliminare questo evento? L\'operazione non è reversibile.')) return;
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = "{{ url_for('allevamento.cicli_evento_elimina', id=0) }}".replace('/0', '/' + _eventoId);
+    var csrf = document.createElement('input');
+    csrf.type = 'hidden'; csrf.name = 'csrf_token';
+    csrf.value = document.querySelector('[name=csrf_token]').value;
+    form.appendChild(csrf);
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
+{% endif %}
+
 {% endblock %}

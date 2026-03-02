@@ -517,6 +517,7 @@ class RazioneGiornaliera(db.Model):
     consumo_acqua_litri = db.Column(db.Float)
     acqua_teorica_litri = db.Column(db.Float)
     note = db.Column(db.Text)
+    is_stima = db.Column(db.Boolean, default=False, nullable=False)
 
     __table_args__ = (db.UniqueConstraint("data", "linea", name="_data_linea_uc"),)
 

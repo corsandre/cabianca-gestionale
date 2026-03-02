@@ -8,8 +8,8 @@
     </a>
 </div>
 
-<div class="cb-card p-4" style="max-width:600px">
-<form method="POST">
+<div class="cb-card p-4" style="max-width:680px">
+<form method="POST" id="formEvento">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <div class="mb-3">
@@ -22,9 +22,10 @@
         </select>
     </div>
 
-    <div class="mb-3">
+    {# Box singolo (mortalità / frazionamento) #}
+    <div class="mb-3" id="box-singolo-field">
         <label class="form-label fw-bold">Box / Ciclo</label>
-        <select name="box_ciclo_id" class="form-select" required>
+        <select name="box_ciclo_id" class="form-select" id="box-singolo-select">
             <option value="">– seleziona –</option>
             {% for bc in cicli_attivi %}
             <option value="{{ bc.id }}" {% if preselect_bc == bc.id|string %}selected{% endif %}>
@@ -34,10 +35,41 @@
         </select>
     </div>
 
-    <div class="row g-3 mb-3">
+    {# Multi-box (uscita macello) #}
+    <div class="mb-3 d-none" id="box-multi-field">
+        <label class="form-label fw-bold">Box coinvolti (uscita macello)</label>
+        <div class="border rounded p-2" style="max-height:260px;overflow-y:auto">
+            {% for bc in cicli_attivi %}
+            <div class="d-flex align-items-center gap-2 py-1 border-bottom">
+                <div class="form-check mb-0">
+                    <input type="checkbox" class="form-check-input cb-box-check"
+                           name="box_ciclo_id" value="{{ bc.id }}"
+                           id="chk_bc_{{ bc.id }}"
+                           onchange="aggiornaTotale()">
+                    <label class="form-check-label" for="chk_bc_{{ bc.id }}">
+                        <strong>Box {{ bc.box.numero }}</strong>
+                        <small class="text-muted ms-1">({{ bc.ciclo.ciclo_id }}) – max {{ bc.capi_presenti or 0 }} capi</small>
+                    </label>
+                </div>
+                <input type="number" name="capi_box_{{ bc.id }}"
+                       id="capi_bc_{{ bc.id }}"
+                       class="form-control form-control-sm cb-capi-input ms-auto"
+                       style="width:90px" min="1" max="{{ bc.capi_presenti or 0 }}"
+                       placeholder="capi" disabled
+                       onchange="aggiornaTotale()">
+            </div>
+            {% endfor %}
+        </div>
+        <div class="mt-2 d-flex align-items-center gap-3">
+            <span class="text-muted small">Totale selezionato:</span>
+            <strong id="totale-capi-display">0 capi</strong>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3" id="quantita-row">
         <div class="col-6">
             <label class="form-label fw-bold">N° capi</label>
-            <input type="number" name="quantita" class="form-control" min="1" required>
+            <input type="number" name="quantita" class="form-control" min="1">
         </div>
         <div class="col-6">
             <label class="form-label fw-bold">Data</label>
@@ -46,7 +78,7 @@
     </div>
 
     <div class="mb-3" id="peso-field">
-        <label class="form-label">Peso totale (kg) <small class="text-muted">(opzionale per mortalità)</small></label>
+        <label class="form-label">Peso totale (kg) <small class="text-muted" id="peso-label-hint">(opzionale per mortalità)</small></label>
         <input type="number" name="peso_totale" class="form-control" step="0.1" min="0">
     </div>
 
@@ -77,7 +109,7 @@
         <textarea name="note" class="form-control" rows="2"></textarea>
     </div>
 
-    <button type="submit" class="btn" style="background:#c2185b;color:white">
+    <button type="submit" class="btn" style="background:#c2185b;color:white" id="btn-submit">
         <i class="bi bi-check-lg"></i> Registra
     </button>
 </form>
@@ -88,12 +120,44 @@
 <script>
 function aggiornaForm() {
     const tipo = document.getElementById('tipo-evento').value;
+    const isUscita = tipo === 'uscita_macello';
+
+    document.getElementById('box-singolo-field').classList.toggle('d-none', isUscita);
+    document.getElementById('box-multi-field').classList.toggle('d-none', !isUscita);
+    document.getElementById('quantita-row').classList.toggle('d-none', isUscita);
     document.getElementById('dest-box-field').classList.toggle('d-none', tipo !== 'frazionamento_out');
-    document.getElementById('scarti-field').classList.toggle('d-none', tipo !== 'uscita_macello');
-    if (tipo !== 'uscita_macello') {
+    document.getElementById('scarti-field').classList.toggle('d-none', !isUscita);
+
+    // Gestione required
+    document.getElementById('box-singolo-select').required = !isUscita && tipo !== '';
+    document.querySelector('[name=quantita]').required = !isUscita;
+
+    if (!isUscita) {
         document.getElementById('is-scarti-check').checked = false;
+        document.getElementById('peso-label-hint').textContent = tipo === 'mortalita' ? '(opzionale per mortalità)' : '';
+    } else {
+        document.getElementById('peso-label-hint').textContent = 'peso totale del camion, distribuito proporzionalmente per box';
     }
+
+    aggiornaTotale();
 }
+
+function aggiornaTotale() {
+    let tot = 0;
+    document.querySelectorAll('.cb-box-check').forEach(chk => {
+        const inputCapi = document.getElementById('capi_bc_' + chk.value);
+        inputCapi.disabled = !chk.checked;
+        if (chk.checked) {
+            inputCapi.required = true;
+            tot += parseInt(inputCapi.value || 0);
+        } else {
+            inputCapi.required = false;
+            inputCapi.value = '';
+        }
+    });
+    document.getElementById('totale-capi-display').textContent = tot + ' capi';
+}
+
 document.querySelector('[name=data]').value = new Date().toISOString().split('T')[0];
 </script>
 {% endblock %}

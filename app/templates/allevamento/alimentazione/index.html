@@ -21,101 +21,290 @@
     </div>
 </div>
 
-<p class="text-muted small mb-3">Razioni calcolate per oggi: <strong>{{ oggi.strftime('%d/%m/%Y') }}</strong></p>
+<p class="text-muted small mb-2">Razioni calcolate per oggi: <strong>{{ oggi.strftime('%d/%m/%Y') }}</strong></p>
 
+{# ── Selettore pasti ─────────────────────────────────────────────────── #}
 {% if orari_pasto %}
-<div class="mb-3">
-    <small class="text-muted">
-        <i class="bi bi-clock"></i> Orari pasti:
-        {% for op in orari_pasto %}
-        <span class="badge" style="background:#c2185b">Pasto {{ op.numero }}: {{ op.ora.strftime('%H:%M') }}</span>
-        {% endfor %}
-    </small>
+<div class="mb-3 d-flex align-items-center gap-2 flex-wrap">
+    <span class="text-muted small"><i class="bi bi-clock"></i> Filtra pasti:</span>
+    {% for op in orari_pasto %}
+    <button type="button"
+            class="btn btn-sm pasto-toggle active"
+            data-pasto="{{ op.numero }}"
+            style="background:#c2185b;color:white;border-color:#c2185b">
+        P{{ op.numero }} {{ op.ora.strftime('%H:%M') }}
+    </button>
+    {% endfor %}
+    <span class="text-muted small ms-2" id="pasti-label"></span>
 </div>
 {% endif %}
 
-<div class="row g-3">
-{% for linea, r in razioni.items() %}
-{% set colori = {1: '#1976d2', 2: '#d32f2f', 3: '#388e3c'} %}
-{% set nomi_linea = {1: 'Linea 1 (blu) – CAP 1-2-3', 2: 'Linea 2 (rossa) – CAP 4', 3: 'Linea 3 (verde) – CAP 5-6-7'} %}
-<div class="col-md-4">
-    <div class="cb-card p-3" style="border-left: 4px solid {{ colori[linea] }}">
-        <h6 class="mb-3" style="color:{{ colori[linea] }}">{{ nomi_linea[linea] }}</h6>
-        <table class="table table-sm mb-0">
-            <tr>
-                <th>Mangime teorico</th>
-                <td class="text-end fw-bold">{{ r.teorica_mangime }} kg</td>
-            </tr>
-            <tr>
-                <th>Siero teorico</th>
-                <td class="text-end fw-bold">{{ r.teorica_siero }} L</td>
-            </tr>
-            <tr class="table-light">
-                <th>Acqua stimata</th>
-                <td class="text-end fw-bold" style="color:#0288d1">{{ r.teorica_acqua }} L</td>
-            </tr>
-            {% if r.consumo_mangime is not none %}
-            <tr class="{% if r.consumo_mangime and r.teorica_mangime %}
-                {% set diff = ((r.consumo_mangime - r.teorica_mangime) / r.teorica_mangime * 100) if r.teorica_mangime else 0 %}
-                {% if diff|abs > 15 %}table-warning{% endif %}
-            {% endif %}">
-                <th>Mangime reale</th>
-                <td class="text-end">{{ r.consumo_mangime }} kg
-                    {% if r.consumo_mangime and r.teorica_mangime and r.teorica_mangime > 0 %}
-                    {% set pct = ((r.consumo_mangime - r.teorica_mangime) / r.teorica_mangime * 100)|round(1) %}
-                    <span class="small {% if pct > 0 %}text-success{% else %}text-danger{% endif %}">
-                        ({{ '+' if pct > 0 else '' }}{{ pct }}%)
-                    </span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endif %}
-            {% if r.consumo_siero is not none %}
-            <tr>
-                <th>Siero reale</th>
-                <td class="text-end">{{ r.consumo_siero }} L</td>
-            </tr>
-            {% endif %}
-            {% if r.consumo_acqua is not none %}
-            <tr>
-                <th>Acqua reale</th>
-                <td class="text-end" style="color:#0288d1">{{ r.consumo_acqua }} L</td>
-            </tr>
-            {% endif %}
-        </table>
-        {% if r.note %}<p class="small text-muted mt-2 mb-0">{{ r.note }}</p>{% endif %}
+{# ── Dati JSON per JS ────────────────────────────────────────────────── #}
+<script>
+const NUM_PASTI = {{ num_pasti }};
 
-        {# Breakdown per pasto se presenti #}
-        {% if r.pasti %}
-        <div class="mt-2">
-            <small class="text-muted fw-bold">Dettaglio pasti oggi:</small>
-            <table class="table table-sm table-borderless mt-1 mb-0" style="font-size:.8rem">
-                <thead><tr>
-                    <th class="text-muted">Pasto</th>
-                    <th class="text-end text-muted">Mangime</th>
-                    <th class="text-end text-muted">Siero</th>
-                    <th class="text-end" style="color:#0288d1">Acqua</th>
-                </tr></thead>
+// Totali giornalieri teorici per linea
+const teorici = {
+  1: { m: {{ razioni[1].teorica_mangime }}, s: {{ razioni[1].teorica_siero }}, a: {{ razioni[1].teorica_acqua }} },
+  2: { m: {{ razioni[2].teorica_mangime }}, s: {{ razioni[2].teorica_siero }}, a: {{ razioni[2].teorica_acqua }} },
+  3: { m: {{ razioni[3].teorica_mangime }}, s: {{ razioni[3].teorica_siero }}, a: {{ razioni[3].teorica_acqua }} }
+};
+
+// Dati reali per pasto per linea { linea: { numero_pasto: {m,s,a} } }
+const pastiReali = {{ pasti_json | tojson }};
+
+// Stato pasti attivi
+let pastiAttivi = new Set();
+for (let i = 1; i <= NUM_PASTI; i++) pastiAttivi.add(i);
+
+function aggiorna() {
+    const selArr = Array.from(pastiAttivi).sort((a, b) => a - b);
+    const nSel = selArr.length;
+
+    // Label
+    const label = document.getElementById('pasti-label');
+    if (label) {
+        if (nSel === 0) label.textContent = '(nessun pasto selezionato)';
+        else if (nSel === NUM_PASTI) label.textContent = 'tutti i pasti';
+        else label.textContent = 'pasti: ' + selArr.map(p => 'P' + p).join(', ');
+    }
+
+    [1, 2, 3].forEach(linea => {
+        const t = teorici[linea];
+        const pr = pastiReali[linea] || {};
+
+        // Teorici proporzionali ai pasti selezionati
+        const fattore = NUM_PASTI > 0 ? nSel / NUM_PASTI : 0;
+        const tm = t.m * fattore;
+        const ts = t.s * fattore;
+        const ta = t.a * fattore;
+
+        setCell('t-m-' + linea, nSel > 0 ? tm.toFixed(1) + ' kg' : '—');
+        setCell('t-s-' + linea, nSel > 0 ? ts.toFixed(1) + ' L' : '—');
+        setCell('t-a-' + linea, nSel > 0 ? ta.toFixed(1) + ' L' : '—');
+
+        // Reali: somma pasti selezionati
+        let rm = 0, rs = 0, ra = 0;
+        let haM = false, haS = false, haA = false;
+        selArr.forEach(p => {
+            const pd = pr[p] || {};
+            if (pd.m !== null && pd.m !== undefined) { rm += pd.m; haM = true; }
+            if (pd.s !== null && pd.s !== undefined) { rs += pd.s; haS = true; }
+            if (pd.a !== null && pd.a !== undefined) { ra += pd.a; haA = true; }
+        });
+
+        setReale('r-m-' + linea, haM ? rm : null, 'kg', haM && nSel > 0 ? tm : null);
+        setReale('r-s-' + linea, haS ? rs : null, 'L', null);
+        setReale('r-a-' + linea, haA ? ra : null, 'L', null);
+
+        // Aggiorna righe box con valori scalati
+        document.querySelectorAll('.box-row[data-linea="' + linea + '"]').forEach(tr => {
+            const mDay = parseFloat(tr.dataset.mangime);
+            const sDay = parseFloat(tr.dataset.siero);
+            const rcDay = parseFloat(tr.dataset.razioneCapo);
+            const m = nSel > 0 ? (mDay * fattore) : 0;
+            const s = nSel > 0 ? (sDay * fattore) : 0;
+            const rc = nSel > 0 ? (rcDay * fattore) : 0;
+            const cellM = tr.querySelector('.box-mangime');
+            const cellS = tr.querySelector('.box-siero');
+            const cellR = tr.querySelector('.box-razione-capo');
+            if (cellM) cellM.textContent = m.toFixed(1) + ' kg';
+            if (cellS) cellS.textContent = s.toFixed(1) + ' L';
+            if (cellR) cellR.textContent = rc.toFixed(2) + ' kg';
+        });
+    });
+}
+
+function setCell(id, txt) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = txt;
+}
+
+function setReale(id, val, unit, teorico) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (val === null) {
+        el.innerHTML = '<span class="text-muted">—</span>';
+        return;
+    }
+    let html = val.toFixed(1) + ' ' + unit;
+    if (teorico !== null && teorico > 0) {
+        const pct = ((val - teorico) / teorico * 100);
+        const cls = pct > 5 ? 'text-success' : pct < -5 ? 'text-danger' : 'text-muted';
+        const sign = pct >= 0 ? '+' : '';
+        html += ` <small class="${cls}">(${sign}${pct.toFixed(0)}%)</small>`;
+    }
+    el.innerHTML = html;
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.pasto-toggle').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const p = parseInt(this.dataset.pasto);
+            if (pastiAttivi.has(p)) {
+                pastiAttivi.delete(p);
+                this.style.background = '';
+                this.style.color = '';
+                this.style.borderColor = '';
+                this.classList.remove('active');
+                this.classList.add('btn-outline-secondary');
+            } else {
+                pastiAttivi.add(p);
+                this.style.background = '#c2185b';
+                this.style.color = 'white';
+                this.style.borderColor = '#c2185b';
+                this.classList.add('active');
+                this.classList.remove('btn-outline-secondary');
+            }
+            aggiorna();
+        });
+    });
+    aggiorna();
+});
+</script>
+
+{# ── Card per linea ──────────────────────────────────────────────────── #}
+{% set colori = {1: '#1976d2', 2: '#d32f2f', 3: '#388e3c'} %}
+{% set nomi_linea = {1: 'Linea 1 – CAP 1-2-3', 2: 'Linea 2 – CAP 4', 3: 'Linea 3 – CAP 5-6-7'} %}
+
+<div class="row g-3 mb-3">
+{% for linea in [1, 2, 3] %}
+{% set r = razioni[linea] %}
+{% set col = colori[linea] %}
+<div class="col-md-4">
+    <div class="cb-card p-0" style="border-left: 4px solid {{ col }}">
+        {# Intestazione card #}
+        <div class="d-flex justify-content-between align-items-center px-3 pt-3 pb-2">
+            <div>
+                <span class="fw-bold" style="color:{{ col }}">
+                    <i class="bi bi-circle-fill" style="font-size:.6rem;vertical-align:middle"></i>
+                    {{ nomi_linea[linea] }}
+                </span>
+                <br>
+                <small class="text-muted">
+                    {{ r.boxes|length }} box
+                    {% if r.n_capi > 0 %}&nbsp;·&nbsp;{{ r.n_capi }} capi{% endif %}
+                </small>
+            </div>
+            {% if r.boxes %}
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2"
+                    style="font-size:.75rem"
+                    onclick="toggleBoxes({{ linea }})"
+                    id="btn-boxes-{{ linea }}">
+                <i class="bi bi-layout-split"></i> Box
+            </button>
+            {% endif %}
+        </div>
+
+        <hr class="my-0 mx-3">
+
+        {# Tabella teorica / reale #}
+        <div class="px-3 pt-2 pb-3">
+            <table class="table table-sm table-borderless mb-0" style="font-size:.9rem">
+                <thead>
+                    <tr>
+                        <th class="text-muted fw-normal ps-0" style="width:40%"></th>
+                        <th class="text-end text-muted fw-normal" style="width:30%">Teorica</th>
+                        <th class="text-end text-muted fw-normal" style="width:30%">Reale</th>
+                    </tr>
+                </thead>
                 <tbody>
-                {% for p in r.pasti %}
-                <tr>
-                    <td>{{ p.numero_pasto }}</td>
-                    <td class="text-end">{{ '%.1f'|format(p.consumo_mangime_kg) if p.consumo_mangime_kg else '–' }} kg</td>
-                    <td class="text-end">{{ '%.1f'|format(p.consumo_siero_litri) if p.consumo_siero_litri else '–' }} L</td>
-                    <td class="text-end" style="color:#0288d1">{{ '%.1f'|format(p.consumo_acqua_litri) if p.consumo_acqua_litri else '–' }} L</td>
-                </tr>
-                {% endfor %}
+                    <tr>
+                        <td class="ps-0"><small class="text-muted"><i class="bi bi-box-seam"></i></small> Mangime</td>
+                        <td class="text-end fw-semibold" id="t-m-{{ linea }}">—</td>
+                        <td class="text-end" id="r-m-{{ linea }}"><span class="text-muted">—</span></td>
+                    </tr>
+                    <tr>
+                        <td class="ps-0"><small class="text-muted"><i class="bi bi-cup-straw"></i></small> Siero</td>
+                        <td class="text-end fw-semibold" id="t-s-{{ linea }}">—</td>
+                        <td class="text-end" id="r-s-{{ linea }}"><span class="text-muted">—</span></td>
+                    </tr>
+                    <tr class="table-light">
+                        <td class="ps-0"><small class="text-muted"><i class="bi bi-droplet"></i></small> Acqua</td>
+                        <td class="text-end fw-semibold" id="t-a-{{ linea }}" style="color:#0288d1">—</td>
+                        <td class="text-end" id="r-a-{{ linea }}" style="color:#0288d1"><span class="text-muted">—</span></td>
+                    </tr>
                 </tbody>
             </table>
+
+            {% if r.note %}
+            <p class="small text-muted mt-2 mb-0"><i class="bi bi-chat-left-text"></i> {{ r.note }}</p>
+            {% endif %}
+
+            {% if not r.pasti %}
+            <a href="{{ url_for('allevamento.alimentazione_consumi_pasto') }}"
+               class="btn btn-outline-secondary btn-sm mt-2 w-100" style="font-size:.8rem">
+                <i class="bi bi-pencil"></i> Inserisci consumi
+            </a>
+            {% endif %}
         </div>
-        {% else %}
-        <a href="{{ url_for('allevamento.alimentazione_consumi_pasto') }}"
-           class="btn btn-outline-secondary btn-sm mt-2 w-100">
-            <i class="bi bi-pencil"></i> Inserisci consumi
-        </a>
-        {% endif %}
     </div>
+
+    {# Sezione box espandibile #}
+    {% if r.boxes %}
+    <div id="boxes-linea-{{ linea }}" style="display:none" class="mt-2">
+        <div class="cb-card p-0" style="border-left: 4px solid {{ col }}">
+            <div class="px-3 pt-2 pb-1">
+                <small class="text-muted fw-bold">Dettaglio per box – {{ nomi_linea[linea] }}</small>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0" style="font-size:.82rem">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Box</th>
+                            <th class="text-center">Capi</th>
+                            <th class="text-center">Età</th>
+                            <th class="text-end">Raz./capo</th>
+                            <th class="text-center">%Raz.</th>
+                            <th class="text-end">Mangime</th>
+                            <th class="text-end">Siero</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for box in r.boxes %}
+                    <tr class="box-row{% if box.ha_inappetenza %} table-warning{% endif %}"
+                        data-linea="{{ linea }}"
+                        data-mangime="{{ box.mangime_kg }}"
+                        data-siero="{{ box.siero_litri }}"
+                        data-razione-capo="{{ box.razione_per_capo }}">
+                        <td class="fw-semibold">{{ box.numero }}</td>
+                        <td class="text-center">{{ box.capi }}</td>
+                        <td class="text-center text-muted">{{ box.eta }}gg</td>
+                        <td class="text-end box-razione-capo">{{ box.razione_per_capo }} kg</td>
+                        <td class="text-center">
+                            {% if box.perc_razione < 100 %}
+                            <span class="badge" style="background:#f57c00;font-size:.72rem">
+                                {{ box.perc_razione }}% <i class="bi bi-exclamation-triangle-fill"></i>
+                            </span>
+                            {% else %}
+                            <span class="text-muted small">100%</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end box-mangime">{{ box.mangime_kg }} kg</td>
+                        <td class="text-end box-siero">{{ box.siero_litri }} L</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endfor %}
 </div>
+
+<script>
+function toggleBoxes(linea) {
+    const el = document.getElementById('boxes-linea-' + linea);
+    const btn = document.getElementById('btn-boxes-' + linea);
+    if (!el) return;
+    const aperto = el.style.display !== 'none';
+    el.style.display = aperto ? 'none' : 'block';
+    if (btn) {
+        btn.style.background = aperto ? '' : '#6c757d';
+        btn.style.color = aperto ? '' : 'white';
+    }
+}
+</script>
 {% endblock %}

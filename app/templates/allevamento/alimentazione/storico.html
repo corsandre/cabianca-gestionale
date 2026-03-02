@@ -8,81 +8,305 @@
     </a>
 </div>
 
-{# Vista toggle #}
+{% set colori = {1: '#1976d2', 2: '#d32f2f', 3: '#388e3c'} %}
+{% set nomi_linea = {1: 'Linea 1 – Blu', 2: 'Linea 2 – Rosso', 3: 'Linea 3 – Verde'} %}
+
+{# ── RIEPILOGO TOTALI CICLO ATTIVO ─────────────────────────────────────────── #}
+{% if data_inizio_ciclo %}
+<div class="cb-card p-3 mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0">
+            <i class="bi bi-calculator me-1" style="color:#c2185b"></i>
+            Totali ciclo attivo <small class="text-muted fw-normal">dal {{ data_inizio_ciclo.strftime('%d/%m/%Y') }}</small>
+        </h6>
+    </div>
+    <div class="row g-3">
+    {% for linea in [1, 2, 3] %}
+    {% set tot = totali_ciclo[linea] %}
+    <div class="col-md-4">
+        {% if tot %}
+        <div class="rounded p-3 h-100" style="border-left:4px solid {{ colori[linea] }};background:#fafafa">
+            <div class="fw-bold mb-2" style="color:{{ colori[linea] }}">{{ nomi_linea[linea] }}</div>
+            <div class="row g-1" style="font-size:.9rem">
+                <div class="col-5 text-muted">Mangime</div>
+                <div class="col-7 text-end fw-bold">{{ '%.0f'|format(tot.mangime_reale + tot.mangime_stima) }} kg</div>
+                <div class="col-12 mb-1" style="font-size:.75rem;color:#666">
+                    {% if tot.mangime_reale %}<span style="color:#2e7d32">&#9679; {{ '%.0f'|format(tot.mangime_reale) }} kg reale</span>{% endif %}
+                    {% if tot.mangime_stima %}<span class="ms-1 text-muted">&#9675; {{ '%.0f'|format(tot.mangime_stima) }} kg teorico</span>{% endif %}
+                </div>
+                <div class="col-5 text-muted">Siero</div>
+                <div class="col-7 text-end fw-bold">{{ '%.0f'|format(tot.siero_reale + tot.siero_stima) }} L</div>
+                <div class="col-12 mb-1" style="font-size:.75rem;color:#666">
+                    {% if tot.siero_reale %}<span style="color:#2e7d32">&#9679; {{ '%.0f'|format(tot.siero_reale) }} L reale</span>{% endif %}
+                    {% if tot.siero_stima %}<span class="ms-1 text-muted">&#9675; {{ '%.0f'|format(tot.siero_stima) }} L teorico</span>{% endif %}
+                </div>
+                <div class="col-5 text-muted">Acqua</div>
+                <div class="col-7 text-end fw-bold" style="color:#0288d1">{{ '%.0f'|format(tot.acqua_reale + tot.acqua_stima) }} L</div>
+                <div class="col-12 mb-1" style="font-size:.75rem;color:#666">
+                    {% if tot.acqua_reale %}<span style="color:#0288d1">&#9679; {{ '%.0f'|format(tot.acqua_reale) }} L reale</span>{% endif %}
+                    {% if tot.acqua_stima %}<span class="ms-1 text-muted">&#9675; {{ '%.0f'|format(tot.acqua_stima) }} L teorica</span>{% endif %}
+                </div>
+                <div class="col-12 mt-2 pt-2 border-top" style="font-size:.75rem;color:#888">
+                    {% set tot_gg = tot.n_reali + tot.n_stima %}
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="progress flex-grow-1" style="height:6px">
+                            {% if tot_gg > 0 %}
+                            <div class="progress-bar bg-success" style="width:{{ (tot.n_reali / tot_gg * 100)|int }}%"></div>
+                            {% endif %}
+                        </div>
+                        <span>{{ tot.n_reali }} gg reali · {{ tot.n_stima }} gg teorici</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="rounded p-3 h-100 text-center text-muted" style="border-left:4px solid {{ colori[linea] }};background:#fafafa">
+            <div class="fw-bold mb-2" style="color:{{ colori[linea] }}">{{ nomi_linea[linea] }}</div>
+            <small>Nessun dato</small>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{# ── FILTRO PERIODO ─────────────────────────────────────────────────────────── #}
+<div class="cb-card p-3 mb-3">
+    <form method="get" class="d-flex flex-wrap align-items-end gap-3">
+        <input type="hidden" name="vista" value="{{ vista }}">
+        <div class="btn-group btn-group-sm" role="group">
+            <a href="{{ url_for('allevamento.alimentazione_storico', vista=vista,
+                       da=(quick['7']).strftime('%Y-%m-%d'), a=oggi.strftime('%Y-%m-%d')) }}"
+               class="btn {% if data_da == quick['7'] and data_a == oggi %}btn-secondary{% else %}btn-outline-secondary{% endif %}">7 gg</a>
+            <a href="{{ url_for('allevamento.alimentazione_storico', vista=vista,
+                       da=(quick['30']).strftime('%Y-%m-%d'), a=oggi.strftime('%Y-%m-%d')) }}"
+               class="btn {% if data_da == quick['30'] and data_a == oggi %}btn-secondary{% else %}btn-outline-secondary{% endif %}">30 gg</a>
+            <a href="{{ url_for('allevamento.alimentazione_storico', vista=vista,
+                       da=(quick['90']).strftime('%Y-%m-%d'), a=oggi.strftime('%Y-%m-%d')) }}"
+               class="btn {% if data_da == quick['90'] and data_a == oggi %}btn-secondary{% else %}btn-outline-secondary{% endif %}">90 gg</a>
+            {% if quick['ciclo'] %}
+            <a href="{{ url_for('allevamento.alimentazione_storico', vista=vista,
+                       da=(quick['ciclo']).strftime('%Y-%m-%d'), a=oggi.strftime('%Y-%m-%d')) }}"
+               class="btn {% if data_da == quick['ciclo'] and data_a == oggi %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Tutto ciclo</a>
+            {% endif %}
+        </div>
+        <div class="d-flex align-items-end gap-2">
+            <div>
+                <label class="form-label form-label-sm mb-1 text-muted">Dal</label>
+                <input type="date" name="da" class="form-control form-control-sm"
+                       value="{{ data_da.strftime('%Y-%m-%d') }}" style="width:145px">
+            </div>
+            <div>
+                <label class="form-label form-label-sm mb-1 text-muted">Al</label>
+                <input type="date" name="a" class="form-control form-control-sm"
+                       value="{{ data_a.strftime('%Y-%m-%d') }}" style="width:145px">
+            </div>
+            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-funnel"></i> Applica
+            </button>
+        </div>
+    </form>
+</div>
+
+{# ── VISTA TOGGLE ───────────────────────────────────────────────────────────── #}
 <ul class="nav nav-tabs mb-3">
     <li class="nav-item">
         <a class="nav-link {% if vista == 'giornaliera' %}active{% endif %}"
-           href="{{ url_for('allevamento.alimentazione_storico', vista='giornaliera') }}">
-            <i class="bi bi-calendar-day"></i> Riepilogo giornaliero
+           href="{{ url_for('allevamento.alimentazione_storico', vista='giornaliera',
+                   da=data_da.strftime('%Y-%m-%d'), a=data_a.strftime('%Y-%m-%d')) }}">
+            <i class="bi bi-calendar-day"></i> Per giorno
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link {% if vista == 'pasto' %}active{% endif %}"
-           href="{{ url_for('allevamento.alimentazione_storico', vista='pasto') }}">
+           href="{{ url_for('allevamento.alimentazione_storico', vista='pasto',
+                   da=data_da.strftime('%Y-%m-%d'), a=data_a.strftime('%Y-%m-%d')) }}">
             <i class="bi bi-list-columns"></i> Per pasto
         </a>
     </li>
 </ul>
 
-{% set colori = {1: '#1976d2', 2: '#d32f2f', 3: '#388e3c'} %}
-
+{# ── TABELLA GIORNALIERA (una riga per giorno, totale linee) ─────────────────── #}
 {% if vista == 'giornaliera' %}
-<div class="cb-table">
-{% if razioni %}
+<div class="cb-card">
+{% if giornate %}
 <div class="table-responsive">
-    <table class="table table-sm table-hover">
+    <table class="table table-sm table-hover mb-0">
+        <thead>
+            <tr class="table-light">
+                <th>Data</th>
+                <th class="text-center">Copertura</th>
+                <th class="text-end">Mangime tot (kg)</th>
+                <th class="text-end">Siero tot (L)</th>
+                <th class="text-end" style="color:#0288d1">Acqua tot (L)</th>
+                <th class="text-end text-muted" style="font-size:.8rem">Δ mangime</th>
+                <th class="text-center text-muted" style="font-size:.8rem">Dettaglio</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for g in giornate %}
+        <tr style="cursor:pointer" onclick="mostraDettaglio('{{ g.data.strftime('%Y-%m-%d') }}')">
+            <td class="fw-bold">{{ g.data.strftime('%d/%m/%Y') }}</td>
+            <td class="text-center">
+                {% if g.n_reali > 0 and g.n_stima == 0 %}
+                <span class="badge bg-success-subtle text-success border border-success" style="font-size:.7rem">
+                    <i class="bi bi-check-circle"></i> {{ g.n_reali }} reali
+                </span>
+                {% elif g.n_reali == 0 %}
+                <span class="badge bg-light text-secondary border" style="font-size:.7rem">
+                    <i class="bi bi-calculator"></i> {{ g.n_stima }} teorici
+                </span>
+                {% else %}
+                <span class="badge bg-warning-subtle text-warning-emphasis border" style="font-size:.7rem">
+                    {{ g.n_reali }}R + {{ g.n_stima }}T
+                </span>
+                {% endif %}
+            </td>
+            <td class="text-end fw-bold">{{ '%.1f'|format(g.tot_mangime) }}</td>
+            <td class="text-end">{{ '%.1f'|format(g.tot_siero) }}</td>
+            <td class="text-end" style="color:#0288d1">{{ g.tot_acqua }}</td>
+            <td class="text-end" style="font-size:.85rem">
+                {% if g.delta_mangime is not none %}
+                    {% if g.delta_mangime > 0.5 %}
+                    <span class="text-danger">+{{ '%.1f'|format(g.delta_mangime) }}</span>
+                    {% elif g.delta_mangime < -0.5 %}
+                    <span class="text-primary">{{ '%.1f'|format(g.delta_mangime) }}</span>
+                    {% else %}
+                    <span class="text-success">≈</span>
+                    {% endif %}
+                {% else %}
+                <span class="text-muted">–</span>
+                {% endif %}
+            </td>
+            <td class="text-center text-muted"><i class="bi bi-info-circle"></i></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="table-light fw-bold" style="font-size:.9rem">
+                <td>Totale periodo</td>
+                <td class="text-center">
+                    <small class="fw-normal text-muted">{{ periodo_totali.n_reali }}R · {{ periodo_totali.n_stima }}T</small>
+                </td>
+                <td class="text-end">{{ '%.1f'|format(periodo_totali.mangime) }} kg</td>
+                <td class="text-end">{{ '%.1f'|format(periodo_totali.siero) }} L</td>
+                <td class="text-end" style="color:#0288d1">{{ periodo_totali.acqua }} L</td>
+                <td colspan="2"></td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+{# Contenuto nascosto per ogni giorno (usato dal modal) #}
+{% for g in giornate %}
+<div id="detail-{{ g.data.strftime('%Y-%m-%d') }}" class="d-none">
+    {# Breakdown per linea #}
+    <h6 class="mb-2"><i class="bi bi-bar-chart-line me-1"></i>Per linea</h6>
+    <div class="table-responsive mb-3">
+    <table class="table table-sm mb-0">
         <thead><tr>
-            <th>Data</th><th>Linea</th>
-            <th class="text-end">Teorica mangime (kg)</th>
-            <th class="text-end">Consumo mangime (kg)</th>
-            <th class="text-end">Consumo siero (L)</th>
+            <th>Linea</th><th class="text-center">Tipo</th>
+            <th class="text-end">Mangime (kg)</th><th class="text-end">Teorico (kg)</th>
+            <th class="text-end">Siero (L)</th>
             <th class="text-end" style="color:#0288d1">Acqua reale (L)</th>
-            <th class="text-end" style="color:#0288d1">Acqua stimata (L)</th>
-            <th>Note</th>
+            <th class="text-end" style="color:#0288d1">Acqua teorica (L)</th>
         </tr></thead>
         <tbody>
-        {% for r in razioni %}
-        <tr>
-            <td>{{ r.data.strftime('%d/%m/%Y') }}</td>
-            <td><span style="color:{{ colori[r.linea] }};font-weight:bold">Linea {{ r.linea }}</span></td>
-            <td class="text-end">{{ '%.1f'|format(r.razione_teorica_kg) if r.razione_teorica_kg else '–' }}</td>
-            <td class="text-end">{{ '%.1f'|format(r.consumo_mangime_kg) if r.consumo_mangime_kg else '–' }}</td>
+        {% for r in g.razioni %}
+        <tr {% if r.is_stima %}class="text-muted" style="font-style:italic"{% endif %}>
+            <td><span style="color:{{ colori[r.linea] }};font-weight:bold">L{{ r.linea }}</span></td>
+            <td class="text-center">
+                {% if r.is_stima %}
+                <span class="badge bg-light text-secondary border" style="font-size:.65rem;font-style:normal"><i class="bi bi-calculator"></i> teorico</span>
+                {% else %}
+                <span class="badge bg-success-subtle text-success border border-success" style="font-size:.65rem"><i class="bi bi-check-circle"></i> reale</span>
+                {% endif %}
+            </td>
+            <td class="text-end fw-{% if not r.is_stima %}bold{% else %}normal{% endif %}">
+                {{ '%.1f'|format(r.consumo_mangime_kg) if r.consumo_mangime_kg else '–' }}
+            </td>
+            <td class="text-end text-muted" style="font-size:.85rem">
+                {{ '%.1f'|format(r.razione_teorica_kg) if r.razione_teorica_kg else '–' }}
+            </td>
             <td class="text-end">{{ '%.1f'|format(r.consumo_siero_litri) if r.consumo_siero_litri else '–' }}</td>
-            <td class="text-end" style="color:#0288d1">{{ '%.0f'|format(r.consumo_acqua_litri) if r.consumo_acqua_litri else '–' }}</td>
-            <td class="text-end" style="color:#0288d1">{{ '%.0f'|format(r.acqua_teorica_litri) if r.acqua_teorica_litri else '–' }}</td>
-            <td class="small text-muted">{{ r.note or '' }}</td>
+            <td class="text-end" style="color:#0288d1">
+                {{ '%.0f'|format(r.consumo_acqua_litri) if (not r.is_stima and r.consumo_acqua_litri) else '–' }}
+            </td>
+            <td class="text-end" style="color:#78b8d4">
+                {{ '%.0f'|format(r.acqua_teorica_litri) if r.acqua_teorica_litri else '–' }}
+            </td>
         </tr>
         {% endfor %}
         </tbody>
     </table>
-</div>
-{% else %}
-<div class="cb-empty">
-    <i class="bi bi-basket d-block"></i>
-    <p>Nessun dato disponibile.</p>
-</div>
-{% endif %}
-</div>
+    </div>
 
-{% else %}
-{# Vista per pasto #}
-<div class="cb-table">
-{% if pasti %}
-<div class="table-responsive">
-    <table class="table table-sm table-hover">
+    {# Breakdown per pasto #}
+    {% if g.pasti %}
+    <h6 class="mb-2"><i class="bi bi-list-columns me-1"></i>Per pasto</h6>
+    <div class="table-responsive">
+    <table class="table table-sm mb-0">
         <thead><tr>
-            <th>Data</th><th>Pasto</th><th>Linea</th>
+            <th>Pasto</th><th>Linea</th>
             <th class="text-end">Mangime (kg)</th>
             <th class="text-end">Siero (L)</th>
             <th class="text-end" style="color:#0288d1">Acqua (L)</th>
             <th>Note</th>
         </tr></thead>
         <tbody>
+        {% for p in g.pasti|sort(attribute='numero_pasto') %}
+        <tr>
+            <td><span class="badge bg-secondary">P{{ p.numero_pasto }}</span></td>
+            <td><span style="color:{{ colori[p.linea] }};font-weight:bold">L{{ p.linea }}</span></td>
+            <td class="text-end">{{ '%.1f'|format(p.consumo_mangime_kg) if p.consumo_mangime_kg else '–' }}</td>
+            <td class="text-end">{{ '%.1f'|format(p.consumo_siero_litri) if p.consumo_siero_litri else '–' }}</td>
+            <td class="text-end" style="color:#0288d1">{{ '%.0f'|format(p.consumo_acqua_litri) if p.consumo_acqua_litri else '–' }}</td>
+            <td class="small text-muted">{{ p.note or '' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Nessun dato per pasto disponibile per questa giornata.</p>
+    {% endif %}
+</div>
+{% endfor %}
+
+{% else %}
+<div class="cb-empty p-4 text-center">
+    <i class="bi bi-basket d-block fs-2 text-muted mb-2"></i>
+    <p class="text-muted mb-0">Nessun dato nel periodo selezionato.</p>
+    <small class="text-muted">
+        {% if data_inizio_ciclo %}I dati vengono generati automaticamente ad ogni evento del ciclo.
+        {% else %}Nessun ciclo attivo trovato.{% endif %}
+    </small>
+</div>
+{% endif %}
+</div>
+
+{# ── TABELLA PER PASTO ────────────────────────────────────────────────────────── #}
+{% else %}
+<div class="cb-card">
+{% if pasti %}
+<div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+        <thead>
+            <tr class="table-light">
+                <th>Data</th><th>Pasto</th><th>Linea</th>
+                <th class="text-end">Mangime (kg)</th>
+                <th class="text-end">Siero (L)</th>
+                <th class="text-end" style="color:#0288d1">Acqua (L)</th>
+                <th>Note</th>
+            </tr>
+        </thead>
+        <tbody>
         {% for p in pasti %}
         <tr>
             <td>{{ p.data.strftime('%d/%m/%Y') }}</td>
             <td><span class="badge bg-secondary">P{{ p.numero_pasto }}</span></td>
-            <td><span style="color:{{ colori[p.linea] }};font-weight:bold">Linea {{ p.linea }}</span></td>
+            <td><span style="color:{{ colori[p.linea] }};font-weight:bold">L{{ p.linea }}</span></td>
             <td class="text-end">{{ '%.1f'|format(p.consumo_mangime_kg) if p.consumo_mangime_kg else '–' }}</td>
             <td class="text-end">{{ '%.1f'|format(p.consumo_siero_litri) if p.consumo_siero_litri else '–' }}</td>
             <td class="text-end" style="color:#0288d1">{{ '%.0f'|format(p.consumo_acqua_litri) if p.consumo_acqua_litri else '–' }}</td>
@@ -93,12 +317,60 @@
     </table>
 </div>
 {% else %}
-<div class="cb-empty">
-    <i class="bi bi-basket d-block"></i>
-    <p>Nessun dato disponibile.</p>
+<div class="cb-empty p-4 text-center">
+    <i class="bi bi-basket d-block fs-2 text-muted mb-2"></i>
+    <p class="text-muted mb-0">Nessun dato per pasto nel periodo selezionato.</p>
 </div>
 {% endif %}
 </div>
 {% endif %}
 
+{# Legenda #}
+<div class="mt-3 d-flex gap-3 flex-wrap" style="font-size:.8rem;color:#888">
+    <span>
+        <span class="badge bg-success-subtle text-success border border-success" style="font-size:.7rem"><i class="bi bi-check-circle"></i> reale</span>
+        dato inserito manualmente
+    </span>
+    <span>
+        <span class="badge bg-light text-secondary border" style="font-size:.7rem"><i class="bi bi-calculator"></i> teorico</span>
+        calcolato da curva accrescimento + ricetta diluizione
+    </span>
+    <span>
+        <span class="text-danger fw-bold">Δ +</span> mangime sopra teorico &nbsp;
+        <span class="text-primary fw-bold">Δ –</span> sotto &nbsp;
+        <span class="text-success fw-bold">≈</span> in linea (±0.5 kg)
+    </span>
+</div>
+
+{# ── MODAL DETTAGLIO GIORNO ─────────────────────────────────────────────────── #}
+<div class="modal fade" id="modaleDettaglio" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+            <i class="bi bi-calendar-day me-2" style="color:#c2185b"></i>
+            Dettaglio giornata <span id="modaleDettaglioData"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="modaleDettaglioContent"></div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function mostraDettaglio(dataStr) {
+    const el = document.getElementById('detail-' + dataStr);
+    if (!el) return;
+    // Format date for display
+    const parts = dataStr.split('-');
+    document.getElementById('modaleDettaglioData').textContent =
+        parts[2] + '/' + parts[1] + '/' + parts[0];
+    document.getElementById('modaleDettaglioContent').innerHTML = el.innerHTML;
+    new bootstrap.Modal(document.getElementById('modaleDettaglio')).show();
+}
+</script>
 {% endblock %}

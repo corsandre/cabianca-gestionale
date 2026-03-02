@@ -129,12 +129,221 @@ def _calcola_razioni_linea(linea):
     return totale_mangime_kg, totale_siero_litri, totale_acqua_litri
 
 
+def _calcola_razioni_linea_dettaglio(linea):
+    """Come _calcola_razioni_linea ma ritorna anche boxes_dettaglio per espansione UI."""
+    oggi = date.today()
+    boxes_linea = Box.query.filter_by(linea_alimentazione=linea).all()
+    box_ids = [b.id for b in boxes_linea]
+    cicli_attivi = BoxCiclo.query.filter(
+        BoxCiclo.box_id.in_(box_ids),
+        BoxCiclo.stato.in_(["attivo", "in_uscita"]),
+    ).all()
+
+    totale_mangime_kg = 0.0
+    totale_siero_litri = 0.0
+    boxes_dettaglio = []
+
+    for bc in cicli_attivi:
+        if not bc.eta_stimata_gg or not bc.data_accasamento or not bc.capi_presenti:
+            continue
+        eta_oggi = bc.eta_stimata_gg + (oggi - bc.data_accasamento).days
+        razione_base = _razione_da_eta(eta_oggi)
+        inapp = bc.inappetenze.filter(
+            InappetenzaBox.data_inizio <= oggi,
+            db.or_(InappetenzaBox.data_fine == None, InappetenzaBox.data_fine >= oggi),
+        ).first()
+        perc_razione = (inapp.percentuale_razione / 100.0) if inapp else 1.0
+        razione_box = razione_base * bc.capi_presenti * perc_razione
+
+        perc_s = _perc_siero_da_eta(eta_oggi) / 100.0
+        ss_perc = _get_setting_float("allevamento_perc_ss_siero", 6.0) / 100.0
+        siero_ss_kg = razione_box * perc_s
+        siero_litri = (siero_ss_kg / ss_perc) if ss_perc > 0 else 0.0
+        mangime_kg = razione_box - siero_ss_kg
+
+        totale_mangime_kg += mangime_kg
+        totale_siero_litri += siero_litri
+
+        acqua_box = _calcola_acqua(round(mangime_kg, 1), round(siero_litri, 1))
+        boxes_dettaglio.append({
+            "numero": bc.box.numero,
+            "capi": bc.capi_presenti,
+            "eta": eta_oggi,
+            "razione_per_capo": round(razione_base, 2),
+            "perc_razione": round(perc_razione * 100),
+            "ha_inappetenza": inapp is not None,
+            "mangime_kg": round(mangime_kg, 1),
+            "siero_litri": round(siero_litri, 1),
+            "acqua_litri": acqua_box,
+        })
+
+    boxes_dettaglio.sort(key=lambda x: x["numero"])
+    totale_mangime_kg = round(totale_mangime_kg, 1)
+    totale_siero_litri = round(totale_siero_litri, 1)
+    totale_acqua_litri = _calcola_acqua(totale_mangime_kg, totale_siero_litri)
+    return totale_mangime_kg, totale_siero_litri, totale_acqua_litri, boxes_dettaglio
+
+
 def _get_setting_float(key, default):
     s = Setting.query.get(key)
     try:
         return float(s.value) if s else default
     except (TypeError, ValueError):
         return default
+
+
+def _interp_curva_precaricata(curva, eta_gg):
+    """Razione giornaliera (kg/capo) da curva pre-caricata."""
+    if not curva:
+        return 0.0
+    if eta_gg <= curva[0].eta_giorni:
+        return curva[0].razione_kg_giorno
+    if eta_gg >= curva[-1].eta_giorni:
+        return curva[-1].razione_kg_giorno
+    for i in range(len(curva) - 1):
+        a, b = curva[i], curva[i + 1]
+        if a.eta_giorni <= eta_gg <= b.eta_giorni:
+            ratio = (eta_gg - a.eta_giorni) / (b.eta_giorni - a.eta_giorni)
+            return a.razione_kg_giorno + ratio * (b.razione_kg_giorno - a.razione_kg_giorno)
+    return 0.0
+
+
+def _interp_siero_precaricata(tabella, eta_gg):
+    """Percentuale sostituzione siero da tabella pre-caricata."""
+    for row in tabella:
+        if row.eta_min <= eta_gg <= row.eta_max:
+            return row.percentuale_siero
+    return 0.0
+
+
+def _capi_storici_data(bc, data_target, eventi_bc=None):
+    """Calcola capi presenti in un BoxCiclo a una data specifica.
+    eventi_bc è la lista pre-caricata ordinata per data (opzionale).
+    """
+    if bc.data_accasamento > data_target:
+        return 0
+    capi = bc.capi_iniziali or 0
+    evs = eventi_bc if eventi_bc is not None else bc.eventi.order_by(EventoCiclo.data).all()
+    for ev in evs:
+        if ev.data > data_target:
+            break
+        if ev.tipo == 'riaccasamento':
+            capi = ev.quantita or capi
+        elif ev.tipo in ('mortalita', 'frazionamento_out', 'uscita_macello'):
+            capi -= (ev.quantita or 0)
+        elif ev.tipo == 'frazionamento_in':
+            capi += (ev.quantita or 0)
+    return max(0, capi)
+
+
+def _rigenera_stime_ciclo(ciclo, data_da=None):
+    """Rigenera stime razione teoriche sulle linee del ciclo dal data_da a oggi.
+    Sostituisce solo record is_stima=True, mai record reali (is_stima=False/NULL).
+    """
+    from datetime import timedelta
+
+    data_inizio = data_da if data_da else ciclo.data_inizio
+    data_fine = date.today()
+
+    if data_inizio > data_fine:
+        return
+
+    # Linee coinvolte da questo ciclo
+    linee_ciclo = set()
+    for bc in ciclo.box_cicli.all():
+        if bc.box and bc.box.linea_alimentazione:
+            linee_ciclo.add(bc.box.linea_alimentazione)
+    if not linee_ciclo:
+        return
+
+    curva = CurvaAccrescimento.query.order_by(CurvaAccrescimento.eta_giorni).all()
+    tabella_siero = TabellaSostSiero.query.all()
+    if not curva:
+        return
+
+    ss_perc = _get_setting_float("allevamento_perc_ss_siero", 6.0) / 100.0
+
+    # Pre-carica tutti i BoxCiclo sulle linee coinvolte (tutti i cicli)
+    boxes_per_linea = {}
+    all_bc_for_linee = []
+    for linea in linee_ciclo:
+        boxes_l = Box.query.filter_by(linea_alimentazione=linea).all()
+        box_ids_l = [b.id for b in boxes_l]
+        bc_list = BoxCiclo.query.filter(BoxCiclo.box_id.in_(box_ids_l)).all()
+        boxes_per_linea[linea] = bc_list
+        all_bc_for_linee.extend(bc_list)
+
+    # Pre-carica tutti gli eventi per quei BoxCiclo (tutti, non solo nel range)
+    all_bc_ids = [bc.id for bc in all_bc_for_linee]
+    all_eventi = EventoCiclo.query.filter(
+        EventoCiclo.box_ciclo_id.in_(all_bc_ids)
+    ).order_by(EventoCiclo.data).all()
+    eventi_per_bc = {}
+    for ev in all_eventi:
+        eventi_per_bc.setdefault(ev.box_ciclo_id, []).append(ev)
+
+    giorni = (data_fine - data_inizio).days + 1
+
+    for delta in range(giorni):
+        d = data_inizio + timedelta(days=delta)
+
+        for linea in linee_ciclo:
+            # Skip se esiste già un dato reale (non stima) per questa data/linea
+            razione_reale = RazioneGiornaliera.query.filter_by(data=d, linea=linea).filter(
+                db.or_(RazioneGiornaliera.is_stima == False, RazioneGiornaliera.is_stima == None)
+            ).first()
+            if razione_reale:
+                continue
+
+            totale_mangime = 0.0
+            totale_siero = 0.0
+            ha_animali = False
+
+            for bc in boxes_per_linea[linea]:
+                if not bc.data_accasamento or bc.data_accasamento > d:
+                    continue
+                if not bc.eta_stimata_gg:
+                    continue
+
+                capi = _capi_storici_data(bc, d, eventi_per_bc.get(bc.id, []))
+                if capi <= 0:
+                    continue
+
+                ha_animali = True
+                eta = bc.eta_stimata_gg + (d - bc.data_accasamento).days
+                razione_base = _interp_curva_precaricata(curva, eta)
+                perc_s = _interp_siero_precaricata(tabella_siero, eta) / 100.0
+                razione_box = razione_base * capi
+
+                siero_ss_kg = razione_box * perc_s
+                siero_litri = (siero_ss_kg / ss_perc) if ss_perc > 0 else 0.0
+                mangime_kg = razione_box - siero_ss_kg
+
+                totale_mangime += mangime_kg
+                totale_siero += siero_litri
+
+            # Elimina stima precedente per questa data/linea
+            RazioneGiornaliera.query.filter_by(
+                data=d, linea=linea, is_stima=True
+            ).delete(synchronize_session='fetch')
+
+            if not ha_animali:
+                continue
+
+            acqua = _calcola_acqua(round(totale_mangime, 1), round(totale_siero, 1))
+            razione_teorica = totale_mangime + totale_siero * ss_perc
+
+            db.session.add(RazioneGiornaliera(
+                data=d,
+                linea=linea,
+                razione_teorica_kg=round(razione_teorica, 1),
+                consumo_mangime_kg=round(totale_mangime, 1),
+                consumo_siero_litri=round(totale_siero, 1),
+                acqua_teorica_litri=round(acqua, 1),
+                is_stima=True,
+            ))
+
+    db.session.commit()
 
 
 def _calcola_acqua(mangime_kg, siero_litri):
@@ -373,6 +582,7 @@ def cicli_nuovo():
             db.session.add(bc)
 
         db.session.commit()
+        _rigenera_stime_ciclo(ciclo)
         flash(f"Ciclo {ciclo.ciclo_id} creato con {capi_effettivi} capi in {len(box_capi)} box.", "success")
         return redirect(url_for("allevamento.cicli_detail", id=ciclo.id))
 
@@ -393,12 +603,30 @@ def cicli_detail(id):
         EventoCiclo.box_ciclo_id.in_(bc_ids)
     ).order_by(EventoCiclo.data.desc()).all() if bc_ids else []
 
-    # Calcola data vendita prevista per ogni lotto
+    # Calcola data vendita prevista, peso medio ed età stimata per ogni lotto
     lotti_info = []
     for lt in lotti:
         data_vendita = _calcola_data_vendita(lt.lettera_nascita, lt.data_consegna) if lt.lettera_nascita else None
-        capi_lotto = lt.box_cicli.count()
-        lotti_info.append({"lotto": lt, "data_vendita": data_vendita, "n_box": capi_lotto})
+        bcs = lt.box_cicli.all()
+        capi_totali = sum(bc.capi_iniziali for bc in bcs)
+        # Peso medio: da bolla / capi oppure da BoxCiclo salvato
+        if lt.peso_totale_bolla_kg and capi_totali:
+            peso_medio = round(lt.peso_totale_bolla_kg / capi_totali, 1)
+        else:
+            pm_vals = [bc.peso_medio_iniziale for bc in bcs if bc.peso_medio_iniziale]
+            peso_medio = round(sum(pm_vals) / len(pm_vals), 1) if pm_vals else None
+        # Età stimata: prendi dal primo BoxCiclo, altrimenti ricalcola
+        eta_vals = [bc.eta_stimata_gg for bc in bcs if bc.eta_stimata_gg]
+        eta_stimata = round(sum(eta_vals) / len(eta_vals)) if eta_vals else (
+            _eta_da_peso(peso_medio) if peso_medio else None
+        )
+        lotti_info.append({
+            "lotto": lt,
+            "data_vendita": data_vendita,
+            "n_box": len(bcs),
+            "peso_medio": peso_medio,
+            "eta_stimata": eta_stimata,
+        })
 
     # Banner warning se lettere diverse tra lotti
     lettere_uniche = {lt.lettera_nascita for lt in lotti if lt.lettera_nascita}
@@ -523,6 +751,45 @@ def cicli_aggiungi_lotto(id):
                            lettere_mesi=LETTERE_MESI, nomi_mesi=NOMI_MESI)
 
 
+@bp.route("/cicli/<int:id>/lotti/<int:lotto_id>/modifica", methods=["POST"])
+@login_required
+@write_required
+def cicli_modifica_lotto(id, lotto_id):
+    ciclo = CicloProduttivo.query.get_or_404(id)
+    lotto = Lotto.query.filter_by(id=lotto_id, ciclo_id=id).first_or_404()
+
+    data_consegna_str = request.form.get("data_consegna", "").strip()
+    if data_consegna_str:
+        try:
+            lotto.data_consegna = date.fromisoformat(data_consegna_str)
+        except ValueError:
+            flash("Data consegna non valida.", "danger")
+            return redirect(url_for("allevamento.cicli_detail", id=id))
+
+    lettera = request.form.get("lettera_nascita", "").strip().upper() or None
+    if lettera and lettera not in LETTERE_MESI:
+        flash("Lettera DOP non valida.", "danger")
+        return redirect(url_for("allevamento.cicli_detail", id=id))
+    lotto.lettera_nascita = lettera
+
+    peso_str = request.form.get("peso_totale_bolla_kg", "").strip()
+    lotto.peso_totale_bolla_kg = float(peso_str) if peso_str else None
+
+    lotto.fornitore = request.form.get("fornitore", "").strip() or None
+    lotto.numero_documento = request.form.get("numero_documento", "").strip() or None
+    lotto.note = request.form.get("note", "").strip() or None
+
+    # Aggiorna lettera_nascita e data_accasamento sui BoxCiclo del lotto
+    for bc in lotto.box_cicli:
+        if lettera:
+            bc.lettera_nascita = lettera
+        bc.data_accasamento = lotto.data_consegna
+
+    db.session.commit()
+    flash(f"Lotto {lotto.numero_lotto} aggiornato.", "success")
+    return redirect(url_for("allevamento.cicli_detail", id=id))
+
+
 @bp.route("/cicli/<int:id>/riaccasamento", methods=["GET", "POST"])
 @login_required
 @write_required
@@ -583,7 +850,12 @@ def cicli_riaccasamento(id):
             bc.stato = "chiuso" if nuovi_capi == 0 else bc.stato
             if nuovi_peso:
                 bc.peso_medio_iniziale = round(nuovi_peso, 2)
-                bc.eta_stimata_gg = _eta_da_peso(nuovi_peso)
+                eta_alla_pesatura = _eta_da_peso(nuovi_peso)
+                if eta_alla_pesatura is not None and bc.data_accasamento:
+                    giorni_trascorsi = (data_riaccasamento - bc.data_accasamento).days
+                    bc.eta_stimata_gg = eta_alla_pesatura - giorni_trascorsi
+                else:
+                    bc.eta_stimata_gg = eta_alla_pesatura
 
             nota = f"Riaccasamento: {capi_prima}→{nuovi_capi} capi"
             if nuovi_peso:
@@ -638,6 +910,7 @@ def cicli_riaccasamento(id):
             ))
 
         db.session.commit()
+        _rigenera_stime_ciclo(ciclo, data_da=data_riaccasamento)
         flash("Riaccasamento registrato.", "success")
         return redirect(url_for("allevamento.cicli_detail", id=id))
 
@@ -676,23 +949,65 @@ def eventi_nuovo():
 
     if request.method == "POST":
         tipo = request.form.get("tipo")
-        box_ciclo_id = int(request.form.get("box_ciclo_id", 0))
-        quantita = int(request.form.get("quantita", 0) or 0)
-        peso_totale = float(request.form.get("peso_totale", 0) or 0)
         data_str = request.form.get("data", str(date.today()))
         note = request.form.get("note", "").strip()
         is_scarti = request.form.get("is_scarti") == "1"
+        data_ev = date.fromisoformat(data_str)
 
+        if tipo == "uscita_macello":
+            # Multi-box: uno o più box selezionati con checkbox
+            box_ciclo_ids = request.form.getlist("box_ciclo_id")
+            peso_totale_camion = float(request.form.get("peso_totale", 0) or 0)
+            capi_per_box = {}
+            for bc_id in box_ciclo_ids:
+                c = int(request.form.get(f"capi_box_{bc_id}", 0) or 0)
+                if c > 0:
+                    capi_per_box[int(bc_id)] = c
+
+            if not capi_per_box:
+                flash("Nessun capo selezionato per l'uscita macello.", "warning")
+                return redirect(url_for("allevamento.eventi_nuovo"))
+
+            capi_totali = sum(capi_per_box.values())
+            ciclo_ref = None
+            for bc_id, capi in capi_per_box.items():
+                bc = BoxCiclo.query.get_or_404(bc_id)
+                if ciclo_ref is None:
+                    ciclo_ref = bc.ciclo
+                peso_box = round(peso_totale_camion * capi / capi_totali, 1) if capi_totali > 0 else None
+                db.session.add(EventoCiclo(
+                    box_ciclo_id=bc_id, tipo="uscita_macello", data=data_ev,
+                    quantita=capi, peso_totale=peso_box, note=note,
+                    operatore_id=current_user.id, is_scarti=is_scarti,
+                ))
+                bc.capi_presenti = max(0, (bc.capi_presenti or 0) - capi)
+                if bc.capi_presenti == 0:
+                    bc.stato = "chiuso"
+
+            # Controlla se tutto il ciclo è chiuso
+            if ciclo_ref and all(b.stato == "chiuso" for b in ciclo_ref.box_cicli.all()):
+                ciclo_ref.stato = "chiuso"
+                ciclo_ref.data_chiusura = date.today()
+
+            db.session.commit()
+            if ciclo_ref:
+                _rigenera_stime_ciclo(ciclo_ref, data_da=data_ev)
+            n_box = len(capi_per_box)
+            flash(f"Uscita macello registrata: {capi_totali} capi da {n_box} box.", "success")
+            ciclo_id = ciclo_ref.id if ciclo_ref else None
+            return redirect(url_for("allevamento.cicli_detail", id=ciclo_id) if ciclo_id
+                            else url_for("allevamento.cicli_index"))
+
+        # Tutti gli altri tipi: singolo box
+        box_ciclo_id = int(request.form.get("box_ciclo_id", 0))
+        quantita = int(request.form.get("quantita", 0) or 0)
+        peso_totale = float(request.form.get("peso_totale", 0) or 0)
         bc = BoxCiclo.query.get_or_404(box_ciclo_id)
         ev = EventoCiclo(
-            box_ciclo_id=box_ciclo_id,
-            tipo=tipo,
-            data=date.fromisoformat(data_str),
+            box_ciclo_id=box_ciclo_id, tipo=tipo, data=data_ev,
             quantita=quantita,
             peso_totale=peso_totale if peso_totale else None,
-            note=note,
-            operatore_id=current_user.id,
-            is_scarti=is_scarti,
+            note=note, operatore_id=current_user.id, is_scarti=is_scarti,
         )
         db.session.add(ev)
 
@@ -700,31 +1015,20 @@ def eventi_nuovo():
             bc.capi_presenti = max(0, (bc.capi_presenti or 0) - quantita)
         elif tipo == "frazionamento_out":
             bc.capi_presenti = max(0, (bc.capi_presenti or 0) - quantita)
-            # frazionamento_in va registrato sul box destinazione separatamente
             dest_bc_id = int(request.form.get("dest_box_ciclo_id", 0) or 0)
             if dest_bc_id:
                 dest_bc = BoxCiclo.query.get(dest_bc_id)
                 if dest_bc:
                     dest_bc.capi_presenti = (dest_bc.capi_presenti or 0) + quantita
                     db.session.add(EventoCiclo(
-                        box_ciclo_id=dest_bc_id,
-                        tipo="frazionamento_in",
-                        data=date.fromisoformat(data_str),
+                        box_ciclo_id=dest_bc_id, tipo="frazionamento_in", data=data_ev,
                         quantita=quantita,
                         note=f"Da box {bc.box.numero} – {note}",
                         operatore_id=current_user.id,
                     ))
-        elif tipo == "uscita_macello":
-            bc.capi_presenti = max(0, (bc.capi_presenti or 0) - quantita)
-            if bc.capi_presenti == 0:
-                bc.stato = "chiuso"
-                # Controlla se tutto il ciclo è chiuso
-                ciclo_obj = bc.ciclo
-                if all(b.stato == "chiuso" for b in ciclo_obj.box_cicli.all()):
-                    ciclo_obj.stato = "chiuso"
-                    ciclo_obj.data_chiusura = date.today()
 
         db.session.commit()
+        _rigenera_stime_ciclo(bc.ciclo, data_da=data_ev)
         flash(f"Evento '{tipo}' registrato ({quantita} capi).", "success")
         return redirect(url_for("allevamento.cicli_detail", id=bc.ciclo_id))
 
@@ -733,6 +1037,87 @@ def eventi_nuovo():
     return render_template("allevamento/eventi/form.html",
                            cicli_attivi=cicli_attivi, preselect_bc=preselect_bc,
                            today=date.today())
+
+
+@bp.route("/eventi/<int:id>/modifica", methods=["GET", "POST"])
+@login_required
+@write_required
+def cicli_evento_modifica(id):
+    """Modifica data/quantita/peso/note di un EventoCiclo esistente."""
+    ev = EventoCiclo.query.get_or_404(id)
+    bc = ev.box_ciclo
+    ciclo = bc.ciclo
+
+    if request.method == "POST":
+        data_str = request.form.get("data", str(ev.data))
+        nuova_data = date.fromisoformat(data_str)
+        nuova_quantita = int(request.form.get("quantita", ev.quantita or 0) or 0)
+        nuovo_peso_str = request.form.get("peso_totale", "").strip()
+        nuovo_peso = float(nuovo_peso_str) if nuovo_peso_str else None
+        note = request.form.get("note", "").strip()
+
+        # Se la quantità cambia, aggiusta capi_presenti con il delta
+        old_qty = ev.quantita or 0
+        if nuova_quantita != old_qty:
+            delta = old_qty - nuova_quantita  # positivo = ripristino capi
+            if ev.tipo in ("mortalita", "frazionamento_out", "uscita_macello"):
+                bc.capi_presenti = max(0, (bc.capi_presenti or 0) + delta)
+            elif ev.tipo == "frazionamento_in":
+                bc.capi_presenti = max(0, (bc.capi_presenti or 0) - delta)
+
+        old_data = ev.data
+        ev.data = nuova_data
+        ev.quantita = nuova_quantita
+        ev.peso_totale = nuovo_peso
+        ev.note = note
+        db.session.commit()
+        _rigenera_stime_ciclo(ciclo, data_da=min(old_data, nuova_data))
+        flash("Evento aggiornato.", "success")
+        return redirect(url_for("allevamento.cicli_detail", id=ciclo.id))
+
+    return render_template("allevamento/eventi/modifica.html", ev=ev, ciclo=ciclo, today=date.today())
+
+
+@bp.route("/eventi/<int:id>/elimina", methods=["POST"])
+@login_required
+@write_required
+def cicli_evento_elimina(id):
+    """Elimina un EventoCiclo e ripristina lo stato conseguente."""
+    ev = EventoCiclo.query.get_or_404(id)
+    bc = ev.box_ciclo
+    ciclo = bc.ciclo
+    data_evento = ev.data
+
+    # Ripristina capi_presenti
+    if ev.tipo in ("mortalita", "frazionamento_out", "uscita_macello"):
+        bc.capi_presenti = (bc.capi_presenti or 0) + (ev.quantita or 0)
+        if bc.stato == "chiuso" and bc.capi_presenti > 0:
+            bc.stato = "in_uscita"
+        if ciclo.stato == "chiuso":
+            ciclo.stato = "attivo"
+            ciclo.data_chiusura = None
+    elif ev.tipo == "frazionamento_in":
+        bc.capi_presenti = max(0, (bc.capi_presenti or 0) - (ev.quantita or 0))
+
+    db.session.delete(ev)
+    db.session.commit()
+    _rigenera_stime_ciclo(ciclo, data_da=data_evento)
+    flash("Evento eliminato.", "success")
+    return redirect(url_for("allevamento.cicli_detail", id=ciclo.id))
+
+
+@bp.route("/cicli/<int:id>/rigenera_stime", methods=["POST"])
+@login_required
+@write_required
+def cicli_rigenera_stime(id):
+    """Rigenera le stime teoriche dall'inizio del ciclo a oggi (solo admin)."""
+    if current_user.role != "admin":
+        flash("Azione riservata agli amministratori.", "danger")
+        return redirect(url_for("allevamento.cicli_detail", id=id))
+    ciclo = CicloProduttivo.query.get_or_404(id)
+    _rigenera_stime_ciclo(ciclo)
+    flash("Stime teoriche rigenerate dall'inizio del ciclo a oggi.", "success")
+    return redirect(url_for("allevamento.cicli_detail", id=id))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -836,13 +1221,26 @@ def sanita_storico():
 @bp.route("/alimentazione/")
 @login_required
 def alimentazione_index():
+    import json as _json
     oggi = date.today()
     orari_pasto = OrarioPasto.query.filter_by(attivo=True).order_by(OrarioPasto.numero).all()
+    num_pasti = len(orari_pasto)
     razioni = {}
+    pasti_json = {}  # {linea: {numero_pasto: {m, s, a}}} per JS
     for linea in [1, 2, 3]:
-        mangime, siero, acqua = _calcola_razioni_linea(linea)
+        mangime, siero, acqua, boxes_det = _calcola_razioni_linea_dettaglio(linea)
         razione_db = RazioneGiornaliera.query.filter_by(data=oggi, linea=linea).first()
         pasti_oggi = RazionePasto.query.filter_by(data=oggi, linea=linea).order_by(RazionePasto.numero_pasto).all()
+        # Serializza pasti per JS
+        pasti_linea = {}
+        for op in orari_pasto:
+            rp = next((p for p in pasti_oggi if p.numero_pasto == op.numero), None)
+            pasti_linea[op.numero] = {
+                "m": rp.consumo_mangime_kg if rp and rp.consumo_mangime_kg is not None else None,
+                "s": rp.consumo_siero_litri if rp and rp.consumo_siero_litri is not None else None,
+                "a": rp.consumo_acqua_litri if rp and rp.consumo_acqua_litri is not None else None,
+            }
+        pasti_json[linea] = pasti_linea
         razioni[linea] = {
             "teorica_mangime": mangime,
             "teorica_siero": siero,
@@ -852,9 +1250,12 @@ def alimentazione_index():
             "consumo_acqua": razione_db.consumo_acqua_litri if razione_db else None,
             "note": razione_db.note if razione_db else "",
             "pasti": pasti_oggi,
+            "boxes": boxes_det,
+            "n_capi": sum(b["capi"] for b in boxes_det),
         }
     return render_template("allevamento/alimentazione/index.html",
-                           razioni=razioni, oggi=oggi, orari_pasto=orari_pasto)
+                           razioni=razioni, oggi=oggi, orari_pasto=orari_pasto,
+                           num_pasti=num_pasti, pasti_json=pasti_json)
 
 
 @bp.route("/alimentazione/consumi", methods=["GET", "POST"])
@@ -954,14 +1355,121 @@ def alimentazione_consumi_pasto():
 @login_required
 def alimentazione_storico():
     vista = request.args.get("vista", "giornaliera")
-    razioni = RazioneGiornaliera.query.order_by(
-        RazioneGiornaliera.data.desc(), RazioneGiornaliera.linea
-    ).limit(90).all()
-    pasti = RazionePasto.query.order_by(
+    oggi = date.today()
+
+    # Filtro periodo (default: ultimi 7 giorni)
+    da_str = request.args.get("da", "")
+    a_str = request.args.get("a", "")
+    data_da = date.fromisoformat(da_str) if da_str else oggi - timedelta(days=6)
+    data_a = date.fromisoformat(a_str) if a_str else oggi
+
+    # Inizio del ciclo attivo più vecchio (per "tutto ciclo")
+    cicli_attivi = CicloProduttivo.query.filter_by(stato="attivo").all()
+    data_inizio_ciclo = min((c.data_inizio for c in cicli_attivi), default=None)
+
+    # Totali per l'intero ciclo attivo
+    totali_ciclo = {1: None, 2: None, 3: None}
+    if data_inizio_ciclo:
+        razioni_all = RazioneGiornaliera.query.filter(
+            RazioneGiornaliera.data >= data_inizio_ciclo,
+            RazioneGiornaliera.data <= oggi,
+        ).all()
+        for linea in (1, 2, 3):
+            rl = [r for r in razioni_all if r.linea == linea]
+            if not rl:
+                continue
+            reali = [r for r in rl if not r.is_stima]
+            stime = [r for r in rl if r.is_stima]
+            totali_ciclo[linea] = {
+                "mangime_reale": round(sum(r.consumo_mangime_kg or 0 for r in reali), 0),
+                "mangime_stima": round(sum(r.consumo_mangime_kg or 0 for r in stime), 0),
+                "siero_reale": round(sum(r.consumo_siero_litri or 0 for r in reali), 0),
+                "siero_stima": round(sum(r.consumo_siero_litri or 0 for r in stime), 0),
+                "acqua_reale": round(sum(r.consumo_acqua_litri or 0 for r in reali), 0),
+                "acqua_stima": round(sum(r.acqua_teorica_litri or 0 for r in stime), 0),
+                "n_reali": len(reali),
+                "n_stima": len(stime),
+            }
+
+    # Razioni nel periodo filtrato
+    razioni = RazioneGiornaliera.query.filter(
+        RazioneGiornaliera.data >= data_da,
+        RazioneGiornaliera.data <= data_a,
+    ).order_by(RazioneGiornaliera.data.desc(), RazioneGiornaliera.linea).all()
+
+    pasti = RazionePasto.query.filter(
+        RazionePasto.data >= data_da,
+        RazionePasto.data <= data_a,
+    ).order_by(
         RazionePasto.data.desc(), RazionePasto.linea, RazionePasto.numero_pasto
-    ).limit(270).all()
-    return render_template("allevamento/alimentazione/storico.html",
-                           razioni=razioni, pasti=pasti, vista=vista)
+    ).all()
+
+    # Aggrega per data → una riga per giorno
+    from collections import OrderedDict
+    razioni_per_data = OrderedDict()
+    for r in razioni:
+        razioni_per_data.setdefault(r.data, []).append(r)
+    pasti_per_data = {}
+    for p in pasti:
+        pasti_per_data.setdefault(p.data, []).append(p)
+
+    giornate = []
+    for d, rs in razioni_per_data.items():
+        reali = [r for r in rs if not r.is_stima]
+        stime = [r for r in rs if r.is_stima]
+        tot_mangime = round(sum(r.consumo_mangime_kg or 0 for r in rs), 1)
+        tot_siero = round(sum(r.consumo_siero_litri or 0 for r in rs), 1)
+        # Acqua: usa reale se disponibile, altrimenti teorica
+        tot_acqua = round(sum(
+            (r.consumo_acqua_litri if (not r.is_stima and r.consumo_acqua_litri is not None)
+             else (r.acqua_teorica_litri or 0))
+            for r in rs
+        ), 0)
+        # Delta mangime vs teorico (solo per linee reali)
+        delta_mangime = None
+        if reali:
+            mr = sum(r.consumo_mangime_kg or 0 for r in reali)
+            mt = sum(r.razione_teorica_kg or 0 for r in reali)
+            if mt > 0:
+                delta_mangime = round(mr - mt, 1)
+        giornate.append({
+            "data": d,
+            "razioni": rs,
+            "pasti": pasti_per_data.get(d, []),
+            "tot_mangime": tot_mangime,
+            "tot_siero": tot_siero,
+            "tot_acqua": int(tot_acqua),
+            "delta_mangime": delta_mangime,
+            "n_reali": len(reali),
+            "n_stima": len(stime),
+        })
+
+    # Totali del periodo filtrato
+    periodo_totali = {
+        "mangime": round(sum(g["tot_mangime"] for g in giornate), 1),
+        "siero": round(sum(g["tot_siero"] for g in giornate), 1),
+        "acqua": int(sum(g["tot_acqua"] for g in giornate)),
+        "n_reali": sum(g["n_reali"] for g in giornate),
+        "n_stima": sum(g["n_stima"] for g in giornate),
+    }
+
+    # Date quick-filter da passare al template
+    quick = {
+        "7": oggi - timedelta(days=6),
+        "30": oggi - timedelta(days=29),
+        "90": oggi - timedelta(days=89),
+        "ciclo": data_inizio_ciclo,
+    }
+
+    return render_template(
+        "allevamento/alimentazione/storico.html",
+        giornate=giornate, pasti=pasti, vista=vista,
+        data_da=data_da, data_a=data_a, oggi=oggi,
+        totali_ciclo=totali_ciclo,
+        data_inizio_ciclo=data_inizio_ciclo,
+        periodo_totali=periodo_totali,
+        quick=quick,
+    )
 
 
 @bp.route("/alimentazione/cisterna")
@@ -1301,9 +1809,10 @@ def report_ciclo(id):
     peso_uscita_tot = peso_uscita_normale + peso_uscita_scarti
     capi_usciti = capi_usciti_tot
 
-    durata_gg = None
     if ciclo.data_chiusura:
         durata_gg = (ciclo.data_chiusura - ciclo.data_inizio).days
+    else:
+        durata_gg = (date.today() - ciclo.data_inizio).days
 
     return render_template("allevamento/report/ciclo.html",
                            ciclo=ciclo, box_cicli=box_cicli, eventi=eventi,

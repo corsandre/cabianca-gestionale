@@ -50,7 +50,7 @@
                         <div class="row g-2">
                             <div class="col-6">
                                 <label class="form-label small">Mangime (kg)
-                                    <span class="badge ms-1" style="background:#0288d1;font-size:.65rem">Stima: {{ (rt.mangime / numero_pasti)|round(1) }} kg</span>
+                                    <span class="badge ms-1" style="background:#0288d1;font-size:.65rem">Teorica: {{ (rt.mangime / numero_pasti)|round(1) }} kg</span>
                                 </label>
                                 <input type="number" name="mangime_{{ pasto }}_{{ linea }}"
                                        class="form-control form-control-sm feed-input"
@@ -61,7 +61,7 @@
                             </div>
                             <div class="col-6">
                                 <label class="form-label small">Siero (L)
-                                    <span class="badge ms-1" style="background:#0288d1;font-size:.65rem">Stima: {{ (rt.siero / numero_pasti)|round(1) }} L</span>
+                                    <span class="badge ms-1" style="background:#0288d1;font-size:.65rem">Teorica: {{ (rt.siero / numero_pasti)|round(1) }} L</span>
                                 </label>
                                 <input type="number" name="siero_{{ pasto }}_{{ linea }}"
                                        class="form-control form-control-sm feed-input"
@@ -72,7 +72,7 @@
                             </div>
                             <div class="col-6">
                                 <label class="form-label small">Acqua (L)
-                                    <span class="badge ms-1" style="background:#0288d1;font-size:.65rem">Stima: {{ (rt.acqua / numero_pasti)|round(0)|int }} L</span>
+                                    <span class="badge ms-1" style="background:#0288d1;font-size:.65rem">Teorica: {{ (rt.acqua / numero_pasti)|round(0)|int }} L</span>
                                 </label>
                                 <input type="number" name="acqua_{{ pasto }}_{{ linea }}"
                                        class="form-control form-control-sm"
