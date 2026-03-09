@@ -46,6 +46,14 @@ def reconcile_batch(bank_transactions):
         }
         actions = apply_rules(rule_data, "banca")
 
+        if actions and actions.get("ignore"):
+            bt.status = "ignorato"
+            bt.matched_by = "regola"
+            bt.matched_rule_id = actions.get("rule_id")
+            bt.ignore_reason_id = actions.get("ignore_reason_id")
+            stats["matched"] += 1
+            continue
+
         if actions and actions.get("auto_create"):
             _create_transaction_from_bank(bt, actions)
             bt.status = "riconciliato"

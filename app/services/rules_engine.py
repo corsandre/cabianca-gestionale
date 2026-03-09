@@ -183,4 +183,9 @@ def _build_actions(rule):
     if rule.action_date_end_prev_month:
         actions["date_end_prev_month"] = True
 
+    if rule.action_ignore:
+        actions["ignore"] = True
+        if rule.action_ignore_reason_id:
+            actions["ignore_reason_id"] = rule.action_ignore_reason_id
+
     return actions

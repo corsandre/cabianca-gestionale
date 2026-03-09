@@ -284,6 +284,8 @@ class AutoRule(db.Model):
     action_notes = db.Column(db.String(500))
     action_date_offset = db.Column(db.Integer)  # giorni da sottrarre alla data
     action_date_end_prev_month = db.Column(db.Boolean, default=False)  # ultimo giorno mese precedente
+    action_ignore = db.Column(db.Boolean, default=False)  # ignora il movimento bancario
+    action_ignore_reason_id = db.Column(db.Integer, db.ForeignKey("ignore_reasons.id"))
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -291,6 +293,7 @@ class AutoRule(db.Model):
     action_category = db.relationship("Category")
     action_contact = db.relationship("Contact")
     action_revenue_stream = db.relationship("RevenueStream")
+    action_ignore_reason = db.relationship("IgnoreReason", foreign_keys=[action_ignore_reason_id])
 
     bank_transactions = db.relationship("BankTransaction", backref="matched_rule", lazy="dynamic")
 
@@ -565,6 +568,7 @@ class ConsegnaAlimentare(db.Model):
     quantita_q = db.Column(db.Float, nullable=False)
     fornitore = db.Column(db.String(200))
     percentuale_ss_siero = db.Column(db.Float)
+    tipo_prodotto = db.Column(db.String(100), nullable=True)  # es. "LC 80", "SP 140/AO"
     note = db.Column(db.Text)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

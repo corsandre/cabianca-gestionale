@@ -217,6 +217,9 @@ def _init_db(app):
         ("box_cicli", "lotto_id", "INTEGER REFERENCES lotti(id)"),
         ("box_cicli", "lettera_nascita", "VARCHAR(1)"),
         ("razioni_giornaliere", "is_stima", "INTEGER DEFAULT 0 NOT NULL"),
+        ("consegne_alimentari", "tipo_prodotto", "TEXT"),
+        ("auto_rules", "action_ignore", "BOOLEAN DEFAULT 0"),
+        ("auto_rules", "action_ignore_reason_id", "INTEGER REFERENCES ignore_reasons(id)"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

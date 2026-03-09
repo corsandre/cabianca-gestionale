@@ -580,6 +580,42 @@ def regole():
 def regola_nuova():
     """Crea una nuova regola."""
     if request.method == "POST":
+        action_ignore = "action_ignore" in request.form
+        ignore_reason_id = None
+        if action_ignore:
+            reason_val = request.form.get("action_ignore_reason_id", "").strip()
+            if reason_val == "new":
+                new_reason_name = request.form.get("new_ignore_reason_name", "").strip()
+                new_reason_color = request.form.get("new_ignore_reason_color", "#6c757d").strip()
+                if not new_reason_name:
+                    flash("Specifica un nome per il nuovo motivo di ignoramento.", "warning")
+                    categories = Category.query.filter_by(active=True).order_by(Category.name).all()
+                    contacts = Contact.query.filter_by(active=True).order_by(Contact.name).all()
+                    revenue_streams = RevenueStream.query.filter_by(active=True).order_by(RevenueStream.name).all()
+                    ignore_reasons = IgnoreReason.query.order_by(IgnoreReason.name).all()
+                    return render_template("banca/regole.html", mode="new", rule=None,
+                                           categories=categories, contacts=contacts,
+                                           revenue_streams=revenue_streams, ignore_reasons=ignore_reasons)
+                existing = IgnoreReason.query.filter_by(name=new_reason_name).first()
+                if existing:
+                    ignore_reason_id = existing.id
+                else:
+                    new_reason = IgnoreReason(name=new_reason_name, color=new_reason_color)
+                    db.session.add(new_reason)
+                    db.session.flush()
+                    ignore_reason_id = new_reason.id
+            else:
+                ignore_reason_id = int(reason_val) if reason_val.isdigit() else None
+            if not ignore_reason_id:
+                flash("Seleziona o crea un motivo di ignoramento (obbligatorio).", "warning")
+                categories = Category.query.filter_by(active=True).order_by(Category.name).all()
+                contacts = Contact.query.filter_by(active=True).order_by(Contact.name).all()
+                revenue_streams = RevenueStream.query.filter_by(active=True).order_by(RevenueStream.name).all()
+                ignore_reasons = IgnoreReason.query.order_by(IgnoreReason.name).all()
+                return render_template("banca/regole.html", mode="new", rule=None,
+                                       categories=categories, contacts=contacts,
+                                       revenue_streams=revenue_streams, ignore_reasons=ignore_reasons)
+
         rule = AutoRule(
             name=request.form.get("name", "").strip(),
             active=True,
@@ -592,16 +628,18 @@ def regola_nuova():
             match_amount_min=request.form.get("match_amount_min", type=float) or None,
             match_amount_max=request.form.get("match_amount_max", type=float) or None,
             match_direction=request.form.get("match_direction", "").strip() or None,
-            action_category_id=request.form.get("action_category_id", type=int) or None,
-            action_contact_id=request.form.get("action_contact_id", type=int) or None,
-            action_revenue_stream_id=request.form.get("action_revenue_stream_id", type=int) or None,
-            action_description=request.form.get("action_description", "").strip() or None,
-            action_auto_create="action_auto_create" in request.form,
-            action_payment_method=request.form.get("action_payment_method", "").strip() or None,
-            action_iva_rate=request.form.get("action_iva_rate", type=float),
-            action_notes=request.form.get("action_notes", "").strip() or None,
-            action_date_offset=request.form.get("action_date_offset", type=int) or None,
-            action_date_end_prev_month="action_date_end_prev_month" in request.form,
+            action_ignore=action_ignore,
+            action_ignore_reason_id=ignore_reason_id,
+            action_category_id=request.form.get("action_category_id", type=int) or None if not action_ignore else None,
+            action_contact_id=request.form.get("action_contact_id", type=int) or None if not action_ignore else None,
+            action_revenue_stream_id=request.form.get("action_revenue_stream_id", type=int) or None if not action_ignore else None,
+            action_description=request.form.get("action_description", "").strip() or None if not action_ignore else None,
+            action_auto_create=("action_auto_create" in request.form) if not action_ignore else False,
+            action_payment_method=request.form.get("action_payment_method", "").strip() or None if not action_ignore else None,
+            action_iva_rate=request.form.get("action_iva_rate", type=float) if not action_ignore else None,
+            action_notes=request.form.get("action_notes", "").strip() or None if not action_ignore else None,
+            action_date_offset=request.form.get("action_date_offset", type=int) or None if not action_ignore else None,
+            action_date_end_prev_month=("action_date_end_prev_month" in request.form) if not action_ignore else False,
         )
 
         if not rule.name:
@@ -615,6 +653,7 @@ def regola_nuova():
     categories = Category.query.filter_by(active=True).order_by(Category.name).all()
     contacts = Contact.query.filter_by(active=True).order_by(Contact.name).all()
     revenue_streams = RevenueStream.query.filter_by(active=True).order_by(RevenueStream.name).all()
+    ignore_reasons = IgnoreReason.query.order_by(IgnoreReason.name).all()
 
     return render_template(
         "banca/regole.html",
@@ -623,6 +662,7 @@ def regola_nuova():
         categories=categories,
         contacts=contacts,
         revenue_streams=revenue_streams,
+        ignore_reasons=ignore_reasons,
     )
 
 
@@ -634,6 +674,44 @@ def regola_modifica(id):
     rule = AutoRule.query.get_or_404(id)
 
     if request.method == "POST":
+        action_ignore = "action_ignore" in request.form
+        ignore_reason_id = rule.action_ignore_reason_id
+        if action_ignore:
+            reason_val = request.form.get("action_ignore_reason_id", "").strip()
+            if reason_val == "new":
+                new_reason_name = request.form.get("new_ignore_reason_name", "").strip()
+                new_reason_color = request.form.get("new_ignore_reason_color", "#6c757d").strip()
+                if not new_reason_name:
+                    flash("Specifica un nome per il nuovo motivo di ignoramento.", "warning")
+                    categories = Category.query.filter_by(active=True).order_by(Category.name).all()
+                    contacts = Contact.query.filter_by(active=True).order_by(Contact.name).all()
+                    revenue_streams = RevenueStream.query.filter_by(active=True).order_by(RevenueStream.name).all()
+                    ignore_reasons = IgnoreReason.query.order_by(IgnoreReason.name).all()
+                    return render_template("banca/regole.html", mode="edit", rule=rule,
+                                           categories=categories, contacts=contacts,
+                                           revenue_streams=revenue_streams, ignore_reasons=ignore_reasons)
+                existing = IgnoreReason.query.filter_by(name=new_reason_name).first()
+                if existing:
+                    ignore_reason_id = existing.id
+                else:
+                    new_reason = IgnoreReason(name=new_reason_name, color=new_reason_color)
+                    db.session.add(new_reason)
+                    db.session.flush()
+                    ignore_reason_id = new_reason.id
+            else:
+                ignore_reason_id = int(reason_val) if reason_val.isdigit() else None
+            if not ignore_reason_id:
+                flash("Seleziona o crea un motivo di ignoramento (obbligatorio).", "warning")
+                categories = Category.query.filter_by(active=True).order_by(Category.name).all()
+                contacts = Contact.query.filter_by(active=True).order_by(Contact.name).all()
+                revenue_streams = RevenueStream.query.filter_by(active=True).order_by(RevenueStream.name).all()
+                ignore_reasons = IgnoreReason.query.order_by(IgnoreReason.name).all()
+                return render_template("banca/regole.html", mode="edit", rule=rule,
+                                       categories=categories, contacts=contacts,
+                                       revenue_streams=revenue_streams, ignore_reasons=ignore_reasons)
+        else:
+            ignore_reason_id = None
+
         rule.name = request.form.get("name", "").strip()
         rule.priority = request.form.get("priority", 0, type=int)
         rule.applies_to = request.form.get("applies_to", "tutti")
@@ -644,16 +722,18 @@ def regola_modifica(id):
         rule.match_amount_min = request.form.get("match_amount_min", type=float) or None
         rule.match_amount_max = request.form.get("match_amount_max", type=float) or None
         rule.match_direction = request.form.get("match_direction", "").strip() or None
-        rule.action_category_id = request.form.get("action_category_id", type=int) or None
-        rule.action_contact_id = request.form.get("action_contact_id", type=int) or None
-        rule.action_revenue_stream_id = request.form.get("action_revenue_stream_id", type=int) or None
-        rule.action_description = request.form.get("action_description", "").strip() or None
-        rule.action_auto_create = "action_auto_create" in request.form
-        rule.action_payment_method = request.form.get("action_payment_method", "").strip() or None
-        rule.action_iva_rate = request.form.get("action_iva_rate", type=float)
-        rule.action_notes = request.form.get("action_notes", "").strip() or None
-        rule.action_date_offset = request.form.get("action_date_offset", type=int) or None
-        rule.action_date_end_prev_month = "action_date_end_prev_month" in request.form
+        rule.action_ignore = action_ignore
+        rule.action_ignore_reason_id = ignore_reason_id
+        rule.action_category_id = request.form.get("action_category_id", type=int) or None if not action_ignore else None
+        rule.action_contact_id = request.form.get("action_contact_id", type=int) or None if not action_ignore else None
+        rule.action_revenue_stream_id = request.form.get("action_revenue_stream_id", type=int) or None if not action_ignore else None
+        rule.action_description = request.form.get("action_description", "").strip() or None if not action_ignore else None
+        rule.action_auto_create = ("action_auto_create" in request.form) if not action_ignore else False
+        rule.action_payment_method = request.form.get("action_payment_method", "").strip() or None if not action_ignore else None
+        rule.action_iva_rate = request.form.get("action_iva_rate", type=float) if not action_ignore else None
+        rule.action_notes = request.form.get("action_notes", "").strip() or None if not action_ignore else None
+        rule.action_date_offset = request.form.get("action_date_offset", type=int) or None if not action_ignore else None
+        rule.action_date_end_prev_month = ("action_date_end_prev_month" in request.form) if not action_ignore else False
 
         if not rule.name:
             flash("Il nome della regola e' obbligatorio.", "warning")
@@ -665,6 +745,7 @@ def regola_modifica(id):
     categories = Category.query.filter_by(active=True).order_by(Category.name).all()
     contacts = Contact.query.filter_by(active=True).order_by(Contact.name).all()
     revenue_streams = RevenueStream.query.filter_by(active=True).order_by(RevenueStream.name).all()
+    ignore_reasons = IgnoreReason.query.order_by(IgnoreReason.name).all()
 
     return render_template(
         "banca/regole.html",
@@ -673,6 +754,7 @@ def regola_modifica(id):
         categories=categories,
         contacts=contacts,
         revenue_streams=revenue_streams,
+        ignore_reasons=ignore_reasons,
     )
 
 
@@ -743,7 +825,13 @@ def regole_riapplica():
         if not actions:
             continue
 
-        if actions.get("auto_create") and bt.status != "riconciliato":
+        if actions.get("ignore") and bt.status == "non_riconciliato":
+            bt.status = "ignorato"
+            bt.matched_by = "regola"
+            bt.matched_rule_id = actions.get("rule_id")
+            bt.ignore_reason_id = actions.get("ignore_reason_id")
+            updated += 1
+        elif actions.get("auto_create") and bt.status != "riconciliato":
             create_transaction_from_rule(bt, actions)
             created += 1
         else:

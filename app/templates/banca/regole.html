@@ -69,10 +69,15 @@
                         {{ conds | join(' + ') if conds else '-' }}
                     </td>
                     <td class="small d-none d-md-table-cell">
-                        {% if r.action_category %}<span class="cb-chip" style="background:{{ r.action_category.color }}">{{ r.action_category.name }}</span> {% endif %}
-                        {% if r.action_contact %}{{ r.action_contact.name }} {% endif %}
-                        {% if r.action_auto_create %}<span class="badge bg-info">auto-crea</span>{% endif %}
-                        {% if r.action_payment_method %}<span class="badge bg-secondary">{{ r.action_payment_method }}</span>{% endif %}
+                        {% if r.action_ignore %}
+                            <span class="badge bg-warning text-dark"><i class="bi bi-eye-slash"></i> ignora</span>
+                            {% if r.action_ignore_reason %}<span class="badge ms-1" style="background:{{ r.action_ignore_reason.color }}">{{ r.action_ignore_reason.name }}</span>{% endif %}
+                        {% else %}
+                            {% if r.action_category %}<span class="cb-chip" style="background:{{ r.action_category.color }}">{{ r.action_category.name }}</span> {% endif %}
+                            {% if r.action_contact %}{{ r.action_contact.name }} {% endif %}
+                            {% if r.action_auto_create %}<span class="badge bg-info">auto-crea</span>{% endif %}
+                            {% if r.action_payment_method %}<span class="badge bg-secondary">{{ r.action_payment_method }}</span>{% endif %}
+                        {% endif %}
                     </td>
                     <td class="text-center">{{ r.priority }}</td>
                     <td class="text-end text-nowrap">
@@ -308,6 +313,53 @@ document.addEventListener('DOMContentLoaded', function() {
 
         <hr class="my-3">
         <h6 class="text-muted"><i class="bi bi-lightning"></i> Azioni</h6>
+
+        {# Sezione ignora - esclusiva rispetto alle altre azioni #}
+        <div class="mb-3">
+            <div class="form-check form-switch">
+                <input type="checkbox" name="action_ignore" class="form-check-input" id="action_ignore"
+                       {{ 'checked' if rule and rule.action_ignore }}>
+                <label class="form-check-label fw-semibold" for="action_ignore">
+                    <i class="bi bi-eye-slash text-warning"></i> Ignora il movimento bancario
+                </label>
+            </div>
+            <div class="form-text text-muted ms-4">Quando attivo, i movimenti che corrispondono a questa regola vengono marcati come "ignorati" invece di essere riconciliati. Le altre azioni vengono disabilitate.</div>
+        </div>
+
+        <div id="ignoreFields" class="mb-3" style="display:none">
+            <div class="row g-3 ps-4 border-start border-3 border-warning">
+                <div class="col-md-8">
+                    <label class="form-label small">Motivo di ignoramento <span class="text-danger">*</span></label>
+                    <select name="action_ignore_reason_id" id="ignoreReasonSelect" class="form-select form-select-sm" required>
+                        <option value="">-- Seleziona un motivo --</option>
+                        {% for r in ignore_reasons %}
+                        <option value="{{ r.id }}"
+                            {{ 'selected' if rule and rule.action_ignore_reason_id == r.id }}
+                            style="border-left: 3px solid {{ r.color }}">
+                            {{ r.name }}
+                        </option>
+                        {% endfor %}
+                        <option value="new">+ Crea nuovo motivo...</option>
+                    </select>
+                </div>
+                <div id="newReasonFields" class="col-12" style="display:none">
+                    <div class="row g-2 ps-2 border-start border-2 border-secondary">
+                        <div class="col-md-6">
+                            <label class="form-label small">Nome nuovo motivo <span class="text-danger">*</span></label>
+                            <input type="text" name="new_ignore_reason_name" id="newReasonName"
+                                   class="form-control form-control-sm" placeholder="es. Giroconto interno">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Colore</label>
+                            <input type="color" name="new_ignore_reason_color" class="form-control form-control-sm form-control-color"
+                                   value="#6c757d" style="height:31px">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="standardActions">
         <div class="row g-3">
             <div class="col-md-6">
                 <label class="form-label small">Categoria</label>
@@ -403,6 +455,8 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         </div>
 
+        </div>{# end standardActions #}
+
         <div class="mt-4">
             <button class="btn btn-cb"><i class="bi bi-check"></i> {{ 'Salva modifiche' if mode == 'edit' else 'Crea regola' }}</button>
             <a href="{{ url_for('banca.regole') }}" class="btn btn-cb-outline ms-2">Annulla</a>
@@ -413,14 +467,48 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const autoCreate = document.getElementById('auto_create');
-    const fields = document.getElementById('autoCreateFields');
+    const autoCreateFields = document.getElementById('autoCreateFields');
+    const actionIgnore = document.getElementById('action_ignore');
+    const ignoreFields = document.getElementById('ignoreFields');
+    const standardActions = document.getElementById('standardActions');
+    const ignoreReasonSelect = document.getElementById('ignoreReasonSelect');
+    const newReasonFields = document.getElementById('newReasonFields');
+    const newReasonName = document.getElementById('newReasonName');
 
-    function toggleFields() {
-        fields.style.display = autoCreate.checked ? 'block' : 'none';
+    function toggleIgnore() {
+        const ignored = actionIgnore.checked;
+        ignoreFields.style.display = ignored ? 'block' : 'none';
+        standardActions.style.display = ignored ? 'none' : 'block';
+        // Quando ignora è attivo, rimuovi required dall'auto_create etc.
+        if (ignored) {
+            ignoreReasonSelect.setAttribute('required', 'required');
+        } else {
+            ignoreReasonSelect.removeAttribute('required');
+            newReasonFields.style.display = 'none';
+            if (newReasonName) newReasonName.removeAttribute('required');
+        }
     }
 
-    autoCreate.addEventListener('change', toggleFields);
-    toggleFields();
+    function toggleAutoCreate() {
+        autoCreateFields.style.display = autoCreate.checked ? 'block' : 'none';
+    }
+
+    function toggleNewReason() {
+        const isNew = ignoreReasonSelect.value === 'new';
+        newReasonFields.style.display = isNew ? 'block' : 'none';
+        if (newReasonName) {
+            if (isNew) newReasonName.setAttribute('required', 'required');
+            else newReasonName.removeAttribute('required');
+        }
+    }
+
+    actionIgnore.addEventListener('change', toggleIgnore);
+    autoCreate.addEventListener('change', toggleAutoCreate);
+    if (ignoreReasonSelect) ignoreReasonSelect.addEventListener('change', toggleNewReason);
+
+    toggleIgnore();
+    toggleAutoCreate();
+    toggleNewReason();
 });
 </script>
 {% endif %}
