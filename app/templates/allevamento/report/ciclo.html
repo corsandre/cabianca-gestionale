@@ -79,6 +79,24 @@
 </div>
 {% endif %}
 
+{# Alimentazione nel periodo ciclo #}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="cb-card p-3 text-center" style="border-left:4px solid #388e3c">
+            <div class="fs-3 fw-bold" style="color:#388e3c">{{ '%.2f'|format(mangime_totale_q) }}</div>
+            <div class="small text-muted">Mangime ricevuto (q)</div>
+        </div>
+    </div>
+    {% if siero_totale_q %}
+    <div class="col-6 col-md-3">
+        <div class="cb-card p-3 text-center" style="border-left:4px solid #1976d2">
+            <div class="fs-3 fw-bold" style="color:#1976d2">{{ '%.2f'|format(siero_totale_q) }}</div>
+            <div class="small text-muted">Siero ricevuto (q)</div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
 {# Dettaglio box #}
 <div class="cb-card p-3 mb-3">
     <h6 class="mb-3">Box coinvolti</h6>

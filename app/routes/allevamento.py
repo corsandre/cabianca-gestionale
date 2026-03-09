@@ -617,6 +617,9 @@ def cicli_nuovo():
 def cicli_detail(id):
     ciclo = CicloProduttivo.query.get_or_404(id)
     box_cicli = ciclo.box_cicli.all()
+    box_cicli_attivi = ciclo.box_cicli.filter(
+        BoxCiclo.stato.in_(["attivo", "in_uscita"])
+    ).order_by(BoxCiclo.box_id).all()
     lotti = ciclo.lotti.order_by(Lotto.numero_lotto).all()
     # Tutti gli eventi per questo ciclo, ordinati per data desc
     bc_ids = [bc.id for bc in box_cicli]
@@ -654,7 +657,8 @@ def cicli_detail(id):
     lettere_miste = len(lettere_uniche) > 1
 
     return render_template("allevamento/cicli/detail.html",
-                           ciclo=ciclo, box_cicli=box_cicli, eventi=eventi,
+                           ciclo=ciclo, box_cicli=box_cicli,
+                           box_cicli_attivi=box_cicli_attivi, eventi=eventi,
                            lotti_info=lotti_info, lettere_miste=lettere_miste,
                            nomi_mesi=NOMI_MESI, lettere_mesi=LETTERE_MESI)
 
@@ -1680,6 +1684,7 @@ def magazzino_consegna_nuova():
         data_str = request.form.get("data", str(date.today()))
         fornitore = request.form.get("fornitore", "").strip()
         perc_ss = request.form.get("percentuale_ss", "").strip()
+        tipo_prodotto = request.form.get("tipo_prodotto", "").strip() or None
         note = request.form.get("note", "").strip()
 
         consegna = ConsegnaAlimentare(
@@ -1688,6 +1693,7 @@ def magazzino_consegna_nuova():
             quantita_q=quantita,
             fornitore=fornitore,
             percentuale_ss_siero=float(perc_ss) if perc_ss else None,
+            tipo_prodotto=tipo_prodotto,
             note=note,
             created_by=current_user.id,
         )
@@ -1824,16 +1830,20 @@ def report_index():
 @login_required
 def report_ciclo(id):
     ciclo = CicloProduttivo.query.get_or_404(id)
-    box_cicli = ciclo.box_cicli.all()
-    bc_ids = [bc.id for bc in box_cicli]
+    box_cicli_all = ciclo.box_cicli.all()
+    # Solo attivi per la tabella (evita duplicati se stesso box riaccasato)
+    box_cicli = ciclo.box_cicli.filter(
+        BoxCiclo.stato.in_(["attivo", "in_uscita"])
+    ).order_by(BoxCiclo.box_id).all()
+    bc_ids_all = [bc.id for bc in box_cicli_all]
 
     eventi = EventoCiclo.query.filter(
-        EventoCiclo.box_ciclo_id.in_(bc_ids)
-    ).order_by(EventoCiclo.data).all() if bc_ids else []
+        EventoCiclo.box_ciclo_id.in_(bc_ids_all)
+    ).order_by(EventoCiclo.data).all() if bc_ids_all else []
 
-    # Calcolo statistiche
-    capi_iniziali_tot = sum(bc.capi_iniziali for bc in box_cicli)
-    capi_finali = sum(bc.capi_presenti or 0 for bc in box_cicli)
+    # Calcolo statistiche su tutti i box_cicli (inclusi chiusi) per completezza storica
+    capi_iniziali_tot = sum(bc.capi_iniziali for bc in box_cicli_all)
+    capi_finali = sum(bc.capi_presenti or 0 for bc in box_cicli_all)
     morti = sum(
         e.quantita for e in eventi if e.tipo == "mortalita" and e.quantita
     )
@@ -1860,6 +1870,17 @@ def report_ciclo(id):
     else:
         durata_gg = (date.today() - ciclo.data_inizio).days
 
+    # Totali consegne mangime/siero nel periodo del ciclo
+    data_fine_ciclo = ciclo.data_chiusura or date.today()
+    mangime_totale_q = db.session.query(db.func.sum(ConsegnaAlimentare.quantita_q))\
+        .filter(ConsegnaAlimentare.tipo == "mangime",
+                ConsegnaAlimentare.data >= ciclo.data_inizio,
+                ConsegnaAlimentare.data <= data_fine_ciclo).scalar() or 0
+    siero_totale_q = db.session.query(db.func.sum(ConsegnaAlimentare.quantita_q))\
+        .filter(ConsegnaAlimentare.tipo == "siero",
+                ConsegnaAlimentare.data >= ciclo.data_inizio,
+                ConsegnaAlimentare.data <= data_fine_ciclo).scalar() or 0
+
     return render_template("allevamento/report/ciclo.html",
                            ciclo=ciclo, box_cicli=box_cicli, eventi=eventi,
                            capi_iniziali_tot=capi_iniziali_tot,
@@ -1873,7 +1894,9 @@ def report_ciclo(id):
                            capi_usciti_scarti=capi_usciti_scarti,
                            capi_usciti=capi_usciti,
                            capi_usciti_tot=capi_usciti_tot,
-                           durata_gg=durata_gg)
+                           durata_gg=durata_gg,
+                           mangime_totale_q=mangime_totale_q,
+                           siero_totale_q=siero_totale_q)
 
 
 @bp.route("/report/trattamenti")

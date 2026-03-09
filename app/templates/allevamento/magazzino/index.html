@@ -50,12 +50,13 @@
     {% if ultime_consegne %}
     <div class="table-responsive">
         <table class="table table-sm">
-            <thead><tr><th>Data</th><th>Tipo</th><th>Q.tà (q)</th><th>Fornitore</th><th>% SS siero</th><th>Note</th></tr></thead>
+            <thead><tr><th>Data</th><th>Tipo</th><th>Prodotto</th><th>Q.tà (q)</th><th>Fornitore</th><th>% SS siero</th><th>Note</th></tr></thead>
             <tbody>
             {% for c in ultime_consegne %}
             <tr>
                 <td>{{ c.data.strftime('%d/%m/%Y') }}</td>
                 <td>{{ c.tipo|capitalize }}</td>
+                <td class="small">{{ c.tipo_prodotto or '–' }}</td>
                 <td class="fw-bold">{{ c.quantita_q }}</td>
                 <td>{{ c.fornitore or '–' }}</td>
                 <td>{{ '%.1f'|format(c.percentuale_ss_siero) + '%' if c.percentuale_ss_siero else '–' }}</td>

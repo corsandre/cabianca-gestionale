@@ -65,18 +65,21 @@
     </div>
     <div class="col-md-7">
         <div class="cb-card p-3">
-            <h6 class="mb-2">Box coinvolti</h6>
+            <h6 class="mb-2">Box attivi
+                {% set n_chiusi = box_cicli|selectattr('stato','eq','chiuso')|list|length %}
+                {% if n_chiusi > 0 %}
+                <span class="badge bg-secondary ms-1" title="{{ n_chiusi }} box usciti dal ciclo">+{{ n_chiusi }} chiusi</span>
+                {% endif %}
+            </h6>
             <div class="d-flex flex-wrap gap-2">
-            {% for bc in box_cicli %}
-            <div class="border rounded p-2 text-center" style="min-width:90px;background:{% if bc.stato == 'attivo' %}#e8f5e9{% elif bc.stato == 'chiuso' %}#f5f5f5{% else %}#fff9c4{% endif %}">
+            {% for bc in box_cicli_attivi %}
+            <div class="border rounded p-2 text-center" style="min-width:90px;background:{% if bc.stato == 'attivo' %}#e8f5e9{% else %}#fff9c4{% endif %}">
                 <div class="fw-bold">Box {{ bc.box.numero }}</div>
                 <div class="small">{{ bc.capi_presenti or 0 }} / {{ bc.capi_iniziali }}</div>
-                <div class="badge {% if bc.stato == 'attivo' %}bg-success{% else %}bg-secondary{% endif %} mt-1">{{ bc.stato }}</div>
-                {% if bc.stato in ['attivo', 'in_uscita'] %}
+                <div class="badge bg-success mt-1">{{ bc.stato }}</div>
                 <div class="mt-1">
                     <a href="{{ url_for('allevamento.eventi_nuovo') }}?bc={{ bc.id }}" class="btn btn-xs btn-outline-danger" style="font-size:.7rem;padding:.15rem .4rem">Evento</a>
                 </div>
-                {% endif %}
             </div>
             {% endfor %}
             </div>
