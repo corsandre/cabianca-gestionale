@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Allevamento – Razione Box{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-sliders2-vertical me-2" style="color:#c2185b"></i>Razione Box</h4>
+</div>
+
+{% if not ciclo %}
+<div class="cb-card p-4 text-center text-muted">Nessun ciclo attivo.</div>
+{% else %}
+
+<!-- Navigazione settimana -->
+<div class="cb-card p-2 mb-3">
+    <div class="d-flex justify-content-between align-items-center">
+        <a href="{{ url_for('allevamento.razione', settimana=settimana_offset-1) }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-chevron-left"></i>
+        </a>
+        <strong>
+            Settimana {{ lun.strftime('%d/%m/%Y') }}
+            {% if settimana_offset == 0 %}<span class="badge bg-secondary ms-1">corrente</span>{% endif %}
+        </strong>
+        <a href="{{ url_for('allevamento.razione', settimana=settimana_offset+1) }}"
+           class="btn btn-sm btn-outline-secondary {{ 'disabled' if settimana_offset >= 0 }}">
+            <i class="bi bi-chevron-right"></i>
+        </a>
+    </div>
+</div>
+
+<form method="post" action="{{ url_for('allevamento.razione_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="settimana_offset" value="{{ settimana_offset }}">
+
+    {% for cap in CAPANNONI %}
+    <h6 class="text-uppercase small mb-1 mt-3" style="color:#c2185b">CAP {{ cap }}</h6>
+    <div class="cb-card p-0 mb-2" style="overflow-x:auto">
+        <table class="table table-sm table-bordered mb-0" style="min-width:600px;font-size:0.85rem">
+            <thead class="table-light">
+                <tr>
+                    <th style="width:60px">Box</th>
+                    {% for g in giorni %}
+                    <th class="text-center">{{ GIORNI_SETTIMANA[loop.index0][:3] }}<br>{{ g.strftime('%d/%m') }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for b in BOX_PER_CAP[cap] %}
+                <tr>
+                    <td class="fw-bold text-center">{{ b }}</td>
+                    {% for g in giorni %}
+                    <td>
+                        <input type="number" name="raz_{{ b }}_{{ g.isoformat() }}"
+                               class="form-control form-control-sm text-center p-0"
+                               style="min-width:55px;font-size:0.8rem"
+                               step="1" min="0" max="100"
+                               value="{{ razioni.get(b, {}).get(g, '') }}"
+                               placeholder="{{ razioni.get(b, {}).get(giorni[loop.index0 - 1], '') if loop.index0 > 0 else '' }}">
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+
+    <div class="mt-3">
+        <button type="submit" class="btn" style="background:#c2185b;color:#fff">
+            <i class="bi bi-floppy me-1"></i>Salva razioni settimana
+        </button>
+        <small class="text-muted ms-2">I campi vuoti ereditano il valore del giorno precedente.</small>
+    </div>
+</form>
+{% endif %}
+{% endblock %}

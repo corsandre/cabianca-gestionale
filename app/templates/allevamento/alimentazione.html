@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Allevamento – Alimentazione{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-basket me-2" style="color:#c2185b"></i>Uso Pasti</h4>
+</div>
+
+{% if not ciclo %}
+<div class="cb-card p-4 text-center text-muted">Nessun ciclo attivo.</div>
+{% else %}
+
+<!-- Navigazione data -->
+<div class="cb-card p-2 mb-3">
+    <div class="d-flex gap-2 align-items-center">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="navDate(-1)"><i class="bi bi-chevron-left"></i></button>
+        <input type="date" id="dataNav" class="form-control form-control-sm" style="max-width:160px"
+               value="{{ data_sel.isoformat() }}"
+               onchange="location.href='{{ url_for('allevamento.alimentazione') }}?data='+this.value">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="navDate(1)"><i class="bi bi-chevron-right"></i></button>
+        <a href="{{ url_for('allevamento.alimentazione') }}" class="btn btn-sm btn-outline-secondary">Oggi</a>
+    </div>
+</div>
+
+<form method="post" action="{{ url_for('allevamento.alimentazione_new') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="data" value="{{ data_sel.isoformat() }}">
+
+    <!-- Griglia pasti -->
+    <div class="cb-card p-0 mb-3" style="overflow-x:auto">
+        <table class="table table-sm mb-0" style="min-width:550px">
+            <thead class="table-light">
+                <tr>
+                    <th>Pasto</th>
+                    <th colspan="3" class="text-center" style="border-left:2px solid #dee2e6">Linea 1 (CAP 1-2-3)</th>
+                    <th colspan="3" class="text-center" style="border-left:2px solid #dee2e6">Linea 2 (CAP 4)</th>
+                    <th colspan="3" class="text-center" style="border-left:2px solid #dee2e6">Linea 3 (CAP 5-6-7)</th>
+                </tr>
+                <tr>
+                    <th></th>
+                    {% for linea in [1,2,3] %}
+                    <th class="text-center {{ 'border-start border-2' if loop.first else '' }}" style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">Mang.(kg)</th>
+                    <th class="text-center">Siero(kg)</th>
+                    <th class="text-center">Acqua(l)</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for pasto in [1,2,3] %}
+                <tr>
+                    <td class="fw-bold">Pasto {{ pasto }}</td>
+                    {% for linea in [1,2,3] %}
+                    {% set p = pasti.get((pasto, linea)) %}
+                    <td style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">
+                        <input type="number" name="mang_{{ pasto }}_{{ linea }}" class="form-control form-control-sm"
+                               style="min-width:70px" step="0.1" min="0"
+                               value="{{ p.mangime_kg if p and p.mangime_kg is not none else '' }}">
+                    </td>
+                    <td>
+                        <input type="number" name="siero_{{ pasto }}_{{ linea }}" class="form-control form-control-sm"
+                               style="min-width:70px" step="0.1" min="0"
+                               value="{{ p.siero_kg if p and p.siero_kg is not none else '' }}">
+                    </td>
+                    <td>
+                        <input type="number" name="acqua_{{ pasto }}_{{ linea }}" class="form-control form-control-sm"
+                               style="min-width:70px" step="1" min="0"
+                               value="{{ p.acqua_litri if p and p.acqua_litri is not none else '' }}">
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+                <!-- Totali -->
+                <tr class="table-light fw-bold">
+                    <td>Totale</td>
+                    {% for linea in [1,2,3] %}
+                    <td class="{{ 'border-start border-2' if loop.first else '' }}" style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">{{ totali[linea].mangime | round(1) }}</td>
+                    <td>{{ totali[linea].siero | round(1) }}</td>
+                    <td>{{ totali[linea].acqua | round(0) | int }}</td>
+                    {% endfor %}
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Campi aggiuntivi -->
+    <div class="cb-card p-3 mb-3">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Tipo mangime</label>
+                <input type="text" name="tipo_mangime" class="form-control"
+                       value="{{ pasti.values() | list | first | attr('tipo_mangime') if pasti else '' }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">% siero (media)</label>
+                <input type="number" name="perc_siero" class="form-control" step="0.1" min="0" max="100"
+                       value="{{ pasti.values() | list | first | attr('perc_siero') if pasti else '' }}">
+            </div>
+        </div>
+    </div>
+
+    <button type="submit" class="btn" style="background:#c2185b;color:#fff">
+        <i class="bi bi-floppy me-1"></i>Salva dati alimentazione
+    </button>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function navDate(delta) {
+    const inp = document.getElementById('dataNav');
+    const d = new Date(inp.value);
+    d.setDate(d.getDate() + delta);
+    const iso = d.toISOString().split('T')[0];
+    location.href = '{{ url_for('allevamento.alimentazione') }}?data=' + iso;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Allevamento – Mortalità{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-heartbreak me-2" style="color:#c2185b"></i>Registro Mortalità</h4>
+    <button class="btn btn-sm" style="background:#c2185b;color:#fff" data-bs-toggle="modal" data-bs-target="#modalMortalita">
+        <i class="bi bi-plus-circle me-1"></i>Registra
+    </button>
+</div>
+
+{% if not ciclo %}
+<div class="cb-card p-4 text-center text-muted">Nessun ciclo attivo.</div>
+{% else %}
+
+<!-- Navigazione settimana -->
+<div class="cb-card p-3 mb-3">
+    <div class="d-flex justify-content-between align-items-center">
+        <a href="{{ url_for('allevamento.mortalita', settimana=settimana_offset-1) }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-chevron-left"></i>
+        </a>
+        <strong>
+            {{ lun.strftime('%d/%m/%Y') }} – {{ dom.strftime('%d/%m/%Y') }}
+            {% if settimana_offset == 0 %}<span class="badge bg-secondary ms-1">questa settimana</span>{% endif %}
+        </strong>
+        <a href="{{ url_for('allevamento.mortalita', settimana=settimana_offset+1) }}"
+           class="btn btn-sm btn-outline-secondary {{ 'disabled' if settimana_offset >= 0 }}">
+            <i class="bi bi-chevron-right"></i>
+        </a>
+    </div>
+</div>
+
+<!-- Griglia mortalità settimanale -->
+<div class="cb-card p-0 mb-4" style="overflow-x:auto">
+    <table class="table table-sm table-bordered mb-0" style="min-width:600px">
+        <thead class="table-light">
+            <tr>
+                <th style="width:100px">Capannone</th>
+                {% for d, _ in griglia.items() %}
+                <th class="text-center {{ 'table-warning' if d == oggi }}">{{ d.strftime('%a %d/%m') }}</th>
+                {% endfor %}
+                <th class="text-center">TOT</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cap in CAPANNONI %}
+            <tr>
+                <td class="fw-bold">CAP {{ cap }}</td>
+                {% set tot_cap = namespace(v=0) %}
+                {% for d, caps in griglia.items() %}
+                {% set n = caps.get(cap, 0) %}
+                {% set tot_cap.v = tot_cap.v + n %}
+                <td class="text-center {{ 'table-warning' if d == oggi }}">
+                    {% if n > 0 %}<span class="text-danger fw-bold">{{ n }}</span>{% else %}<span class="text-muted">–</span>{% endif %}
+                </td>
+                {% endfor %}
+                <td class="text-center fw-bold {{ 'text-danger' if tot_cap.v > 0 }}">{{ tot_cap.v if tot_cap.v > 0 else '–' }}</td>
+            </tr>
+            {% endfor %}
+            <!-- Totali giornalieri -->
+            <tr class="table-light fw-bold">
+                <td>Totale</td>
+                {% for d, caps in griglia.items() %}
+                {% set tot_g = caps.values()|sum %}
+                <td class="text-center {{ 'table-warning' if d == oggi }} {{ 'text-danger' if tot_g > 0 }}">{{ tot_g if tot_g > 0 else '–' }}</td>
+                {% endfor %}
+                <td class="text-center text-danger">{{ griglia.values()|map(attribute='values')|map('sum')|sum }}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Storico eventi ultimi 30gg -->
+<h6 class="text-uppercase text-muted small mb-2">Ultimi 30 giorni</h6>
+<div class="cb-card p-0" style="overflow-x:auto">
+    {% if ultimi %}
+    <table class="table table-sm mb-0">
+        <thead class="table-light">
+            <tr>
+                <th>Data</th><th>CAP</th><th>Box</th><th>Capi</th><th>Causa</th><th>Note</th>
+                {% if current_user.role == 'admin' %}<th></th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for ev in ultimi %}
+            <tr>
+                <td>{{ ev.data.strftime('%d/%m/%Y') }}</td>
+                <td>{{ ev.capannone_numero }}</td>
+                <td class="text-muted">{{ ev.box_numero or '–' }}</td>
+                <td class="text-danger fw-bold">{{ ev.quantita }}</td>
+                <td>{{ ev.causa or '–' }}</td>
+                <td class="text-muted">{{ ev.note or '' }}</td>
+                {% if current_user.role == 'admin' %}
+                <td>
+                    <form method="post" action="{{ url_for('allevamento.mortalita_delete', ev_id=ev.id) }}" onsubmit="return confirm('Elimina questo evento?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-danger py-0"><i class="bi bi-trash"></i></button>
+                    </form>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted p-3 mb-0">Nessun evento negli ultimi 30 giorni.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Modal registra mortalità -->
+<div class="modal fade" id="modalMortalita" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#c2185b;color:#fff">
+                <h5 class="modal-title"><i class="bi bi-heartbreak me-2"></i>Registra mortalità</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('allevamento.mortalita_new') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Data</label>
+                        <input type="date" name="data" class="form-control" value="{{ oggi.isoformat() }}" required>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Capannone</label>
+                            <select name="capannone" class="form-select" id="selCap" required onchange="updateBoxes()">
+                                <option value="">Seleziona…</option>
+                                {% for cap in CAPANNONI %}
+                                <option value="{{ cap }}">CAP {{ cap }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Box <small class="text-muted">(opzionale)</small></label>
+                            <select name="box" class="form-select" id="selBox">
+                                <option value="">– tutto il CAP –</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">N° capi morti</label>
+                        <input type="number" name="quantita" class="form-control" value="1" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Causa</label>
+                        <input type="text" name="causa" class="form-control" placeholder="es. trauma, malattia…">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Note</label>
+                        <textarea name="note" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn" style="background:#c2185b;color:#fff">Salva</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const BOX_PER_CAP = {{ BOX_PER_CAP | tojson }};
+function updateBoxes() {
+    const cap = document.getElementById('selCap').value;
+    const sel = document.getElementById('selBox');
+    sel.innerHTML = '<option value="">– tutto il CAP –</option>';
+    if (cap && BOX_PER_CAP[cap]) {
+        BOX_PER_CAP[cap].forEach(b => {
+            const o = document.createElement('option');
+            o.value = b; o.textContent = 'Box ' + b;
+            sel.appendChild(o);
+        });
+    }
+}
+</script>
+{% endblock %}

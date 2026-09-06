@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Allevamento – Panoramica{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-house me-2"></i>Panoramica Allevamento</h4>
+    {% if not ciclo %}
+    {% if current_user.role == 'admin' %}
+    <a href="{{ url_for('allevamento.impostazioni') }}" class="btn btn-sm" style="background:#c2185b;color:#fff">
+        <i class="bi bi-plus-circle me-1"></i>Crea ciclo
+    </a>
+    {% endif %}
+    {% endif %}
+</div>
+
+{% if not ciclo %}
+<div class="cb-card p-4 text-center text-muted">
+    <i class="bi bi-exclamation-circle fs-2 mb-2 d-block"></i>
+    <p>Nessun ciclo produttivo attivo.<br>
+    {% if current_user.role == 'admin' %}Vai in <a href="{{ url_for('allevamento.impostazioni') }}">Impostazioni</a> per crearne uno.{% endif %}
+    </p>
+</div>
+{% else %}
+
+<!-- KPI row -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-2 fw-bold" style="color:#c2185b">{{ kpi.vivi_totali }}</div>
+            <small class="text-muted">Suini vivi</small>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-2 fw-bold text-danger">{{ kpi.morti_settimana }}</div>
+            <small class="text-muted">Morti questa settimana</small>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-2 fw-bold text-secondary">{{ kpi.morti_totali }}</div>
+            <small class="text-muted">Morti totali ciclo</small>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-5 fw-bold">{{ kpi.ultimo_censimento.data.strftime('%d/%m/%Y') if kpi.ultimo_censimento else '–' }}</div>
+            <small class="text-muted">Ultimo censimento</small>
+        </div>
+    </div>
+</div>
+
+<!-- Ciclo info -->
+<div class="cb-card p-3 mb-4">
+    <span class="badge me-2" style="background:#c2185b">Ciclo attivo</span>
+    <strong>{{ ciclo.nome }}</strong> — iniziato il {{ ciclo.data_inizio.strftime('%d/%m/%Y') }}
+    {% if ciclo.note %}<span class="text-muted ms-2">{{ ciclo.note }}</span>{% endif %}
+</div>
+
+<!-- Capannoni -->
+<h6 class="text-uppercase text-muted small mb-2">Stato capannoni</h6>
+<div class="row g-2 mb-4">
+    {% for cap in CAPANNONI %}
+    {% set d = cap_data.get(cap, {}) %}
+    {% set perc = d.get('perc', 0) %}
+    <div class="col-6 col-md-4 col-lg-3">
+        <div class="cb-card p-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <strong>CAP {{ cap }}</strong>
+                <span class="badge bg-secondary">{{ d.get('vivi', 0) }}/{{ d.get('posti', 0) }}</span>
+            </div>
+            <div class="progress" style="height:6px">
+                <div class="progress-bar" style="width:{{ perc }}%;background:#c2185b"></div>
+            </div>
+            <small class="text-muted">{{ perc }}% occupazione</small>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Ultime consegne -->
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="cb-card p-3">
+            <h6 class="mb-3"><i class="bi bi-droplet me-1" style="color:#c2185b"></i>Ultime consegne siero</h6>
+            {% if consegne_siero %}
+            <table class="table table-sm mb-0">
+                <thead><tr><th>Data</th><th>Qli</th><th>Lotto</th></tr></thead>
+                <tbody>
+                {% for c in consegne_siero %}
+                <tr>
+                    <td>{{ c.data.strftime('%d/%m') }}</td>
+                    <td>{{ c.quantita_qli }}</td>
+                    <td class="text-muted">{{ c.lotto or '–' }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}<p class="text-muted small mb-0">Nessuna consegna registrata.</p>{% endif %}
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="cb-card p-3">
+            <h6 class="mb-3"><i class="bi bi-bag me-1" style="color:#c2185b"></i>Ultime consegne mangime</h6>
+            {% if consegne_mangime %}
+            <table class="table table-sm mb-0">
+                <thead><tr><th>Data</th><th>Qli</th><th>Tipo</th></tr></thead>
+                <tbody>
+                {% for c in consegne_mangime %}
+                <tr>
+                    <td>{{ c.data.strftime('%d/%m') }}</td>
+                    <td>{{ c.quantita_qli }}</td>
+                    <td class="text-muted">{{ c.tipo_mangime or '–' }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}<p class="text-muted small mb-0">Nessuna consegna registrata.</p>{% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

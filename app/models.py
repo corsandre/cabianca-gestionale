@@ -359,3 +359,127 @@ class Setting(db.Model):
     key = db.Column(db.String(64), primary_key=True)
     value = db.Column(db.String(512))
 
+
+# === ALLEVAMENTO v2 ===
+
+class Ciclo(db.Model):
+    __tablename__ = "cicli_v2"
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False)
+    data_inizio = db.Column(db.Date, nullable=False)
+    data_fine = db.Column(db.Date)
+    note = db.Column(db.Text)
+    attivo = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class Censimento(db.Model):
+    __tablename__ = "censimenti"
+    id = db.Column(db.Integer, primary_key=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"), nullable=False)
+    data = db.Column(db.Date, nullable=False)
+    operatore = db.Column(db.String(100))
+    note = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ciclo = db.relationship("Ciclo", backref="censimenti")
+    conteggi = db.relationship("CensimentoBox", backref="censimento", lazy="dynamic", cascade="all, delete-orphan")
+
+
+class CensimentoBox(db.Model):
+    __tablename__ = "censimento_box"
+    id = db.Column(db.Integer, primary_key=True)
+    censimento_id = db.Column(db.Integer, db.ForeignKey("censimenti.id"), nullable=False)
+    box_numero = db.Column(db.Integer, nullable=False)
+    quantita = db.Column(db.Integer, nullable=False, default=0)
+
+
+class EventoMortalita(db.Model):
+    __tablename__ = "eventi_mortalita"
+    id = db.Column(db.Integer, primary_key=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"), nullable=False)
+    data = db.Column(db.Date, nullable=False)
+    capannone_numero = db.Column(db.Integer, nullable=False)
+    box_numero = db.Column(db.Integer)
+    quantita = db.Column(db.Integer, nullable=False, default=1)
+    causa = db.Column(db.String(100))
+    note = db.Column(db.Text)
+    registrato_da = db.Column(db.String(20), default="web")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ciclo = db.relationship("Ciclo", backref="morti")
+
+
+class Spostamento(db.Model):
+    __tablename__ = "spostamenti_animali"
+    id = db.Column(db.Integer, primary_key=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"), nullable=False)
+    data = db.Column(db.Date, nullable=False)
+    tipo = db.Column(db.String(20), nullable=False)  # 'interno', 'entrata', 'uscita'
+    box_origine = db.Column(db.Integer)
+    box_destinazione = db.Column(db.Integer)
+    capannone_origine = db.Column(db.Integer)
+    capannone_destinazione = db.Column(db.Integer)
+    quantita = db.Column(db.Integer, nullable=False)
+    motivo = db.Column(db.String(100))
+    note = db.Column(db.Text)
+    registrato_da = db.Column(db.String(20), default="web")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ciclo = db.relationship("Ciclo", backref="spostamenti")
+
+
+class ConsegnaSiero(db.Model):
+    __tablename__ = "consegne_siero"
+    id = db.Column(db.Integer, primary_key=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"), nullable=False)
+    data = db.Column(db.Date, nullable=False)
+    ora = db.Column(db.Time)
+    quantita_qli = db.Column(db.Float, nullable=False)
+    lotto = db.Column(db.String(50))
+    speditore = db.Column(db.String(200))
+    trasportatore = db.Column(db.String(200))
+    note = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ciclo = db.relationship("Ciclo", backref="consegne_siero")
+
+
+class ConsegnaMangime(db.Model):
+    __tablename__ = "consegne_mangime"
+    id = db.Column(db.Integer, primary_key=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"), nullable=False)
+    data = db.Column(db.Date, nullable=False)
+    ora = db.Column(db.Time)
+    quantita_qli = db.Column(db.Float, nullable=False)
+    tipo_mangime = db.Column(db.String(100))
+    numero_bolla = db.Column(db.String(50))
+    fornitore = db.Column(db.String(200))
+    note = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ciclo = db.relationship("Ciclo", backref="consegne_mangime")
+
+
+class UsoPasto(db.Model):
+    __tablename__ = "uso_pasti"
+    id = db.Column(db.Integer, primary_key=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"), nullable=False)
+    data = db.Column(db.Date, nullable=False)
+    pasto = db.Column(db.Integer, nullable=False)
+    linea = db.Column(db.Integer, nullable=False)
+    mangime_kg = db.Column(db.Float)
+    siero_kg = db.Column(db.Float)
+    acqua_litri = db.Column(db.Float)
+    tipo_mangime = db.Column(db.String(100))
+    perc_siero = db.Column(db.Float)
+    note = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ciclo = db.relationship("Ciclo", backref="uso_pasti")
+
+
+class RazioneBox(db.Model):
+    __tablename__ = "razioni_box_v2"
+    id = db.Column(db.Integer, primary_key=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"), nullable=False)
+    data = db.Column(db.Date, nullable=False)
+    box_numero = db.Column(db.Integer, nullable=False)
+    percentuale = db.Column(db.Float, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ciclo = db.relationship("Ciclo", backref="razioni_box")
+

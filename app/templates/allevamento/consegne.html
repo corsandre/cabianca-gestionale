@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Allevamento – Consegne{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-truck me-2" style="color:#c2185b"></i>Registro Consegne</h4>
+    {% if ciclo %}
+    <button class="btn btn-sm" style="background:#c2185b;color:#fff"
+            data-bs-toggle="modal" data-bs-target="{{ '#modalSiero' if tab=='siero' else '#modalMangime' }}">
+        <i class="bi bi-plus-circle me-1"></i>Nuova consegna
+    </button>
+    {% endif %}
+</div>
+
+{% if not ciclo %}
+<div class="cb-card p-4 text-center text-muted">Nessun ciclo attivo.</div>
+{% else %}
+
+<!-- Tab -->
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link {{ 'active' if tab=='siero' }}" href="{{ url_for('allevamento.consegne', tab='siero') }}">
+            <i class="bi bi-droplet me-1"></i>Siero
+            <span class="badge bg-secondary ms-1">{{ tot_siero }} qli</span>
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {{ 'active' if tab=='mangime' }}" href="{{ url_for('allevamento.consegne', tab='mangime') }}">
+            <i class="bi bi-bag me-1"></i>Mangime
+            <span class="badge bg-secondary ms-1">{{ tot_mangime }} qli</span>
+        </a>
+    </li>
+</ul>
+
+{% if tab == 'siero' %}
+<div class="cb-card p-0" style="overflow-x:auto">
+    {% if siero_list %}
+    <table class="table table-sm mb-0">
+        <thead class="table-light">
+            <tr><th>Data</th><th>Ora</th><th>Qli</th><th>Lotto</th><th>Speditore</th><th>Trasportatore</th><th>Note</th>
+            {% if current_user.role == 'admin' %}<th></th>{% endif %}</tr>
+        </thead>
+        <tbody>
+            {% for c in siero_list %}
+            <tr>
+                <td>{{ c.data.strftime('%d/%m/%Y') }}</td>
+                <td>{{ c.ora.strftime('%H:%M') if c.ora else '–' }}</td>
+                <td class="fw-bold" style="color:#c2185b">{{ c.quantita_qli }}</td>
+                <td>{{ c.lotto or '–' }}</td>
+                <td>{{ c.speditore or '–' }}</td>
+                <td>{{ c.trasportatore or '–' }}</td>
+                <td class="text-muted">{{ c.note or '' }}</td>
+                {% if current_user.role == 'admin' %}
+                <td>
+                    <form method="post" action="{{ url_for('allevamento.consegne_siero_delete', cid=c.id) }}" onsubmit="return confirm('Elimina?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-danger py-0"><i class="bi bi-trash"></i></button>
+                    </form>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot class="table-light fw-bold">
+            <tr><td colspan="2">Totale</td><td style="color:#c2185b">{{ tot_siero }}</td><td colspan="5"></td></tr>
+        </tfoot>
+    </table>
+    {% else %}<p class="text-muted p-3 mb-0">Nessuna consegna siero registrata.</p>{% endif %}
+</div>
+{% else %}
+<div class="cb-card p-0" style="overflow-x:auto">
+    {% if mangime_list %}
+    <table class="table table-sm mb-0">
+        <thead class="table-light">
+            <tr><th>Data</th><th>Ora</th><th>Qli</th><th>Tipo</th><th>Bolla</th><th>Fornitore</th><th>Note</th>
+            {% if current_user.role == 'admin' %}<th></th>{% endif %}</tr>
+        </thead>
+        <tbody>
+            {% for c in mangime_list %}
+            <tr>
+                <td>{{ c.data.strftime('%d/%m/%Y') }}</td>
+                <td>{{ c.ora.strftime('%H:%M') if c.ora else '–' }}</td>
+                <td class="fw-bold" style="color:#c2185b">{{ c.quantita_qli }}</td>
+                <td>{{ c.tipo_mangime or '–' }}</td>
+                <td>{{ c.numero_bolla or '–' }}</td>
+                <td>{{ c.fornitore or '–' }}</td>
+                <td class="text-muted">{{ c.note or '' }}</td>
+                {% if current_user.role == 'admin' %}
+                <td>
+                    <form method="post" action="{{ url_for('allevamento.consegne_mangime_delete', cid=c.id) }}" onsubmit="return confirm('Elimina?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-danger py-0"><i class="bi bi-trash"></i></button>
+                    </form>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot class="table-light fw-bold">
+            <tr><td colspan="2">Totale</td><td style="color:#c2185b">{{ tot_mangime }}</td><td colspan="5"></td></tr>
+        </tfoot>
+    </table>
+    {% else %}<p class="text-muted p-3 mb-0">Nessuna consegna mangime registrata.</p>{% endif %}
+</div>
+{% endif %}
+{% endif %}
+
+<!-- Modal siero -->
+<div class="modal fade" id="modalSiero" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#c2185b;color:#fff">
+                <h5 class="modal-title"><i class="bi bi-droplet me-2"></i>Nuova consegna siero</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('allevamento.consegne_siero_new') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Data</label>
+                            <input type="date" name="data" class="form-control" value="{{ oggi.isoformat() }}" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Ora</label>
+                            <input type="time" name="ora" class="form-control">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Quantità (qli)</label>
+                        <input type="number" name="quantita_qli" class="form-control" step="0.01" min="0" required>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Lotto</label>
+                            <input type="text" name="lotto" class="form-control">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Speditore</label>
+                            <input type="text" name="speditore" class="form-control">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Trasportatore</label>
+                        <input type="text" name="trasportatore" class="form-control">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Note</label>
+                        <textarea name="note" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn" style="background:#c2185b;color:#fff">Salva</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal mangime -->
+<div class="modal fade" id="modalMangime" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#c2185b;color:#fff">
+                <h5 class="modal-title"><i class="bi bi-bag me-2"></i>Nuova consegna mangime</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('allevamento.consegne_mangime_new') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Data</label>
+                            <input type="date" name="data" class="form-control" value="{{ oggi.isoformat() }}" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Ora</label>
+                            <input type="time" name="ora" class="form-control">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Quantità (qli)</label>
+                        <input type="number" name="quantita_qli" class="form-control" step="0.01" min="0" required>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Tipo mangime</label>
+                            <input type="text" name="tipo_mangime" class="form-control" placeholder="es. intero, spezzato…">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">N° bolla</label>
+                            <input type="text" name="numero_bolla" class="form-control">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Fornitore</label>
+                        <input type="text" name="fornitore" class="form-control">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Note</label>
+                        <textarea name="note" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn" style="background:#c2185b;color:#fff">Salva</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

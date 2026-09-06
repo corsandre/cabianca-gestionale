@@ -58,6 +58,7 @@ def create_app():
     from app.routes.banca import bp as banca_bp
     from app.routes.ricorrenti import bp as ricorrenti_bp
     from app.routes.finanza_impostazioni import bp as finanza_impostazioni_bp
+    from app.routes.allevamento import bp as allevamento_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -74,6 +75,7 @@ def create_app():
     app.register_blueprint(banca_bp)
     app.register_blueprint(ricorrenti_bp)
     app.register_blueprint(finanza_impostazioni_bp)
+    app.register_blueprint(allevamento_bp)
 
     # Logging
     logging.basicConfig(level=logging.INFO)
@@ -151,6 +153,7 @@ def create_app():
         'movimenti': 'finanza', 'anagrafica': 'finanza', 'inventario': 'finanza',
         'categorie': 'finanza', 'analisi': 'finanza', 'scadenzario': 'finanza',
         'banca': 'finanza', 'ricorrenti': 'finanza', 'finanza_impostazioni': 'finanza',
+        'allevamento': 'allevamento',
     }
 
     @app.context_processor
@@ -371,5 +374,13 @@ def _init_scheduler(app):
             scheduler.add_job(fetch_emails, "cron", hour="8,14,20", minute=30)
         scheduler.start()
         app.scheduler = scheduler
+
+        # Avvia bot Telegram allevamento (thread daemon)
+        try:
+            from app.services.allevamento_bot import start_bot
+            start_bot(app)
+        except Exception as bot_err:
+            app.logger.warning(f"Bot allevamento non avviato: {bot_err}")
+
     except Exception:
         pass  # Scheduler is optional, don't crash the app

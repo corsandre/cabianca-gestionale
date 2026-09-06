@@ -94,6 +94,69 @@
     {% endif %}
 
 
+    {% if current_user.has_section('allevamento') %}
+    <li class="cb-nav-divider"></li>
+    {% set allev_active = request.blueprint == 'allevamento' %}
+    <!-- ALLEVAMENTO GROUP -->
+    <li class="nav-item">
+        <div class="cb-nav-group-header" data-bs-toggle="collapse" data-bs-target="#nav-allevamento"
+             aria-expanded="{{ 'true' if allev_active else 'false' }}" aria-controls="nav-allevamento">
+            <span>
+                <span class="cb-nav-group-dot" style="background: #c2185b"></span>
+                Allevamento
+            </span>
+            <i class="bi bi-chevron-down cb-nav-group-chevron"></i>
+        </div>
+    </li>
+    <div class="collapse {% if allev_active %}show{% endif %}" id="nav-allevamento">
+        <ul class="nav flex-column cb-nav" style="padding-top:0">
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'allevamento.index' %}active{% endif %}" href="{{ url_for('allevamento.index') }}">
+                    <i class="bi bi-house"></i> Panoramica
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'allevamento.mortalita' %}active{% endif %}" href="{{ url_for('allevamento.mortalita') }}">
+                    <i class="bi bi-heartbreak"></i> Mortalità
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'allevamento.censimento' %}active{% endif %}" href="{{ url_for('allevamento.censimento') }}">
+                    <i class="bi bi-123"></i> Censimento
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'allevamento.spostamenti' %}active{% endif %}" href="{{ url_for('allevamento.spostamenti') }}">
+                    <i class="bi bi-arrow-left-right"></i> Spostamenti
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'allevamento.consegne' %}active{% endif %}" href="{{ url_for('allevamento.consegne') }}">
+                    <i class="bi bi-truck"></i> Consegne
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'allevamento.alimentazione' %}active{% endif %}" href="{{ url_for('allevamento.alimentazione') }}">
+                    <i class="bi bi-basket"></i> Alimentazione
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'allevamento.razione' %}active{% endif %}" href="{{ url_for('allevamento.razione') }}">
+                    <i class="bi bi-sliders2-vertical"></i> Razione Box
+                </a>
+            </li>
+            {% if current_user.role == 'admin' %}
+            <li class="cb-nav-divider"></li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'allevamento.impostazioni' %}active{% endif %}" href="{{ url_for('allevamento.impostazioni') }}">
+                    <i class="bi bi-sliders"></i> Impostazioni
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+
     <li class="cb-nav-divider"></li>
 
     <!-- IMPOSTAZIONI GENERALI (solo admin, fuori dai gruppi) -->

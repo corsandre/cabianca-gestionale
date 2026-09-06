@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Allevamento – Censimento{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-123 me-2" style="color:#c2185b"></i>Censimento</h4>
+    {% if ciclo %}
+    <button class="btn btn-sm" style="background:#c2185b;color:#fff" data-bs-toggle="modal" data-bs-target="#modalCensimento">
+        <i class="bi bi-plus-circle me-1"></i>Nuovo censimento
+    </button>
+    {% endif %}
+</div>
+
+{% if not ciclo %}
+<div class="cb-card p-4 text-center text-muted">Nessun ciclo attivo.</div>
+{% else %}
+
+<!-- Conteggio live per capannone -->
+<h6 class="text-uppercase text-muted small mb-2">Conteggio live (ultimo snapshot + delta eventi)</h6>
+<div class="row g-2 mb-4">
+    {% for cap in CAPANNONI %}
+    {% set boxes = BOX_PER_CAP[cap] %}
+    {% set tot_cap = boxes | map(attribute=0) | list %}
+    <div class="col-12 col-md-6">
+        <div class="cb-card p-3">
+            <h6 class="mb-2"><span class="badge me-1" style="background:#c2185b">CAP {{ cap }}</span></h6>
+            <div class="row g-1">
+                {% for b in boxes %}
+                <div class="col-auto">
+                    <span class="badge {{ 'bg-secondary' if live.get(b,0) == 0 else 'text-dark' }}"
+                          style="{{ '' if live.get(b,0) == 0 else 'background:#fce4ec;border:1px solid #c2185b' }}"
+                          title="Box {{ b }} (cap.{{ POSTI_PER_BOX_STANDARD[b] }})">
+                        B{{ b }}: {{ live.get(b, 0) }}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="mt-2 fw-bold">
+                Totale: <span style="color:#c2185b">{{ boxes | map(attribute=0) | list | length }}</span>
+                {% set tot = namespace(v=0) %}
+                {% for b in boxes %}{% set tot.v = tot.v + live.get(b, 0) %}{% endfor %}
+                <span class="ms-1" style="color:#c2185b">{{ tot.v }}</span> suini
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Storico censimenti -->
+<h6 class="text-uppercase text-muted small mb-2">Storico censimenti</h6>
+<div class="cb-card p-0" style="overflow-x:auto">
+    {% if storico %}
+    <table class="table table-sm mb-0">
+        <thead class="table-light">
+            <tr><th>Data</th><th>Totale</th><th>Operatore</th><th>Note</th></tr>
+        </thead>
+        <tbody>
+            {% for c in storico %}
+            <tr>
+                <td>{{ c.data.strftime('%d/%m/%Y') }}</td>
+                <td class="fw-bold" style="color:#c2185b">{{ storico_totali.get(c.id, 0) }}</td>
+                <td>{{ c.operatore or '–' }}</td>
+                <td class="text-muted">{{ c.note or '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted p-3 mb-0">Nessun censimento registrato.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Modal nuovo censimento -->
+<div class="modal fade" id="modalCensimento" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#c2185b;color:#fff">
+                <h5 class="modal-title"><i class="bi bi-123 me-2"></i>Nuovo censimento manuale</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('allevamento.censimento_new') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label">Data</label>
+                            <input type="date" name="data" class="form-control" value="{{ oggi.isoformat() }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Operatore</label>
+                            <input type="text" name="operatore" class="form-control" placeholder="Chi ha fatto il conteggio">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Note</label>
+                            <input type="text" name="note" class="form-control">
+                        </div>
+                    </div>
+                    {% for cap in CAPANNONI %}
+                    <h6 class="text-uppercase small mb-2">CAP {{ cap }}</h6>
+                    <div class="row g-2 mb-3">
+                        {% for b in BOX_PER_CAP[cap] %}
+                        <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+                            <label class="form-label small mb-0">Box {{ b }} <small class="text-muted">(cap.{{ POSTI_PER_BOX_STANDARD[b] }})</small></label>
+                            <input type="number" name="box_{{ b }}" class="form-control form-control-sm"
+                                   value="{{ live.get(b, 0) }}" min="0" max="{{ POSTI_PER_BOX_STANDARD[b] }}">
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn" style="background:#c2185b;color:#fff">Salva censimento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

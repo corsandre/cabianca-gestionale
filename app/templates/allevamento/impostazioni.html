@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Allevamento – Impostazioni{% endblock %}
+
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-sliders me-2" style="color:#c2185b"></i>Impostazioni Allevamento</h4>
+
+<!-- Ciclo attivo -->
+<h6 class="text-uppercase text-muted small mb-2">Ciclo produttivo attivo</h6>
+<div class="cb-card p-3 mb-4">
+    {% if ciclo_attivo %}
+    <div class="d-flex justify-content-between align-items-start">
+        <div>
+            <span class="badge mb-1" style="background:#c2185b">Attivo</span>
+            <h5 class="mb-1">{{ ciclo_attivo.nome }}</h5>
+            <div class="text-muted small">
+                Iniziato il {{ ciclo_attivo.data_inizio.strftime('%d/%m/%Y') }}
+                ({{ (oggi - ciclo_attivo.data_inizio).days }} giorni)
+            </div>
+            {% if ciclo_attivo.note %}<div class="text-muted small mt-1">{{ ciclo_attivo.note }}</div>{% endif %}
+        </div>
+        <form method="post" action="{{ url_for('allevamento.ciclo_chiudi', cid=ciclo_attivo.id) }}"
+              onsubmit="return confirm('Chiudere il ciclo {{ ciclo_attivo.nome }}? Questa azione non può essere annullata.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-x-circle me-1"></i>Chiudi ciclo
+            </button>
+        </form>
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">Nessun ciclo attivo. Crea un nuovo ciclo per iniziare a registrare i dati.</p>
+    {% endif %}
+</div>
+
+<!-- Nuovo ciclo -->
+<h6 class="text-uppercase text-muted small mb-2">Crea nuovo ciclo</h6>
+<div class="cb-card p-3 mb-4">
+    {% if ciclo_attivo %}
+    <div class="alert alert-warning mb-3">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        Esiste già un ciclo attivo. Crearne uno nuovo lo disattiverà automaticamente.
+    </div>
+    {% endif %}
+    <form method="post" action="{{ url_for('allevamento.ciclo_new') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Nome ciclo</label>
+                <input type="text" name="nome" class="form-control" placeholder="es. Ciclo 2026/01" required>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Data inizio</label>
+                <input type="date" name="data_inizio" class="form-control" value="{{ oggi.isoformat() }}" required>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label">Note</label>
+                <input type="text" name="note" class="form-control" placeholder="opzionale">
+            </div>
+        </div>
+        <button type="submit" class="btn mt-3" style="background:#c2185b;color:#fff">
+            <i class="bi bi-plus-circle me-1"></i>Crea e attiva ciclo
+        </button>
+    </form>
+</div>
+
+<!-- Storico cicli -->
+{% if cicli_precedenti %}
+<h6 class="text-uppercase text-muted small mb-2">Cicli precedenti</h6>
+<div class="cb-card p-0">
+    <table class="table table-sm mb-0">
+        <thead class="table-light">
+            <tr><th>Nome</th><th>Inizio</th><th>Fine</th><th>Durata</th><th>Note</th></tr>
+        </thead>
+        <tbody>
+            {% for c in cicli_precedenti %}
+            <tr>
+                <td>{{ c.nome }}</td>
+                <td>{{ c.data_inizio.strftime('%d/%m/%Y') }}</td>
+                <td>{{ c.data_fine.strftime('%d/%m/%Y') if c.data_fine else '–' }}</td>
+                <td class="text-muted">
+                    {% if c.data_fine %}{{ (c.data_fine - c.data_inizio).days }} giorni{% else %}–{% endif %}
+                </td>
+                <td class="text-muted">{{ c.note or '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}
