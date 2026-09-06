@@ -58,7 +58,6 @@ def create_app():
     from app.routes.banca import bp as banca_bp
     from app.routes.ricorrenti import bp as ricorrenti_bp
     from app.routes.finanza_impostazioni import bp as finanza_impostazioni_bp
-    from app.routes.allevamento import bp as allevamento_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -75,7 +74,6 @@ def create_app():
     app.register_blueprint(banca_bp)
     app.register_blueprint(ricorrenti_bp)
     app.register_blueprint(finanza_impostazioni_bp)
-    app.register_blueprint(allevamento_bp)
 
     # Logging
     logging.basicConfig(level=logging.INFO)
@@ -153,7 +151,6 @@ def create_app():
         'movimenti': 'finanza', 'anagrafica': 'finanza', 'inventario': 'finanza',
         'categorie': 'finanza', 'analisi': 'finanza', 'scadenzario': 'finanza',
         'banca': 'finanza', 'ricorrenti': 'finanza', 'finanza_impostazioni': 'finanza',
-        'allevamento': 'allevamento',
     }
 
     @app.context_processor
@@ -164,7 +161,6 @@ def create_app():
     # Create tables and seed data on first run
     with app.app_context():
         _init_db(app)
-        _backfill_stime(app)
 
     # Start scheduler for backups and notifications
     _init_scheduler(app)
@@ -211,13 +207,6 @@ def _init_db(app):
         ("transactions", "recurring_expense_id", "INTEGER REFERENCES recurring_expenses(id)"),
         ("bank_transactions", "description", "TEXT"),
         ("users", "sections", "TEXT DEFAULT '[\"finanza\"]'"),
-        ("razioni_giornaliere", "consumo_acqua_litri", "REAL"),
-        ("razioni_giornaliere", "acqua_teorica_litri", "REAL"),
-        ("eventi_ciclo", "is_scarti", "INTEGER DEFAULT 0 NOT NULL"),
-        ("box_cicli", "lotto_id", "INTEGER REFERENCES lotti(id)"),
-        ("box_cicli", "lettera_nascita", "VARCHAR(1)"),
-        ("razioni_giornaliere", "is_stima", "INTEGER DEFAULT 0 NOT NULL"),
-        ("consegne_alimentari", "tipo_prodotto", "TEXT"),
         ("auto_rules", "action_ignore", "BOOLEAN DEFAULT 0"),
         ("auto_rules", "action_ignore_reason_id", "INTEGER REFERENCES ignore_reasons(id)"),
     ]
@@ -318,203 +307,11 @@ def _init_db(app):
         "backup_hour": "2",
         "backup_minute": "0",
         "backup_frequency_days": "1",
-        "numero_pasti": "3",
-        "rapporto_ss": "10",
-        "rapporto_liquido": "31",
-        "cisterna_buffer_minuti": "60",
     }
     for key, value in defaults.items():
         if not Setting.query.get(key):
             db.session.add(Setting(key=key, value=value))
     db.session.commit()
-
-    # Seed orari pasto (solo se non esistono)
-    from app.models import OrarioPasto
-    from datetime import time as dt_time
-    try:
-        if OrarioPasto.query.count() == 0:
-            for n, h in [(1, 7), (2, 13), (3, 18)]:
-                db.session.add(OrarioPasto(numero=n, ora=dt_time(h, 0), attivo=True))
-            db.session.commit()
-    except Exception:
-        db.session.rollback()
-
-    # Seed allevamento struttura fisica (solo se non esiste)
-    from app.models import Capannone, Box, MagazzinoProdotto, CurvaAccrescimento, TabellaSostSiero
-    try:
-        if Box.query.count() == 0:
-            _seed_allevamento()
-    except Exception:
-        db.session.rollback()
-
-    # Migrazione: sostituisci curva accrescimento default con dati reali utente
-    # Il seed default inizia da eta_giorni=60; se troviamo quello, sostituiamo tutto.
-    try:
-        first_curva = CurvaAccrescimento.query.order_by(CurvaAccrescimento.eta_giorni).first()
-        if first_curva and first_curva.eta_giorni == 60:
-            CURVA_REALE = [
-                (0,   20.0, 1.00), (7,   30.0, 1.30), (14,  34.0, 1.50), (21,  38.2, 1.70),
-                (28,  42.8, 1.85), (35,  47.5, 2.00), (42,  52.3, 2.00), (49,  57.2, 2.10),
-                (56,  62.2, 2.20), (63,  67.3, 2.30), (70,  72.5, 2.40), (77,  77.7, 2.50),
-                (84,  83.0, 2.60), (91,  88.4, 2.60), (98,  93.8, 2.70), (105, 99.3, 2.70),
-                (112, 104.8, 2.80), (119, 110.3, 2.80), (126, 115.8, 2.85), (133, 121.2, 2.85),
-                (140, 126.5, 2.90), (147, 131.7, 2.90), (154, 136.8, 2.90), (161, 141.8, 2.90),
-                (168, 146.8, 2.95), (175, 151.6, 2.95), (182, 156.2, 2.95),
-                (189, 160.6, 3.00), (196, 164.9, 3.00),
-                (203, 169.1, 3.10), (210, 173.0, 3.10), (217, 174.0, 3.10),
-            ]
-            # percentuale_siero = kg_siero_die * perc_ss_siero(5%) / razione_kg * 100
-            SIERO_REALE = [
-                (0,   27,  0.00),   # sett. 1-4: nessun siero
-                (28,  34,  2.70),   # sett. 5:  1.0 kg/die
-                (35,  41,  3.75),   # sett. 6:  1.5 kg/die
-                (42,  48,  5.00),   # sett. 7:  2.0 kg/die
-                (49,  55,  5.95),   # sett. 8:  2.5 kg/die
-                (56,  62,  7.95),   # sett. 9:  3.5 kg/die
-                (63,  69,  9.78),   # sett. 10: 4.5 kg/die
-                (70,  76, 11.46),   # sett. 11: 5.5 kg/die
-                (77,  83, 13.00),   # sett. 12: 6.5 kg/die
-                (84,  90, 15.38),   # sett. 13: 8.0 kg/die
-                (91,  97, 17.31),   # sett. 14: 9.0 kg/die
-                (98,  111, 18.52),  # sett. 15-16: 10.0 kg/die
-                (112, 125, 19.64),  # sett. 17-18: 11.0 kg/die
-                (126, 139, 21.05),  # sett. 19-20: 12.0 kg/die (raz=2.85)
-                (140, 167, 20.69),  # sett. 21-24: 12.0 kg/die (raz=2.90)
-                (168, 188, 20.34),  # sett. 25-27: 12.0 kg/die (raz=2.95)
-                (189, 202, 20.00),  # sett. 28-29: 12.0 kg/die (raz=3.00)
-                (203, 999, 19.35),  # sett. 30+:   12.0 kg/die (raz=3.10)
-            ]
-            CurvaAccrescimento.query.delete()
-            TabellaSostSiero.query.delete()
-            for eta, peso, razione in CURVA_REALE:
-                db.session.add(CurvaAccrescimento(
-                    eta_giorni=eta, peso_kg=peso, razione_kg_giorno=razione))
-            for eta_min, eta_max, perc in SIERO_REALE:
-                db.session.add(TabellaSostSiero(
-                    eta_min=eta_min, eta_max=eta_max, percentuale_siero=perc))
-            s = Setting.query.get("allevamento_perc_ss_siero")
-            if s:
-                s.value = "5.0"
-            else:
-                db.session.add(Setting(key="allevamento_perc_ss_siero", value="5.0"))
-            db.session.commit()
-            app.logger.info("Migrazione curva accrescimento e tabella siero: completata.")
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Errore migrazione curva accrescimento: {e}")
-
-
-def _seed_allevamento():
-    from app.models import Capannone, Box, MagazzinoProdotto, CurvaAccrescimento, TabellaSostSiero
-
-    # Capannoni
-    caps = {}
-    for numero, nome in [(1, "CAP 1"), (2, "CAP 2"), (3, "CAP 3"), (4, "CAP 4"),
-                         (5, "CAP 5"), (6, "CAP 6"), (7, "CAP 7")]:
-        c = Capannone(numero=numero, nome=nome)
-        db.session.add(c)
-        db.session.flush()
-        caps[numero] = c.id
-
-    # Box: (numero, cap_numero, linea, superficie_m2, trogolo_m)
-    boxes_data = (
-        # CAP 1: box 1-9, linea 1, 40 posti cad.
-        [(i, 1, 1, 40.0, 13.2) for i in range(1, 10)] +
-        # CAP 2: box 10-15, linea 1, 26 posti cad.
-        [(i, 2, 1, 26.0, 8.6) for i in range(10, 16)] +
-        # CAP 3: box 16-21, linea 1, 10 posti cad.
-        [(i, 3, 1, 10.0, 3.3) for i in range(16, 22)] +
-        # CAP 4: box 22-36, linea 2, 38 posti cad.
-        [(i, 4, 2, 38.0, 12.5) for i in range(22, 37)] +
-        # CAP 5: box 37-42, linea 3, 38 posti cad.
-        [(i, 5, 3, 38.0, 12.5) for i in range(37, 43)] +
-        # CAP 7: box 43-48 (31 posti), box 49 (deposito 32 posti), linea 3
-        [(i, 7, 3, 31.0, 10.2) for i in range(43, 49)] +
-        [(49, 7, 3, 32.0, 10.6)] +
-        # CAP 6: box 50-54, linea 3, ~46 posti cad.
-        [(50, 6, 3, 47.0, 15.5), (51, 6, 3, 47.0, 15.5), (52, 6, 3, 46.0, 15.2),
-         (53, 6, 3, 45.0, 14.8), (54, 6, 3, 45.0, 14.8)]
-    )
-    for numero, cap_num, linea, sup, trogolo in boxes_data:
-        db.session.add(Box(
-            numero=numero,
-            capannone_id=caps[cap_num],
-            linea_alimentazione=linea,
-            superficie_m2=sup,
-            lunghezza_trogolo_m=trogolo,
-        ))
-
-    # Magazzino prodotti
-    for tipo, cap_max, soglia in [("mangime", 300.0, 30.0), ("siero", 200.0, 20.0)]:
-        db.session.add(MagazzinoProdotto(tipo=tipo, capacita_massima_q=cap_max, soglia_minima_q=soglia))
-
-    # Curva accrescimento (suino pesante italiano, giorni-peso-razione)
-    curva = [
-        (60, 20.0, 0.80), (70, 25.0, 0.90), (80, 30.0, 1.05), (90, 35.0, 1.20),
-        (100, 42.0, 1.38), (110, 48.0, 1.52), (120, 55.0, 1.67), (130, 62.0, 1.82),
-        (140, 70.0, 2.00), (150, 78.0, 2.17), (160, 87.0, 2.36), (170, 95.0, 2.50),
-        (180, 104.0, 2.65), (190, 112.0, 2.78), (200, 120.0, 2.88), (210, 128.0, 2.97),
-        (220, 135.0, 3.04), (230, 142.0, 3.10), (240, 149.0, 3.14), (250, 155.0, 3.17),
-        (260, 160.0, 3.18),
-    ]
-    for eta, peso, razione in curva:
-        db.session.add(CurvaAccrescimento(eta_giorni=eta, peso_kg=peso, razione_kg_giorno=razione))
-
-    # Tabella sostituzione siero
-    for eta_min, eta_max, perc in [(0, 90, 35.0), (91, 150, 25.0), (151, 999, 15.0)]:
-        db.session.add(TabellaSostSiero(eta_min=eta_min, eta_max=eta_max, percentuale_siero=perc))
-
-    db.session.commit()
-
-
-def _backfill_stime(app):
-    """Genera stime teoriche mancanti per tutti i cicli attivi.
-
-    Viene chiamata a ogni avvio: per ogni ciclo attivo controlla quante stime
-    esistono rispetto ai giorni attesi; se la copertura è < 50% per qualsiasi
-    linea del ciclo, rigenera tutto lo storico teorico dal data_inizio a oggi.
-    Non tocca mai i record con is_stima=False (dati reali inseriti dall'utente).
-    """
-    try:
-        from datetime import date
-        from app.models import CicloProduttivo, RazioneGiornaliera, BoxCiclo, Box
-        from app.routes.allevamento import _rigenera_stime_ciclo
-
-        cicli_attivi = CicloProduttivo.query.filter_by(stato="attivo").all()
-        today = date.today()
-        for ciclo in cicli_attivi:
-            if not ciclo.data_inizio or ciclo.data_inizio > today:
-                continue
-            days_total = (today - ciclo.data_inizio).days + 1
-
-            # Linee coinvolte dal ciclo
-            linee = set()
-            for bc in ciclo.box_cicli.all():
-                if bc.box and bc.box.linea_alimentazione:
-                    linee.add(bc.box.linea_alimentazione)
-            if not linee:
-                continue
-
-            # Stime esistenti per le linee del ciclo nel periodo
-            n_stime = RazioneGiornaliera.query.filter(
-                RazioneGiornaliera.data >= ciclo.data_inizio,
-                RazioneGiornaliera.data <= today,
-                RazioneGiornaliera.linea.in_(list(linee)),
-                RazioneGiornaliera.is_stima == True,
-            ).count()
-
-            soglia = days_total * len(linee) * 0.5
-            if n_stime < soglia:
-                app.logger.info(
-                    f"Backfill stime ciclo {ciclo.ciclo_id}: "
-                    f"{n_stime} stime su {days_total * len(linee)} attese"
-                )
-                _rigenera_stime_ciclo(ciclo)
-    except Exception as e:
-        try:
-            app.logger.warning(f"_backfill_stime: {e}")
-        except Exception:
-            pass
 
 
 def _init_scheduler(app):
@@ -565,21 +362,7 @@ def _init_scheduler(app):
                 except Exception as e:
                     app.logger.error(f"Errore generazione ricorrenti: {e}")
 
-        def generate_allevamento_alarms():
-            with app.app_context():
-                try:
-                    from app.services.allevamento_alarms import rigenera_allarmi
-                    rigenera_allarmi()
-                except Exception as e:
-                    app.logger.error(f"Errore generazione allarmi allevamento: {e}")
-
-        def refresh_stime_giornaliere():
-            with app.app_context():
-                _backfill_stime(app)
-
         scheduler.add_job(generate_recurring, "cron", hour=3, minute=0)
-        scheduler.add_job(refresh_stime_giornaliere, "cron", hour=5, minute=0)
-        scheduler.add_job(generate_allevamento_alarms, "cron", hour=6, minute=0)
         scheduler.add_job(run_backup, "cron", hour=backup_hour, minute=backup_minute, id="backup")
         if app.config.get("CLOUD_OFFICE_USER") and app.config.get("CLOUD_OFFICE_PASSWORD"):
             scheduler.add_job(sync_cassa, "cron", hour=4, minute=0)
