@@ -64,7 +64,7 @@
                 {% set tot_g = caps.values()|sum %}
                 <td class="text-center {{ 'table-warning' if d == oggi }} {{ 'text-danger' if tot_g > 0 }}">{{ tot_g if tot_g > 0 else '–' }}</td>
                 {% endfor %}
-                <td class="text-center text-danger">{{ griglia.values()|map(attribute='values')|map('sum')|sum }}</td>
+                <td class="text-center text-danger">{{ tot_settimana if tot_settimana > 0 else '–' }}</td>
             </tr>
         </tbody>
     </table>

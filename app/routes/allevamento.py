@@ -195,11 +195,14 @@ def mortalita():
         EventoMortalita.data >= oggi - timedelta(days=30),
     ).order_by(EventoMortalita.data.desc(), EventoMortalita.id.desc()).all() if ciclo else []
 
+    tot_settimana = sum(sum(caps.values()) for caps in griglia.values())
+
     return render_template("allevamento/mortalita.html",
                            ciclo=ciclo, griglia=griglia, lun=lun, dom=dom,
                            settimana_offset=settimana_offset,
                            CAPANNONI=CAPANNONI, BOX_PER_CAP=BOX_PER_CAP,
-                           ultimi=ultimi, oggi=oggi)
+                           ultimi=ultimi, oggi=oggi,
+                           tot_settimana=tot_settimana)
 
 
 @bp.route("/mortalita/new", methods=["POST"])
@@ -300,7 +303,17 @@ def censimento_new():
         for b in range(1, 55):
             val = request.form.get(f"box_{b}", "0").strip()
             qty = int(val) if val.isdigit() else 0
-            db.session.add(CensimentoBox(censimento_id=cens.id, box_numero=b, quantita=qty))
+            giorni_val = request.form.get(f"giorni_{b}", "").strip()
+            peso_val = request.form.get(f"peso_{b}", "").strip()
+            giorni = int(giorni_val) if giorni_val.isdigit() else None
+            try:
+                peso = float(peso_val.replace(",", ".")) if peso_val else None
+            except ValueError:
+                peso = None
+            db.session.add(CensimentoBox(
+                censimento_id=cens.id, box_numero=b, quantita=qty,
+                giorni_vita=giorni, peso_stimato_kg=peso,
+            ))
             totale += qty
 
         db.session.commit()

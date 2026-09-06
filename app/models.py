@@ -391,6 +391,8 @@ class CensimentoBox(db.Model):
     censimento_id = db.Column(db.Integer, db.ForeignKey("censimenti.id"), nullable=False)
     box_numero = db.Column(db.Integer, nullable=False)
     quantita = db.Column(db.Integer, nullable=False, default=0)
+    giorni_vita = db.Column(db.Integer)       # età media stimata dei suini nel box
+    peso_stimato_kg = db.Column(db.Float)     # peso medio stimato per capo
 
 
 class EventoMortalita(db.Model):

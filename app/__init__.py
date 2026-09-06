@@ -212,6 +212,8 @@ def _init_db(app):
         ("users", "sections", "TEXT DEFAULT '[\"finanza\"]'"),
         ("auto_rules", "action_ignore", "BOOLEAN DEFAULT 0"),
         ("auto_rules", "action_ignore_reason_id", "INTEGER REFERENCES ignore_reasons(id)"),
+        ("censimento_box", "giorni_vita", "INTEGER"),
+        ("censimento_box", "peso_stimato_kg", "REAL"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

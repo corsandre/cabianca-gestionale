@@ -101,9 +101,19 @@
                     <div class="row g-2 mb-3">
                         {% for b in BOX_PER_CAP[cap] %}
                         <div class="col-6 col-sm-4 col-md-3 col-lg-2">
-                            <label class="form-label small mb-0">Box {{ b }} <small class="text-muted">(cap.{{ POSTI_PER_BOX_STANDARD[b] }})</small></label>
-                            <input type="number" name="box_{{ b }}" class="form-control form-control-sm"
-                                   value="{{ live.get(b, 0) }}" min="0" max="{{ POSTI_PER_BOX_STANDARD[b] }}">
+                            <label class="form-label small mb-0 fw-semibold">Box {{ b }} <small class="text-muted">(max {{ POSTI_PER_BOX_STANDARD[b] }})</small></label>
+                            <input type="number" name="box_{{ b }}" class="form-control form-control-sm mb-1"
+                                   placeholder="Capi" value="{{ live.get(b, 0) }}" min="0" max="{{ POSTI_PER_BOX_STANDARD[b] }}">
+                            <div class="input-group input-group-sm mb-1">
+                                <span class="input-group-text" title="Giorni di vita">gg</span>
+                                <input type="number" name="giorni_{{ b }}" class="form-control form-control-sm"
+                                       placeholder="Età" min="0" max="365">
+                            </div>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text" title="Peso medio stimato">kg</span>
+                                <input type="number" name="peso_{{ b }}" class="form-control form-control-sm"
+                                       placeholder="Peso" min="0" max="250" step="0.1">
+                            </div>
                         </div>
                         {% endfor %}
                     </div>
