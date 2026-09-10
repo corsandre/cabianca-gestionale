@@ -46,10 +46,9 @@
                 </tr>
             </thead>
             <tbody>
-                {% set pasto_label = {1: 'Mattina', 2: 'Pomeriggio', 3: 'Extra'} %}
                 {% for pasto in [1,2,3] %}
                 <tr>
-                    <td class="fw-bold">{{ pasto_label[pasto] }}</td>
+                    <td class="fw-bold">Pasto {{ pasto }}</td>
                     {% for linea in [1,2,3] %}
                     {% set p = pasti.get((pasto, linea)) %}
                     {% set stimato = p and p.stimato %}

@@ -39,7 +39,8 @@ def start_bot(app):
         MORTALITA_CAP, MORTALITA_BOX, MORTALITA_QTY, MORTALITA_CAUSA,
         SPOSTAMENTO_TIPO, SPOSTAMENTO_ORIG, SPOSTAMENTO_DEST, SPOSTAMENTO_QTY,
         CONSEGNA_TIPO, CONSEGNA_QTY, CONSEGNA_EXTRA,
-    ) = range(12)
+        PASTO_LINEA, PASTO_NUM, PASTO_MANG, PASTO_SIERO, PASTO_ACQUA,
+    ) = range(17)
 
     CAPANNONI = [1, 2, 3, 4, 5, 6, 7]
     BOX_PER_CAP = {
@@ -62,12 +63,27 @@ def start_bot(app):
 
     def kb_main():
         return InlineKeyboardMarkup([
+            [InlineKeyboardButton("🍽️ Uso pasto", callback_data="pasto")],
             [InlineKeyboardButton("💀 Registra morte", callback_data="mortalita")],
             [InlineKeyboardButton("🔄 Spostamento", callback_data="spostamento")],
             [InlineKeyboardButton("🚚 Consegna siero", callback_data="consegna_siero"),
              InlineKeyboardButton("🌾 Consegna mangime", callback_data="consegna_mangime")],
             [InlineKeyboardButton("📊 Stato ciclo", callback_data="stato")],
         ])
+
+    def kb_linee():
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔵 Linea 1", callback_data="1"),
+            InlineKeyboardButton("🔴 Linea 2", callback_data="2"),
+            InlineKeyboardButton("🟢 Linea 3", callback_data="3"),
+        ]])
+
+    def kb_pasti():
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton("Pasto 1", callback_data="1"),
+            InlineKeyboardButton("Pasto 2", callback_data="2"),
+            InlineKeyboardButton("Pasto 3", callback_data="3"),
+        ]])
 
     async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         with app.app_context():
@@ -86,7 +102,10 @@ def start_bot(app):
         await q.answer()
         data = q.data
 
-        if data == "mortalita":
+        if data == "pasto":
+            await q.edit_message_text("🍽️ *Uso pasto*\nSeleziona la linea:", parse_mode="Markdown", reply_markup=kb_linee())
+            return PASTO_LINEA
+        elif data == "mortalita":
             await q.edit_message_text("💀 *Registra mortalità*\nSeleziona il capannone:", parse_mode="Markdown", reply_markup=kb_capannoni())
             return MORTALITA_CAP
         elif data == "spostamento":
@@ -301,6 +320,84 @@ def start_bot(app):
         await update.message.reply_text(f"{emoji} {qty} qli {tipo} registrati.\n\nUsa /start per continuare.")
         return ConversationHandler.END
 
+    # ── Uso pasto ─────────────────────────────────────────────────────────
+
+    async def pasto_linea(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        q = update.callback_query
+        await q.answer()
+        ctx.user_data["pasto_linea"] = int(q.data)
+        await q.edit_message_text(
+            f"Linea {q.data} selezionata.\nSeleziona il pasto:", reply_markup=kb_pasti(),
+        )
+        return PASTO_NUM
+
+    async def pasto_num(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        q = update.callback_query
+        await q.answer()
+        ctx.user_data["pasto_num"] = int(q.data)
+        await q.edit_message_text(f"🌾 Mangime (qli)? Scrivi il numero (es: 8.5) oppure /skip:")
+        return PASTO_MANG
+
+    def _parse_float_skip(testo):
+        if testo.strip().startswith("/skip"):
+            return None, True
+        try:
+            return float(testo.strip().replace(",", ".")), True
+        except ValueError:
+            return None, False
+
+    async def pasto_mang(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        val, ok = _parse_float_skip(update.message.text)
+        if not ok:
+            await update.message.reply_text("⚠️ Inserisci un numero valido (es: 8.5) oppure /skip.")
+            return PASTO_MANG
+        ctx.user_data["pasto_mang"] = val
+        await update.message.reply_text("🚚 Siero (qli)? Scrivi il numero oppure /skip:")
+        return PASTO_SIERO
+
+    async def pasto_siero(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        val, ok = _parse_float_skip(update.message.text)
+        if not ok:
+            await update.message.reply_text("⚠️ Inserisci un numero valido oppure /skip.")
+            return PASTO_SIERO
+        ctx.user_data["pasto_siero"] = val
+        await update.message.reply_text("💧 Acqua (litri)? Scrivi il numero oppure /skip:")
+        return PASTO_ACQUA
+
+    async def pasto_acqua(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        val, ok = _parse_float_skip(update.message.text)
+        if not ok:
+            await update.message.reply_text("⚠️ Inserisci un numero valido oppure /skip.")
+            return PASTO_ACQUA
+
+        linea = ctx.user_data.get("pasto_linea")
+        pasto = ctx.user_data.get("pasto_num")
+        mang = ctx.user_data.get("pasto_mang")
+        siero = ctx.user_data.get("pasto_siero")
+
+        with app.app_context():
+            from app import db
+            from app.models import Ciclo
+            from app.services.allevamento_pasti import registra_pasto
+            ciclo = Ciclo.query.filter_by(attivo=True).first()
+            if not ciclo:
+                await update.message.reply_text("⚠️ Nessun ciclo attivo.")
+                return ConversationHandler.END
+            registra_pasto(
+                ciclo_id=ciclo.id, data=date.today(), pasto=pasto, linea=linea,
+                mangime_qli=mang, siero_qli=siero, acqua_litri=val,
+            )
+            db.session.commit()
+
+        await update.message.reply_text(
+            f"✅ Pasto {pasto} — Linea {linea} registrato.\n"
+            f"Mangime: {mang if mang is not None else '-'} qli, "
+            f"Siero: {siero if siero is not None else '-'} qli, "
+            f"Acqua: {val if val is not None else '-'} l\n\nUsa /start per continuare.",
+            reply_markup=kb_main(),
+        )
+        return ConversationHandler.END
+
     async def cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Operazione annullata. Usa /start per ricominciare.")
         return ConversationHandler.END
@@ -328,6 +425,20 @@ def start_bot(app):
             CONSEGNA_EXTRA: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, consegna_extra),
                 CommandHandler("skip", consegna_extra),
+            ],
+            PASTO_LINEA: [CallbackQueryHandler(pasto_linea)],
+            PASTO_NUM: [CallbackQueryHandler(pasto_num)],
+            PASTO_MANG: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, pasto_mang),
+                CommandHandler("skip", pasto_mang),
+            ],
+            PASTO_SIERO: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, pasto_siero),
+                CommandHandler("skip", pasto_siero),
+            ],
+            PASTO_ACQUA: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, pasto_acqua),
+                CommandHandler("skip", pasto_acqua),
             ],
         },
         fallbacks=[
