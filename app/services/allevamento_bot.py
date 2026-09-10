@@ -24,7 +24,7 @@ def start_bot(app):
         return
 
     try:
-        from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+        from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
         from telegram.ext import (
             Application, CommandHandler, CallbackQueryHandler,
             ConversationHandler, MessageHandler, filters, ContextTypes,
@@ -344,6 +344,11 @@ def start_bot(app):
 
     async def _run_bot():
         async with tg_app:
+            await tg_app.bot.set_my_commands([
+                BotCommand("start", "Apri il menu principale"),
+                BotCommand("menu", "Apri il menu principale"),
+                BotCommand("cancel", "Annulla l'operazione in corso"),
+            ])
             await tg_app.start()
             await tg_app.updater.start_polling(drop_pending_updates=True)
             await asyncio.Event().wait()  # block until task is cancelled
