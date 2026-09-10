@@ -63,7 +63,7 @@ def start_bot(app):
 
     def kb_main():
         return InlineKeyboardMarkup([
-            [InlineKeyboardButton("🍽️ Uso pasto", callback_data="pasto")],
+            [InlineKeyboardButton("🍽️ Registra consumo", callback_data="pasto")],
             [InlineKeyboardButton("💀 Registra morte", callback_data="mortalita")],
             [InlineKeyboardButton("🔄 Spostamento", callback_data="spostamento")],
             [InlineKeyboardButton("🚚 Consegna siero", callback_data="consegna_siero"),
@@ -103,7 +103,7 @@ def start_bot(app):
         data = q.data
 
         if data == "pasto":
-            await q.edit_message_text("🍽️ *Uso pasto*\nSeleziona la linea:", parse_mode="Markdown", reply_markup=kb_linee())
+            await q.edit_message_text("🍽️ *Registra consumo*\nSeleziona la linea:", parse_mode="Markdown", reply_markup=kb_linee())
             return PASTO_LINEA
         elif data == "mortalita":
             await q.edit_message_text("💀 *Registra mortalità*\nSeleziona il capannone:", parse_mode="Markdown", reply_markup=kb_capannoni())
@@ -320,7 +320,7 @@ def start_bot(app):
         await update.message.reply_text(f"{emoji} {qty} qli {tipo} registrati.\n\nUsa /start per continuare.")
         return ConversationHandler.END
 
-    # ── Uso pasto ─────────────────────────────────────────────────────────
+    # ── Registra consumo ─────────────────────────────────────────────────
 
     async def pasto_linea(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         q = update.callback_query
