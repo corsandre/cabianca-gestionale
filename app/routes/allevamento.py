@@ -451,9 +451,11 @@ def consegne_siero_new():
         ora_str = request.form.get("ora", "").strip()
         ora = dt_time.fromisoformat(ora_str) if ora_str else None
         qty = float(request.form["quantita_qli"])
+        ss = request.form.get("perc_sostanza_secca", "").strip()
         c = ConsegnaSiero(
             ciclo_id=ciclo.id, data=date.fromisoformat(data_str), ora=ora,
             quantita_qli=qty,
+            perc_sostanza_secca=float(ss) if ss else None,
             lotto=request.form.get("lotto", "").strip() or None,
             speditore=request.form.get("speditore", "").strip() or None,
             trasportatore=request.form.get("trasportatore", "").strip() or None,
@@ -549,8 +551,8 @@ def alimentazione():
     # Totali giornalieri per linea
     totali = {linea: {"mangime": 0, "siero": 0, "acqua": 0} for linea in [1, 2, 3]}
     for (pasto, linea), p in pasti.items():
-        totali[linea]["mangime"] += p.mangime_kg or 0
-        totali[linea]["siero"] += p.siero_kg or 0
+        totali[linea]["mangime"] += p.mangime_qli or 0
+        totali[linea]["siero"] += p.siero_qli or 0
         totali[linea]["acqua"] += p.acqua_litri or 0
 
     return render_template("allevamento/alimentazione.html",
@@ -562,7 +564,7 @@ def alimentazione():
 @login_required
 def alimentazione_new():
     _check_allevamento()
-    from app.models import UsoPasto
+    from app.services.allevamento_pasti import registra_pasto
     ciclo = _get_ciclo_attivo()
     if not ciclo:
         flash("Nessun ciclo attivo.", "danger")
@@ -571,35 +573,25 @@ def alimentazione_new():
     try:
         data_str = request.form.get("data", str(date.today()))
         data_pasto = date.fromisoformat(data_str)
+        tipo_mangime = request.form.get("tipo_mangime", "").strip() or None
+        perc_siero = float(request.form.get("perc_siero", "") or 0) or None
 
-        for pasto in [1, 2, 3]:
-            for linea in [1, 2, 3]:
+        for linea in [1, 2, 3]:
+            for pasto in [1, 2, 3]:
                 mang = request.form.get(f"mang_{pasto}_{linea}", "").strip()
                 siero = request.form.get(f"siero_{pasto}_{linea}", "").strip()
                 acqua = request.form.get(f"acqua_{pasto}_{linea}", "").strip()
 
                 if not any([mang, siero, acqua]):
-                    continue
+                    continue  # nessun inserimento manuale per questo pasto: eredita/mantiene la stima
 
-                esistente = UsoPasto.query.filter_by(
-                    ciclo_id=ciclo.id, data=data_pasto, pasto=pasto, linea=linea
-                ).first()
-
-                vals = {
-                    "mangime_kg": float(mang) if mang else None,
-                    "siero_kg": float(siero) if siero else None,
-                    "acqua_litri": float(acqua) if acqua else None,
-                    "tipo_mangime": request.form.get("tipo_mangime", "").strip() or None,
-                    "perc_siero": float(request.form.get("perc_siero", "") or 0) or None,
-                }
-
-                if esistente:
-                    for k, v in vals.items():
-                        setattr(esistente, k, v)
-                else:
-                    db.session.add(UsoPasto(
-                        ciclo_id=ciclo.id, data=data_pasto, pasto=pasto, linea=linea, **vals
-                    ))
+                registra_pasto(
+                    ciclo_id=ciclo.id, data=data_pasto, pasto=pasto, linea=linea,
+                    mangime_qli=float(mang) if mang else None,
+                    siero_qli=float(siero) if siero else None,
+                    acqua_litri=float(acqua) if acqua else None,
+                    tipo_mangime=tipo_mangime, perc_siero=perc_siero,
+                )
 
         db.session.commit()
         flash("Dati alimentazione salvati.", "success")

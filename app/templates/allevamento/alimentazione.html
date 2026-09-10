@@ -39,31 +39,33 @@
                 <tr>
                     <th></th>
                     {% for linea in [1,2,3] %}
-                    <th class="text-center {{ 'border-start border-2' if loop.first else '' }}" style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">Mang.(kg)</th>
-                    <th class="text-center">Siero(kg)</th>
+                    <th class="text-center {{ 'border-start border-2' if loop.first else '' }}" style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">Mang.(qli)</th>
+                    <th class="text-center">Siero(qli)</th>
                     <th class="text-center">Acqua(l)</th>
                     {% endfor %}
                 </tr>
             </thead>
             <tbody>
+                {% set pasto_label = {1: 'Mattina', 2: 'Pomeriggio', 3: 'Extra'} %}
                 {% for pasto in [1,2,3] %}
                 <tr>
-                    <td class="fw-bold">Pasto {{ pasto }}</td>
+                    <td class="fw-bold">{{ pasto_label[pasto] }}</td>
                     {% for linea in [1,2,3] %}
                     {% set p = pasti.get((pasto, linea)) %}
+                    {% set stimato = p and p.stimato %}
                     <td style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">
-                        <input type="number" name="mang_{{ pasto }}_{{ linea }}" class="form-control form-control-sm"
-                               style="min-width:70px" step="0.1" min="0"
-                               value="{{ p.mangime_kg if p and p.mangime_kg is not none else '' }}">
+                        <input type="number" name="mang_{{ pasto }}_{{ linea }}" class="form-control form-control-sm {{ 'bg-warning-subtle' if stimato }}"
+                               style="min-width:70px" step="0.01" min="0" title="{{ 'Valore stimato (copiato dalla mattina)' if stimato else '' }}"
+                               value="{{ p.mangime_qli if p and p.mangime_qli is not none else '' }}">
                     </td>
                     <td>
-                        <input type="number" name="siero_{{ pasto }}_{{ linea }}" class="form-control form-control-sm"
-                               style="min-width:70px" step="0.1" min="0"
-                               value="{{ p.siero_kg if p and p.siero_kg is not none else '' }}">
+                        <input type="number" name="siero_{{ pasto }}_{{ linea }}" class="form-control form-control-sm {{ 'bg-warning-subtle' if stimato }}"
+                               style="min-width:70px" step="0.01" min="0" title="{{ 'Valore stimato (copiato dalla mattina)' if stimato else '' }}"
+                               value="{{ p.siero_qli if p and p.siero_qli is not none else '' }}">
                     </td>
                     <td>
-                        <input type="number" name="acqua_{{ pasto }}_{{ linea }}" class="form-control form-control-sm"
-                               style="min-width:70px" step="1" min="0"
+                        <input type="number" name="acqua_{{ pasto }}_{{ linea }}" class="form-control form-control-sm {{ 'bg-warning-subtle' if stimato }}"
+                               style="min-width:70px" step="1" min="0" title="{{ 'Valore stimato (copiato dalla mattina)' if stimato else '' }}"
                                value="{{ p.acqua_litri if p and p.acqua_litri is not none else '' }}">
                     </td>
                     {% endfor %}
@@ -81,6 +83,10 @@
             </tbody>
         </table>
     </div>
+    <p class="text-muted small">
+        <i class="bi bi-square-fill me-1" style="color:#fff3cd;-webkit-text-stroke:1px #ffc107"></i>
+        I valori in giallo sono stimati (copiati dal pasto della mattina): inserisci un valore per renderlo definitivo.
+    </p>
 
     <!-- Campi aggiuntivi -->
     <div class="cb-card p-3 mb-3">
@@ -91,7 +97,7 @@
                        value="{{ pasti.values() | list | first | attr('tipo_mangime') if pasti else '' }}">
             </div>
             <div class="col-md-4">
-                <label class="form-label">% siero (media)</label>
+                <label class="form-label">% sostituzione s.s. da siero (ricetta)</label>
                 <input type="number" name="perc_siero" class="form-control" step="0.1" min="0" max="100"
                        value="{{ pasti.values() | list | first | attr('perc_siero') if pasti else '' }}">
             </div>

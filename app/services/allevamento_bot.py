@@ -330,7 +330,10 @@ def start_bot(app):
                 CommandHandler("skip", consegna_extra),
             ],
         },
-        fallbacks=[CommandHandler("cancel", cancel), CommandHandler("annulla", cancel)],
+        fallbacks=[
+            CommandHandler("cancel", cancel), CommandHandler("annulla", cancel),
+            CommandHandler("start", cmd_start), CommandHandler("menu", cmd_start),
+        ],
         per_message=False,
     )
 

@@ -435,6 +435,7 @@ class ConsegnaSiero(db.Model):
     data = db.Column(db.Date, nullable=False)
     ora = db.Column(db.Time)
     quantita_qli = db.Column(db.Float, nullable=False)
+    perc_sostanza_secca = db.Column(db.Float)  # % sostanza secca contenuta nel lotto consegnato
     lotto = db.Column(db.String(50))
     speditore = db.Column(db.String(200))
     trasportatore = db.Column(db.String(200))
@@ -465,11 +466,12 @@ class UsoPasto(db.Model):
     data = db.Column(db.Date, nullable=False)
     pasto = db.Column(db.Integer, nullable=False)
     linea = db.Column(db.Integer, nullable=False)
-    mangime_kg = db.Column(db.Float)
-    siero_kg = db.Column(db.Float)
+    mangime_qli = db.Column(db.Float)
+    siero_qli = db.Column(db.Float)
     acqua_litri = db.Column(db.Float)
     tipo_mangime = db.Column(db.String(100))
-    perc_siero = db.Column(db.Float)
+    perc_siero = db.Column(db.Float)  # % sostituzione sostanza secca da siero nella ricetta
+    stimato = db.Column(db.Boolean, default=False)  # True se copiato dal pasto mattutino, non inserito manualmente
     note = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     ciclo = db.relationship("Ciclo", backref="uso_pasti")
