@@ -41,7 +41,8 @@ def start_bot(app):
         CONSEGNA_TIPO, CONSEGNA_QTY, CONSEGNA_EXTRA,
         PASTO_LINEA, PASTO_NUM, PASTO_MANG, PASTO_SIERO, PASTO_ACQUA,
         CENSIMENTO_FIELD, CENSIMENTO_BOX_NEXT, CENSIMENTO_CAP_NEXT, CENSIMENTO_CONFIRM,
-    ) = range(21)
+        CENSIMENTO_RECAP_PICK,
+    ) = range(22)
 
     CAPANNONI = [1, 2, 3, 4, 5, 6, 7]
     BOX_PER_CAP = {
@@ -133,6 +134,7 @@ def start_bot(app):
             ctx.user_data["cens_field"] = "capi"
             ctx.user_data["cens_buffer"] = ""
             ctx.user_data["cens_riferimento"] = rif
+            ctx.user_data["cens_modo"] = "normale"
             await _mostra_campo_box(q, ctx)
             return CENSIMENTO_FIELD
         elif data == "pasto":
@@ -477,6 +479,7 @@ def start_bot(app):
             row5.append(InlineKeyboardButton("Salta ↷", callback_data="skip"))
         row5.append(InlineKeyboardButton("✓ OK", callback_data="ok"))
         rows.append(row5)
+        rows.append([InlineKeyboardButton("⬅️ Indietro", callback_data="back")])
         return InlineKeyboardMarkup(rows)
 
     async def _mostra_campo_box(q, ctx):
@@ -506,6 +509,8 @@ def start_bot(app):
             ctx.user_data["cens_buffer"] = str(ctx.user_data["cens_riferimento"].get(b, 0))
             await _mostra_campo_box(q, ctx)
             return CENSIMENTO_FIELD
+        if data == "back":
+            return await _torna_indietro(q, ctx)
         if data == "skip":
             return await _salva_campo_e_avanza(q, ctx, None)
         if data == "ok":
@@ -526,6 +531,37 @@ def start_bot(app):
             return await _salva_campo_e_avanza(q, ctx, valore)
         return CENSIMENTO_FIELD
 
+    async def _torna_indietro(q, ctx):
+        field = ctx.user_data["cens_field"]
+        cap, b = _cens_box_corrente(ctx)
+        idx = CENS_CAMPI.index(field)
+
+        if idx > 0:
+            nuovo_field = CENS_CAMPI[idx - 1]
+            dati = ctx.user_data["cens_conteggi"].get(b, {})
+            valore = dati.get(nuovo_field)
+            ctx.user_data["cens_field"] = nuovo_field
+            ctx.user_data["cens_buffer"] = "" if valore is None else str(valore)
+            await _mostra_campo_box(q, ctx)
+            return CENSIMENTO_FIELD
+
+        # field == "capi": primo campo del box
+        if ctx.user_data.get("cens_modo") == "correzione":
+            return await _mostra_pick_box(q, ctx)
+
+        if ctx.user_data["cens_box_idx"] == 0:
+            await q.answer("Sei al primo box di questo capannone.", show_alert=True)
+            return CENSIMENTO_FIELD
+
+        ctx.user_data["cens_box_idx"] -= 1
+        _, b_prec = _cens_box_corrente(ctx)
+        dati_prec = ctx.user_data["cens_conteggi"].get(b_prec, {})
+        ctx.user_data["cens_field"] = "peso"
+        valore = dati_prec.get("peso")
+        ctx.user_data["cens_buffer"] = "" if valore is None else str(valore)
+        await _mostra_campo_box(q, ctx)
+        return CENSIMENTO_FIELD
+
     async def _salva_campo_e_avanza(q, ctx, valore):
         cap, b = _cens_box_corrente(ctx)
         field = ctx.user_data["cens_field"]
@@ -533,8 +569,11 @@ def start_bot(app):
 
         idx = CENS_CAMPI.index(field)
         if idx + 1 < len(CENS_CAMPI):
-            ctx.user_data["cens_field"] = CENS_CAMPI[idx + 1]
-            ctx.user_data["cens_buffer"] = ""
+            prossimo = CENS_CAMPI[idx + 1]
+            dati = ctx.user_data["cens_conteggi"].get(b, {})
+            valore_esistente = dati.get(prossimo)
+            ctx.user_data["cens_field"] = prossimo
+            ctx.user_data["cens_buffer"] = "" if valore_esistente is None else str(valore_esistente)
             await _mostra_campo_box(q, ctx)
             return CENSIMENTO_FIELD
 
@@ -548,6 +587,10 @@ def start_bot(app):
                  f"Età: {dati.get('giorni') if dati.get('giorni') is not None else '—'} gg\n"
                  f"Peso: {dati.get('peso') if dati.get('peso') is not None else '—'} kg"
                  f"{avviso}")
+
+        if ctx.user_data.get("cens_modo") == "correzione":
+            ctx.user_data["cens_modo"] = "normale"
+            return await _mostra_recap_capannone(q, ctx)
 
         ultimo_box = ctx.user_data["cens_box_idx"] + 1 >= len(BOX_PER_CAP[cap])
         if ultimo_box:
@@ -588,12 +631,44 @@ def start_bot(app):
         righe.append(f"Totale generale finora: *{tot_generale}*")
 
         ultimo_cap = ctx.user_data["cens_cap_idx"] + 1 >= len(CAPANNONI)
+        kb_rows = []
         if ultimo_cap:
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Riepilogo finale", callback_data="finalrecap")]])
+            kb_rows.append([InlineKeyboardButton("✅ Riepilogo finale", callback_data="finalrecap")])
         else:
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("➡️ Prossimo capannone", callback_data="nextcap")]])
-        await q.edit_message_text("\n".join(righe), parse_mode="Markdown", reply_markup=kb)
+            kb_rows.append([InlineKeyboardButton("➡️ Prossimo capannone", callback_data="nextcap")])
+        kb_rows.append([InlineKeyboardButton("✏️ Correggi un box", callback_data="correggi")])
+        await q.edit_message_text("\n".join(righe), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb_rows))
         return CENSIMENTO_CAP_NEXT
+
+    async def _mostra_pick_box(q, ctx):
+        cap = CAPANNONI[ctx.user_data["cens_cap_idx"]]
+        boxes = BOX_PER_CAP[cap]
+        buttons = [InlineKeyboardButton(f"B{b}", callback_data=f"editbox:{b}") for b in boxes]
+        rows = [buttons[i:i + 5] for i in range(0, len(buttons), 5)]
+        rows.append([InlineKeyboardButton("🔙 Torna al riepilogo", callback_data="backrecap")])
+        await q.edit_message_text(
+            f"✏️ *Correggi un box — CAP {cap}*\nScegli il box da modificare:",
+            parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(rows),
+        )
+        return CENSIMENTO_RECAP_PICK
+
+    async def censimento_recap_pick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        q = update.callback_query
+        await q.answer()
+        if q.data == "backrecap":
+            return await _mostra_recap_capannone(q, ctx)
+
+        b = int(q.data.split(":")[1])
+        cap = CAPANNONI[ctx.user_data["cens_cap_idx"]]
+        boxes = BOX_PER_CAP[cap]
+        ctx.user_data["cens_box_idx"] = boxes.index(b)
+        ctx.user_data["cens_field"] = "capi"
+        dati = ctx.user_data["cens_conteggi"].get(b, {})
+        valore = dati.get("capi")
+        ctx.user_data["cens_buffer"] = "" if valore is None else str(valore)
+        ctx.user_data["cens_modo"] = "correzione"
+        await _mostra_campo_box(q, ctx)
+        return CENSIMENTO_FIELD
 
     async def censimento_cap_next(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         q = update.callback_query
@@ -605,6 +680,8 @@ def start_bot(app):
             ctx.user_data["cens_buffer"] = ""
             await _mostra_campo_box(q, ctx)
             return CENSIMENTO_FIELD
+        if q.data == "correggi":
+            return await _mostra_pick_box(q, ctx)
 
         tot = sum(d.get("capi", 0) for d in ctx.user_data["cens_conteggi"].values())
         kb = InlineKeyboardMarkup([[
@@ -696,6 +773,7 @@ def start_bot(app):
             CENSIMENTO_FIELD: [CallbackQueryHandler(censimento_field)],
             CENSIMENTO_BOX_NEXT: [CallbackQueryHandler(censimento_box_next)],
             CENSIMENTO_CAP_NEXT: [CallbackQueryHandler(censimento_cap_next)],
+            CENSIMENTO_RECAP_PICK: [CallbackQueryHandler(censimento_recap_pick)],
             CENSIMENTO_CONFIRM: [CallbackQueryHandler(censimento_confirm)],
         },
         fallbacks=[
