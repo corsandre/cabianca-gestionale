@@ -85,12 +85,15 @@
             <h6 class="mb-3"><i class="bi bi-droplet me-1" style="color:#c2185b"></i>Ultime consegne siero</h6>
             {% if consegne_siero %}
             <table class="table table-sm mb-0">
-                <thead><tr><th>Data</th><th>Qli</th><th>Lotto</th></tr></thead>
+                <thead><tr><th>Data</th><th>Qli</th><th>% s.s.</th><th>Lotto</th></tr></thead>
                 <tbody>
                 {% for c in consegne_siero %}
                 <tr>
                     <td>{{ c.data.strftime('%d/%m') }}</td>
                     <td>{{ c.quantita_qli }}</td>
+                    <td class="{{ 'text-danger fw-bold' if c.perc_sostanza_secca is none else '' }}">
+                        {{ c.perc_sostanza_secca if c.perc_sostanza_secca is not none else '–' }}
+                    </td>
                     <td class="text-muted">{{ c.lotto or '–' }}</td>
                 </tr>
                 {% endfor %}
