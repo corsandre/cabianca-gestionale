@@ -40,13 +40,24 @@ def start_bot(app):
         SPOSTAMENTO_TIPO, SPOSTAMENTO_ORIG, SPOSTAMENTO_DEST, SPOSTAMENTO_QTY,
         CONSEGNA_TIPO, CONSEGNA_QTY, CONSEGNA_EXTRA,
         PASTO_LINEA, PASTO_NUM, PASTO_MANG, PASTO_SIERO, PASTO_ACQUA,
-    ) = range(17)
+        CENSIMENTO_BOX, CENSIMENTO_CONFIRM,
+    ) = range(19)
 
     CAPANNONI = [1, 2, 3, 4, 5, 6, 7]
     BOX_PER_CAP = {
         1: list(range(1, 10)), 2: list(range(10, 16)), 3: list(range(16, 22)),
         4: list(range(22, 37)), 5: list(range(37, 43)),
         7: list(range(43, 50)), 6: list(range(50, 55)),
+    }
+    POSTI_PER_BOX_STANDARD = {
+        **{i: 40 for i in range(1, 10)},
+        **{i: 26 for i in range(10, 16)},
+        **{i: 10 for i in range(16, 22)},
+        **{i: 38 for i in range(22, 37)},
+        **{i: 38 for i in range(37, 43)},
+        **{i: 31 for i in range(43, 49)},
+        49: 32,
+        50: 47, 51: 47, 52: 46, 53: 45, 54: 45,
     }
 
     def kb_capannoni():
@@ -63,6 +74,7 @@ def start_bot(app):
 
     def kb_main():
         return InlineKeyboardMarkup([
+            [InlineKeyboardButton("📋 Censimento", callback_data="censimento")],
             [InlineKeyboardButton("🍽️ Registra consumo", callback_data="pasto")],
             [InlineKeyboardButton("💀 Registra morte", callback_data="mortalita")],
             [InlineKeyboardButton("🔄 Spostamento", callback_data="spostamento")],
@@ -102,7 +114,16 @@ def start_bot(app):
         await q.answer()
         data = q.data
 
-        if data == "pasto":
+        if data == "censimento":
+            ctx.user_data["cens_conteggi"] = {}
+            ctx.user_data["cens_cap_idx"] = 0
+            await q.edit_message_text(
+                "📋 *Censimento*\nInvieremo i capi capannone per capannone, per evitare invii "
+                "unici troppo grandi. Un messaggio per capannone, poi conferma finale.\n\n"
+                "Iniziamo:", parse_mode="Markdown",
+            )
+            return await _chiedi_censimento_cap(update.effective_chat.id, ctx)
+        elif data == "pasto":
             await q.edit_message_text("🍽️ *Registra consumo*\nSeleziona la linea:", parse_mode="Markdown", reply_markup=kb_linee())
             return PASTO_LINEA
         elif data == "mortalita":
@@ -398,6 +419,107 @@ def start_bot(app):
         )
         return ConversationHandler.END
 
+    # ── Censimento ────────────────────────────────────────────────────────
+
+    async def _chiedi_censimento_cap(chat_id, ctx):
+        idx = ctx.user_data["cens_cap_idx"]
+        if idx >= len(CAPANNONI):
+            return await _chiedi_censimento_conferma(chat_id, ctx)
+        cap = CAPANNONI[idx]
+        boxes = BOX_PER_CAP[cap]
+        lista = ", ".join(f"B{b}" for b in boxes)
+        esempio = " ".join(["0"] * len(boxes))
+        await ctx.bot.send_message(
+            chat_id=chat_id,
+            text=(f"🏠 *CAP {cap}* — box: {lista}\n"
+                  f"Scrivi i capi per ciascun box nello stesso ordine, separati da spazio "
+                  f"({len(boxes)} numeri). Es: {esempio}"),
+            parse_mode="Markdown",
+        )
+        return CENSIMENTO_BOX
+
+    async def censimento_box(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        idx = ctx.user_data["cens_cap_idx"]
+        cap = CAPANNONI[idx]
+        boxes = BOX_PER_CAP[cap]
+        parti = update.message.text.strip().split()
+
+        if len(parti) != len(boxes):
+            await update.message.reply_text(
+                f"⚠️ Servono esattamente {len(boxes)} numeri (uno per box), "
+                f"ne hai inviati {len(parti)}. Riprova:"
+            )
+            return CENSIMENTO_BOX
+        try:
+            valori = [int(v) for v in parti]
+            if any(v < 0 for v in valori):
+                raise ValueError
+        except ValueError:
+            await update.message.reply_text("⚠️ Devono essere tutti numeri interi ≥ 0. Riprova:")
+            return CENSIMENTO_BOX
+
+        avvisi = []
+        for b, v in zip(boxes, valori):
+            ctx.user_data["cens_conteggi"][b] = v
+            cap_max = POSTI_PER_BOX_STANDARD.get(b)
+            if cap_max and v > cap_max:
+                avvisi.append(f"B{b}: {v} (⚠ capienza {cap_max})")
+
+        tot_cap = sum(valori)
+        tot_generale = sum(ctx.user_data["cens_conteggi"].values())
+        righe = "\n".join(f"B{b}: {v}" for b, v in zip(boxes, valori))
+        msg = (f"✅ CAP {cap} registrato:\n{righe}\n"
+               f"Totale CAP {cap}: {tot_cap}\nTotale generale finora: {tot_generale}")
+        if avvisi:
+            msg += "\n\n⚠️ Sopra capienza:\n" + "\n".join(avvisi)
+        await update.message.reply_text(msg)
+
+        ctx.user_data["cens_cap_idx"] += 1
+        return await _chiedi_censimento_cap(update.effective_chat.id, ctx)
+
+    async def _chiedi_censimento_conferma(chat_id, ctx):
+        conteggi = ctx.user_data["cens_conteggi"]
+        tot = sum(conteggi.values())
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("✅ Conferma e salva", callback_data="cens_ok"),
+            InlineKeyboardButton("❌ Annulla", callback_data="cens_no"),
+        ]])
+        await ctx.bot.send_message(
+            chat_id=chat_id,
+            text=f"📋 *Censimento completo*\nTotale suini: *{tot}*\n\nConfermi il salvataggio?",
+            parse_mode="Markdown", reply_markup=kb,
+        )
+        return CENSIMENTO_CONFIRM
+
+    async def censimento_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        q = update.callback_query
+        await q.answer()
+
+        if q.data == "cens_no":
+            ctx.user_data.pop("cens_conteggi", None)
+            await q.edit_message_text("Censimento annullato. Usa /start per ricominciare.")
+            return ConversationHandler.END
+
+        conteggi = ctx.user_data.get("cens_conteggi", {})
+        with app.app_context():
+            from app import db
+            from app.models import Ciclo, Censimento, CensimentoBox
+            ciclo = Ciclo.query.filter_by(attivo=True).first()
+            if not ciclo:
+                await q.edit_message_text("⚠️ Nessun ciclo attivo.")
+                return ConversationHandler.END
+            operatore = f"telegram:{update.effective_user.first_name or update.effective_user.id}"
+            cens = Censimento(ciclo_id=ciclo.id, data=date.today(), operatore=operatore)
+            db.session.add(cens)
+            db.session.flush()
+            for b, v in conteggi.items():
+                db.session.add(CensimentoBox(censimento_id=cens.id, box_numero=b, quantita=v))
+            db.session.commit()
+
+        tot = sum(conteggi.values())
+        await q.edit_message_text(f"✅ Censimento salvato: {tot} suini totali.\n\nUsa /start per continuare.")
+        return ConversationHandler.END
+
     async def cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Operazione annullata. Usa /start per ricominciare.")
         return ConversationHandler.END
@@ -440,6 +562,8 @@ def start_bot(app):
                 MessageHandler(filters.TEXT & ~filters.COMMAND, pasto_acqua),
                 CommandHandler("skip", pasto_acqua),
             ],
+            CENSIMENTO_BOX: [MessageHandler(filters.TEXT & ~filters.COMMAND, censimento_box)],
+            CENSIMENTO_CONFIRM: [CallbackQueryHandler(censimento_confirm)],
         },
         fallbacks=[
             CommandHandler("cancel", cancel), CommandHandler("annulla", cancel),

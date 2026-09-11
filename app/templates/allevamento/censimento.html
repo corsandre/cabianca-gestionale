@@ -82,6 +82,11 @@
             </div>
             <form method="post" action="{{ url_for('allevamento.censimento_new') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="cb-censimento-totale-bar d-flex justify-content-between align-items-center px-3 py-2"
+                     style="position:sticky;top:0;z-index:5;background:#fce4ec;border-bottom:2px solid #c2185b">
+                    <span class="fw-semibold" style="color:#c2185b">Totale suini inseriti</span>
+                    <span class="fs-4 fw-bold cb-censimento-totale" style="color:#c2185b">0</span>
+                </div>
                 <div class="modal-body">
                     <div class="row g-3 mb-4">
                         <div class="col-md-4">
@@ -133,7 +138,19 @@
 
 {% block extra_js %}
 <script>
-document.querySelectorAll('.cb-censimento-capi').forEach(function (input) {
+const cbCensimentoInputs = document.querySelectorAll('.cb-censimento-capi');
+const cbCensimentoTotale = document.querySelector('.cb-censimento-totale');
+
+function cbCensimentoAggiornaTotale() {
+    let tot = 0;
+    cbCensimentoInputs.forEach(function (i) {
+        const v = parseInt(i.value, 10);
+        if (!isNaN(v)) tot += v;
+    });
+    cbCensimentoTotale.textContent = tot;
+}
+
+cbCensimentoInputs.forEach(function (input) {
     const capienza = parseInt(input.dataset.capienza, 10);
     const overflow = input.parentElement.querySelector('.cb-censimento-overflow');
     function check() {
@@ -141,6 +158,7 @@ document.querySelectorAll('.cb-censimento-capi').forEach(function (input) {
         input.classList.toggle('bg-warning-subtle', sopra);
         input.classList.toggle('border-warning', sopra);
         overflow.hidden = !sopra;
+        cbCensimentoAggiornaTotale();
     }
     input.addEventListener('input', check);
     check();
