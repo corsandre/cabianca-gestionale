@@ -38,11 +38,11 @@ def start_bot(app):
         MAIN_MENU,
         MORTALITA_CAP, MORTALITA_BOX, MORTALITA_QTY, MORTALITA_CAUSA,
         SPOSTAMENTO_TIPO, SPOSTAMENTO_ORIG, SPOSTAMENTO_DEST, SPOSTAMENTO_QTY,
-        CONSEGNA_TIPO, CONSEGNA_QTY, CONSEGNA_EXTRA,
+        CONSEGNA_TIPO, CONSEGNA_QTY, CONSEGNA_SS, CONSEGNA_EXTRA,
         PASTO_LINEA, PASTO_NUM, PASTO_MANG, PASTO_SIERO, PASTO_ACQUA,
         CENSIMENTO_FIELD, CENSIMENTO_BOX_NEXT, CENSIMENTO_CAP_NEXT, CENSIMENTO_CONFIRM,
         CENSIMENTO_RECAP_PICK,
-    ) = range(22)
+    ) = range(23)
 
     CAPANNONI = [1, 2, 3, 4, 5, 6, 7]
     BOX_PER_CAP = {
@@ -321,9 +321,24 @@ def start_bot(app):
         ctx.user_data["consegna_qty"] = qty
         tipo = ctx.user_data.get("consegna_tipo", "siero")
         if tipo == "siero":
-            await update.message.reply_text("Lotto / speditore (opzionale, scrivi /skip per saltare):")
+            await update.message.reply_text(
+                "% sostanza secca misurata col rifrattometro Brix (opzionale, scrivi /skip per saltare):"
+            )
+            return CONSEGNA_SS
+        await update.message.reply_text("Tipo mangime / n° bolla (opzionale, scrivi /skip per saltare):")
+        return CONSEGNA_EXTRA
+
+    async def consegna_ss(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        testo = update.message.text.strip()
+        if testo.startswith("/skip"):
+            ctx.user_data["consegna_ss"] = None
         else:
-            await update.message.reply_text("Tipo mangime / n° bolla (opzionale, scrivi /skip per saltare):")
+            try:
+                ctx.user_data["consegna_ss"] = float(testo.replace(",", "."))
+            except ValueError:
+                await update.message.reply_text("⚠️ Inserisci un numero valido (es: 22.5) oppure /skip.")
+                return CONSEGNA_SS
+        await update.message.reply_text("Lotto / speditore (opzionale, scrivi /skip per saltare):")
         return CONSEGNA_EXTRA
 
     async def consegna_extra(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -343,6 +358,7 @@ def start_bot(app):
                 db.session.add(ConsegnaSiero(
                     ciclo_id=ciclo.id, data=date.today(),
                     quantita_qli=qty, speditore=extra,
+                    perc_sostanza_secca=ctx.user_data.get("consegna_ss"),
                 ))
             else:
                 db.session.add(ConsegnaMangime(
@@ -752,6 +768,10 @@ def start_bot(app):
             SPOSTAMENTO_DEST: [CallbackQueryHandler(spostamento_dest)],
             SPOSTAMENTO_QTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, spostamento_qty)],
             CONSEGNA_QTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, consegna_qty)],
+            CONSEGNA_SS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, consegna_ss),
+                CommandHandler("skip", consegna_ss),
+            ],
             CONSEGNA_EXTRA: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, consegna_extra),
                 CommandHandler("skip", consegna_extra),
