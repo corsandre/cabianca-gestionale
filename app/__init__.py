@@ -120,10 +120,11 @@ def create_app():
 
     @app.errorhandler(400)
     def handle_400(e):
-        import sys
+        import sys, traceback
         ct = request.content_type or 'none'
         cl = request.content_length or 0
         print(f"[400] {e} | URL={request.url} | method={request.method} | content-type={ct} | content-length={cl}", file=sys.stderr, flush=True)
+        print(traceback.format_exc(), file=sys.stderr, flush=True)
         return ("<h2>Richiesta non valida</h2>"
                 "<p>Controlla i dati inseriti e riprova. "
                 "<a href='javascript:history.back()'>Torna indietro</a></p>"), 400
