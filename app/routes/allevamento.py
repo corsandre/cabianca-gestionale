@@ -555,9 +555,20 @@ def alimentazione():
         totali[linea]["siero"] += p.siero_qli or 0
         totali[linea]["acqua"] += p.acqua_litri or 0
 
+    # % sostituzione s.s.: valore di oggi se già inserito, altrimenti l'ultimo storico
+    perc_siero_default = None
+    if pasti:
+        perc_siero_default = next((p.perc_siero for p in pasti.values() if p.perc_siero is not None), None)
+    if perc_siero_default is None and ciclo:
+        ultimo = UsoPasto.query.filter(
+            UsoPasto.ciclo_id == ciclo.id, UsoPasto.perc_siero.isnot(None)
+        ).order_by(UsoPasto.data.desc(), UsoPasto.id.desc()).first()
+        if ultimo:
+            perc_siero_default = ultimo.perc_siero
+
     return render_template("allevamento/alimentazione.html",
                            ciclo=ciclo, data_sel=data_sel, pasti=pasti,
-                           totali=totali)
+                           totali=totali, perc_siero_default=perc_siero_default)
 
 
 @bp.route("/alimentazione/new", methods=["POST"])
@@ -574,7 +585,8 @@ def alimentazione_new():
         data_str = request.form.get("data", str(date.today()))
         data_pasto = date.fromisoformat(data_str)
         tipo_mangime = request.form.get("tipo_mangime", "").strip() or None
-        perc_siero = float(request.form.get("perc_siero", "") or 0) or None
+        perc_siero_str = request.form.get("perc_siero", "").strip()
+        perc_siero = float(perc_siero_str) if perc_siero_str else None
 
         for linea in [1, 2, 3]:
             for pasto in [1, 2, 3]:

@@ -96,9 +96,10 @@
                        value="{{ pasti.values() | list | first | attr('tipo_mangime') if pasti else '' }}">
             </div>
             <div class="col-md-4">
-                <label class="form-label">% sostituzione s.s. da siero (ricetta)</label>
-                <input type="number" name="perc_siero" class="form-control" step="0.1" min="0" max="100"
-                       value="{{ pasti.values() | list | first | attr('perc_siero') if pasti else '' }}">
+                <label class="form-label">% sostituzione s.s. da siero (ricetta) <span class="text-danger">*</span></label>
+                <input type="number" name="perc_siero" class="form-control" step="0.1" min="0" max="100" required
+                       value="{{ perc_siero_default if perc_siero_default is not none else '' }}">
+                <small class="text-muted">Precompilato con l'ultimo valore inserito, modificabile.</small>
             </div>
         </div>
     </div>
