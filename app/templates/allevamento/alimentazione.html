@@ -73,7 +73,9 @@
                                value="{{ p.acqua_qli if p and p.acqua_qli is not none else '' }}">
                     </td>
                     <td class="text-muted text-center small">
-                        {{ (p.perc_siero ~ '%') if p and p.perc_siero is not none else '–' }}
+                        {% if p and p.perc_siero is not none %}
+                        {{ p.perc_siero }}%{% if p.perc_ss_siero_rif is not none %} <span class="text-muted">({{ p.perc_ss_siero_rif }}%)</span>{% endif %}
+                        {% else %}–{% endif %}
                     </td>
                     {% endfor %}
                     <td class="fw-bold text-center border-start border-2" style="border-left:2px solid #dee2e6">{{ totale_per_pasto[pasto].mangime | round(2) }}</td>

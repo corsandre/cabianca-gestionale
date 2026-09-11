@@ -1,9 +1,38 @@
+import os
+import uuid
 from datetime import date, timedelta
-from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, jsonify, current_app
 from flask_login import login_required, current_user
 from app import db
 
 bp = Blueprint("allevamento", __name__, url_prefix="/allevamento")
+
+BOLLA_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "webp"}
+
+
+def _salva_bolla(file_storage):
+    """Salva la foto/PDF di una bolla in UPLOAD_FOLDER/allevamento_consegne e
+    ritorna il path relativo da salvare nel DB, o None se non valida."""
+    if not file_storage or not file_storage.filename:
+        return None
+    ext = file_storage.filename.rsplit(".", 1)[-1].lower() if "." in file_storage.filename else ""
+    if ext not in BOLLA_EXTENSIONS:
+        return None
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    upload_dir = os.path.join(current_app.config["UPLOAD_FOLDER"], "allevamento_consegne")
+    os.makedirs(upload_dir, exist_ok=True)
+    file_storage.save(os.path.join(upload_dir, filename))
+    return f"allevamento_consegne/{filename}"
+
+
+def _elimina_bolla(bolla_path):
+    if not bolla_path:
+        return
+    filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], bolla_path)
+    try:
+        os.remove(filepath)
+    except OSError:
+        pass
 
 # Struttura fisica fissa
 CAP_PER_BOX = {
@@ -471,6 +500,7 @@ def consegne_siero_new():
             speditore=request.form.get("speditore", "").strip() or None,
             trasportatore=request.form.get("trasportatore", "").strip() or None,
             note=request.form.get("note", "").strip() or None,
+            bolla_path=_salva_bolla(request.files.get("bolla")),
         )
         db.session.add(c)
         db.session.commit()
@@ -488,6 +518,7 @@ def consegne_siero_delete(cid):
     from app.models import ConsegnaSiero
     c = db.session.get(ConsegnaSiero, cid)
     if c:
+        _elimina_bolla(c.bolla_path)
         db.session.delete(c)
         db.session.commit()
         flash("Consegna siero eliminata.", "success")
@@ -516,6 +547,7 @@ def consegne_mangime_new():
             numero_bolla=request.form.get("numero_bolla", "").strip() or None,
             fornitore=request.form.get("fornitore", "").strip() or None,
             note=request.form.get("note", "").strip() or None,
+            bolla_path=_salva_bolla(request.files.get("bolla")),
         )
         db.session.add(c)
         db.session.commit()
@@ -533,6 +565,7 @@ def consegne_mangime_delete(cid):
     from app.models import ConsegnaMangime
     c = db.session.get(ConsegnaMangime, cid)
     if c:
+        _elimina_bolla(c.bolla_path)
         db.session.delete(c)
         db.session.commit()
         flash("Consegna mangime eliminata.", "success")

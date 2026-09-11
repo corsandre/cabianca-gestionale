@@ -5,6 +5,7 @@ Richiede TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID nel .env.
 """
 import logging
 import os
+import uuid
 from datetime import date
 
 logger = logging.getLogger(__name__)
@@ -38,11 +39,11 @@ def start_bot(app):
         MAIN_MENU,
         MORTALITA_CAP, MORTALITA_BOX, MORTALITA_QTY, MORTALITA_CAUSA,
         SPOSTAMENTO_TIPO, SPOSTAMENTO_ORIG, SPOSTAMENTO_DEST, SPOSTAMENTO_QTY,
-        CONSEGNA_TIPO, CONSEGNA_QTY, CONSEGNA_SS, CONSEGNA_EXTRA,
+        CONSEGNA_TIPO, CONSEGNA_QTY, CONSEGNA_SS, CONSEGNA_EXTRA, CONSEGNA_BOLLA,
         PASTO_LINEA, PASTO_NUM, PASTO_MANG, PASTO_SIERO, PASTO_ACQUA,
         CENSIMENTO_FIELD, CENSIMENTO_BOX_NEXT, CENSIMENTO_CAP_NEXT, CENSIMENTO_CONFIRM,
         CENSIMENTO_RECAP_PICK,
-    ) = range(23)
+    ) = range(24)
 
     CAPANNONI = [1, 2, 3, 4, 5, 6, 7]
     BOX_PER_CAP = {
@@ -344,6 +345,25 @@ def start_bot(app):
     async def consegna_extra(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         testo = update.message.text.strip()
         extra = None if testo.startswith("/skip") else testo
+        ctx.user_data["consegna_extra"] = extra
+        await update.message.reply_text("📷 Foto della bolla (opzionale): invia la foto oppure /skip per saltare:")
+        return CONSEGNA_BOLLA
+
+    async def consegna_bolla(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        bolla_path = None
+        if update.message.photo:
+            foto = update.message.photo[-1]
+            file = await foto.get_file()
+            filename = f"{uuid.uuid4().hex}.jpg"
+            upload_dir = os.path.join(app.config["UPLOAD_FOLDER"], "allevamento_consegne")
+            os.makedirs(upload_dir, exist_ok=True)
+            await file.download_to_drive(os.path.join(upload_dir, filename))
+            bolla_path = f"allevamento_consegne/{filename}"
+        elif not (update.message.text or "").strip().startswith("/skip"):
+            await update.message.reply_text("⚠️ Invia una foto della bolla oppure /skip per saltare.")
+            return CONSEGNA_BOLLA
+
+        extra = ctx.user_data.get("consegna_extra")
         tipo = ctx.user_data.get("consegna_tipo", "siero")
         qty = ctx.user_data.get("consegna_qty", 0)
 
@@ -359,16 +379,21 @@ def start_bot(app):
                     ciclo_id=ciclo.id, data=date.today(),
                     quantita_qli=qty, speditore=extra,
                     perc_sostanza_secca=ctx.user_data.get("consegna_ss"),
+                    bolla_path=bolla_path,
                 ))
             else:
                 db.session.add(ConsegnaMangime(
                     ciclo_id=ciclo.id, data=date.today(),
                     quantita_qli=qty, tipo_mangime=extra,
+                    bolla_path=bolla_path,
                 ))
             db.session.commit()
 
         emoji = "🚚" if tipo == "siero" else "🌾"
-        await update.message.reply_text(f"{emoji} {qty} qli {tipo} registrati.\n\nUsa /start per continuare.")
+        foto_txt = " (con foto bolla)" if bolla_path else ""
+        await update.message.reply_text(
+            f"{emoji} {qty} qli {tipo} registrati{foto_txt}.\n\nUsa /start per continuare."
+        )
         return ConversationHandler.END
 
     # ── Registra consumo ─────────────────────────────────────────────────
@@ -778,6 +803,11 @@ def start_bot(app):
             CONSEGNA_EXTRA: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, consegna_extra),
                 CommandHandler("skip", consegna_extra),
+            ],
+            CONSEGNA_BOLLA: [
+                MessageHandler(filters.PHOTO, consegna_bolla),
+                CommandHandler("skip", consegna_bolla),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, consegna_bolla),
             ],
             PASTO_LINEA: [CallbackQueryHandler(pasto_linea)],
             PASTO_NUM: [CallbackQueryHandler(pasto_num)],

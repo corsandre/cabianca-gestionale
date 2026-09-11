@@ -61,12 +61,14 @@ def registra_pasto(ciclo_id, data, pasto, linea, mangime_qli=None, siero_qli=Non
         riga.acqua_qli = acqua_qli
         riga.tipo_mangime = tipo_mangime
         riga.perc_siero = perc_siero
+        riga.perc_ss_siero_rif = perc_ss_siero
         riga.stimato = False
     else:
         riga = UsoPasto(
             ciclo_id=ciclo_id, data=data, pasto=pasto, linea=linea,
             mangime_qli=mangime_qli, siero_qli=siero_qli, acqua_qli=acqua_qli,
-            tipo_mangime=tipo_mangime, perc_siero=perc_siero, stimato=False,
+            tipo_mangime=tipo_mangime, perc_siero=perc_siero, perc_ss_siero_rif=perc_ss_siero,
+            stimato=False,
         )
         db.session.add(riga)
 
@@ -95,4 +97,5 @@ def _rifornisci_stime(ciclo_id, data, linea, pasto_inserito, riferimento):
         altro.acqua_qli = riferimento.acqua_qli
         altro.tipo_mangime = riferimento.tipo_mangime
         altro.perc_siero = riferimento.perc_siero
+        altro.perc_ss_siero_rif = riferimento.perc_ss_siero_rif
         altro.stimato = True

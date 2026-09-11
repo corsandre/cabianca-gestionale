@@ -37,7 +37,7 @@
     {% if siero_list %}
     <table class="table table-sm mb-0">
         <thead class="table-light">
-            <tr><th>Data</th><th>Ora</th><th>Qli</th><th>% s.s. (Brix)</th><th>Lotto</th><th>Speditore</th><th>Trasportatore</th><th>Note</th>
+            <tr><th>Data</th><th>Ora</th><th>Qli</th><th>% s.s. (Brix)</th><th>Lotto</th><th>Speditore</th><th>Trasportatore</th><th>Note</th><th>Bolla</th>
             {% if current_user.role == 'admin' %}<th></th>{% endif %}</tr>
         </thead>
         <tbody>
@@ -51,6 +51,13 @@
                 <td>{{ c.speditore or '–' }}</td>
                 <td>{{ c.trasportatore or '–' }}</td>
                 <td class="text-muted">{{ c.note or '' }}</td>
+                <td>
+                    {% if c.bolla_path %}
+                    <a href="{{ url_for('static', filename='uploads/' + c.bolla_path) }}" target="_blank" download title="Scarica bolla">
+                        <i class="bi bi-file-earmark-image"></i>
+                    </a>
+                    {% else %}–{% endif %}
+                </td>
                 {% if current_user.role == 'admin' %}
                 <td>
                     <form method="post" action="{{ url_for('allevamento.consegne_siero_delete', cid=c.id) }}" onsubmit="return confirm('Elimina?')">
@@ -63,7 +70,7 @@
             {% endfor %}
         </tbody>
         <tfoot class="table-light fw-bold">
-            <tr><td colspan="2">Totale</td><td style="color:#c2185b">{{ tot_siero }}</td><td colspan="6"></td></tr>
+            <tr><td colspan="2">Totale</td><td style="color:#c2185b">{{ tot_siero }}</td><td colspan="7"></td></tr>
         </tfoot>
     </table>
     {% else %}<p class="text-muted p-3 mb-0">Nessuna consegna siero registrata.</p>{% endif %}
@@ -73,7 +80,7 @@
     {% if mangime_list %}
     <table class="table table-sm mb-0">
         <thead class="table-light">
-            <tr><th>Data</th><th>Ora</th><th>Qli</th><th>Tipo</th><th>Bolla</th><th>Fornitore</th><th>Note</th>
+            <tr><th>Data</th><th>Ora</th><th>Qli</th><th>Tipo</th><th>N° Bolla</th><th>Fornitore</th><th>Note</th><th>Foto bolla</th>
             {% if current_user.role == 'admin' %}<th></th>{% endif %}</tr>
         </thead>
         <tbody>
@@ -86,6 +93,13 @@
                 <td>{{ c.numero_bolla or '–' }}</td>
                 <td>{{ c.fornitore or '–' }}</td>
                 <td class="text-muted">{{ c.note or '' }}</td>
+                <td>
+                    {% if c.bolla_path %}
+                    <a href="{{ url_for('static', filename='uploads/' + c.bolla_path) }}" target="_blank" download title="Scarica bolla">
+                        <i class="bi bi-file-earmark-image"></i>
+                    </a>
+                    {% else %}–{% endif %}
+                </td>
                 {% if current_user.role == 'admin' %}
                 <td>
                     <form method="post" action="{{ url_for('allevamento.consegne_mangime_delete', cid=c.id) }}" onsubmit="return confirm('Elimina?')">
@@ -98,7 +112,7 @@
             {% endfor %}
         </tbody>
         <tfoot class="table-light fw-bold">
-            <tr><td colspan="2">Totale</td><td style="color:#c2185b">{{ tot_mangime }}</td><td colspan="5"></td></tr>
+            <tr><td colspan="2">Totale</td><td style="color:#c2185b">{{ tot_mangime }}</td><td colspan="6"></td></tr>
         </tfoot>
     </table>
     {% else %}<p class="text-muted p-3 mb-0">Nessuna consegna mangime registrata.</p>{% endif %}
@@ -114,7 +128,7 @@
                 <h5 class="modal-title"><i class="bi bi-droplet me-2"></i>Nuova consegna siero</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="post" action="{{ url_for('allevamento.consegne_siero_new') }}">
+            <form method="post" action="{{ url_for('allevamento.consegne_siero_new') }}" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
                     <div class="row g-2 mb-3">
@@ -151,9 +165,14 @@
                         <label class="form-label">Trasportatore</label>
                         <input type="text" name="trasportatore" class="form-control">
                     </div>
-                    <div class="mb-2">
+                    <div class="mb-3">
                         <label class="form-label">Note</label>
                         <textarea name="note" class="form-control" rows="2"></textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Foto bolla</label>
+                        <input type="file" name="bolla" class="form-control" accept="image/*,.pdf" capture="environment">
+                        <small class="text-muted">Su cellulare puoi scattare la foto direttamente, oppure scegliere dalla galleria.</small>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -173,7 +192,7 @@
                 <h5 class="modal-title"><i class="bi bi-bag me-2"></i>Nuova consegna mangime</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="post" action="{{ url_for('allevamento.consegne_mangime_new') }}">
+            <form method="post" action="{{ url_for('allevamento.consegne_mangime_new') }}" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
                     <div class="row g-2 mb-3">
@@ -204,9 +223,14 @@
                         <label class="form-label">Fornitore</label>
                         <input type="text" name="fornitore" class="form-control">
                     </div>
-                    <div class="mb-2">
+                    <div class="mb-3">
                         <label class="form-label">Note</label>
                         <textarea name="note" class="form-control" rows="2"></textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Foto bolla</label>
+                        <input type="file" name="bolla" class="form-control" accept="image/*,.pdf" capture="environment">
+                        <small class="text-muted">Su cellulare puoi scattare la foto direttamente, oppure scegliere dalla galleria.</small>
                     </div>
                 </div>
                 <div class="modal-footer">

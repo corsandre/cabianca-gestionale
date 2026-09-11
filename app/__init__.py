@@ -243,6 +243,9 @@ def _init_db(app):
         ("censimento_box", "peso_stimato_kg", "REAL"),
         ("uso_pasti", "stimato", "BOOLEAN DEFAULT 0"),
         ("consegne_siero", "perc_sostanza_secca", "REAL"),
+        ("uso_pasti", "perc_ss_siero_rif", "REAL"),
+        ("consegne_siero", "bolla_path", "VARCHAR(300)"),
+        ("consegne_mangime", "bolla_path", "VARCHAR(300)"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

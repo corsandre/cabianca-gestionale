@@ -440,6 +440,7 @@ class ConsegnaSiero(db.Model):
     speditore = db.Column(db.String(200))
     trasportatore = db.Column(db.String(200))
     note = db.Column(db.Text)
+    bolla_path = db.Column(db.String(300))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     ciclo = db.relationship("Ciclo", backref="consegne_siero")
 
@@ -455,6 +456,7 @@ class ConsegnaMangime(db.Model):
     numero_bolla = db.Column(db.String(50))
     fornitore = db.Column(db.String(200))
     note = db.Column(db.Text)
+    bolla_path = db.Column(db.String(300))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     ciclo = db.relationship("Ciclo", backref="consegne_mangime")
 
@@ -471,6 +473,7 @@ class UsoPasto(db.Model):
     acqua_qli = db.Column(db.Float)
     tipo_mangime = db.Column(db.String(100))
     perc_siero = db.Column(db.Float)  # % sostituzione sostanza secca da siero nella ricetta
+    perc_ss_siero_rif = db.Column(db.Float)  # % s.s. del carico di siero usato per calcolare perc_siero
     stimato = db.Column(db.Boolean, default=False)  # True se copiato dal pasto mattutino, non inserito manualmente
     note = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
