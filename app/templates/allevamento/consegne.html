@@ -171,7 +171,7 @@
                     </div>
                     <div class="mb-2">
                         <label class="form-label">Foto bolla</label>
-                        <input type="file" name="bolla" class="form-control" accept="image/*,.pdf" capture="environment">
+                        <input type="file" name="bolla" class="form-control cb-bolla-input" accept="image/*,.pdf" capture="environment">
                         <small class="text-muted">Su cellulare puoi scattare la foto direttamente, oppure scegliere dalla galleria.</small>
                     </div>
                 </div>
@@ -229,7 +229,7 @@
                     </div>
                     <div class="mb-2">
                         <label class="form-label">Foto bolla</label>
-                        <input type="file" name="bolla" class="form-control" accept="image/*,.pdf" capture="environment">
+                        <input type="file" name="bolla" class="form-control cb-bolla-input" accept="image/*,.pdf" capture="environment">
                         <small class="text-muted">Su cellulare puoi scattare la foto direttamente, oppure scegliere dalla galleria.</small>
                     </div>
                 </div>
@@ -241,4 +241,56 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function cbComprimiImmagine(file, maxDim, qualita) {
+    return new Promise(function (resolve) {
+        if (!file.type.startsWith('image/')) {
+            resolve(file); // PDF o altro: non tocco
+            return;
+        }
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = function () {
+            URL.revokeObjectURL(url);
+            let w = img.width, h = img.height;
+            if (w > maxDim || h > maxDim) {
+                if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+                else { w = Math.round(w * maxDim / h); h = maxDim; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            canvas.toBlob(function (blob) {
+                if (!blob || blob.size >= file.size) {
+                    resolve(file); // compressione non conveniente: tieni l'originale
+                    return;
+                }
+                resolve(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }));
+            }, 'image/jpeg', qualita);
+        };
+        img.onerror = function () {
+            URL.revokeObjectURL(url);
+            resolve(file);
+        };
+        img.src = url;
+    });
+}
+
+document.querySelectorAll('.cb-bolla-input').forEach(function (input) {
+    input.addEventListener('change', async function () {
+        if (!input.files || !input.files[0]) return;
+        const originale = input.files[0];
+        const compressa = await cbComprimiImmagine(originale, 1600, 0.75);
+        if (compressa !== originale) {
+            const dt = new DataTransfer();
+            dt.items.add(compressa);
+            input.files = dt.files;
+        }
+    });
+});
+</script>
 {% endblock %}
