@@ -105,11 +105,12 @@ def _live_count(ciclo):
 @login_required
 def index():
     _check_allevamento()
-    from app.models import EventoMortalita, ConsegnaSiero, ConsegnaMangime, Censimento
+    from app.models import EventoMortalita, ConsegnaSiero, ConsegnaMangime, Censimento, UsoPasto
     ciclo = _get_ciclo_attivo()
     if not ciclo:
         return render_template("allevamento/index.html", ciclo=None,
                                cap_data={}, kpi={}, consegne_siero=[], consegne_mangime=[],
+                               totali_alimentazione_ciclo={"mangime": 0, "siero": 0, "acqua": 0},
                                CAP_PER_BOX=CAP_PER_BOX, BOX_PER_CAP=BOX_PER_CAP,
                                POSTI_PER_CAP=POSTI_PER_CAP, CAPANNONI=CAPANNONI)
 
@@ -129,6 +130,15 @@ def index():
     ultimo_censimento = Censimento.query.filter_by(ciclo_id=ciclo.id).order_by(
         Censimento.data.desc()
     ).first()
+
+    totali_alimentazione_ciclo = {
+        "mangime": db.session.query(db.func.sum(UsoPasto.mangime_qli)).filter(
+            UsoPasto.ciclo_id == ciclo.id).scalar() or 0,
+        "siero": db.session.query(db.func.sum(UsoPasto.siero_qli)).filter(
+            UsoPasto.ciclo_id == ciclo.id).scalar() or 0,
+        "acqua": db.session.query(db.func.sum(UsoPasto.acqua_qli)).filter(
+            UsoPasto.ciclo_id == ciclo.id).scalar() or 0,
+    }
 
     cap_data = {}
     for cap in CAPANNONI:
@@ -155,6 +165,7 @@ def index():
     return render_template("allevamento/index.html",
                            ciclo=ciclo, cap_data=cap_data, kpi=kpi,
                            consegne_siero=consegne_siero, consegne_mangime=consegne_mangime,
+                           totali_alimentazione_ciclo=totali_alimentazione_ciclo,
                            CAP_PER_BOX=CAP_PER_BOX, BOX_PER_CAP=BOX_PER_CAP,
                            POSTI_PER_CAP=POSTI_PER_CAP, CAPANNONI=CAPANNONI)
 
@@ -555,6 +566,19 @@ def alimentazione():
         totali[linea]["siero"] += p.siero_qli or 0
         totali[linea]["acqua"] += p.acqua_qli or 0
 
+    # Totali per pasto (somma delle 3 linee) e totale giornaliero complessivo
+    totale_per_pasto = {pasto: {"mangime": 0, "siero": 0, "acqua": 0} for pasto in [1, 2, 3]}
+    for (pasto, linea), p in pasti.items():
+        totale_per_pasto[pasto]["mangime"] += p.mangime_qli or 0
+        totale_per_pasto[pasto]["siero"] += p.siero_qli or 0
+        totale_per_pasto[pasto]["acqua"] += p.acqua_qli or 0
+
+    totale_giorno = {"mangime": 0, "siero": 0, "acqua": 0}
+    for t in totali.values():
+        totale_giorno["mangime"] += t["mangime"]
+        totale_giorno["siero"] += t["siero"]
+        totale_giorno["acqua"] += t["acqua"]
+
     # Tipo mangime e % sostanza secca siero: dall'ultima consegna, informativi
     tipo_mangime_attuale = None
     perc_ss_siero_attuale = None
@@ -574,7 +598,8 @@ def alimentazione():
                            ciclo=ciclo, data_sel=data_sel, pasti=pasti,
                            totali=totali, tipo_mangime_attuale=tipo_mangime_attuale,
                            perc_ss_siero_attuale=perc_ss_siero_attuale,
-                           perc_sostituzione=perc_sostituzione)
+                           perc_sostituzione=perc_sostituzione,
+                           totale_per_pasto=totale_per_pasto, totale_giorno=totale_giorno)
 
 
 @bp.route("/alimentazione/new", methods=["POST"])
