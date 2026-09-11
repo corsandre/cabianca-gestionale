@@ -553,7 +553,7 @@ def alimentazione():
     for (pasto, linea), p in pasti.items():
         totali[linea]["mangime"] += p.mangime_qli or 0
         totali[linea]["siero"] += p.siero_qli or 0
-        totali[linea]["acqua"] += p.acqua_litri or 0
+        totali[linea]["acqua"] += p.acqua_qli or 0
 
     # Tipo mangime e % sostanza secca siero: dall'ultima consegna, informativi
     tipo_mangime_attuale = None
@@ -604,7 +604,7 @@ def alimentazione_new():
                     ciclo_id=ciclo.id, data=data_pasto, pasto=pasto, linea=linea,
                     mangime_qli=float(mang) if mang else None,
                     siero_qli=float(siero) if siero else None,
-                    acqua_litri=float(acqua) if acqua else None,
+                    acqua_qli=float(acqua) if acqua else None,
                 )
 
         db.session.commit()

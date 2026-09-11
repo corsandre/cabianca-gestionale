@@ -202,6 +202,19 @@ def _pre_migrate_rename(sqlalchemy):
     except Exception:
         db.session.rollback()
 
+    try:
+        r = db.session.execute(sqlalchemy.text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='uso_pasti'"
+        ))
+        if r.fetchone():
+            db.session.execute(sqlalchemy.text(
+                "ALTER TABLE uso_pasti RENAME COLUMN acqua_litri TO acqua_qli"))
+            db.session.execute(sqlalchemy.text(
+                "UPDATE uso_pasti SET acqua_qli = acqua_qli / 100.0 WHERE acqua_qli IS NOT NULL"))
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+
 
 def _init_db(app):
     import sqlalchemy

@@ -32,16 +32,17 @@
             <thead class="table-light">
                 <tr>
                     <th>Pasto</th>
-                    <th colspan="3" class="text-center" style="border-left:2px solid #dee2e6">Linea 1 (CAP 1-2-3)</th>
-                    <th colspan="3" class="text-center" style="border-left:2px solid #dee2e6">Linea 2 (CAP 4)</th>
-                    <th colspan="3" class="text-center" style="border-left:2px solid #dee2e6">Linea 3 (CAP 5-6-7)</th>
+                    <th colspan="4" class="text-center" style="border-left:2px solid #dee2e6">Linea 1 (CAP 1-2-3)</th>
+                    <th colspan="4" class="text-center" style="border-left:2px solid #dee2e6">Linea 2 (CAP 4)</th>
+                    <th colspan="4" class="text-center" style="border-left:2px solid #dee2e6">Linea 3 (CAP 5-6-7)</th>
                 </tr>
                 <tr>
                     <th></th>
                     {% for linea in [1,2,3] %}
                     <th class="text-center {{ 'border-start border-2' if loop.first else '' }}" style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">Mang.(qli)</th>
                     <th class="text-center">Siero(qli)</th>
-                    <th class="text-center">Acqua(l)</th>
+                    <th class="text-center">Acqua(qli)</th>
+                    <th class="text-center">% sost.</th>
                     {% endfor %}
                 </tr>
             </thead>
@@ -64,8 +65,11 @@
                     </td>
                     <td>
                         <input type="number" name="acqua_{{ pasto }}_{{ linea }}" class="form-control form-control-sm {{ 'bg-warning-subtle' if stimato }}"
-                               style="min-width:70px" step="1" min="0" title="{{ 'Valore stimato (copiato dalla mattina)' if stimato else '' }}"
-                               value="{{ p.acqua_litri if p and p.acqua_litri is not none else '' }}">
+                               style="min-width:70px" step="0.01" min="0" title="{{ 'Valore stimato (copiato dalla mattina)' if stimato else '' }}"
+                               value="{{ p.acqua_qli if p and p.acqua_qli is not none else '' }}">
+                    </td>
+                    <td class="text-muted text-center small">
+                        {{ (p.perc_siero ~ '%') if p and p.perc_siero is not none else '–' }}
                     </td>
                     {% endfor %}
                 </tr>
@@ -76,15 +80,8 @@
                     {% for linea in [1,2,3] %}
                     <td class="{{ 'border-start border-2' if loop.first else '' }}" style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">{{ totali[linea].mangime | round(1) }}</td>
                     <td>{{ totali[linea].siero | round(1) }}</td>
-                    <td>{{ totali[linea].acqua | round(0) | int }}</td>
-                    {% endfor %}
-                </tr>
-                <tr class="small text-muted">
-                    <td>% sostituzione s.s.</td>
-                    {% for linea in [1,2,3] %}
-                    <td colspan="3" class="{{ 'border-start border-2' if loop.first else '' }}" style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">
-                        {{ perc_sostituzione[linea] ~ '%' if perc_sostituzione[linea] is not none else '–' }}
-                    </td>
+                    <td>{{ totali[linea].acqua | round(2) }}</td>
+                    <td class="small">{{ (perc_sostituzione[linea] ~ '%') if perc_sostituzione[linea] is not none else '–' }}</td>
                     {% endfor %}
                 </tr>
             </tbody>

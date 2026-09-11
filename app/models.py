@@ -468,7 +468,7 @@ class UsoPasto(db.Model):
     linea = db.Column(db.Integer, nullable=False)
     mangime_qli = db.Column(db.Float)
     siero_qli = db.Column(db.Float)
-    acqua_litri = db.Column(db.Float)
+    acqua_qli = db.Column(db.Float)
     tipo_mangime = db.Column(db.String(100))
     perc_siero = db.Column(db.Float)  # % sostituzione sostanza secca da siero nella ricetta
     stimato = db.Column(db.Boolean, default=False)  # True se copiato dal pasto mattutino, non inserito manualmente

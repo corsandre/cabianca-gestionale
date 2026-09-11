@@ -412,7 +412,7 @@ def start_bot(app):
             await update.message.reply_text("⚠️ Inserisci un numero valido oppure /skip.")
             return PASTO_SIERO
         ctx.user_data["pasto_siero"] = val
-        await update.message.reply_text("💧 Acqua (litri)? Scrivi il numero oppure /skip:")
+        await update.message.reply_text("💧 Acqua (qli)? Scrivi il numero oppure /skip:")
         return PASTO_ACQUA
 
     async def pasto_acqua(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -436,7 +436,7 @@ def start_bot(app):
                 return ConversationHandler.END
             riga = registra_pasto(
                 ciclo_id=ciclo.id, data=date.today(), pasto=pasto, linea=linea,
-                mangime_qli=mang, siero_qli=siero, acqua_litri=val,
+                mangime_qli=mang, siero_qli=siero, acqua_qli=val,
             )
             perc_siero = riga.perc_siero
             db.session.commit()
@@ -446,7 +446,7 @@ def start_bot(app):
             f"✅ Pasto {pasto} — Linea {linea} registrato.\n"
             f"Mangime: {mang if mang is not None else '-'} qli, "
             f"Siero: {siero if siero is not None else '-'} qli, "
-            f"Acqua: {val if val is not None else '-'} l\n"
+            f"Acqua: {val if val is not None else '-'} qli\n"
             f"% sostituzione s.s. (calcolata): {ss_txt}\n\nUsa /start per continuare.",
             reply_markup=kb_main(),
         )
