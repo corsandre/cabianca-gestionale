@@ -56,7 +56,12 @@
                     <a href="{{ url_for('static', filename='uploads/' + c.bolla_path) }}" target="_blank" download title="Scarica bolla">
                         <i class="bi bi-file-earmark-image"></i>
                     </a>
-                    {% else %}–{% endif %}
+                    {% else %}
+                    <label class="btn btn-sm btn-outline-secondary py-0 px-1 mb-0" title="Aggiungi foto bolla">
+                        <i class="bi bi-camera"></i>
+                        <input type="file" class="cb-bolla-input-later d-none" data-tipo="siero" data-id="{{ c.id }}" accept="image/*,.pdf" capture="environment">
+                    </label>
+                    {% endif %}
                 </td>
                 {% if current_user.role == 'admin' %}
                 <td>
@@ -98,7 +103,12 @@
                     <a href="{{ url_for('static', filename='uploads/' + c.bolla_path) }}" target="_blank" download title="Scarica bolla">
                         <i class="bi bi-file-earmark-image"></i>
                     </a>
-                    {% else %}–{% endif %}
+                    {% else %}
+                    <label class="btn btn-sm btn-outline-secondary py-0 px-1 mb-0" title="Aggiungi foto bolla">
+                        <i class="bi bi-camera"></i>
+                        <input type="file" class="cb-bolla-input-later d-none" data-tipo="mangime" data-id="{{ c.id }}" accept="image/*,.pdf" capture="environment">
+                    </label>
+                    {% endif %}
                 </td>
                 {% if current_user.role == 'admin' %}
                 <td>
@@ -128,7 +138,7 @@
                 <h5 class="modal-title"><i class="bi bi-droplet me-2"></i>Nuova consegna siero</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="post" action="{{ url_for('allevamento.consegne_siero_new') }}" enctype="multipart/form-data" class="cb-form-consegna">
+            <form method="post" action="{{ url_for('allevamento.consegne_siero_new') }}" enctype="multipart/form-data" class="cb-form-consegna" data-tipo="siero">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
                     <div class="row g-2 mb-3">
@@ -192,7 +202,7 @@
                 <h5 class="modal-title"><i class="bi bi-bag me-2"></i>Nuova consegna mangime</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="post" action="{{ url_for('allevamento.consegne_mangime_new') }}" enctype="multipart/form-data" class="cb-form-consegna">
+            <form method="post" action="{{ url_for('allevamento.consegne_mangime_new') }}" enctype="multipart/form-data" class="cb-form-consegna" data-tipo="mangime">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
                     <div class="row g-2 mb-3">
@@ -293,42 +303,80 @@ document.querySelectorAll('.cb-bolla-input').forEach(function (input) {
     });
 });
 
+async function cbFetchConRetry(url, body, tentativiMax, onTentativo) {
+    for (let tentativo = 1; tentativo <= tentativiMax; tentativo++) {
+        if (onTentativo) onTentativo(tentativo, tentativiMax);
+        try {
+            const resp = await fetch(url, {
+                method: 'POST',
+                body: body,
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'fetch' },
+            });
+            let json = null;
+            try { json = await resp.json(); } catch (e) {}
+            if (resp.ok && json) return json;
+            throw new Error((json && json.error) || 'risposta non valida dal server');
+        } catch (err) {
+            if (tentativo === tentativiMax) throw err;
+            await new Promise(function (r) { setTimeout(r, 1500); });
+        }
+    }
+}
+
+// Invio del form: prima i dati (piccoli, veloci, critici), poi -se presente- la
+// foto della bolla come richiesta separata. Se la foto fallisce anche dopo i
+// retry, la consegna resta comunque salvata: si avvisa e si può riprovare
+// dopo con l'icona nella tabella, senza dover reinserire tutto.
 async function cbInviaConRetry(form, tentativiMax) {
     const btn = form.querySelector('button[type="submit"]');
     const btnTestoOriginale = btn.innerHTML;
     const vecchioAvviso = form.querySelector('.cb-invio-errore');
     if (vecchioAvviso) vecchioAvviso.remove();
+    btn.disabled = true;
 
-    for (let tentativo = 1; tentativo <= tentativiMax; tentativo++) {
-        btn.disabled = true;
-        btn.innerHTML = tentativo === 1
-            ? '<span class="spinner-border spinner-border-sm me-1"></span>Invio in corso…'
-            : '<span class="spinner-border spinner-border-sm me-1"></span>Riprovo (' + tentativo + '/' + tentativiMax + ')…';
+    const bollaInput = form.querySelector('.cb-bolla-input');
+    const fileBolla = bollaInput && bollaInput.files[0];
+    const csrfToken = form.querySelector('input[name="csrf_token"]').value;
+
+    const datiForm = new FormData(form);
+    datiForm.delete('bolla');
+
+    let risultato;
+    try {
+        risultato = await cbFetchConRetry(form.action, datiForm, tentativiMax, function (t, max) {
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' +
+                (t === 1 ? 'Salvataggio dati…' : 'Riprovo dati (' + t + '/' + max + ')…');
+        });
+    } catch (err) {
+        btn.disabled = false;
+        btn.innerHTML = btnTestoOriginale;
+        const div = document.createElement('div');
+        div.className = 'alert alert-danger cb-invio-errore mt-2 mb-0';
+        div.textContent = 'Connessione instabile: la consegna non è stata salvata dopo ' + tentativiMax +
+            ' tentativi. I dati sono ancora qui nel modulo: riprova quando la connessione è più stabile.';
+        form.querySelector('.modal-footer').insertAdjacentElement('beforebegin', div);
+        return;
+    }
+
+    if (fileBolla) {
         try {
-            const resp = await fetch(form.action, {
-                method: 'POST',
-                body: new FormData(form),
-                credentials: 'same-origin',
+            const fdBolla = new FormData();
+            fdBolla.append('bolla', fileBolla);
+            fdBolla.append('csrf_token', csrfToken);
+            const urlBolla = '/allevamento/consegne/' + form.dataset.tipo + '/' + risultato.id + '/bolla';
+            await cbFetchConRetry(urlBolla, fdBolla, tentativiMax, function (t, max) {
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' +
+                    (t === 1 ? 'Caricamento foto…' : 'Riprovo foto (' + t + '/' + max + ')…');
             });
-            if (resp.ok) {
-                window.location.href = resp.url;
-                return;
-            }
-            throw new Error('risposta non valida dal server');
         } catch (err) {
-            if (tentativo === tentativiMax) {
-                btn.disabled = false;
-                btn.innerHTML = btnTestoOriginale;
-                const div = document.createElement('div');
-                div.className = 'alert alert-danger cb-invio-errore mt-2 mb-0';
-                div.textContent = 'Connessione instabile: invio non riuscito dopo ' + tentativiMax +
-                    ' tentativi. I dati sono ancora qui nel modulo: riprova quando la connessione è più stabile.';
-                form.querySelector('.modal-footer').insertAdjacentElement('beforebegin', div);
-                return;
-            }
-            await new Promise(function (r) { setTimeout(r, 1500); });
+            sessionStorage.setItem('cb-avviso-consegne',
+                'Consegna salvata. La foto della bolla non è stata caricata (connessione instabile): ' +
+                'riprova dalla tabella con l\'icona 📷.');
         }
     }
+
+    window.location.href = risultato.redirect;
 }
 
 document.querySelectorAll('.cb-form-consegna').forEach(function (form) {
@@ -337,5 +385,39 @@ document.querySelectorAll('.cb-form-consegna').forEach(function (form) {
         cbInviaConRetry(form, 3);
     });
 });
+
+// Upload posticipato della bolla dalla tabella (icona 📷 sulle righe senza foto)
+document.querySelectorAll('.cb-bolla-input-later').forEach(function (input) {
+    input.addEventListener('change', async function () {
+        if (!input.files || !input.files[0]) return;
+        const label = input.closest('label');
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        label.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        try {
+            const compressa = await cbComprimiImmagine(input.files[0], 1600, 0.75);
+            const fd = new FormData();
+            fd.append('bolla', compressa);
+            fd.append('csrf_token', csrfToken);
+            const url = '/allevamento/consegne/' + input.dataset.tipo + '/' + input.dataset.id + '/bolla';
+            await cbFetchConRetry(url, fd, 3, function () {});
+        } catch (err) {
+            sessionStorage.setItem('cb-avviso-consegne', 'Caricamento foto non riuscito: ' + err.message);
+        }
+        window.location.reload();
+    });
+});
+
+// Mostra un eventuale avviso lasciato da un caricamento foto fallito
+(function () {
+    const avviso = sessionStorage.getItem('cb-avviso-consegne');
+    if (avviso) {
+        sessionStorage.removeItem('cb-avviso-consegne');
+        const div = document.createElement('div');
+        div.className = 'alert alert-warning';
+        div.textContent = avviso;
+        const header = document.querySelector('.d-flex.justify-content-between.align-items-center.mb-3');
+        if (header) header.insertAdjacentElement('afterend', div);
+    }
+})();
 </script>
 {% endblock %}

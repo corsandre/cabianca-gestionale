@@ -482,7 +482,10 @@ def consegne_siero_new():
     _check_allevamento()
     from app.models import ConsegnaSiero
     ciclo = _get_ciclo_attivo()
+    ajax = request.headers.get("X-Requested-With") == "fetch"
     if not ciclo:
+        if ajax:
+            return jsonify(error="Nessun ciclo attivo."), 400
         flash("Nessun ciclo attivo.", "danger")
         return redirect(url_for("allevamento.consegne", tab="siero"))
     try:
@@ -504,11 +507,32 @@ def consegne_siero_new():
         )
         db.session.add(c)
         db.session.commit()
+        if ajax:
+            return jsonify(id=c.id, redirect=url_for("allevamento.consegne", tab="siero"))
         flash(f"Consegna siero registrata: {qty} qli.", "success")
     except Exception as e:
         db.session.rollback()
+        if ajax:
+            return jsonify(error=str(e)), 400
         flash(f"Errore: {e}", "danger")
     return redirect(url_for("allevamento.consegne", tab="siero"))
+
+
+@bp.route("/consegne/siero/<int:cid>/bolla", methods=["POST"])
+@login_required
+def consegne_siero_bolla(cid):
+    _check_allevamento()
+    from app.models import ConsegnaSiero
+    c = db.session.get(ConsegnaSiero, cid)
+    if not c:
+        return jsonify(error="Consegna non trovata."), 404
+    path = _salva_bolla(request.files.get("bolla"))
+    if not path:
+        return jsonify(error="File non valido (usa jpg, png, webp o pdf)."), 400
+    _elimina_bolla(c.bolla_path)
+    c.bolla_path = path
+    db.session.commit()
+    return jsonify(ok=True, path=path)
 
 
 @bp.route("/consegne/siero/<int:cid>/delete", methods=["POST"])
@@ -531,7 +555,10 @@ def consegne_mangime_new():
     _check_allevamento()
     from app.models import ConsegnaMangime
     ciclo = _get_ciclo_attivo()
+    ajax = request.headers.get("X-Requested-With") == "fetch"
     if not ciclo:
+        if ajax:
+            return jsonify(error="Nessun ciclo attivo."), 400
         flash("Nessun ciclo attivo.", "danger")
         return redirect(url_for("allevamento.consegne", tab="mangime"))
     try:
@@ -551,11 +578,32 @@ def consegne_mangime_new():
         )
         db.session.add(c)
         db.session.commit()
+        if ajax:
+            return jsonify(id=c.id, redirect=url_for("allevamento.consegne", tab="mangime"))
         flash(f"Consegna mangime registrata: {qty} qli.", "success")
     except Exception as e:
         db.session.rollback()
+        if ajax:
+            return jsonify(error=str(e)), 400
         flash(f"Errore: {e}", "danger")
     return redirect(url_for("allevamento.consegne", tab="mangime"))
+
+
+@bp.route("/consegne/mangime/<int:cid>/bolla", methods=["POST"])
+@login_required
+def consegne_mangime_bolla(cid):
+    _check_allevamento()
+    from app.models import ConsegnaMangime
+    c = db.session.get(ConsegnaMangime, cid)
+    if not c:
+        return jsonify(error="Consegna non trovata."), 404
+    path = _salva_bolla(request.files.get("bolla"))
+    if not path:
+        return jsonify(error="File non valido (usa jpg, png, webp o pdf)."), 400
+    _elimina_bolla(c.bolla_path)
+    c.bolla_path = path
+    db.session.commit()
+    return jsonify(ok=True, path=path)
 
 
 @bp.route("/consegne/mangime/<int:cid>/delete", methods=["POST"])
