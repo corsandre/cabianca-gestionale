@@ -26,11 +26,12 @@
             <h6 class="mb-2"><span class="badge me-1" style="background:#c2185b">CAP {{ cap }}</span></h6>
             <div class="row g-1">
                 {% for b in boxes %}
+                {% set sopra_capienza = live.get(b,0) > POSTI_PER_BOX_STANDARD[b] %}
                 <div class="col-auto">
                     <span class="badge {{ 'bg-secondary' if live.get(b,0) == 0 else 'text-dark' }}"
-                          style="{{ '' if live.get(b,0) == 0 else 'background:#fce4ec;border:1px solid #c2185b' }}"
-                          title="Box {{ b }} (cap.{{ POSTI_PER_BOX_STANDARD[b] }})">
-                        B{{ b }}: {{ live.get(b, 0) }}
+                          style="{{ 'background:#fff3cd;border:1px solid #ffc107' if sopra_capienza else ('' if live.get(b,0) == 0 else 'background:#fce4ec;border:1px solid #c2185b') }}"
+                          title="Box {{ b }} (cap.{{ POSTI_PER_BOX_STANDARD[b] }}){{ ' — SOPRA CAPIENZA' if sopra_capienza else '' }}">
+                        B{{ b }}: {{ live.get(b, 0) }}{{ ' ⚠' if sopra_capienza else '' }}
                     </span>
                 </div>
                 {% endfor %}
@@ -102,8 +103,9 @@
                         {% for b in BOX_PER_CAP[cap] %}
                         <div class="col-6 col-sm-4 col-md-3 col-lg-2">
                             <label class="form-label small mb-0 fw-semibold">Box {{ b }} <small class="text-muted">(max {{ POSTI_PER_BOX_STANDARD[b] }})</small></label>
-                            <input type="number" name="box_{{ b }}" class="form-control form-control-sm mb-1"
-                                   placeholder="Capi" value="{{ live.get(b, 0) }}" min="0" max="{{ POSTI_PER_BOX_STANDARD[b] }}">
+                            <input type="number" name="box_{{ b }}" class="form-control form-control-sm mb-1 cb-censimento-capi"
+                                   placeholder="Capi" value="{{ live.get(b, 0) }}" min="0" data-capienza="{{ POSTI_PER_BOX_STANDARD[b] }}">
+                            <div class="small text-warning-emphasis fw-semibold cb-censimento-overflow" hidden>⚠ sopra capienza</div>
                             <div class="input-group input-group-sm mb-1">
                                 <span class="input-group-text" title="Giorni di vita">gg</span>
                                 <input type="number" name="giorni_{{ b }}" class="form-control form-control-sm"
@@ -127,4 +129,21 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.cb-censimento-capi').forEach(function (input) {
+    const capienza = parseInt(input.dataset.capienza, 10);
+    const overflow = input.parentElement.querySelector('.cb-censimento-overflow');
+    function check() {
+        const sopra = parseInt(input.value, 10) > capienza;
+        input.classList.toggle('bg-warning-subtle', sopra);
+        input.classList.toggle('border-warning', sopra);
+        overflow.hidden = !sopra;
+    }
+    input.addEventListener('input', check);
+    check();
+});
+</script>
 {% endblock %}
