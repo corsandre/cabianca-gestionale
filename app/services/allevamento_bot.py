@@ -40,8 +40,8 @@ def start_bot(app):
         SPOSTAMENTO_TIPO, SPOSTAMENTO_ORIG, SPOSTAMENTO_DEST, SPOSTAMENTO_QTY,
         CONSEGNA_TIPO, CONSEGNA_QTY, CONSEGNA_EXTRA,
         PASTO_LINEA, PASTO_NUM, PASTO_MANG, PASTO_SIERO, PASTO_ACQUA,
-        CENSIMENTO_BOX, CENSIMENTO_CONFIRM,
-    ) = range(19)
+        CENSIMENTO_FIELD, CENSIMENTO_BOX_NEXT, CENSIMENTO_CAP_NEXT, CENSIMENTO_CONFIRM,
+    ) = range(21)
 
     CAPANNONI = [1, 2, 3, 4, 5, 6, 7]
     BOX_PER_CAP = {
@@ -115,14 +115,26 @@ def start_bot(app):
         data = q.data
 
         if data == "censimento":
+            with app.app_context():
+                from app.models import Ciclo, Censimento
+                ciclo = Ciclo.query.filter_by(attivo=True).first()
+                rif = None
+                if ciclo:
+                    ultimo = Censimento.query.filter_by(ciclo_id=ciclo.id).order_by(
+                        Censimento.data.desc(), Censimento.id.desc()
+                    ).first()
+                    rif = {cb.box_numero: cb.quantita for cb in ultimo.conteggi.all()} if ultimo else {}
+            if rif is None:
+                await q.edit_message_text("⚠️ Nessun ciclo attivo.", reply_markup=kb_main())
+                return MAIN_MENU
             ctx.user_data["cens_conteggi"] = {}
             ctx.user_data["cens_cap_idx"] = 0
-            await q.edit_message_text(
-                "📋 *Censimento*\nInvieremo i capi capannone per capannone, per evitare invii "
-                "unici troppo grandi. Un messaggio per capannone, poi conferma finale.\n\n"
-                "Iniziamo:", parse_mode="Markdown",
-            )
-            return await _chiedi_censimento_cap(update.effective_chat.id, ctx)
+            ctx.user_data["cens_box_idx"] = 0
+            ctx.user_data["cens_field"] = "capi"
+            ctx.user_data["cens_buffer"] = ""
+            ctx.user_data["cens_riferimento"] = rif
+            await _mostra_campo_box(q, ctx)
+            return CENSIMENTO_FIELD
         elif data == "pasto":
             await q.edit_message_text("🍽️ *Registra consumo*\nSeleziona la linea:", parse_mode="Markdown", reply_markup=kb_linee())
             return PASTO_LINEA
@@ -419,74 +431,188 @@ def start_bot(app):
         )
         return ConversationHandler.END
 
-    # ── Censimento ────────────────────────────────────────────────────────
+    # ── Censimento (percorso guidato, solo tastiera inline) ─────────────────
 
-    async def _chiedi_censimento_cap(chat_id, ctx):
-        idx = ctx.user_data["cens_cap_idx"]
-        if idx >= len(CAPANNONI):
-            return await _chiedi_censimento_conferma(chat_id, ctx)
-        cap = CAPANNONI[idx]
+    CENS_CAMPI = ["capi", "giorni", "peso"]
+    CENS_LABEL = {"capi": "Capi", "giorni": "Giorni di vita (età)", "peso": "Peso stimato (kg)"}
+
+    def _cens_box_corrente(ctx):
+        cap = CAPANNONI[ctx.user_data["cens_cap_idx"]]
+        b = BOX_PER_CAP[cap][ctx.user_data["cens_box_idx"]]
+        return cap, b
+
+    def _cens_box_testo(ctx):
+        cap, b = _cens_box_corrente(ctx)
+        field = ctx.user_data["cens_field"]
+        buffer = ctx.user_data["cens_buffer"]
+        cap_max = POSTI_PER_BOX_STANDARD.get(b)
+        righe = [f"🏠 CAP {cap} — 📦 Box {b} (max {cap_max})", f"Campo: *{CENS_LABEL[field]}*"]
+        if field == "capi":
+            rif = ctx.user_data["cens_riferimento"].get(b)
+            if rif is not None:
+                righe.append(f"Ultimo censimento: {rif}")
+        righe.append(f"\nValore: `{buffer or '—'}`")
+        return "\n".join(righe)
+
+    def _cens_box_kb(ctx):
+        field = ctx.user_data["cens_field"]
+        cap, b = _cens_box_corrente(ctx)
+        rows = [
+            [InlineKeyboardButton(str(n), callback_data=f"d{n}") for n in (1, 2, 3)],
+            [InlineKeyboardButton(str(n), callback_data=f"d{n}") for n in (4, 5, 6)],
+            [InlineKeyboardButton(str(n), callback_data=f"d{n}") for n in (7, 8, 9)],
+        ]
+        row4 = []
+        if field == "peso":
+            row4.append(InlineKeyboardButton(".", callback_data="dot"))
+        row4.append(InlineKeyboardButton("0", callback_data="d0"))
+        row4.append(InlineKeyboardButton("⌫", callback_data="bksp"))
+        rows.append(row4)
+        row5 = []
+        if field == "capi":
+            rif = ctx.user_data["cens_riferimento"].get(b)
+            if rif is not None:
+                row5.append(InlineKeyboardButton(f"Usa {rif}", callback_data="usarif"))
+        else:
+            row5.append(InlineKeyboardButton("Salta ↷", callback_data="skip"))
+        row5.append(InlineKeyboardButton("✓ OK", callback_data="ok"))
+        rows.append(row5)
+        return InlineKeyboardMarkup(rows)
+
+    async def _mostra_campo_box(q, ctx):
+        await q.edit_message_text(_cens_box_testo(ctx), parse_mode="Markdown", reply_markup=_cens_box_kb(ctx))
+
+    async def censimento_field(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        q = update.callback_query
+        await q.answer()
+        data = q.data
+        field = ctx.user_data["cens_field"]
+
+        if data.startswith("d") and data[1:].isdigit():
+            ctx.user_data["cens_buffer"] += data[1:]
+            await _mostra_campo_box(q, ctx)
+            return CENSIMENTO_FIELD
+        if data == "dot":
+            if "." not in ctx.user_data["cens_buffer"]:
+                ctx.user_data["cens_buffer"] += "."
+            await _mostra_campo_box(q, ctx)
+            return CENSIMENTO_FIELD
+        if data == "bksp":
+            ctx.user_data["cens_buffer"] = ctx.user_data["cens_buffer"][:-1]
+            await _mostra_campo_box(q, ctx)
+            return CENSIMENTO_FIELD
+        if data == "usarif":
+            _, b = _cens_box_corrente(ctx)
+            ctx.user_data["cens_buffer"] = str(ctx.user_data["cens_riferimento"].get(b, 0))
+            await _mostra_campo_box(q, ctx)
+            return CENSIMENTO_FIELD
+        if data == "skip":
+            return await _salva_campo_e_avanza(q, ctx, None)
+        if data == "ok":
+            buf = ctx.user_data["cens_buffer"]
+            if field == "capi":
+                if not buf.isdigit():
+                    await q.answer("Inserisci un numero per i capi.", show_alert=True)
+                    return CENSIMENTO_FIELD
+                valore = int(buf)
+            else:
+                if not buf:
+                    return await _salva_campo_e_avanza(q, ctx, None)
+                try:
+                    valore = int(buf) if field == "giorni" else float(buf)
+                except ValueError:
+                    await q.answer("Valore non valido.", show_alert=True)
+                    return CENSIMENTO_FIELD
+            return await _salva_campo_e_avanza(q, ctx, valore)
+        return CENSIMENTO_FIELD
+
+    async def _salva_campo_e_avanza(q, ctx, valore):
+        cap, b = _cens_box_corrente(ctx)
+        field = ctx.user_data["cens_field"]
+        ctx.user_data["cens_conteggi"].setdefault(b, {})[field] = valore
+
+        idx = CENS_CAMPI.index(field)
+        if idx + 1 < len(CENS_CAMPI):
+            ctx.user_data["cens_field"] = CENS_CAMPI[idx + 1]
+            ctx.user_data["cens_buffer"] = ""
+            await _mostra_campo_box(q, ctx)
+            return CENSIMENTO_FIELD
+
+        dati = ctx.user_data["cens_conteggi"][b]
+        cap_max = POSTI_PER_BOX_STANDARD.get(b)
+        avviso = ""
+        if cap_max and dati.get("capi", 0) > cap_max:
+            avviso = f"\n⚠️ Sopra capienza (max {cap_max})"
+        testo = (f"✅ Box {b} completato:\n"
+                 f"Capi: {dati.get('capi', 0)}\n"
+                 f"Età: {dati.get('giorni') if dati.get('giorni') is not None else '—'} gg\n"
+                 f"Peso: {dati.get('peso') if dati.get('peso') is not None else '—'} kg"
+                 f"{avviso}")
+
+        ultimo_box = ctx.user_data["cens_box_idx"] + 1 >= len(BOX_PER_CAP[cap])
+        if ultimo_box:
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("📋 Riepilogo capannone", callback_data="recap")]])
+        else:
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("➡️ Prossimo box", callback_data="nextbox")]])
+        await q.edit_message_text(testo, reply_markup=kb)
+        return CENSIMENTO_BOX_NEXT
+
+    async def censimento_box_next(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        q = update.callback_query
+        await q.answer()
+        if q.data == "nextbox":
+            ctx.user_data["cens_box_idx"] += 1
+            ctx.user_data["cens_field"] = "capi"
+            ctx.user_data["cens_buffer"] = ""
+            await _mostra_campo_box(q, ctx)
+            return CENSIMENTO_FIELD
+        return await _mostra_recap_capannone(q, ctx)
+
+    async def _mostra_recap_capannone(q, ctx):
+        cap = CAPANNONI[ctx.user_data["cens_cap_idx"]]
         boxes = BOX_PER_CAP[cap]
-        lista = ", ".join(f"B{b}" for b in boxes)
-        esempio = " ".join(["0"] * len(boxes))
-        await ctx.bot.send_message(
-            chat_id=chat_id,
-            text=(f"🏠 *CAP {cap}* — box: {lista}\n"
-                  f"Scrivi i capi per ciascun box nello stesso ordine, separati da spazio "
-                  f"({len(boxes)} numeri). Es: {esempio}"),
-            parse_mode="Markdown",
-        )
-        return CENSIMENTO_BOX
+        righe = [f"📋 *Riepilogo CAP {cap}*"]
+        tot_cap = 0
+        for b in boxes:
+            dati = ctx.user_data["cens_conteggi"].get(b, {})
+            capi = dati.get("capi", 0)
+            tot_cap += capi
+            extra = []
+            if dati.get("giorni") is not None:
+                extra.append(f"{dati['giorni']}gg")
+            if dati.get("peso") is not None:
+                extra.append(f"{dati['peso']}kg")
+            righe.append(f"B{b}: {capi} capi" + (f" ({', '.join(extra)})" if extra else ""))
+        righe.append(f"\nTotale CAP {cap}: *{tot_cap}*")
+        tot_generale = sum(d.get("capi", 0) for d in ctx.user_data["cens_conteggi"].values())
+        righe.append(f"Totale generale finora: *{tot_generale}*")
 
-    async def censimento_box(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        idx = ctx.user_data["cens_cap_idx"]
-        cap = CAPANNONI[idx]
-        boxes = BOX_PER_CAP[cap]
-        parti = update.message.text.strip().split()
+        ultimo_cap = ctx.user_data["cens_cap_idx"] + 1 >= len(CAPANNONI)
+        if ultimo_cap:
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Riepilogo finale", callback_data="finalrecap")]])
+        else:
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("➡️ Prossimo capannone", callback_data="nextcap")]])
+        await q.edit_message_text("\n".join(righe), parse_mode="Markdown", reply_markup=kb)
+        return CENSIMENTO_CAP_NEXT
 
-        if len(parti) != len(boxes):
-            await update.message.reply_text(
-                f"⚠️ Servono esattamente {len(boxes)} numeri (uno per box), "
-                f"ne hai inviati {len(parti)}. Riprova:"
-            )
-            return CENSIMENTO_BOX
-        try:
-            valori = [int(v) for v in parti]
-            if any(v < 0 for v in valori):
-                raise ValueError
-        except ValueError:
-            await update.message.reply_text("⚠️ Devono essere tutti numeri interi ≥ 0. Riprova:")
-            return CENSIMENTO_BOX
+    async def censimento_cap_next(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        q = update.callback_query
+        await q.answer()
+        if q.data == "nextcap":
+            ctx.user_data["cens_cap_idx"] += 1
+            ctx.user_data["cens_box_idx"] = 0
+            ctx.user_data["cens_field"] = "capi"
+            ctx.user_data["cens_buffer"] = ""
+            await _mostra_campo_box(q, ctx)
+            return CENSIMENTO_FIELD
 
-        avvisi = []
-        for b, v in zip(boxes, valori):
-            ctx.user_data["cens_conteggi"][b] = v
-            cap_max = POSTI_PER_BOX_STANDARD.get(b)
-            if cap_max and v > cap_max:
-                avvisi.append(f"B{b}: {v} (⚠ capienza {cap_max})")
-
-        tot_cap = sum(valori)
-        tot_generale = sum(ctx.user_data["cens_conteggi"].values())
-        righe = "\n".join(f"B{b}: {v}" for b, v in zip(boxes, valori))
-        msg = (f"✅ CAP {cap} registrato:\n{righe}\n"
-               f"Totale CAP {cap}: {tot_cap}\nTotale generale finora: {tot_generale}")
-        if avvisi:
-            msg += "\n\n⚠️ Sopra capienza:\n" + "\n".join(avvisi)
-        await update.message.reply_text(msg)
-
-        ctx.user_data["cens_cap_idx"] += 1
-        return await _chiedi_censimento_cap(update.effective_chat.id, ctx)
-
-    async def _chiedi_censimento_conferma(chat_id, ctx):
-        conteggi = ctx.user_data["cens_conteggi"]
-        tot = sum(conteggi.values())
+        tot = sum(d.get("capi", 0) for d in ctx.user_data["cens_conteggi"].values())
         kb = InlineKeyboardMarkup([[
             InlineKeyboardButton("✅ Conferma e salva", callback_data="cens_ok"),
             InlineKeyboardButton("❌ Annulla", callback_data="cens_no"),
         ]])
-        await ctx.bot.send_message(
-            chat_id=chat_id,
-            text=f"📋 *Censimento completo*\nTotale suini: *{tot}*\n\nConfermi il salvataggio?",
+        await q.edit_message_text(
+            f"📋 *Censimento completo*\nTotale suini: *{tot}*\n\nConfermi il salvataggio?",
             parse_mode="Markdown", reply_markup=kb,
         )
         return CENSIMENTO_CONFIRM
@@ -512,11 +638,16 @@ def start_bot(app):
             cens = Censimento(ciclo_id=ciclo.id, data=date.today(), operatore=operatore)
             db.session.add(cens)
             db.session.flush()
-            for b, v in conteggi.items():
-                db.session.add(CensimentoBox(censimento_id=cens.id, box_numero=b, quantita=v))
+            for b, dati in conteggi.items():
+                db.session.add(CensimentoBox(
+                    censimento_id=cens.id, box_numero=b,
+                    quantita=dati.get("capi", 0),
+                    giorni_vita=dati.get("giorni"),
+                    peso_stimato_kg=dati.get("peso"),
+                ))
             db.session.commit()
 
-        tot = sum(conteggi.values())
+        tot = sum(d.get("capi", 0) for d in conteggi.values())
         await q.edit_message_text(f"✅ Censimento salvato: {tot} suini totali.\n\nUsa /start per continuare.")
         return ConversationHandler.END
 
@@ -562,7 +693,9 @@ def start_bot(app):
                 MessageHandler(filters.TEXT & ~filters.COMMAND, pasto_acqua),
                 CommandHandler("skip", pasto_acqua),
             ],
-            CENSIMENTO_BOX: [MessageHandler(filters.TEXT & ~filters.COMMAND, censimento_box)],
+            CENSIMENTO_FIELD: [CallbackQueryHandler(censimento_field)],
+            CENSIMENTO_BOX_NEXT: [CallbackQueryHandler(censimento_box_next)],
+            CENSIMENTO_CAP_NEXT: [CallbackQueryHandler(censimento_cap_next)],
             CENSIMENTO_CONFIRM: [CallbackQueryHandler(censimento_confirm)],
         },
         fallbacks=[
