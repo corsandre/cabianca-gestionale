@@ -39,10 +39,10 @@ def start_bot(app):
         MORTALITA_CAP, MORTALITA_BOX, MORTALITA_QTY, MORTALITA_CAUSA,
         SPOSTAMENTO_TIPO, SPOSTAMENTO_ORIG, SPOSTAMENTO_DEST, SPOSTAMENTO_QTY,
         CONSEGNA_TIPO, CONSEGNA_QTY, CONSEGNA_SS, CONSEGNA_EXTRA,
-        PASTO_LINEA, PASTO_NUM, PASTO_MANG, PASTO_SIERO, PASTO_ACQUA, PASTO_SS,
+        PASTO_LINEA, PASTO_NUM, PASTO_MANG, PASTO_SIERO, PASTO_ACQUA,
         CENSIMENTO_FIELD, CENSIMENTO_BOX_NEXT, CENSIMENTO_CAP_NEXT, CENSIMENTO_CONFIRM,
         CENSIMENTO_RECAP_PICK,
-    ) = range(24)
+    ) = range(23)
 
     CAPANNONI = [1, 2, 3, 4, 5, 6, 7]
     BOX_PER_CAP = {
@@ -420,50 +420,11 @@ def start_bot(app):
         if not ok:
             await update.message.reply_text("⚠️ Inserisci un numero valido oppure /skip.")
             return PASTO_ACQUA
-        ctx.user_data["pasto_acqua"] = val
-
-        with app.app_context():
-            from app.models import Ciclo, UsoPasto
-            ciclo = Ciclo.query.filter_by(attivo=True).first()
-            ultimo = None
-            if ciclo:
-                u = UsoPasto.query.filter(
-                    UsoPasto.ciclo_id == ciclo.id, UsoPasto.perc_siero.isnot(None)
-                ).order_by(UsoPasto.data.desc(), UsoPasto.id.desc()).first()
-                ultimo = u.perc_siero if u else None
-        ctx.user_data["pasto_ultimo_ss"] = ultimo
-
-        if ultimo is not None:
-            await update.message.reply_text(
-                f"🧪 % sostituzione s.s. da siero (ricetta)?\nUltimo valore usato: {ultimo}\n"
-                f"Scrivi un numero per cambiarlo oppure /skip per confermare {ultimo}:"
-            )
-        else:
-            await update.message.reply_text(
-                "🧪 % sostituzione s.s. da siero (ricetta)? Scrivi il numero (nessun valore precedente registrato):"
-            )
-        return PASTO_SS
-
-    async def pasto_ss(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        testo = update.message.text.strip()
-        ultimo = ctx.user_data.get("pasto_ultimo_ss")
-        if testo.startswith("/skip"):
-            if ultimo is None:
-                await update.message.reply_text("⚠️ Nessun valore precedente disponibile: devi inserire un numero.")
-                return PASTO_SS
-            perc_siero = ultimo
-        else:
-            try:
-                perc_siero = float(testo.replace(",", "."))
-            except ValueError:
-                await update.message.reply_text("⚠️ Inserisci un numero valido oppure /skip.")
-                return PASTO_SS
 
         linea = ctx.user_data.get("pasto_linea")
         pasto = ctx.user_data.get("pasto_num")
         mang = ctx.user_data.get("pasto_mang")
         siero = ctx.user_data.get("pasto_siero")
-        acqua = ctx.user_data.get("pasto_acqua")
 
         with app.app_context():
             from app import db
@@ -473,18 +434,20 @@ def start_bot(app):
             if not ciclo:
                 await update.message.reply_text("⚠️ Nessun ciclo attivo.")
                 return ConversationHandler.END
-            registra_pasto(
+            riga = registra_pasto(
                 ciclo_id=ciclo.id, data=date.today(), pasto=pasto, linea=linea,
-                mangime_qli=mang, siero_qli=siero, acqua_litri=acqua, perc_siero=perc_siero,
+                mangime_qli=mang, siero_qli=siero, acqua_litri=val,
             )
+            perc_siero = riga.perc_siero
             db.session.commit()
 
+        ss_txt = f"{perc_siero}%" if perc_siero is not None else "– (manca % s.s. siero nell'ultima consegna)"
         await update.message.reply_text(
             f"✅ Pasto {pasto} — Linea {linea} registrato.\n"
             f"Mangime: {mang if mang is not None else '-'} qli, "
             f"Siero: {siero if siero is not None else '-'} qli, "
-            f"Acqua: {acqua if acqua is not None else '-'} l, "
-            f"% s.s.: {perc_siero}\n\nUsa /start per continuare.",
+            f"Acqua: {val if val is not None else '-'} l\n"
+            f"% sostituzione s.s. (calcolata): {ss_txt}\n\nUsa /start per continuare.",
             reply_markup=kb_main(),
         )
         return ConversationHandler.END
@@ -829,10 +792,6 @@ def start_bot(app):
             PASTO_ACQUA: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, pasto_acqua),
                 CommandHandler("skip", pasto_acqua),
-            ],
-            PASTO_SS: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, pasto_ss),
-                CommandHandler("skip", pasto_ss),
             ],
             CENSIMENTO_FIELD: [CallbackQueryHandler(censimento_field)],
             CENSIMENTO_BOX_NEXT: [CallbackQueryHandler(censimento_box_next)],

@@ -79,6 +79,14 @@
                     <td>{{ totali[linea].acqua | round(0) | int }}</td>
                     {% endfor %}
                 </tr>
+                <tr class="small text-muted">
+                    <td>% sostituzione s.s.</td>
+                    {% for linea in [1,2,3] %}
+                    <td colspan="3" class="{{ 'border-start border-2' if loop.first else '' }}" style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">
+                        {{ perc_sostituzione[linea] ~ '%' if perc_sostituzione[linea] is not none else '–' }}
+                    </td>
+                    {% endfor %}
+                </tr>
             </tbody>
         </table>
     </div>
@@ -87,21 +95,12 @@
         I valori in giallo sono stimati (copiati dal pasto della mattina): inserisci un valore per renderlo definitivo.
     </p>
 
-    <!-- Campi aggiuntivi -->
-    <div class="cb-card p-3 mb-3">
-        <div class="row g-3">
-            <div class="col-md-4">
-                <label class="form-label">Tipo mangime</label>
-                <input type="text" name="tipo_mangime" class="form-control"
-                       value="{{ pasti.values() | list | first | attr('tipo_mangime') if pasti else '' }}">
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">% sostituzione s.s. da siero (ricetta) <span class="text-danger">*</span></label>
-                <input type="number" name="perc_siero" class="form-control" step="0.1" min="0" max="100" required
-                       value="{{ perc_siero_default if perc_siero_default is not none else '' }}">
-                <small class="text-muted">Precompilato con l'ultimo valore inserito, modificabile.</small>
-            </div>
-        </div>
+    <div class="cb-card p-3 mb-3 small text-muted">
+        <i class="bi bi-info-circle me-1"></i>
+        Tipo mangime e % sostituzione si prendono automaticamente dall'ultima consegna registrata —
+        tipo mangime: <strong>{{ tipo_mangime_attuale or 'non ancora impostato' }}</strong>,
+        % sostanza secca siero: <strong>{{ (perc_ss_siero_attuale ~ '%') if perc_ss_siero_attuale is not none else 'non ancora impostata' }}</strong>.
+        Se mancano, registrale nella pagina <a href="{{ url_for('allevamento.consegne') }}">Consegne</a>.
     </div>
 
     <button type="submit" class="btn" style="background:#c2185b;color:#fff">
