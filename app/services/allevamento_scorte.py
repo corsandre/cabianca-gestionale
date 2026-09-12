@@ -131,14 +131,17 @@ def giacenza_mangime():
 
 
 def _consumo_medio_per_pasto(campo, giorni=7):
-    """Media giornaliera per ciascun Pasto 1/2/3 (ogni pasto ha di solito una
-    sua quantità tipica), calcolata solo sui giorni completi con dati reali:
-    serve per simulare in avanti pasto per pasto invece che con una media
-    giornaliera piatta divisa per 3."""
+    """Media per ciascun Pasto 1/2/3 (ogni pasto ha di solito una sua
+    quantità tipica), calcolata solo sui pasti già avvenuti negli ultimi
+    `giorni`: include anche i pasti già fatti di oggi (un pasto è completo
+    non appena il suo orario è passato, non serve aspettare fine giornata),
+    escludendo solo quelli di oggi non ancora avvenuti."""
     da = date.today() - timedelta(days=giorni)
-    righe = UsoPasto.query.filter(UsoPasto.data >= da, UsoPasto.data < date.today()).all()
+    righe = UsoPasto.query.filter(UsoPasto.data >= da).all()
     per_pasto = {1: {}, 2: {}, 3: {}}
     for r in righe:
+        if not pasto_avvenuto(r.data, r.pasto):
+            continue
         giorni_pasto = per_pasto.setdefault(r.pasto, {})
         giorni_pasto.setdefault(r.data, 0.0)
         valore = getattr(r, campo)
