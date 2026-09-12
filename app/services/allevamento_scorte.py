@@ -130,28 +130,24 @@ def giacenza_mangime():
     return giacenza_mangime_a_data(None)
 
 
-def _consumo_medio_per_pasto(campo, giorni=7):
-    """Media per ciascun Pasto 1/2/3 (ogni pasto ha di solito una sua
-    quantità tipica), calcolata solo sui pasti già avvenuti negli ultimi
-    `giorni`: include anche i pasti già fatti di oggi (un pasto è completo
-    non appena il suo orario è passato, non serve aspettare fine giornata),
-    escludendo solo quelli di oggi non ancora avvenuti."""
-    da = date.today() - timedelta(days=giorni)
-    righe = UsoPasto.query.filter(UsoPasto.data >= da).all()
-    per_pasto = {1: {}, 2: {}, 3: {}}
+def _ultimo_consumo_pasto(campo):
+    """Totale sulle 3 linee dell'ultimo pasto già avvenuto per cui esiste un
+    valore di questo campo (reale o stimato). Con poca storia disponibile,
+    una media tra giorni diversi pesa troppo un giorno vecchio non più
+    rappresentativo: per la sola proiezione di esaurimento è meglio
+    assumere che i pasti successivi restino sugli ultimi valori registrati,
+    senza variazioni."""
+    righe = UsoPasto.query.filter(getattr(UsoPasto, campo).isnot(None)).order_by(
+        UsoPasto.data.desc(), UsoPasto.pasto.desc()
+    ).all()
     for r in righe:
         if not pasto_avvenuto(r.data, r.pasto):
             continue
-        giorni_pasto = per_pasto.setdefault(r.pasto, {})
-        giorni_pasto.setdefault(r.data, 0.0)
-        valore = getattr(r, campo)
-        if valore:
-            giorni_pasto[r.data] += valore
-    medie = {}
-    for pasto in (1, 2, 3):
-        dati_giorno = per_pasto.get(pasto, {})
-        medie[pasto] = sum(dati_giorno.values()) / len(dati_giorno) if dati_giorno else 0
-    return medie
+        tot = db.session.query(db.func.sum(getattr(UsoPasto, campo))).filter(
+            UsoPasto.data == r.data, UsoPasto.pasto == r.pasto
+        ).scalar() or 0
+        return tot
+    return 0
 
 
 def consegna_siero_aperta():
@@ -211,29 +207,25 @@ def _testo_residuo(pasti_residui):
     return testo
 
 
-def stima_esaurimento(giacenza, medie_per_pasto, adesso=None):
-    """Simula in avanti pasto per pasto (con la media specifica di ciascun
-    pasto), partendo dal primo pasto non ancora avvenuto, finché la
-    giacenza si esaurisce. Ritorna None se i dati non bastano per una stima
-    affidabile, {"esaurito": True} se la giacenza è già a zero, altrimenti
-    il pasto e l'istante di esaurimento con lo scarto (mancano/avanzano)
-    rispetto al consumo tipico di quel pasto."""
+def stima_esaurimento(giacenza, consumo_ultimo_pasto, adesso=None):
+    """Simula in avanti pasto per pasto, ripetendo il consumo dell'ultimo
+    pasto registrato (senza assumere variazioni), partendo dal primo pasto
+    non ancora avvenuto, finché la giacenza si esaurisce. Ritorna None se
+    non c'è ancora nessun dato utile, {"esaurito": True} se la giacenza è
+    già a zero, altrimenti il pasto e l'istante di esaurimento con lo
+    scarto (mancano/avanzano) rispetto a quel consumo."""
     if giacenza is None:
         return None
     if giacenza <= 0:
         return {"esaurito": True, "testo": "Esaurito"}
-    if sum(medie_per_pasto.values()) <= 0:
+    if not consumo_ultimo_pasto or consumo_ultimo_pasto <= 0:
         return None
     adesso = adesso or datetime.now()
     data, pasto = _primo_pasto_futuro(adesso)
     resto = giacenza
     for n in range(1, 201):  # limite di sicurezza, ~66 giorni
-        consumo = medie_per_pasto.get(pasto, 0)
-        if consumo <= 0:
-            data, pasto = _pasto_successivo(data, pasto)
-            continue
-        if resto <= consumo:
-            scarto = resto - consumo
+        if resto <= consumo_ultimo_pasto:
+            scarto = resto - consumo_ultimo_pasto
             return {
                 "esaurito": False,
                 "pasti_residui": n,
@@ -244,7 +236,7 @@ def stima_esaurimento(giacenza, medie_per_pasto, adesso=None):
                 "mancano": -scarto if scarto < 0 else None,
                 "avanzano": scarto if scarto >= 0 else None,
             }
-        resto -= consumo
+        resto -= consumo_ultimo_pasto
         data, pasto = _pasto_successivo(data, pasto)
     return None
 
@@ -270,10 +262,10 @@ def stato_mangime():
     giacenza = giacenza_mangime()
     capacita = get_setting_float("allevamento_capacita_mangime_q")
     soglia = get_setting_float("allevamento_soglia_mangime_q")
-    medie_per_pasto = _consumo_medio_per_pasto("mangime_qli")
+    ultimo_pasto = _ultimo_consumo_pasto("mangime_qli")
     return {
         "giacenza": giacenza, "capacita": capacita, "soglia": soglia,
-        "stima": stima_esaurimento(giacenza, medie_per_pasto),
+        "stima": stima_esaurimento(giacenza, ultimo_pasto),
         "colore": colore_livello(giacenza, soglia),
         "perc": _perc_capacita(giacenza, capacita),
     }
@@ -286,13 +278,13 @@ def stato_siero():
     solo giacenza/capacità e la stima di quando finirà."""
     info = giacenza_siero()
     capacita = get_setting_float("allevamento_capacita_siero_q")
-    medie_per_pasto = _consumo_medio_per_pasto("siero_qli")
+    ultimo_pasto = _ultimo_consumo_pasto("siero_qli")
     giacenza = info["giacenza"] if info else None
     return {
         "consegna": info["consegna"] if info else None,
         "usato": info["usato"] if info else None,
         "giacenza": giacenza, "capacita": capacita, "soglia": None,
-        "stima": stima_esaurimento(giacenza, medie_per_pasto),
+        "stima": stima_esaurimento(giacenza, ultimo_pasto),
         "colore": None,
         "perc": _perc_capacita(giacenza, capacita),
     }
