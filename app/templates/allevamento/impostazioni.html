@@ -92,11 +92,10 @@
                         <input type="number" name="allevamento_capacita_siero_q" class="form-control form-control-sm"
                                step="1" min="0" value="{{ scorte_settings.capacita_siero_q }}">
                     </div>
-                    <div class="col-6">
-                        <label class="form-label small">Soglia riordino (q)</label>
-                        <input type="number" name="allevamento_soglia_siero_q" class="form-control form-control-sm"
-                               step="1" min="0" value="{{ scorte_settings.soglia_siero_q }}">
-                    </div>
+                </div>
+                <div class="form-text mb-2">
+                    Il siero si ordina per più giorni (non appena scende sotto un tot di quintali), quindi qui
+                    non c'è una soglia di riordino: solo la capacità, usata per la barra di riempimento.
                 </div>
                 <div class="mt-2">
                     <label class="form-label small">Soglia scarto consegna/consumo (q)</label>

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/scorta_card.html" import card_scorta %}
 {% block title %}Allevamento – Consegne{% endblock %}
 
 {% block content %}
@@ -19,48 +20,10 @@
 <!-- Giacenze -->
 <div class="row g-3 mb-4">
     <div class="col-md-6">
-        <div class="cb-card p-3">
-            <div class="d-flex justify-content-between align-items-center mb-1">
-                <h6 class="mb-0"><i class="bi bi-droplet me-1" style="color:#c2185b"></i>Giacenza siero</h6>
-                {% if scorta_siero.in_allerta %}<span class="badge bg-danger">Sotto soglia</span>{% endif %}
-            </div>
-            {% if scorta_siero.giacenza is not none %}
-            <div class="fs-3 fw-bold" style="color:#c2185b">{{ scorta_siero.giacenza | round(1) }} q</div>
-            {% if scorta_siero.perc is not none %}
-            <div class="progress mb-1" style="height:6px">
-                <div class="progress-bar" style="width:{{ scorta_siero.perc }}%;background:#c2185b"></div>
-            </div>
-            {% endif %}
-            <small class="text-muted">
-                Soglia riordino: {{ scorta_siero.soglia | round(0) if scorta_siero.soglia is not none else '–' }} q
-                {% if scorta_siero.giorni_residui is not none %}
-                · ~{{ scorta_siero.giorni_residui }} giorni residui (esaurimento stimato {{ scorta_siero.data_stimata.strftime('%d/%m') }})
-                {% endif %}
-            </small>
-            {% else %}
-            <p class="text-muted small mb-0">Nessuna consegna aperta: cisterna vuota, in attesa di carico.</p>
-            {% endif %}
-        </div>
+        {{ card_scorta('Giacenza siero', 'bi-droplet', scorta_siero, testo_vuoto='Nessuna consegna aperta: cisterna vuota, in attesa di carico.') }}
     </div>
     <div class="col-md-6">
-        <div class="cb-card p-3">
-            <div class="d-flex justify-content-between align-items-center mb-1">
-                <h6 class="mb-0"><i class="bi bi-bag me-1" style="color:#c2185b"></i>Giacenza mangime</h6>
-                {% if scorta_mangime.in_allerta %}<span class="badge bg-danger">Sotto soglia</span>{% endif %}
-            </div>
-            <div class="fs-3 fw-bold" style="color:#c2185b">{{ scorta_mangime.giacenza | round(1) }} q</div>
-            {% if scorta_mangime.perc is not none %}
-            <div class="progress mb-1" style="height:6px">
-                <div class="progress-bar" style="width:{{ scorta_mangime.perc }}%;background:#c2185b"></div>
-            </div>
-            {% endif %}
-            <small class="text-muted">
-                Soglia riordino: {{ scorta_mangime.soglia | round(0) if scorta_mangime.soglia is not none else '–' }} q
-                {% if scorta_mangime.giorni_residui is not none %}
-                · ~{{ scorta_mangime.giorni_residui }} giorni residui (esaurimento stimato {{ scorta_mangime.data_stimata.strftime('%d/%m') }})
-                {% endif %}
-            </small>
-        </div>
+        {{ card_scorta('Giacenza mangime', 'bi-bag', scorta_mangime, mostra_scarto=false) }}
     </div>
 </div>
 

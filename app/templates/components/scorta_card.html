@@ -1,0 +1,66 @@
+{#
+Card riepilogo giacenza (siero/mangime): giacenza in quintali, barra di
+capacità, stima "N pasti residui" / "N giorni e M pasti" con istante di
+esaurimento previsto. Se dati.soglia è impostata, la card è colorata a
+semaforo (verde/giallo/rosso) in base ad essa e mostra la soglia; se è
+None (es. il siero, che si ordina per più giorni e non ha senso legare a
+una soglia in quintali) la card resta neutra, senza soglia né semaforo.
+
+mostra_scarto (default True) mostra anche il dettaglio "mancano/avanzano X
+quintali per completare il pasto di esaurimento" — utile per il siero
+(il PC compensa da solo con acqua/mangime), inutile per il mangime (se
+manca si aspetta il camion, il dettaglio quintali non cambia cosa fare).
+
+Uso: {{ card_scorta('Siero', 'bi-droplet', scorta_siero) }}
+#}
+{% macro card_scorta(titolo, icona, dati, testo_vuoto='Nessun dato disponibile.', nota_extra=none, mostra_scarto=true) %}
+{% set variante = {'rosso': 'danger', 'giallo': 'warning', 'verde': 'success'}.get(dati.colore, 'secondary') %}
+{% set etichetta = {'rosso': 'Sotto soglia', 'giallo': 'In esaurimento', 'verde': 'Scorta ok'}.get(dati.colore) %}
+<div class="cb-card p-3 h-100">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0"><i class="bi {{ icona }} me-1" style="color:#c2185b"></i>{{ titolo }}</h6>
+        {% if etichetta %}<span class="badge bg-{{ variante }}">{{ etichetta }}</span>{% endif %}
+    </div>
+
+    {% if dati.giacenza is none %}
+    <p class="text-muted small mb-0">{{ testo_vuoto }}</p>
+    {% else %}
+    <div class="fs-3 fw-bold mb-1" style="color:#c2185b">{{ dati.giacenza | round(1) }} q</div>
+    {% if dati.perc is not none %}
+    <div class="progress mb-2" style="height:6px">
+        <div class="progress-bar bg-{{ variante }}" style="width:{{ dati.perc }}%"></div>
+    </div>
+    {% endif %}
+
+    {% set stima = dati.stima %}
+    <div class="alert alert-{{ variante }} py-2 px-2 mb-2 small">
+        {% if stima is none %}
+        Dati insufficienti per una stima affidabile: inserisci qualche giorno di consumi in Alimentazione.
+        {% elif stima.esaurito %}
+        <strong>Scorta esaurita</strong>
+        {% else %}
+        <div class="fw-bold">{{ stima.testo }}</div>
+        <div>
+            Esaurimento previsto: {{ stima.giorno_testo }} alle {{ stima.istante.strftime('%H:%M') }}
+            (durante il Pasto {{ stima.pasto }})
+        </div>
+        {% if mostra_scarto %}
+        {% if stima.mancano is not none %}
+        <div class="mt-1">
+            Mancano <strong>{{ stima.mancano | round(1) }} q</strong> per completare il pasto —
+            il PC userà acqua/mangime extra, poi correggi il dato reale in Alimentazione.
+        </div>
+        {% elif stima.avanzano is not none %}
+        <div class="mt-1">Avanzano <strong>{{ stima.avanzano | round(1) }} q</strong> dopo questo pasto.</div>
+        {% endif %}
+        {% endif %}
+        {% endif %}
+    </div>
+
+    {% if dati.soglia is not none %}
+    <small class="text-muted">Soglia riordino: {{ dati.soglia | round(0) }} q</small>
+    {% endif %}
+    {% if nota_extra %}<small class="text-muted d-block">{{ nota_extra }}</small>{% endif %}
+    {% endif %}
+</div>
+{% endmacro %}

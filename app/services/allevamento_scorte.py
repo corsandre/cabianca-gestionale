@@ -26,7 +26,6 @@ DEFAULTS = {
     "allevamento_capacita_mangime_q": "400",
     "allevamento_soglia_mangime_q": "40",
     "allevamento_capacita_siero_q": "150",
-    "allevamento_soglia_siero_q": "20",
     "allevamento_soglia_scarto_siero_q": "5",
 }
 
@@ -97,26 +96,6 @@ def _somma_consumo(campo, dal=None, al=None):
     return tot
 
 
-def _consumo_medio(campo, giorni=7):
-    """Media giornaliera calcolata solo sui giorni completi (esclude oggi,
-    sempre parziale) che hanno almeno un dato registrato in Alimentazione,
-    negli ultimi `giorni`. I giorni precedenti all'inizio del tracciamento
-    (nessuna riga inserita) non entrano né a numeratore né a denominatore,
-    altrimenti diluirebbero la media facendola sembrare più bassa di quella
-    reale."""
-    da = date.today() - timedelta(days=giorni)
-    righe = UsoPasto.query.filter(UsoPasto.data >= da, UsoPasto.data < date.today()).all()
-    per_giorno = {}
-    for r in righe:
-        per_giorno.setdefault(r.data, 0.0)
-        valore = getattr(r, campo)
-        if valore:
-            per_giorno[r.data] += valore
-    if not per_giorno:
-        return 0
-    return sum(per_giorno.values()) / len(per_giorno)
-
-
 def get_setting_float(key):
     s = Setting.query.get(key)
     val = s.value if s and s.value not in (None, "") else DEFAULTS.get(key)
@@ -151,8 +130,25 @@ def giacenza_mangime():
     return giacenza_mangime_a_data(None)
 
 
-def consumo_medio_mangime(giorni=7):
-    return _consumo_medio("mangime_qli", giorni)
+def _consumo_medio_per_pasto(campo, giorni=7):
+    """Media giornaliera per ciascun Pasto 1/2/3 (ogni pasto ha di solito una
+    sua quantità tipica), calcolata solo sui giorni completi con dati reali:
+    serve per simulare in avanti pasto per pasto invece che con una media
+    giornaliera piatta divisa per 3."""
+    da = date.today() - timedelta(days=giorni)
+    righe = UsoPasto.query.filter(UsoPasto.data >= da, UsoPasto.data < date.today()).all()
+    per_pasto = {1: {}, 2: {}, 3: {}}
+    for r in righe:
+        giorni_pasto = per_pasto.setdefault(r.pasto, {})
+        giorni_pasto.setdefault(r.data, 0.0)
+        valore = getattr(r, campo)
+        if valore:
+            giorni_pasto[r.data] += valore
+    medie = {}
+    for pasto in (1, 2, 3):
+        dati_giorno = per_pasto.get(pasto, {})
+        medie[pasto] = sum(dati_giorno.values()) / len(dati_giorno) if dati_giorno else 0
+    return medie
 
 
 def consegna_siero_aperta():
@@ -171,21 +167,94 @@ def giacenza_siero():
     return {"consegna": c, "usato": usato, "giacenza": c.quantita_qli - usato}
 
 
-def consumo_medio_siero(giorni=7):
-    return _consumo_medio("siero_qli", giorni)
+def _primo_pasto_futuro(adesso):
+    """Il primo pasto (data, numero) non ancora avvenuto rispetto ad adesso."""
+    data = adesso.date()
+    for pasto in (1, 2, 3):
+        if _datetime_pasto(data, pasto) > adesso:
+            return data, pasto
+    return data + timedelta(days=1), 1
 
 
-def _proiezione(giacenza_q, consumo_medio_giorno, soglia_q):
-    """Ritorna (giorni_residui|None, data_stimata_esaurimento|None, in_allerta)."""
-    if giacenza_q is None:
-        return None, None, False
-    in_allerta = soglia_q is not None and giacenza_q <= soglia_q
-    if giacenza_q <= 0:
-        return 0, date.today(), True
-    if not consumo_medio_giorno or consumo_medio_giorno <= 0:
-        return None, None, in_allerta
-    giorni = giacenza_q / consumo_medio_giorno
-    return round(giorni, 1), date.today() + timedelta(days=round(giorni)), in_allerta
+def _pasto_successivo(data, pasto):
+    if pasto < 3:
+        return data, pasto + 1
+    return data + timedelta(days=1), 1
+
+
+GIORNI_SETTIMANA = ["lun", "mar", "mer", "gio", "ven", "sab", "dom"]
+
+
+def _testo_giorno(data):
+    """'oggi'/'domani'/'dopodomani' o 'gio 18/09', senza dipendere dal
+    locale di sistema per i nomi dei giorni."""
+    delta = (data - date.today()).days
+    if delta == 0:
+        return "oggi"
+    if delta == 1:
+        return "domani"
+    if delta == 2:
+        return "dopodomani"
+    return f"{GIORNI_SETTIMANA[data.weekday()]} {data.strftime('%d/%m')}"
+
+
+def _testo_residuo(pasti_residui):
+    if pasti_residui < 3:
+        return "1 pasto residuo" if pasti_residui == 1 else f"{pasti_residui} pasti residui"
+    giorni, resto = divmod(pasti_residui, 3)
+    testo = "1 giorno" if giorni == 1 else f"{giorni} giorni"
+    if resto:
+        testo += " e " + ("1 pasto" if resto == 1 else f"{resto} pasti")
+    return testo
+
+
+def stima_esaurimento(giacenza, medie_per_pasto, adesso=None):
+    """Simula in avanti pasto per pasto (con la media specifica di ciascun
+    pasto), partendo dal primo pasto non ancora avvenuto, finché la
+    giacenza si esaurisce. Ritorna None se i dati non bastano per una stima
+    affidabile, {"esaurito": True} se la giacenza è già a zero, altrimenti
+    il pasto e l'istante di esaurimento con lo scarto (mancano/avanzano)
+    rispetto al consumo tipico di quel pasto."""
+    if giacenza is None:
+        return None
+    if giacenza <= 0:
+        return {"esaurito": True, "testo": "Esaurito"}
+    if sum(medie_per_pasto.values()) <= 0:
+        return None
+    adesso = adesso or datetime.now()
+    data, pasto = _primo_pasto_futuro(adesso)
+    resto = giacenza
+    for n in range(1, 201):  # limite di sicurezza, ~66 giorni
+        consumo = medie_per_pasto.get(pasto, 0)
+        if consumo <= 0:
+            data, pasto = _pasto_successivo(data, pasto)
+            continue
+        if resto <= consumo:
+            scarto = resto - consumo
+            return {
+                "esaurito": False,
+                "pasti_residui": n,
+                "testo": _testo_residuo(n),
+                "data": data, "pasto": pasto,
+                "istante": _datetime_pasto(data, pasto),
+                "giorno_testo": _testo_giorno(data),
+                "mancano": -scarto if scarto < 0 else None,
+                "avanzano": scarto if scarto >= 0 else None,
+            }
+        resto -= consumo
+        data, pasto = _pasto_successivo(data, pasto)
+    return None
+
+
+def colore_livello(giacenza, soglia):
+    """Semaforo scorta: rosso sotto soglia, giallo entro 2x soglia, verde oltre."""
+    if giacenza is None or soglia is None:
+        return None
+    if giacenza <= soglia:
+        return "rosso"
+    if giacenza <= soglia * 2:
+        return "giallo"
+    return "verde"
 
 
 def _perc_capacita(giacenza_q, capacita_q):
@@ -198,29 +267,30 @@ def stato_mangime():
     giacenza = giacenza_mangime()
     capacita = get_setting_float("allevamento_capacita_mangime_q")
     soglia = get_setting_float("allevamento_soglia_mangime_q")
-    consumo_medio = consumo_medio_mangime()
-    giorni, data_stimata, in_allerta = _proiezione(giacenza, consumo_medio, soglia)
+    medie_per_pasto = _consumo_medio_per_pasto("mangime_qli")
     return {
         "giacenza": giacenza, "capacita": capacita, "soglia": soglia,
-        "consumo_medio": consumo_medio, "giorni_residui": giorni,
-        "data_stimata": data_stimata, "in_allerta": in_allerta,
+        "stima": stima_esaurimento(giacenza, medie_per_pasto),
+        "colore": colore_livello(giacenza, soglia),
         "perc": _perc_capacita(giacenza, capacita),
     }
 
 
 def stato_siero():
+    """Il siero non ha una soglia di riordino in quintali: si ordina per più
+    giorni (es. il lunedì per coprire fino al lunedì successivo), non
+    quando la giacenza scende sotto un tot. Niente semaforo né soglia qui,
+    solo giacenza/capacità e la stima di quando finirà."""
     info = giacenza_siero()
     capacita = get_setting_float("allevamento_capacita_siero_q")
-    soglia = get_setting_float("allevamento_soglia_siero_q")
-    consumo_medio = consumo_medio_siero()
+    medie_per_pasto = _consumo_medio_per_pasto("siero_qli")
     giacenza = info["giacenza"] if info else None
-    giorni, data_stimata, in_allerta = _proiezione(giacenza, consumo_medio, soglia)
     return {
         "consegna": info["consegna"] if info else None,
         "usato": info["usato"] if info else None,
-        "giacenza": giacenza, "capacita": capacita, "soglia": soglia,
-        "consumo_medio": consumo_medio, "giorni_residui": giorni,
-        "data_stimata": data_stimata, "in_allerta": in_allerta,
+        "giacenza": giacenza, "capacita": capacita, "soglia": None,
+        "stima": stima_esaurimento(giacenza, medie_per_pasto),
+        "colore": None,
         "perc": _perc_capacita(giacenza, capacita),
     }
 
