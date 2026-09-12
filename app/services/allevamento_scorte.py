@@ -25,7 +25,6 @@ from app.models import Setting, ConsegnaSiero, ConsegnaMangime, UsoPasto
 DEFAULTS = {
     "allevamento_capacita_mangime_q": "400",
     "allevamento_soglia_mangime_q": "40",
-    "allevamento_capacita_siero_q": "150",
     "allevamento_soglia_scarto_siero_q": "5",
 }
 
@@ -263,30 +262,40 @@ def stato_mangime():
     capacita = get_setting_float("allevamento_capacita_mangime_q")
     soglia = get_setting_float("allevamento_soglia_mangime_q")
     ultimo_pasto = _ultimo_consumo_pasto("mangime_qli")
+    barra_testo = None
+    if giacenza is not None and capacita:
+        barra_testo = f"{giacenza:.1f} di {capacita:.0f} q"
     return {
         "giacenza": giacenza, "capacita": capacita, "soglia": soglia,
         "stima": stima_esaurimento(giacenza, ultimo_pasto),
         "colore": colore_livello(giacenza, soglia),
         "perc": _perc_capacita(giacenza, capacita),
+        "barra_testo": barra_testo,
     }
 
 
 def stato_siero():
     """Il siero non ha una soglia di riordino in quintali: si ordina per più
     giorni (es. il lunedì per coprire fino al lunedì successivo), non
-    quando la giacenza scende sotto un tot. Niente semaforo né soglia qui,
-    solo giacenza/capacità e la stima di quando finirà."""
+    quando la giacenza scende sotto un tot. Niente semaforo né soglia qui.
+    La barra mostra l'avanzamento del carico corrente (usato/consegnato):
+    più utile di una capacità cisterna configurata a mano, perché usa il
+    dato vero della consegna in corso."""
     info = giacenza_siero()
-    capacita = get_setting_float("allevamento_capacita_siero_q")
     ultimo_pasto = _ultimo_consumo_pasto("siero_qli")
     giacenza = info["giacenza"] if info else None
+    usato = info["usato"] if info else None
+    consegna = info["consegna"] if info else None
+    perc = _perc_capacita(usato, consegna.quantita_qli) if consegna else None
+    barra_testo = f"{usato:.1f} di {consegna.quantita_qli:.0f} q" if consegna else None
     return {
-        "consegna": info["consegna"] if info else None,
-        "usato": info["usato"] if info else None,
-        "giacenza": giacenza, "capacita": capacita, "soglia": None,
+        "consegna": consegna,
+        "usato": usato,
+        "giacenza": giacenza, "capacita": None, "soglia": None,
         "stima": stima_esaurimento(giacenza, ultimo_pasto),
         "colore": None,
-        "perc": _perc_capacita(giacenza, capacita),
+        "perc": perc,
+        "barra_testo": barra_testo,
     }
 
 

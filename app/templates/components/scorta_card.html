@@ -1,10 +1,16 @@
 {#
-Card riepilogo giacenza (siero/mangime): giacenza in quintali, barra di
-capacità, stima "N pasti residui" / "N giorni e M pasti" con istante di
-esaurimento previsto. Se dati.soglia è impostata, la card è colorata a
-semaforo (verde/giallo/rosso) in base ad essa e mostra la soglia; se è
-None (es. il siero, che si ordina per più giorni e non ha senso legare a
-una soglia in quintali) la card resta neutra, senza soglia né semaforo.
+Card riepilogo giacenza (siero/mangime): giacenza in quintali, barra con il
+dettaglio "X di Y q" scritto sopra, stima "N pasti residui" / "N giorni e M
+pasti" con istante di esaurimento previsto. Se dati.soglia è impostata, la
+card è colorata a semaforo (verde/giallo/rosso) in base ad essa e mostra la
+soglia; se è None (es. il siero, che si ordina per più giorni e non ha
+senso legare a una soglia in quintali) la card resta neutra, senza soglia
+né semaforo.
+
+dati.perc + dati.barra_testo pilotano la barra: per il mangime è
+giacenza/capacità silos, per il siero è usato/totale del carico corrente
+(più utile di una generica capacità configurata a mano, perché usa il dato
+vero della consegna).
 
 mostra_scarto (default True) mostra anche il dettaglio "mancano/avanzano X
 quintali per completare il pasto di esaurimento" — utile per il siero
@@ -16,10 +22,11 @@ Uso: {{ card_scorta('Siero', 'bi-droplet', scorta_siero) }}
 {% macro card_scorta(titolo, icona, dati, testo_vuoto='Nessun dato disponibile.', nota_extra=none, mostra_scarto=true) %}
 {% set variante = {'rosso': 'danger', 'giallo': 'warning', 'verde': 'success'}.get(dati.colore, 'secondary') %}
 {% set etichetta = {'rosso': 'Sotto soglia', 'giallo': 'In esaurimento', 'verde': 'Scorta ok'}.get(dati.colore) %}
+{% set testo_scuro = variante == 'warning' %}
 <div class="cb-card p-3 h-100">
     <div class="d-flex justify-content-between align-items-center mb-2">
         <h6 class="mb-0"><i class="bi {{ icona }} me-1" style="color:#c2185b"></i>{{ titolo }}</h6>
-        {% if etichetta %}<span class="badge bg-{{ variante }}">{{ etichetta }}</span>{% endif %}
+        {% if etichetta %}<span class="badge bg-{{ variante }} {{ 'text-dark' if testo_scuro }}">{{ etichetta }}</span>{% endif %}
     </div>
 
     {% if dati.giacenza is none %}
@@ -27,8 +34,11 @@ Uso: {{ card_scorta('Siero', 'bi-droplet', scorta_siero) }}
     {% else %}
     <div class="fs-3 fw-bold mb-1" style="color:#c2185b">{{ dati.giacenza | round(1) }} q</div>
     {% if dati.perc is not none %}
-    <div class="progress mb-2" style="height:6px">
-        <div class="progress-bar bg-{{ variante }}" style="width:{{ dati.perc }}%"></div>
+    <div class="progress mb-2" style="height:20px">
+        <div class="progress-bar bg-{{ variante }} {{ 'text-dark' if testo_scuro else 'text-white' }}"
+             style="width:{{ dati.perc }}%">
+            {% if dati.barra_testo %}<small>{{ dati.barra_testo }}</small>{% endif %}
+        </div>
     </div>
     {% endif %}
 
