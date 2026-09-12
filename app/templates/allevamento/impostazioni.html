@@ -62,6 +62,83 @@
     </form>
 </div>
 
+
+<!-- Scorte siero/mangime -->
+<h6 class="text-uppercase text-muted small mb-2">Scorte siero e mangime</h6>
+<div class="cb-card p-3 mb-4">
+    <form method="post" action="{{ url_for('allevamento.impostazioni_scorte') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <h6 class="mb-2"><i class="bi bi-bag me-1" style="color:#c2185b"></i>Mangime (3 silos)</h6>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label small">Capacità totale silos (q)</label>
+                        <input type="number" name="allevamento_capacita_mangime_q" class="form-control form-control-sm"
+                               step="1" min="0" value="{{ scorte_settings.capacita_mangime_q }}">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small">Soglia riordino (q)</label>
+                        <input type="number" name="allevamento_soglia_mangime_q" class="form-control form-control-sm"
+                               step="1" min="0" value="{{ scorte_settings.soglia_mangime_q }}">
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h6 class="mb-2"><i class="bi bi-droplet me-1" style="color:#c2185b"></i>Siero (cisterna)</h6>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label small">Capacità cisterna (q)</label>
+                        <input type="number" name="allevamento_capacita_siero_q" class="form-control form-control-sm"
+                               step="1" min="0" value="{{ scorte_settings.capacita_siero_q }}">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small">Soglia riordino (q)</label>
+                        <input type="number" name="allevamento_soglia_siero_q" class="form-control form-control-sm"
+                               step="1" min="0" value="{{ scorte_settings.soglia_siero_q }}">
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <label class="form-label small">Soglia scarto consegna/consumo (q)</label>
+                    <input type="number" name="allevamento_soglia_scarto_siero_q" class="form-control form-control-sm"
+                           step="0.5" min="0" value="{{ scorte_settings.soglia_scarto_siero_q }}" style="max-width:150px">
+                    <div class="form-text">
+                        Quando il siero consumato in cucina (pesato) si discosta da quanto dichiarato alla
+                        consegna (non pesata) per più di questa quantità, la consegna viene evidenziata in Consegne.
+                    </div>
+                </div>
+            </div>
+        </div>
+        <hr class="my-3">
+        <h6 class="mb-2"><i class="bi bi-clock me-1" style="color:#c2185b"></i>Orari pasti</h6>
+        <div class="form-text mb-2">
+            Usati per capire se un pasto di oggi è già avvenuto oppure è ancora "programmato" (anche se ha già
+            un valore stimato copiato dal pasto precedente): finché l'orario non è passato non viene conteggiato
+            nelle scorte, per evitare che il contatore scali in anticipo per un pasto non ancora fatto.
+        </div>
+        <div class="row g-2">
+            <div class="col-4">
+                <label class="form-label small">Pasto 1</label>
+                <input type="time" name="allevamento_orario_pasto_1" class="form-control form-control-sm"
+                       value="{{ scorte_settings.orario_pasto_1 }}">
+            </div>
+            <div class="col-4">
+                <label class="form-label small">Pasto 2</label>
+                <input type="time" name="allevamento_orario_pasto_2" class="form-control form-control-sm"
+                       value="{{ scorte_settings.orario_pasto_2 }}">
+            </div>
+            <div class="col-4">
+                <label class="form-label small">Pasto 3</label>
+                <input type="time" name="allevamento_orario_pasto_3" class="form-control form-control-sm"
+                       value="{{ scorte_settings.orario_pasto_3 }}">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-sm mt-3" style="background:#c2185b;color:#fff">
+            <i class="bi bi-save me-1"></i>Salva
+        </button>
+    </form>
+</div>
+
 <!-- Storico cicli -->
 {% if cicli_precedenti %}
 <h6 class="text-uppercase text-muted small mb-2">Cicli precedenti</h6>

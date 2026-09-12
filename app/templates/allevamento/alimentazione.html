@@ -2,6 +2,9 @@
 {% block title %}Allevamento – Alimentazione{% endblock %}
 
 {% block content %}
+<style>
+.cb-pasto-futuro { opacity: .55; }
+</style>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="mb-0"><i class="bi bi-basket me-2" style="color:#c2185b"></i>Registra consumo</h4>
 </div>
@@ -52,25 +55,36 @@
             </thead>
             <tbody>
                 {% for pasto in [1,2,3] %}
-                <tr>
-                    <td class="fw-bold">Pasto {{ pasto }}</td>
+                <tr class="{{ 'cb-pasto-futuro' if not avvenuto[pasto] else '' }}">
+                    <td class="fw-bold">
+                        Pasto {{ pasto }}
+                        {% if not avvenuto[pasto] %}
+                        <span class="badge bg-secondary-subtle text-secondary ms-1" title="Non ancora avvenuto, escluso dalle scorte">
+                            <i class="bi bi-clock"></i>
+                        </span>
+                        {% endif %}
+                    </td>
                     {% for linea in [1,2,3] %}
                     {% set p = pasti.get((pasto, linea)) %}
                     {% set stimato = p and p.stimato %}
                     <td style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">
-                        <input type="number" name="mang_{{ pasto }}_{{ linea }}" class="form-control form-control-sm {{ 'bg-warning-subtle' if stimato }}"
+                        <input type="number" name="mang_{{ pasto }}_{{ linea }}" class="form-control form-control-sm cb-campo-pasto {{ 'bg-warning-subtle' if stimato }}"
+                               data-pasto="{{ pasto }}" data-linea="{{ linea }}"
                                style="min-width:70px" step="0.01" min="0" title="{{ 'Valore stimato (copiato dalla mattina)' if stimato else '' }}"
                                value="{{ p.mangime_qli if p and p.mangime_qli is not none else '' }}">
                     </td>
                     <td>
-                        <input type="number" name="siero_{{ pasto }}_{{ linea }}" class="form-control form-control-sm {{ 'bg-warning-subtle' if stimato }}"
+                        <input type="number" name="siero_{{ pasto }}_{{ linea }}" class="form-control form-control-sm cb-campo-pasto {{ 'bg-warning-subtle' if stimato }}"
+                               data-pasto="{{ pasto }}" data-linea="{{ linea }}"
                                style="min-width:70px" step="0.01" min="0" title="{{ 'Valore stimato (copiato dalla mattina)' if stimato else '' }}"
                                value="{{ p.siero_qli if p and p.siero_qli is not none else '' }}">
                     </td>
                     <td>
-                        <input type="number" name="acqua_{{ pasto }}_{{ linea }}" class="form-control form-control-sm {{ 'bg-warning-subtle' if stimato }}"
+                        <input type="number" name="acqua_{{ pasto }}_{{ linea }}" class="form-control form-control-sm cb-campo-pasto {{ 'bg-warning-subtle' if stimato }}"
+                               data-pasto="{{ pasto }}" data-linea="{{ linea }}"
                                style="min-width:70px" step="0.01" min="0" title="{{ 'Valore stimato (copiato dalla mattina)' if stimato else '' }}"
                                value="{{ p.acqua_qli if p and p.acqua_qli is not none else '' }}">
+                        <input type="hidden" name="touched_{{ pasto }}_{{ linea }}" value="">
                     </td>
                     <td class="text-muted text-center small">
                         {% if p and p.perc_siero is not none %}
@@ -99,9 +113,15 @@
             </tbody>
         </table>
     </div>
-    <p class="text-muted small">
+    <p class="text-muted small mb-1">
         <i class="bi bi-square-fill me-1" style="color:#fff3cd;-webkit-text-stroke:1px #ffc107"></i>
-        I valori in giallo sono stimati (copiati dal pasto della mattina): inserisci un valore per renderlo definitivo.
+        I valori in giallo sono stimati (copiati dal pasto precedente): solo le celle che modifichi davvero
+        diventano definitive al salvataggio, le altre restano stime aggiornabili anche se il campo non è vuoto.
+    </p>
+    <p class="text-muted small">
+        <i class="bi bi-clock me-1"></i>
+        Le righe sbiadite sono pasti non ancora avvenuti in base agli orari impostati: il dato (anche se stimato)
+        non viene ancora conteggiato nelle scorte. Cambia gli orari in <a href="{{ url_for('allevamento.impostazioni') }}">Impostazioni</a>.
     </p>
 
     <div class="cb-card p-3 mb-3 small text-muted">
@@ -121,6 +141,18 @@
 
 {% block extra_js %}
 <script>
+// Traccia quali celle sono state davvero modificate dall'utente: solo
+// quelle diventano un inserimento manuale al salvataggio, le altre restano
+// stime aggiornabili anche se il campo mostra già un valore precompilato.
+document.querySelectorAll('.cb-campo-pasto').forEach(function (input) {
+    input.addEventListener('input', function () {
+        var flag = document.querySelector(
+            'input[name="touched_' + input.dataset.pasto + '_' + input.dataset.linea + '"]'
+        );
+        if (flag) flag.value = '1';
+    });
+});
+
 function navDate(delta) {
     const inp = document.getElementById('dataNav');
     const d = new Date(inp.value);

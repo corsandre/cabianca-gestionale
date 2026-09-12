@@ -246,6 +246,8 @@ def _init_db(app):
         ("uso_pasti", "perc_ss_siero_rif", "REAL"),
         ("consegne_siero", "bolla_path", "VARCHAR(300)"),
         ("consegne_mangime", "bolla_path", "VARCHAR(300)"),
+        ("consegne_siero", "data_esaurimento", "DATE"),
+        ("consegne_siero", "ora_esaurimento", "TIME"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

@@ -135,11 +135,14 @@ def _live_count(ciclo):
 def index():
     _check_allevamento()
     from app.models import EventoMortalita, ConsegnaSiero, ConsegnaMangime, Censimento, UsoPasto
+    from app.services.allevamento_scorte import stato_mangime, stato_siero, giacenza_mangime_a_data
     ciclo = _get_ciclo_attivo()
     if not ciclo:
         return render_template("allevamento/index.html", ciclo=None,
                                cap_data={}, kpi={}, consegne_siero=[], consegne_mangime=[],
                                totali_alimentazione_ciclo={"mangime": 0, "siero": 0, "acqua": 0},
+                               scorta_mangime=stato_mangime(), scorta_siero=stato_siero(),
+                               apertura_mangime=None,
                                CAP_PER_BOX=CAP_PER_BOX, BOX_PER_CAP=BOX_PER_CAP,
                                POSTI_PER_CAP=POSTI_PER_CAP, CAPANNONI=CAPANNONI)
 
@@ -195,6 +198,8 @@ def index():
                            ciclo=ciclo, cap_data=cap_data, kpi=kpi,
                            consegne_siero=consegne_siero, consegne_mangime=consegne_mangime,
                            totali_alimentazione_ciclo=totali_alimentazione_ciclo,
+                           scorta_mangime=stato_mangime(), scorta_siero=stato_siero(),
+                           apertura_mangime=giacenza_mangime_a_data(ciclo.data_inizio),
                            CAP_PER_BOX=CAP_PER_BOX, BOX_PER_CAP=BOX_PER_CAP,
                            POSTI_PER_CAP=POSTI_PER_CAP, CAPANNONI=CAPANNONI)
 
@@ -456,6 +461,7 @@ def spostamenti_delete(sp_id):
 def consegne():
     _check_allevamento()
     from app.models import ConsegnaSiero, ConsegnaMangime
+    from app.services.allevamento_scorte import stato_mangime, stato_siero, scarto_consegna_siero, get_setting_float
     ciclo = _get_ciclo_attivo()
 
     tab = request.args.get("tab", "siero")
@@ -469,10 +475,18 @@ def consegne():
     tot_siero = sum(c.quantita_qli for c in siero_list)
     tot_mangime = sum(c.quantita_qli for c in mangime_list)
 
+    soglia_scarto_siero_q = get_setting_float("allevamento_soglia_scarto_siero_q")
+    scarti_siero = {
+        c.id: scarto_consegna_siero(c, soglia_scarto_siero_q)
+        for c in siero_list if c.data_esaurimento
+    }
+
     return render_template("allevamento/consegne.html",
                            ciclo=ciclo, tab=tab,
                            siero_list=siero_list, mangime_list=mangime_list,
                            tot_siero=tot_siero, tot_mangime=tot_mangime,
+                           scorta_mangime=stato_mangime(), scorta_siero=stato_siero(),
+                           scarti_siero=scarti_siero,
                            oggi=date.today())
 
 
@@ -481,6 +495,7 @@ def consegne():
 def consegne_siero_new():
     _check_allevamento()
     from app.models import ConsegnaSiero
+    from app.services.allevamento_scorte import chiudi_consegne_siero_precedenti
     ciclo = _get_ciclo_attivo()
     ajax = request.headers.get("X-Requested-With") == "fetch"
     if not ciclo:
@@ -492,11 +507,14 @@ def consegne_siero_new():
         from datetime import time as dt_time
         data_str = request.form.get("data", str(date.today()))
         ora_str = request.form.get("ora", "").strip()
-        ora = dt_time.fromisoformat(ora_str) if ora_str else None
+        if not ora_str:
+            raise ValueError("L'ora della consegna è obbligatoria: serve per chiudere con precisione il carico precedente.")
+        ora = dt_time.fromisoformat(ora_str)
         qty = float(request.form["quantita_qli"])
         ss = request.form.get("perc_sostanza_secca", "").strip()
+        data_consegna = date.fromisoformat(data_str)
         c = ConsegnaSiero(
-            ciclo_id=ciclo.id, data=date.fromisoformat(data_str), ora=ora,
+            ciclo_id=ciclo.id, data=data_consegna, ora=ora,
             quantita_qli=qty,
             perc_sostanza_secca=float(ss) if ss else None,
             lotto=request.form.get("lotto", "").strip() or None,
@@ -506,6 +524,8 @@ def consegne_siero_new():
             bolla_path=_salva_bolla(request.files.get("bolla")),
         )
         db.session.add(c)
+        # La cisterna viene sempre svuotata prima del carico: chiude il periodo precedente.
+        chiudi_consegne_siero_precedenti(data_consegna, ora)
         db.session.commit()
         if ajax:
             return jsonify(id=c.id, redirect=url_for("allevamento.consegne", tab="siero"))
@@ -549,6 +569,29 @@ def consegne_siero_delete(cid):
     return redirect(url_for("allevamento.consegne", tab="siero"))
 
 
+@bp.route("/consegne/siero/<int:cid>/chiudi", methods=["POST"])
+@login_required
+def consegne_siero_chiudi(cid):
+    _check_allevamento()
+    from app.models import ConsegnaSiero
+    c = db.session.get(ConsegnaSiero, cid)
+    if not c:
+        flash("Consegna non trovata.", "danger")
+        return redirect(url_for("allevamento.consegne", tab="siero"))
+    try:
+        from datetime import datetime, time as dt_time
+        data_str = request.form.get("data_esaurimento", str(date.today()))
+        ora_str = request.form.get("ora_esaurimento", "").strip()
+        c.data_esaurimento = date.fromisoformat(data_str)
+        c.ora_esaurimento = dt_time.fromisoformat(ora_str) if ora_str else datetime.now().time().replace(microsecond=0)
+        db.session.commit()
+        flash("Cisterna segnata come vuota.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
+    return redirect(url_for("allevamento.consegne", tab="siero"))
+
+
 @bp.route("/consegne/mangime/new", methods=["POST"])
 @login_required
 def consegne_mangime_new():
@@ -565,7 +608,9 @@ def consegne_mangime_new():
         from datetime import time as dt_time
         data_str = request.form.get("data", str(date.today()))
         ora_str = request.form.get("ora", "").strip()
-        ora = dt_time.fromisoformat(ora_str) if ora_str else None
+        if not ora_str:
+            raise ValueError("L'ora della consegna è obbligatoria.")
+        ora = dt_time.fromisoformat(ora_str)
         qty = float(request.form["quantita_qli"])
         c = ConsegnaMangime(
             ciclo_id=ciclo.id, data=date.fromisoformat(data_str), ora=ora,
@@ -635,6 +680,9 @@ def alimentazione():
     except ValueError:
         data_sel = date.today()
 
+    from app.services.allevamento_scorte import pasto_avvenuto
+    avvenuto = {pasto: pasto_avvenuto(data_sel, pasto) for pasto in [1, 2, 3]}
+
     pasti = {}
     if ciclo:
         for p in UsoPasto.query.filter_by(ciclo_id=ciclo.id, data=data_sel).all():
@@ -676,7 +724,7 @@ def alimentazione():
             )
 
     return render_template("allevamento/alimentazione.html",
-                           ciclo=ciclo, data_sel=data_sel, pasti=pasti,
+                           ciclo=ciclo, data_sel=data_sel, pasti=pasti, avvenuto=avvenuto,
                            totali=totali, tipo_mangime_attuale=tipo_mangime_attuale,
                            perc_ss_siero_attuale=perc_ss_siero_attuale,
                            perc_sostituzione=perc_sostituzione,
@@ -699,12 +747,12 @@ def alimentazione_new():
 
         for linea in [1, 2, 3]:
             for pasto in [1, 2, 3]:
+                if request.form.get(f"touched_{pasto}_{linea}") != "1":
+                    continue  # cella non modificata dall'utente: resta una stima aggiornabile
+
                 mang = request.form.get(f"mang_{pasto}_{linea}", "").strip()
                 siero = request.form.get(f"siero_{pasto}_{linea}", "").strip()
                 acqua = request.form.get(f"acqua_{pasto}_{linea}", "").strip()
-
-                if not any([mang, siero, acqua]):
-                    continue  # nessun inserimento manuale per questo pasto: eredita/mantiene la stima
 
                 registra_pasto(
                     ciclo_id=ciclo.id, data=data_pasto, pasto=pasto, linea=linea,
@@ -813,10 +861,22 @@ def impostazioni():
     if current_user.role != "admin":
         abort(403)
     from app.models import Ciclo
+    from app.services.allevamento_scorte import get_setting_float, orario_pasto_str
     ciclo_attivo = _get_ciclo_attivo()
     cicli_precedenti = Ciclo.query.filter_by(attivo=False).order_by(Ciclo.data_inizio.desc()).all()
+    scorte_settings = {
+        "capacita_mangime_q": get_setting_float("allevamento_capacita_mangime_q"),
+        "soglia_mangime_q": get_setting_float("allevamento_soglia_mangime_q"),
+        "capacita_siero_q": get_setting_float("allevamento_capacita_siero_q"),
+        "soglia_siero_q": get_setting_float("allevamento_soglia_siero_q"),
+        "soglia_scarto_siero_q": get_setting_float("allevamento_soglia_scarto_siero_q"),
+        "orario_pasto_1": orario_pasto_str(1),
+        "orario_pasto_2": orario_pasto_str(2),
+        "orario_pasto_3": orario_pasto_str(3),
+    }
     return render_template("allevamento/impostazioni.html",
                            ciclo_attivo=ciclo_attivo, cicli_precedenti=cicli_precedenti,
+                           scorte_settings=scorte_settings,
                            oggi=date.today())
 
 
@@ -856,4 +916,36 @@ def ciclo_chiudi(cid):
         ciclo.data_fine = date.today()
         db.session.commit()
         flash(f"Ciclo '{ciclo.nome}' chiuso.", "success")
+    return redirect(url_for("allevamento.impostazioni"))
+
+
+@bp.route("/impostazioni/scorte", methods=["POST"])
+@login_required
+def impostazioni_scorte():
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.services.allevamento_scorte import set_setting
+    campi_numerici = [
+        "allevamento_capacita_mangime_q", "allevamento_soglia_mangime_q",
+        "allevamento_capacita_siero_q", "allevamento_soglia_siero_q",
+        "allevamento_soglia_scarto_siero_q",
+    ]
+    campi_orario = [
+        "allevamento_orario_pasto_1", "allevamento_orario_pasto_2", "allevamento_orario_pasto_3",
+    ]
+    try:
+        for campo in campi_numerici:
+            valore = request.form.get(campo, "").strip()
+            if valore:
+                set_setting(campo, float(valore))
+        for campo in campi_orario:
+            valore = request.form.get(campo, "").strip()
+            if valore:
+                set_setting(campo, valore)
+        db.session.commit()
+        flash("Impostazioni scorte salvate.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
     return redirect(url_for("allevamento.impostazioni"))

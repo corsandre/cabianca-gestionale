@@ -436,6 +436,8 @@ class ConsegnaSiero(db.Model):
     ora = db.Column(db.Time)
     quantita_qli = db.Column(db.Float, nullable=False)
     perc_sostanza_secca = db.Column(db.Float)  # % sostanza secca contenuta nel lotto consegnato
+    data_esaurimento = db.Column(db.Date)  # data in cui la cisterna è stata svuotata/lavata (chiude il periodo)
+    ora_esaurimento = db.Column(db.Time)  # ora precisa di chiusura, per non sovrapporre i consumi col carico successivo
     lotto = db.Column(db.String(50))
     speditore = db.Column(db.String(200))
     trasportatore = db.Column(db.String(200))

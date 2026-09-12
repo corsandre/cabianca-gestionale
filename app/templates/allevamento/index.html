@@ -145,5 +145,57 @@
         </div>
     </div>
 </div>
+
+<!-- Scorte siero/mangime -->
+<h6 class="text-uppercase text-muted small mb-2 mt-4">Scorte</h6>
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="cb-card p-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <h6 class="mb-0"><i class="bi bi-droplet me-1" style="color:#c2185b"></i>Siero</h6>
+                {% if scorta_siero.in_allerta %}<span class="badge bg-danger">Sotto soglia</span>{% endif %}
+            </div>
+            {% if scorta_siero.giacenza is not none %}
+            <div class="fs-4 fw-bold" style="color:#c2185b">{{ scorta_siero.giacenza | round(1) }} q</div>
+            {% if scorta_siero.perc is not none %}
+            <div class="progress mb-1" style="height:6px">
+                <div class="progress-bar" style="width:{{ scorta_siero.perc }}%;background:#c2185b"></div>
+            </div>
+            {% endif %}
+            <small class="text-muted">
+                Soglia: {{ scorta_siero.soglia | round(0) if scorta_siero.soglia is not none else '–' }} q
+                {% if scorta_siero.giorni_residui is not none %}
+                · ~{{ scorta_siero.giorni_residui }} giorni residui
+                {% endif %}
+            </small>
+            {% else %}
+            <p class="text-muted small mb-0">Cisterna vuota, in attesa di carico.</p>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="cb-card p-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <h6 class="mb-0"><i class="bi bi-bag me-1" style="color:#c2185b"></i>Mangime</h6>
+                {% if scorta_mangime.in_allerta %}<span class="badge bg-danger">Sotto soglia</span>{% endif %}
+            </div>
+            <div class="fs-4 fw-bold" style="color:#c2185b">{{ scorta_mangime.giacenza | round(1) }} q</div>
+            {% if scorta_mangime.perc is not none %}
+            <div class="progress mb-1" style="height:6px">
+                <div class="progress-bar" style="width:{{ scorta_mangime.perc }}%;background:#c2185b"></div>
+            </div>
+            {% endif %}
+            <small class="text-muted">
+                Soglia: {{ scorta_mangime.soglia | round(0) if scorta_mangime.soglia is not none else '–' }} q
+                {% if scorta_mangime.giorni_residui is not none %}
+                · ~{{ scorta_mangime.giorni_residui }} giorni residui
+                {% endif %}
+                {% if apertura_mangime is not none %}
+                · a inizio ciclo: {{ apertura_mangime | round(1) }} q
+                {% endif %}
+            </small>
+        </div>
+    </div>
+</div>
 {% endif %}
 {% endblock %}
