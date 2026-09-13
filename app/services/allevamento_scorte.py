@@ -60,20 +60,54 @@ def _datetime_pasto(data_pasto, pasto):
 
 
 def pasto_avvenuto(data_pasto, pasto, adesso=None):
-    """True se l'orario nominale del pasto è già passato rispetto ad adesso."""
+    """True se l'orario nominale del pasto è già passato rispetto ad adesso.
+    Puramente basato sull'orario: usato per il display (es. righe sbiadite
+    in Alimentazione), non garantisce che i dati siano completi su tutte
+    le linee — per quello vedi pasto_completo()."""
     adesso = adesso or datetime.now()
     return _datetime_pasto(data_pasto, pasto) <= adesso
+
+
+def _linee_attive():
+    """Linee (1/2/3) con almeno un animale vivo secondo l'ultimo censimento
+    del ciclo attivo. Una linea senza animali non ha bisogno di dati di
+    consumo per considerare completo un pasto."""
+    from app.routes.allevamento import _get_ciclo_attivo, _live_count, LINEA_PER_BOX
+    ciclo = _get_ciclo_attivo()
+    if not ciclo:
+        return {1, 2, 3}
+    count = _live_count(ciclo)
+    attive = {LINEA_PER_BOX[box] for box, vivi in count.items() if vivi > 0 and box in LINEA_PER_BOX}
+    return attive or {1, 2, 3}
+
+
+def pasto_completo(campo, data_pasto, pasto, linee_attive=None):
+    """True se il pasto è avvenuto E tutte le linee con animali vivi hanno un
+    valore per questo campo. Finché manca anche una sola linea attiva (es.
+    stai ancora inserendo i dati linea per linea in Alimentazione), il
+    pasto non va contato nei consumi: altrimenti la giacenza risulterebbe
+    temporaneamente sottostimata (mancano quintali dalle linee non ancora
+    inserite)."""
+    if not pasto_avvenuto(data_pasto, pasto):
+        return False
+    linee_attive = linee_attive if linee_attive is not None else _linee_attive()
+    valori = {
+        r.linea: getattr(r, campo)
+        for r in UsoPasto.query.filter_by(data=data_pasto, pasto=pasto).all()
+    }
+    return all(valori.get(linea) is not None for linea in linee_attive)
 
 
 def _somma_consumo(campo, dal=None, al=None):
     """Somma un campo (mangime_qli/siero_qli) di UsoPasto tra due istanti
     (datetime), usando l'orario nominale di ciascun pasto per confrontarlo
-    con dal/al: serve sia per escludere i pasti non ancora avvenuti (il cui
-    istante nominale è nel futuro), sia per far partire un periodo dall'ora
-    esatta di una consegna invece che dall'inizio della sua giornata (un
-    pasto delle 07:00 non va attribuito a una consegna arrivata alle 11:00
-    dello stesso giorno)."""
-    adesso = datetime.now()
+    con dal/al: serve sia per far partire un periodo dall'ora esatta di una
+    consegna invece che dall'inizio della sua giornata (un pasto delle
+    07:00 non va attribuito a una consegna arrivata alle 11:00 dello
+    stesso giorno), sia — tramite pasto_completo — per escludere i pasti
+    non ancora avvenuti o non ancora inseriti su tutte le linee attive."""
+    linee_attive = _linee_attive()
+    completi = {}
     q = UsoPasto.query
     if dal is not None:
         q = q.filter(UsoPasto.data >= dal.date())
@@ -84,9 +118,12 @@ def _somma_consumo(campo, dal=None, al=None):
         valore = getattr(riga, campo)
         if not valore:
             continue
+        chiave = (riga.data, riga.pasto)
+        if chiave not in completi:
+            completi[chiave] = pasto_completo(campo, riga.data, riga.pasto, linee_attive)
+        if not completi[chiave]:
+            continue
         istante = _datetime_pasto(riga.data, riga.pasto)
-        if istante > adesso:
-            continue  # non ancora avvenuto
         if dal is not None and istante < dal:
             continue
         if al is not None and istante > al:
@@ -139,8 +176,9 @@ def _ultimo_consumo_pasto(campo):
     righe = UsoPasto.query.filter(getattr(UsoPasto, campo).isnot(None)).order_by(
         UsoPasto.data.desc(), UsoPasto.pasto.desc()
     ).all()
+    linee_attive = _linee_attive()
     for r in righe:
-        if not pasto_avvenuto(r.data, r.pasto):
+        if not pasto_completo(campo, r.data, r.pasto, linee_attive):
             continue
         tot = db.session.query(db.func.sum(getattr(UsoPasto, campo))).filter(
             UsoPasto.data == r.data, UsoPasto.pasto == r.pasto
