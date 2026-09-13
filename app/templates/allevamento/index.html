@@ -151,10 +151,10 @@
 <h6 class="text-uppercase text-muted small mb-2 mt-4">Scorte</h6>
 <div class="row g-3">
     <div class="col-md-6">
-        {{ card_scorta('Siero', 'bi-droplet', scorta_siero, testo_vuoto='Cisterna vuota, in attesa di carico.') }}
+        {{ card_scorta('Siero', 'bi-droplet', scorta_siero, testo_vuoto='Cisterna vuota, in attesa di carico.', barra_label='Carico attuale: usato sul consegnato') }}
     </div>
     <div class="col-md-6">
-        {{ card_scorta('Mangime', 'bi-bag', scorta_mangime, mostra_scarto=false,
+        {{ card_scorta('Mangime', 'bi-bag', scorta_mangime, mostra_scarto=false, barra_label='Riempimento silos: giacenza sulla capacità',
                        nota_extra=('Giacenza a inizio ciclo: ' ~ (apertura_mangime | round(1)) ~ ' q') if apertura_mangime is not none else none) }}
     </div>
 </div>

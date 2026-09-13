@@ -10,7 +10,9 @@ né semaforo.
 dati.perc + dati.barra_testo pilotano la barra: per il mangime è
 giacenza/capacità silos, per il siero è usato/totale del carico corrente
 (più utile di una generica capacità configurata a mano, perché usa il dato
-vero della consegna).
+vero della consegna). barra_label è l'etichetta sopra la barra che spiega
+cosa rappresenta (es. "Carico in uso" per il siero, "Riempimento silos"
+per il mangime).
 
 mostra_scarto (default True) mostra anche il dettaglio "mancano/avanzano X
 quintali per completare il pasto di esaurimento" — utile per il siero
@@ -19,7 +21,7 @@ manca si aspetta il camion, il dettaglio quintali non cambia cosa fare).
 
 Uso: {{ card_scorta('Siero', 'bi-droplet', scorta_siero) }}
 #}
-{% macro card_scorta(titolo, icona, dati, testo_vuoto='Nessun dato disponibile.', nota_extra=none, mostra_scarto=true) %}
+{% macro card_scorta(titolo, icona, dati, testo_vuoto='Nessun dato disponibile.', nota_extra=none, mostra_scarto=true, barra_label='Utilizzato sul totale') %}
 {% set variante = {'rosso': 'danger', 'giallo': 'warning', 'verde': 'success'}.get(dati.colore, 'secondary') %}
 {% set etichetta = {'rosso': 'Sotto soglia', 'giallo': 'In esaurimento', 'verde': 'Scorta ok'}.get(dati.colore) %}
 {% set testo_scuro = variante == 'warning' %}
@@ -32,8 +34,10 @@ Uso: {{ card_scorta('Siero', 'bi-droplet', scorta_siero) }}
     {% if dati.giacenza is none %}
     <p class="text-muted small mb-0">{{ testo_vuoto }}</p>
     {% else %}
+    <div class="text-muted small">Giacenza attuale</div>
     <div class="fs-3 fw-bold mb-1" style="color:#c2185b">{{ dati.giacenza | round(1) }} q</div>
     {% if dati.perc is not none %}
+    {% if barra_label %}<div class="text-muted small">{{ barra_label }}</div>{% endif %}
     <div class="progress mb-2" style="height:20px">
         <div class="progress-bar bg-{{ variante }} {{ 'text-dark' if testo_scuro else 'text-white' }}"
              style="width:{{ dati.perc }}%">
