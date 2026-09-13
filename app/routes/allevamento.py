@@ -861,12 +861,15 @@ def impostazioni():
     if current_user.role != "admin":
         abort(403)
     from app.models import Ciclo
-    from app.services.allevamento_scorte import get_setting_float, orario_pasto_str
+    from app.services.allevamento_scorte import get_setting_float, get_setting_int, orario_pasto_str
     ciclo_attivo = _get_ciclo_attivo()
     cicli_precedenti = Ciclo.query.filter_by(attivo=False).order_by(Ciclo.data_inizio.desc()).all()
+    soglia_mangime_pasti = get_setting_int("allevamento_soglia_mangime_pasti") or 0
+    soglia_mangime_giorni, soglia_mangime_pasti_extra = divmod(soglia_mangime_pasti, 3)
     scorte_settings = {
         "capacita_mangime_q": get_setting_float("allevamento_capacita_mangime_q"),
-        "soglia_mangime_q": get_setting_float("allevamento_soglia_mangime_q"),
+        "soglia_mangime_giorni": soglia_mangime_giorni,
+        "soglia_mangime_pasti_extra": soglia_mangime_pasti_extra,
         "soglia_scarto_siero_q": get_setting_float("allevamento_soglia_scarto_siero_q"),
         "orario_pasto_1": orario_pasto_str(1),
         "orario_pasto_2": orario_pasto_str(2),
@@ -925,8 +928,7 @@ def impostazioni_scorte():
         abort(403)
     from app.services.allevamento_scorte import set_setting
     campi_numerici = [
-        "allevamento_capacita_mangime_q", "allevamento_soglia_mangime_q",
-        "allevamento_soglia_scarto_siero_q",
+        "allevamento_capacita_mangime_q", "allevamento_soglia_scarto_siero_q",
     ]
     campi_orario = [
         "allevamento_orario_pasto_1", "allevamento_orario_pasto_2", "allevamento_orario_pasto_3",
@@ -940,6 +942,11 @@ def impostazioni_scorte():
             valore = request.form.get(campo, "").strip()
             if valore:
                 set_setting(campo, valore)
+
+        giorni = int(request.form.get("soglia_mangime_giorni", "0").strip() or 0)
+        pasti_extra = int(request.form.get("soglia_mangime_pasti_extra", "0").strip() or 0)
+        set_setting("allevamento_soglia_mangime_pasti", giorni * 3 + pasti_extra)
+
         db.session.commit()
         flash("Impostazioni scorte salvate.", "success")
     except Exception as e:

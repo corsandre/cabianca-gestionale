@@ -77,10 +77,20 @@
                         <input type="number" name="allevamento_capacita_mangime_q" class="form-control form-control-sm"
                                step="1" min="0" value="{{ scorte_settings.capacita_mangime_q }}">
                     </div>
-                    <div class="col-6">
-                        <label class="form-label small">Soglia riordino (q)</label>
-                        <input type="number" name="allevamento_soglia_mangime_q" class="form-control form-control-sm"
-                               step="1" min="0" value="{{ scorte_settings.soglia_mangime_q }}">
+                </div>
+                <div class="mt-2">
+                    <label class="form-label small">Soglia riordino</label>
+                    <div class="d-flex align-items-center gap-2">
+                        <input type="number" name="soglia_mangime_giorni" class="form-control form-control-sm"
+                               step="1" min="0" style="width:70px" value="{{ scorte_settings.soglia_mangime_giorni }}">
+                        <span class="small text-muted">giorni e</span>
+                        <input type="number" name="soglia_mangime_pasti_extra" class="form-control form-control-sm"
+                               step="1" min="0" max="2" style="width:70px" value="{{ scorte_settings.soglia_mangime_pasti_extra }}">
+                        <span class="small text-muted">pasti</span>
+                    </div>
+                    <div class="form-text">
+                        In pasti anziché quintali: così la soglia segue automaticamente l'aumento del consumo
+                        invece di restare un numero fisso sempre meno rappresentativo col crescere degli animali.
                     </div>
                 </div>
             </div>

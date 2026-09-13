@@ -19,9 +19,17 @@ quintali per completare il pasto di esaurimento" — utile per il siero
 (il PC compensa da solo con acqua/mangime), inutile per il mangime (se
 manca si aspetta il camion, il dettaglio quintali non cambia cosa fare).
 
+mostra_consumo (default False) mostra il consumo dell'ultimo pasto
+registrato e la sua proiezione a consumo giornaliero (×3) — lo stesso dato
+che alimenta la stima di esaurimento, per trasparenza.
+
+dati.soglia_testo, se presente, sostituisce la vecchia riga "Soglia
+riordino: X q" con un testo già pronto (es. "Soglia riordino: 2 giorni
+(≈ 44,3 q)").
+
 Uso: {{ card_scorta('Siero', 'bi-droplet', scorta_siero) }}
 #}
-{% macro card_scorta(titolo, icona, dati, testo_vuoto='Nessun dato disponibile.', nota_extra=none, mostra_scarto=true, barra_label='Utilizzato sul totale') %}
+{% macro card_scorta(titolo, icona, dati, testo_vuoto='Nessun dato disponibile.', nota_extra=none, mostra_scarto=true, mostra_consumo=false, barra_label='Utilizzato sul totale') %}
 {% set variante = {'rosso': 'danger', 'giallo': 'warning', 'verde': 'success'}.get(dati.colore, 'secondary') %}
 {% set etichetta = {'rosso': 'Sotto soglia', 'giallo': 'In esaurimento', 'verde': 'Scorta ok'}.get(dati.colore) %}
 {% set testo_scuro = variante == 'warning' %}
@@ -43,6 +51,13 @@ Uso: {{ card_scorta('Siero', 'bi-droplet', scorta_siero) }}
              style="width:{{ dati.perc }}%">
             {% if dati.barra_testo %}<small>{{ dati.barra_testo }}</small>{% endif %}
         </div>
+    </div>
+    {% endif %}
+
+    {% if mostra_consumo and dati.consumo_ultimo_pasto %}
+    <div class="small text-muted mb-2">
+        Consumo ultimo pasto: <strong>{{ dati.consumo_ultimo_pasto | round(1) }} q</strong>
+        (stima ≈ {{ dati.consumo_giorno_stimato | round(1) }} q/giorno)
     </div>
     {% endif %}
 
@@ -71,8 +86,8 @@ Uso: {{ card_scorta('Siero', 'bi-droplet', scorta_siero) }}
         {% endif %}
     </div>
 
-    {% if dati.soglia is not none %}
-    <small class="text-muted">Soglia riordino: {{ dati.soglia | round(0) }} q</small>
+    {% if dati.soglia_testo %}
+    <small class="text-muted d-block">{{ dati.soglia_testo }}</small>
     {% endif %}
     {% if nota_extra %}<small class="text-muted d-block">{{ nota_extra }}</small>{% endif %}
     {% endif %}

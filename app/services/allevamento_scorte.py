@@ -24,7 +24,7 @@ from app.models import Setting, ConsegnaSiero, ConsegnaMangime, UsoPasto
 
 DEFAULTS = {
     "allevamento_capacita_mangime_q": "400",
-    "allevamento_soglia_mangime_q": "40",
+    "allevamento_soglia_mangime_pasti": "6",
     "allevamento_soglia_scarto_siero_q": "5",
 }
 
@@ -139,6 +139,11 @@ def get_setting_float(key):
         return float(val)
     except (TypeError, ValueError):
         return None
+
+
+def get_setting_int(key):
+    val = get_setting_float(key)
+    return int(val) if val is not None else None
 
 
 def set_setting(key, value):
@@ -278,13 +283,21 @@ def stima_esaurimento(giacenza, consumo_ultimo_pasto, adesso=None):
     return None
 
 
-def colore_livello(giacenza, soglia):
-    """Semaforo scorta: rosso sotto soglia, giallo entro 2x soglia, verde oltre."""
-    if giacenza is None or soglia is None:
+def colore_livello_pasti(stima, soglia_pasti):
+    """Semaforo scorta basato sui pasti residui stimati (non sui quintali):
+    così la soglia segue automaticamente l'aumento del consumo invece di
+    restare un numero fisso sempre meno rappresentativo col crescere degli
+    animali. Rosso sotto soglia, giallo entro 2x soglia, verde oltre."""
+    if stima is None or soglia_pasti is None:
         return None
-    if giacenza <= soglia:
+    if stima.get("esaurito"):
         return "rosso"
-    if giacenza <= soglia * 2:
+    pasti_residui = stima.get("pasti_residui")
+    if pasti_residui is None:
+        return None
+    if pasti_residui <= soglia_pasti:
+        return "rosso"
+    if pasti_residui <= soglia_pasti * 2:
         return "giallo"
     return "verde"
 
@@ -298,15 +311,28 @@ def _perc_capacita(giacenza_q, capacita_q):
 def stato_mangime():
     giacenza = giacenza_mangime()
     capacita = get_setting_float("allevamento_capacita_mangime_q")
-    soglia = get_setting_float("allevamento_soglia_mangime_q")
+    soglia_pasti = get_setting_int("allevamento_soglia_mangime_pasti")
     ultimo_pasto = _ultimo_consumo_pasto("mangime_qli")
+    stima = stima_esaurimento(giacenza, ultimo_pasto)
+
     barra_testo = None
     if giacenza is not None and capacita:
         barra_testo = f"{giacenza:.1f} di {capacita:.0f} q"
+
+    consumo_giorno_stimato = ultimo_pasto * 3 if ultimo_pasto else None
+
+    soglia_testo = None
+    if soglia_pasti:
+        soglia_testo = f"Soglia riordino: {_testo_residuo(soglia_pasti)}"
+        if ultimo_pasto:
+            soglia_testo += f" (≈ {soglia_pasti * ultimo_pasto:.1f} q)"
+
     return {
-        "giacenza": giacenza, "capacita": capacita, "soglia": soglia,
-        "stima": stima_esaurimento(giacenza, ultimo_pasto),
-        "colore": colore_livello(giacenza, soglia),
+        "giacenza": giacenza, "capacita": capacita,
+        "soglia_pasti": soglia_pasti, "soglia_testo": soglia_testo,
+        "consumo_ultimo_pasto": ultimo_pasto, "consumo_giorno_stimato": consumo_giorno_stimato,
+        "stima": stima,
+        "colore": colore_livello_pasti(stima, soglia_pasti),
         "perc": _perc_capacita(giacenza, capacita),
         "barra_testo": barra_testo,
     }
