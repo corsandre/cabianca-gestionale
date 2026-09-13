@@ -1,10 +1,12 @@
 """
 Registrazione uso pasti (mangime/siero/acqua) con gestione dei valori stimati.
 
-Il primo pasto della giornata inserito manualmente (non necessariamente il
-Pasto 1: può essere qualunque) fa da riferimento per gli altri pasti dello
-stesso giorno/linea non ancora compilati, che vengono marcati come "stimato"
-finché non arriva un inserimento manuale specifico per loro.
+Un pasto inserito manualmente fa da riferimento solo per i pasti successivi
+(stesso giorno/linea) non ancora compilati manualmente, che vengono marcati
+come "stimato" finché non arriva un inserimento manuale specifico per loro.
+Mai all'indietro: un pasto precedente è già avvenuto con la stima che aveva
+in quel momento, non va corretto retroattivamente in base a un pasto
+registrato dopo.
 
 Tipo mangime e % sostanza secca del siero non si chiedono all'utente: si
 prendono dall'ultima consegna registrata per ciascun ingrediente. La %
@@ -78,11 +80,13 @@ def registra_pasto(ciclo_id, data, pasto, linea, mangime_qli=None, siero_qli=Non
 
 
 def _rifornisci_stime(ciclo_id, data, linea, pasto_inserito, riferimento):
-    """Copia i valori appena inseriti manualmente sugli altri pasti dello
+    """Copia i valori appena inseriti manualmente sui pasti successivi dello
     stesso giorno/linea non ancora compilati manualmente (nuovi o già
-    marcati come stimati), sia prima che dopo quello inserito."""
+    marcati come stimati). Solo in avanti: un pasto precedente è già
+    avvenuto con la sua stima di allora, non va corretto retroattivamente
+    in base a un pasto registrato dopo — non avrebbe senso causale."""
     for pasto in TUTTI_I_PASTI:
-        if pasto == pasto_inserito:
+        if pasto <= pasto_inserito:
             continue
         altro = UsoPasto.query.filter_by(
             ciclo_id=ciclo_id, data=data, pasto=pasto, linea=linea
