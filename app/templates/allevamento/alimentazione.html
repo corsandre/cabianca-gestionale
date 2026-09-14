@@ -88,7 +88,7 @@
                     </td>
                     <td class="text-muted text-center small">
                         {% if p and p.perc_siero is not none %}
-                        {{ p.perc_siero }}%{% if p.perc_ss_siero_rif is not none %} <span class="text-muted">({{ p.perc_ss_siero_rif }}%)</span>{% endif %}
+                        {{ p.perc_siero }}%{% if p.perc_ss_siero_rif is not none and p.siero_qli %} <span class="text-muted">({{ p.perc_ss_siero_rif }}%)</span>{% endif %}
                         {% else %}–{% endif %}
                     </td>
                     {% endfor %}
