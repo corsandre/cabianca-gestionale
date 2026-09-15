@@ -147,6 +147,23 @@
     </div>
 </div>
 
+<!-- Uscite macello -->
+<h6 class="text-uppercase text-muted small mb-2 mt-4">Uscite macello</h6>
+<div class="row g-3">
+    <div class="col-6">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-4 fw-bold" style="color:#c2185b">{{ stat_fine_ciclo.capi }}</div>
+            <small class="text-muted">Capi fine ciclo (165-180kg){% if stat_fine_ciclo.kg %} · {{ stat_fine_ciclo.kg | round(0) | int }} kg{% endif %}</small>
+        </div>
+    </div>
+    <div class="col-6">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-4 fw-bold text-warning-emphasis">{{ stat_scarti.capi }}</div>
+            <small class="text-muted">Scarti/sottopeso macellati{% if stat_scarti.kg %} · {{ stat_scarti.kg | round(0) | int }} kg{% endif %}</small>
+        </div>
+    </div>
+</div>
+
 <!-- Scorte siero/mangime -->
 <h6 class="text-uppercase text-muted small mb-2 mt-4">Scorte</h6>
 <div class="row g-3">

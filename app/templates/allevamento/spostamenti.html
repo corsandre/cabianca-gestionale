@@ -16,7 +16,7 @@
 {% else %}
 
 <!-- KPI -->
-<div class="row g-2 mb-4">
+<div class="row g-2 mb-3">
     {% for tipo, label, color in [('entrata','Entrate','success'),('uscita','Uscite','danger'),('interno','Interni','secondary')] %}
     <div class="col-4">
         <div class="cb-card p-3 text-center">
@@ -25,6 +25,20 @@
         </div>
     </div>
     {% endfor %}
+</div>
+<div class="row g-2 mb-4">
+    <div class="col-6">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-4 fw-bold" style="color:#c2185b">{{ stat_fine_ciclo.capi }}</div>
+            <small class="text-muted">Capi fine ciclo (165-180kg){% if stat_fine_ciclo.kg %} · {{ stat_fine_ciclo.kg | round(0) | int }} kg{% endif %}</small>
+        </div>
+    </div>
+    <div class="col-6">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-4 fw-bold text-warning-emphasis">{{ stat_scarti.capi }}</div>
+            <small class="text-muted">Scarti/sottopeso macellati{% if stat_scarti.kg %} · {{ stat_scarti.kg | round(0) | int }} kg{% endif %}</small>
+        </div>
+    </div>
 </div>
 
 <!-- Filtro -->
@@ -41,7 +55,8 @@
     <table class="table table-sm mb-0">
         <thead class="table-light">
             <tr>
-                <th>Data</th><th>Tipo</th><th>Da</th><th>A</th><th>Capi</th><th>Motivo</th>
+                <th>Data</th><th>Tipo</th><th>Da</th><th>A</th><th>Capi</th>
+                <th>Peso medio</th><th>Bolla</th><th>Motivo</th>
                 {% if current_user.role == 'admin' %}<th></th>{% endif %}
             </tr>
         </thead>
@@ -51,7 +66,10 @@
                 <td>{{ s.data.strftime('%d/%m/%Y') }}</td>
                 <td>
                     {% if s.tipo == 'entrata' %}<span class="badge bg-success">Entrata</span>
-                    {% elif s.tipo == 'uscita' %}<span class="badge bg-danger">Uscita</span>
+                    {% elif s.tipo == 'uscita' %}
+                        <span class="badge bg-danger">Uscita</span>
+                        {% if s.categoria_uscita == 'fine_ciclo' %}<span class="badge bg-secondary">Fine ciclo</span>
+                        {% elif s.categoria_uscita == 'scarto_sottopeso' %}<span class="badge text-dark" style="background:#ffc107">Scarto/sottopeso</span>{% endif %}
                     {% else %}<span class="badge bg-secondary">Interno</span>{% endif %}
                 </td>
                 <td class="text-muted">
@@ -67,6 +85,21 @@
                     {% endif %}
                 </td>
                 <td class="fw-bold">{{ s.quantita }}</td>
+                <td class="text-muted">{{ (s.peso_medio_kg ~ ' kg') if s.peso_medio_kg is not none else '–' }}</td>
+                <td>
+                    {% if s.tipo in ('entrata', 'uscita') %}
+                    {% if s.bolla_path %}
+                    <a href="{{ url_for('static', filename='uploads/' + s.bolla_path) }}" target="_blank" download title="Scarica bolla">
+                        <i class="bi bi-file-earmark-image"></i>
+                    </a>
+                    {% else %}
+                    <label class="btn btn-sm btn-outline-secondary py-0 px-1 mb-0" title="Aggiungi foto bolla">
+                        <i class="bi bi-camera"></i>
+                        <input type="file" class="cb-bolla-input-later d-none" data-id="{{ s.id }}" accept="image/*,.pdf" capture="environment">
+                    </label>
+                    {% endif %}
+                    {% else %}–{% endif %}
+                </td>
                 <td class="text-muted">{{ s.motivo or '–' }}</td>
                 {% if current_user.role == 'admin' %}
                 <td>
@@ -94,7 +127,7 @@
                 <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Registra spostamento</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="post" action="{{ url_for('allevamento.spostamenti_new') }}">
+            <form method="post" action="{{ url_for('allevamento.spostamenti_new') }}" enctype="multipart/form-data" class="cb-form-spostamento">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
                     <div class="row g-2 mb-3">
@@ -121,8 +154,8 @@
                         </div>
                         <div class="col-6">
                             <label class="form-label">Box origine</label>
-                            <select name="box_origine" class="form-select" id="boxOrig">
-                                <option value="">– tutto CAP –</option>
+                            <select name="box_origine" class="form-select" id="boxOrig" required>
+                                <option value="" selected disabled>– seleziona box –</option>
                             </select>
                         </div>
                     </div>
@@ -136,14 +169,33 @@
                         </div>
                         <div class="col-6">
                             <label class="form-label">Box destinazione</label>
-                            <select name="box_destinazione" class="form-select" id="boxDest">
-                                <option value="">– tutto CAP –</option>
+                            <select name="box_destinazione" class="form-select" id="boxDest" required>
+                                <option value="" selected disabled>– seleziona box –</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3" id="rowCategoriaUscita" style="display:none">
+                        <div class="col-12">
+                            <label class="form-label">Categoria uscita</label>
+                            <select name="categoria_uscita" class="form-select" id="categoriaUscita">
+                                <option value="fine_ciclo">Fine ciclo (165-180 kg)</option>
+                                <option value="scarto_sottopeso">Scarto/sottopeso (macellazione anticipata)</option>
                             </select>
                         </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Numero capi</label>
                         <input type="number" name="quantita" class="form-control" min="1" value="1" required>
+                    </div>
+                    <div class="row g-2 mb-3" id="rowPesoBolla" style="display:none">
+                        <div class="col-6">
+                            <label class="form-label">Peso medio (kg)</label>
+                            <input type="number" name="peso_medio_kg" class="form-control" step="0.1" min="0">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Foto bolla</label>
+                            <input type="file" name="bolla" class="form-control cb-bolla-input" accept="image/*,.pdf" capture="environment">
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Motivo</label>
@@ -168,7 +220,7 @@
 <script>
 const BPC = {{ BOX_PER_CAP | tojson }};
 function buildBoxOptions(cap, sel) {
-    sel.innerHTML = '<option value="">– tutto CAP –</option>';
+    sel.innerHTML = '<option value="" selected disabled>– seleziona box –</option>';
     if (cap && BPC[cap]) BPC[cap].forEach(b => {
         const o = document.createElement('option'); o.value = b; o.textContent = 'Box ' + b; sel.appendChild(o);
     });
@@ -177,9 +229,109 @@ function updateBoxOrig() { buildBoxOptions(document.getElementById('capOrig').va
 function updateBoxDest() { buildBoxOptions(document.getElementById('capDest').value, document.getElementById('boxDest')); }
 function aggiornaForm() {
     const tipo = document.getElementById('tipoSpostamento').value;
+    const boxOrig = document.getElementById('boxOrig');
+    const boxDest = document.getElementById('boxDest');
+
     document.getElementById('rowOrigine').style.display = tipo === 'entrata' ? 'none' : '';
     document.getElementById('rowDest').style.display = tipo === 'uscita' ? 'none' : '';
+    boxOrig.required = tipo !== 'entrata';
+    boxDest.required = tipo !== 'uscita';
+
+    document.getElementById('rowCategoriaUscita').style.display = tipo === 'uscita' ? '' : 'none';
+    document.getElementById('rowPesoBolla').style.display = (tipo === 'entrata' || tipo === 'uscita') ? '' : 'none';
 }
 aggiornaForm();
+
+// Compressione foto bolla lato browser, stesso meccanismo delle Consegne.
+function cbComprimiImmagine(file, maxDim, qualita) {
+    return new Promise(function (resolve) {
+        if (!file.type.startsWith('image/')) {
+            resolve(file);
+            return;
+        }
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = function () {
+            URL.revokeObjectURL(url);
+            let w = img.width, h = img.height;
+            if (w > maxDim || h > maxDim) {
+                if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+                else { w = Math.round(w * maxDim / h); h = maxDim; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            canvas.toBlob(function (blob) {
+                if (!blob || blob.size >= file.size) {
+                    resolve(file);
+                    return;
+                }
+                resolve(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }));
+            }, 'image/jpeg', qualita);
+        };
+        img.onerror = function () {
+            URL.revokeObjectURL(url);
+            resolve(file);
+        };
+        img.src = url;
+    });
+}
+
+document.querySelectorAll('.cb-bolla-input').forEach(function (input) {
+    input.addEventListener('change', async function () {
+        if (!input.files || !input.files[0]) return;
+        const originale = input.files[0];
+        const compressa = await cbComprimiImmagine(originale, 1600, 0.75);
+        if (compressa !== originale) {
+            const dt = new DataTransfer();
+            dt.items.add(compressa);
+            input.files = dt.files;
+        }
+    });
+});
+
+async function cbFetchConRetry(url, body, tentativiMax, onTentativo) {
+    for (let tentativo = 1; tentativo <= tentativiMax; tentativo++) {
+        if (onTentativo) onTentativo(tentativo, tentativiMax);
+        try {
+            const resp = await fetch(url, {
+                method: 'POST',
+                body: body,
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'fetch' },
+            });
+            let json = null;
+            try { json = await resp.json(); } catch (e) {}
+            if (resp.ok && json) return json;
+            throw new Error((json && json.error) || 'risposta non valida dal server');
+        } catch (err) {
+            if (tentativo === tentativiMax) throw err;
+            await new Promise(function (r) { setTimeout(r, 1500); });
+        }
+    }
+}
+
+// Upload posticipato della bolla dalla tabella (icona 📷 sulle righe senza foto),
+// stesso meccanismo delle Consegne.
+document.querySelectorAll('.cb-bolla-input-later').forEach(function (input) {
+    input.addEventListener('change', async function () {
+        if (!input.files || !input.files[0]) return;
+        const label = input.closest('label');
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        label.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        try {
+            const compressa = await cbComprimiImmagine(input.files[0], 1600, 0.75);
+            const fd = new FormData();
+            fd.append('bolla', compressa);
+            fd.append('csrf_token', csrfToken);
+            const url = '/allevamento/spostamenti/' + input.dataset.id + '/bolla';
+            await cbFetchConRetry(url, fd, 3, function () {});
+        } catch (err) {
+            alert('Caricamento foto non riuscito: ' + err.message);
+        }
+        window.location.reload();
+    });
+});
 </script>
 {% endblock %}
