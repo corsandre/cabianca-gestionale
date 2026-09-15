@@ -955,9 +955,11 @@ def _stato_trattamento(t):
     data_fine_sospensione = None
     if completo and ultima:
         data_fine_sospensione = ultima.data + timedelta(days=t.giorni_sospensione)
+    dose_capo_ml = None
     dose_totale_ml = None
     if t.ml_per_kg and t.peso_medio_kg:
-        dose_totale_ml = t.ml_per_kg * t.peso_medio_kg * t.numero_animali
+        dose_capo_ml = t.ml_per_kg * t.peso_medio_kg
+        dose_totale_ml = dose_capo_ml * t.numero_animali
     return {
         "fatte": fatte,
         "totali": t.giorni_somministrazione,
@@ -967,6 +969,7 @@ def _stato_trattamento(t):
         "prossima_data": (ultima.data + timedelta(days=1)) if ultima and not completo else None,
         "data_fine_sospensione": data_fine_sospensione,
         "in_sospensione": bool(data_fine_sospensione and oggi < data_fine_sospensione),
+        "dose_capo_ml": dose_capo_ml,
         "dose_totale_ml": dose_totale_ml,
     }
 

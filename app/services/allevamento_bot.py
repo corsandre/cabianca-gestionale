@@ -520,7 +520,8 @@ def start_bot(app):
         ambito = f"box {box}" if box else f"CAP {cap} (tutto)"
         dose_txt = ""
         if ml_per_kg and peso:
-            dose_txt = f"\n💉 Dose totale: {ml_per_kg * peso * qty:.1f} ml"
+            dose_capo = ml_per_kg * peso
+            dose_txt = f"\n💉 Dose/capo: {dose_capo:.1f} ml — Dose totale: {dose_capo * qty:.1f} ml"
         await update.message.reply_text(
             f"✅ Trattamento registrato: {nome}, {qty} capi, {ambito}.{dose_txt}\n\nUsa /start per continuare."
         )

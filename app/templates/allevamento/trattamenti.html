@@ -48,7 +48,7 @@
         <thead class="table-light">
             <tr>
                 <th>Data inizio</th><th>Medicinale</th><th>Ambito</th><th>Capi</th>
-                <th>Peso medio</th><th>Dose totale</th>
+                <th>Peso medio</th><th>Dose/capo</th><th>Dose totale</th>
                 <th>Dosi</th><th>Stato</th><th>Operatore</th>
                 {% if current_user.role == 'admin' %}<th></th>{% endif %}
             </tr>
@@ -64,6 +64,7 @@
                 </td>
                 <td class="fw-bold">{{ t.numero_animali }}</td>
                 <td class="text-muted">{{ (t.peso_medio_kg ~ ' kg') if t.peso_medio_kg is not none else '–' }}</td>
+                <td class="text-muted">{{ (s.dose_capo_ml | round(1) ~ ' ml') if s.dose_capo_ml is not none else '–' }}</td>
                 <td class="fw-bold" style="color:#c2185b">{{ (s.dose_totale_ml | round(1) ~ ' ml') if s.dose_totale_ml is not none else '–' }}</td>
                 <td>{{ s.fatte }}/{{ s.totali }}</td>
                 <td>
@@ -168,9 +169,19 @@
                             <input type="number" name="giorni_sospensione" id="inpGiorniSosp" class="form-control form-control-sm" min="0" required>
                         </div>
                     </div>
-                    <div class="cb-card p-2 mb-3 text-center" style="background:#fce4ec">
-                        <span class="text-muted small">Dose totale da somministrare</span>
-                        <div class="fs-4 fw-bold" style="color:#c2185b" id="doseTotale">– ml</div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <div class="cb-card p-2 text-center" style="background:#fce4ec">
+                                <span class="text-muted small">Dose per capo</span>
+                                <div class="fs-5 fw-bold" style="color:#c2185b" id="doseCapo">– ml</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="cb-card p-2 text-center" style="background:#fce4ec">
+                                <span class="text-muted small">Dose totale</span>
+                                <div class="fs-5 fw-bold" style="color:#c2185b" id="doseTotale">– ml</div>
+                            </div>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Operatore</label>
@@ -228,11 +239,15 @@ function aggiornaDoseTotale() {
     const mlKg = parseFloat(document.getElementById('inpMlKg').value);
     const peso = parseFloat(document.getElementById('inpPeso').value);
     const qty = parseFloat(document.getElementById('inpQty').value);
-    const el = document.getElementById('doseTotale');
-    if (!isNaN(mlKg) && !isNaN(peso) && !isNaN(qty) && mlKg > 0 && peso > 0 && qty > 0) {
-        el.textContent = (mlKg * peso * qty).toFixed(1) + ' ml';
+    const elCapo = document.getElementById('doseCapo');
+    const elTotale = document.getElementById('doseTotale');
+    if (!isNaN(mlKg) && !isNaN(peso) && mlKg > 0 && peso > 0) {
+        const doseCapo = mlKg * peso;
+        elCapo.textContent = doseCapo.toFixed(1) + ' ml';
+        elTotale.textContent = (!isNaN(qty) && qty > 0) ? (doseCapo * qty).toFixed(1) + ' ml' : '– ml';
     } else {
-        el.textContent = '– ml';
+        elCapo.textContent = '– ml';
+        elTotale.textContent = '– ml';
     }
 }
 ['inpMlKg', 'inpPeso', 'inpQty'].forEach(function (id) {
