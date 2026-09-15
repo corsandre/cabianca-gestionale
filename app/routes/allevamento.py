@@ -568,8 +568,10 @@ def consegne():
         ciclo_id=ciclo.id if ciclo else -1
     ).order_by(ConsegnaMangime.data.desc()).all() if ciclo else []
 
-    tot_siero = sum(c.quantita_qli for c in siero_list)
-    tot_mangime = sum(c.quantita_qli for c in mangime_list)
+    # round(): la somma di float (es. 45.5 + 30.25) può introdurre residui
+    # binari tipo 88.05000000000001, visibili altrimenti nel totale.
+    tot_siero = round(sum(c.quantita_qli for c in siero_list), 2)
+    tot_mangime = round(sum(c.quantita_qli for c in mangime_list), 2)
 
     soglia_scarto_siero_q = get_setting_float("allevamento_soglia_scarto_siero_q")
     scarti_siero = {
