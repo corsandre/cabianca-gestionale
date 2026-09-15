@@ -45,8 +45,8 @@ def start_bot(app):
         CENSIMENTO_FIELD, CENSIMENTO_BOX_NEXT, CENSIMENTO_CAP_NEXT, CENSIMENTO_CONFIRM,
         CENSIMENTO_RECAP_PICK,
         TRATTAMENTO_SOMMINISTRA, TRATTAMENTO_MEDICINALE, TRATTAMENTO_CAP,
-        TRATTAMENTO_BOX, TRATTAMENTO_QTY,
-    ) = range(31)
+        TRATTAMENTO_BOX, TRATTAMENTO_QTY, TRATTAMENTO_PESO,
+    ) = range(32)
 
     CAPANNONI = [1, 2, 3, 4, 5, 6, 7]
     BOX_PER_CAP = {
@@ -442,9 +442,54 @@ def start_bot(app):
             await update.message.reply_text("⚠️ Inserisci un numero intero positivo.")
             return TRATTAMENTO_QTY
 
+        ctx.user_data["tratt_qty"] = qty
+
+        peso_auto = None
+        box = ctx.user_data.get("tratt_box")
+        if box:
+            with app.app_context():
+                from app.models import Censimento, CensimentoBox, Ciclo
+                ciclo = Ciclo.query.filter_by(attivo=True).first()
+                if ciclo:
+                    riga = (
+                        CensimentoBox.query.join(Censimento)
+                        .filter(
+                            Censimento.ciclo_id == ciclo.id,
+                            CensimentoBox.box_numero == box,
+                            CensimentoBox.peso_stimato_kg.isnot(None),
+                        )
+                        .order_by(Censimento.data.desc(), Censimento.id.desc())
+                        .first()
+                    )
+                    peso_auto = riga.peso_stimato_kg if riga else None
+
+        if peso_auto:
+            ctx.user_data["tratt_peso_auto"] = peso_auto
+            await update.message.reply_text(
+                f"⚖️ Peso medio a capo in kg (dall'ultimo censimento: {peso_auto} kg — "
+                f"scrivi un numero per correggerlo, o /skip per usarlo così):"
+            )
+        else:
+            await update.message.reply_text("⚖️ Peso medio a capo in kg (scrivi /skip se non lo conosci):")
+        return TRATTAMENTO_PESO
+
+    async def trattamento_peso(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        testo = update.message.text.strip()
+        if testo.startswith("/skip"):
+            peso = ctx.user_data.get("tratt_peso_auto")
+        else:
+            try:
+                peso = float(testo.replace(",", "."))
+                if peso <= 0:
+                    raise ValueError
+            except ValueError:
+                await update.message.reply_text("⚠️ Inserisci un numero positivo, oppure /skip.")
+                return TRATTAMENTO_PESO
+
         medicinale_id = ctx.user_data.get("tratt_medicinale_id")
         cap = ctx.user_data.get("tratt_cap")
         box = ctx.user_data.get("tratt_box")
+        qty = ctx.user_data.get("tratt_qty")
 
         with app.app_context():
             from app import db
@@ -458,7 +503,7 @@ def start_bot(app):
             t = Trattamento(
                 ciclo_id=ciclo.id, medicinale_id=medicinale.id,
                 box_numero=box, capannone_numero=cap,
-                numero_animali=qty, data_inizio=oggi,
+                numero_animali=qty, peso_medio_kg=peso, data_inizio=oggi,
                 operatore=f"telegram:{update.effective_user.first_name or update.effective_user.id}",
                 ml_per_kg=medicinale.ml_per_kg,
                 giorni_somministrazione=medicinale.giorni_somministrazione,
@@ -470,9 +515,15 @@ def start_bot(app):
             db.session.add(Somministrazione(trattamento_id=t.id, numero_giorno=1, data=oggi))
             db.session.commit()
             nome = medicinale.nome
+            ml_per_kg = medicinale.ml_per_kg
 
         ambito = f"box {box}" if box else f"CAP {cap} (tutto)"
-        await update.message.reply_text(f"✅ Trattamento registrato: {nome}, {qty} capi, {ambito}.\n\nUsa /start per continuare.")
+        dose_txt = ""
+        if ml_per_kg and peso:
+            dose_txt = f"\n💉 Dose totale: {ml_per_kg * peso * qty:.1f} ml"
+        await update.message.reply_text(
+            f"✅ Trattamento registrato: {nome}, {qty} capi, {ambito}.{dose_txt}\n\nUsa /start per continuare."
+        )
         return ConversationHandler.END
 
     # ── Consegna ──────────────────────────────────────────────────────────
@@ -1001,6 +1052,10 @@ def start_bot(app):
             TRATTAMENTO_CAP: [CallbackQueryHandler(trattamento_cap)],
             TRATTAMENTO_BOX: [CallbackQueryHandler(trattamento_box)],
             TRATTAMENTO_QTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, trattamento_qty)],
+            TRATTAMENTO_PESO: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, trattamento_peso),
+                CommandHandler("skip", trattamento_peso),
+            ],
         },
         fallbacks=[
             CommandHandler("cancel", cancel), CommandHandler("annulla", cancel),

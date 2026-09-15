@@ -251,6 +251,7 @@ def _init_db(app):
         ("spostamenti_animali", "categoria_uscita", "VARCHAR(20)"),
         ("spostamenti_animali", "peso_medio_kg", "REAL"),
         ("spostamenti_animali", "bolla_path", "VARCHAR(300)"),
+        ("trattamenti", "peso_medio_kg", "REAL"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

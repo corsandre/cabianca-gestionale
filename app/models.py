@@ -521,6 +521,7 @@ class Trattamento(db.Model):
     box_numero = db.Column(db.Integer)
     capannone_numero = db.Column(db.Integer)
     numero_animali = db.Column(db.Integer, nullable=False)
+    peso_medio_kg = db.Column(db.Float)  # peso medio a capo, per calcolare la dose totale
     data_inizio = db.Column(db.Date, nullable=False)
     operatore = db.Column(db.String(100))
     note = db.Column(db.Text)

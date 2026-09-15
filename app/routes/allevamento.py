@@ -955,6 +955,9 @@ def _stato_trattamento(t):
     data_fine_sospensione = None
     if completo and ultima:
         data_fine_sospensione = ultima.data + timedelta(days=t.giorni_sospensione)
+    dose_totale_ml = None
+    if t.ml_per_kg and t.peso_medio_kg:
+        dose_totale_ml = t.ml_per_kg * t.peso_medio_kg * t.numero_animali
     return {
         "fatte": fatte,
         "totali": t.giorni_somministrazione,
@@ -964,7 +967,30 @@ def _stato_trattamento(t):
         "prossima_data": (ultima.data + timedelta(days=1)) if ultima and not completo else None,
         "data_fine_sospensione": data_fine_sospensione,
         "in_sospensione": bool(data_fine_sospensione and oggi < data_fine_sospensione),
+        "dose_totale_ml": dose_totale_ml,
     }
+
+
+@bp.route("/box/<int:box_numero>/ultimo-peso")
+@login_required
+def box_ultimo_peso(box_numero):
+    _check_allevamento()
+    from app.models import Censimento, CensimentoBox
+    ciclo = _get_ciclo_attivo()
+    peso = None
+    if ciclo:
+        riga = (
+            CensimentoBox.query.join(Censimento)
+            .filter(
+                Censimento.ciclo_id == ciclo.id,
+                CensimentoBox.box_numero == box_numero,
+                CensimentoBox.peso_stimato_kg.isnot(None),
+            )
+            .order_by(Censimento.data.desc(), Censimento.id.desc())
+            .first()
+        )
+        peso = riga.peso_stimato_kg if riga else None
+    return jsonify(peso_stimato_kg=peso)
 
 
 @bp.route("/trattamenti")
@@ -1018,12 +1044,14 @@ def trattamenti_new():
         ml_per_kg = float(ml_val.replace(",", ".")) if ml_val else medicinale.ml_per_kg
         giorni_somm = int(request.form.get("giorni_somministrazione") or medicinale.giorni_somministrazione)
         giorni_sosp = int(request.form.get("giorni_sospensione") or medicinale.giorni_sospensione)
+        peso_val = request.form.get("peso_medio_kg", "").strip()
+        peso_medio_kg = float(peso_val.replace(",", ".")) if peso_val else None
 
         t = Trattamento(
             ciclo_id=ciclo.id, medicinale_id=medicinale.id,
             box_numero=int(box) if box else None,
             capannone_numero=int(cap) if cap else None,
-            numero_animali=qty, data_inizio=data_inizio,
+            numero_animali=qty, peso_medio_kg=peso_medio_kg, data_inizio=data_inizio,
             operatore=operatore, note=note,
             ml_per_kg=ml_per_kg, giorni_somministrazione=giorni_somm, giorni_sospensione=giorni_sosp,
         )
