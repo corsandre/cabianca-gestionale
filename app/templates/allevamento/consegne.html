@@ -6,10 +6,16 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="mb-0"><i class="bi bi-truck me-2" style="color:#c2185b"></i>Registro Consegne</h4>
     {% if ciclo %}
-    <button class="btn btn-sm" style="background:#c2185b;color:#fff"
-            data-bs-toggle="modal" data-bs-target="{{ '#modalSiero' if tab=='siero' else '#modalMangime' }}">
-        <i class="bi bi-plus-circle me-1"></i>Nuova consegna
-    </button>
+    <div class="d-flex gap-2">
+        <button class="btn btn-sm" style="background:#c2185b;color:#fff"
+                data-bs-toggle="modal" data-bs-target="#modalSiero">
+            <i class="bi bi-droplet me-1"></i>Siero
+        </button>
+        <button class="btn btn-sm" style="background:#c2185b;color:#fff"
+                data-bs-toggle="modal" data-bs-target="#modalMangime">
+            <i class="bi bi-bag me-1"></i>Mangime
+        </button>
+    </div>
     {% endif %}
 </div>
 
