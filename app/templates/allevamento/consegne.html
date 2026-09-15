@@ -24,24 +24,24 @@
     </div>
     <div class="col-md-6">
         {{ card_scorta('Giacenza mangime', 'bi-bag', scorta_mangime, mostra_scarto=false, mostra_consumo=true, barra_label='Riempimento silos: giacenza sulla capacità', nota_extra=scorta_mangime.calibrazione_testo) }}
-        <button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-bs-toggle="modal" data-bs-target="#modalRicalibra">
+        <button type="button" class="btn btn-sm btn-outline-secondary mt-2 mb-2" data-bs-toggle="modal" data-bs-target="#modalRicalibra">
             <i class="bi bi-arrow-repeat me-1"></i>Ricalibra giacenza
         </button>
     </div>
 </div>
 
 <!-- Tab -->
-<ul class="nav nav-tabs mb-3">
+<ul class="nav nav-tabs mb-3 mt-1">
     <li class="nav-item">
-        <a class="nav-link {{ 'active' if tab=='siero' }}" href="{{ url_for('allevamento.consegne', tab='siero') }}">
+        <a class="nav-link py-1 px-2 small {{ 'active' if tab=='siero' }}" href="{{ url_for('allevamento.consegne', tab='siero') }}">
             <i class="bi bi-droplet me-1"></i>Siero
-            <span class="badge bg-secondary ms-1">{{ tot_siero }} qli</span>
+            <span class="badge bg-secondary ms-1">{{ tot_siero }} q</span>
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link {{ 'active' if tab=='mangime' }}" href="{{ url_for('allevamento.consegne', tab='mangime') }}">
+        <a class="nav-link py-1 px-2 small {{ 'active' if tab=='mangime' }}" href="{{ url_for('allevamento.consegne', tab='mangime') }}">
             <i class="bi bi-bag me-1"></i>Mangime
-            <span class="badge bg-secondary ms-1">{{ tot_mangime }} qli</span>
+            <span class="badge bg-secondary ms-1">{{ tot_mangime }} q</span>
         </a>
     </li>
 </ul>
