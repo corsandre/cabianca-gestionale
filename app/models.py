@@ -547,3 +547,18 @@ class Somministrazione(db.Model):
     data = db.Column(db.Date, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+
+class CalibrazioneGiacenza(db.Model):
+    """Ricalibrazione manuale della giacenza (es. da un conteggio fisico dei
+    silos), per riallineare i calcoli invece di sommare dall'inizio dei
+    tempi. Le calibrazioni passate restano tutte in archivio, ma il calcolo
+    usa sempre solo l'ultima prima del momento richiesto."""
+    __tablename__ = "calibrazioni_giacenza"
+    id = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(db.String(20), nullable=False, default="mangime")
+    valore_q = db.Column(db.Float, nullable=False)
+    timestamp = db.Column(db.DateTime, nullable=False)
+    operatore = db.Column(db.String(100))
+    note = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+

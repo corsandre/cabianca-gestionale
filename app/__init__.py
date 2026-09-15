@@ -252,6 +252,7 @@ def _init_db(app):
         ("spostamenti_animali", "peso_medio_kg", "REAL"),
         ("spostamenti_animali", "bolla_path", "VARCHAR(300)"),
         ("trattamenti", "peso_medio_kg", "REAL"),
+        # calibrazioni_giacenza: tabella nuova, creata da db.create_all(), nessuna colonna da aggiungere qui.
     ]
     for table, col, col_type in _migrate_columns:
         try:

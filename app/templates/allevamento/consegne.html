@@ -23,7 +23,10 @@
         {{ card_scorta('Giacenza siero', 'bi-droplet', scorta_siero, testo_vuoto='Nessuna consegna aperta: cisterna vuota, in attesa di carico.', barra_label='Carico attuale: usato sul consegnato') }}
     </div>
     <div class="col-md-6">
-        {{ card_scorta('Giacenza mangime', 'bi-bag', scorta_mangime, mostra_scarto=false, mostra_consumo=true, barra_label='Riempimento silos: giacenza sulla capacità') }}
+        {{ card_scorta('Giacenza mangime', 'bi-bag', scorta_mangime, mostra_scarto=false, mostra_consumo=true, barra_label='Riempimento silos: giacenza sulla capacità', nota_extra=scorta_mangime.calibrazione_testo) }}
+        <button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-bs-toggle="modal" data-bs-target="#modalRicalibra">
+            <i class="bi bi-arrow-repeat me-1"></i>Ricalibra giacenza
+        </button>
     </div>
 </div>
 
@@ -231,6 +234,53 @@
     </div>
 </div>
 
+<!-- Modal ricalibrazione giacenza mangime -->
+<div class="modal fade" id="modalRicalibra" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#c2185b;color:#fff">
+                <h5 class="modal-title"><i class="bi bi-arrow-repeat me-2"></i>Ricalibra giacenza mangime</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('allevamento.mangime_ricalibra') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="form-text mb-3">
+                        Usa un conteggio fisico reale dei silos per riallineare i calcoli: da questo momento in poi
+                        la giacenza riparte dal valore che inserisci, invece che dalla somma di tutta la storia.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Giacenza reale (q)</label>
+                        <input type="number" name="valore_q" class="form-control" step="0.1" min="0" required autofocus>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Data</label>
+                            <input type="date" name="data" class="form-control" id="ricalibraData" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Ora</label>
+                            <input type="time" name="ora" class="form-control" id="ricalibraOra" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Operatore</label>
+                        <input type="text" name="operatore" class="form-control">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Note</label>
+                        <textarea name="note" class="form-control" rows="2" placeholder="es. conteggio fisico silos"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn" style="background:#c2185b;color:#fff">Salva</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Modal mangime -->
 <div class="modal fade" id="modalMangime" tabindex="-1">
     <div class="modal-dialog">
@@ -292,6 +342,14 @@
 
 {% block extra_js %}
 <script>
+document.getElementById('modalRicalibra').addEventListener('show.bs.modal', function () {
+    const adesso = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    document.getElementById('ricalibraData').value =
+        `${adesso.getFullYear()}-${pad(adesso.getMonth() + 1)}-${pad(adesso.getDate())}`;
+    document.getElementById('ricalibraOra').value = `${pad(adesso.getHours())}:${pad(adesso.getMinutes())}`;
+});
+
 function cbComprimiImmagine(file, maxDim, qualita) {
     return new Promise(function (resolve) {
         if (!file.type.startsWith('image/')) {

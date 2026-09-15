@@ -578,6 +578,35 @@ def consegne():
                            oggi=date.today())
 
 
+@bp.route("/mangime/ricalibra", methods=["POST"])
+@login_required
+def mangime_ricalibra():
+    _check_allevamento()
+    from datetime import datetime, time as dt_time
+    from app.models import CalibrazioneGiacenza
+    try:
+        valore = float(request.form["valore_q"].strip().replace(",", "."))
+        data_str = request.form.get("data", str(date.today()))
+        ora_str = request.form.get("ora", "").strip()
+        if not ora_str:
+            raise ValueError("L'ora è obbligatoria.")
+        h, m = ora_str.split(":")
+        timestamp = datetime.combine(date.fromisoformat(data_str), dt_time(int(h), int(m)))
+        operatore = request.form.get("operatore", "").strip() or None
+        note = request.form.get("note", "").strip() or None
+
+        db.session.add(CalibrazioneGiacenza(
+            tipo="mangime", valore_q=valore, timestamp=timestamp,
+            operatore=operatore, note=note,
+        ))
+        db.session.commit()
+        flash(f"Giacenza mangime ricalibrata a {valore} q.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
+    return redirect(url_for("allevamento.consegne", tab="mangime"))
+
+
 @bp.route("/consegne/siero/new", methods=["POST"])
 @login_required
 def consegne_siero_new():

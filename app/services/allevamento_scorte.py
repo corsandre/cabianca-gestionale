@@ -154,17 +154,42 @@ def set_setting(key, value):
         db.session.add(Setting(key=key, value=str(value)))
 
 
+def ultima_calibrazione(tipo, prima_di=None):
+    """L'ultima ricalibrazione manuale di un certo tipo (es. 'mangime'),
+    prima di un dato istante (o l'ultima in assoluto se prima_di è None)."""
+    from app.models import CalibrazioneGiacenza
+    q = CalibrazioneGiacenza.query.filter_by(tipo=tipo)
+    if prima_di is not None:
+        q = q.filter(CalibrazioneGiacenza.timestamp <= prima_di)
+    return q.order_by(CalibrazioneGiacenza.timestamp.desc()).first()
+
+
 def giacenza_mangime_a_data(data_limite=None):
-    """Giacenza cumulativa mangime (tutti i cicli) fino a una data esclusa,
-    o su tutta la storia se data_limite è None."""
-    q_consegne = db.session.query(db.func.sum(ConsegnaMangime.quantita_qli))
-    al = None
+    """Giacenza cumulativa mangime fino a una data esclusa (o su tutta la
+    storia se data_limite è None). Se esiste una ricalibrazione manuale
+    precedente al punto richiesto, riparte da quel valore invece che dalla
+    somma dall'inizio dei tempi — altrimenti resta il comportamento
+    originale (somma da sempre), per chi non l'ha mai usata."""
+    limite_dt = datetime.combine(data_limite, dt_time(0, 0)) if data_limite is not None else None
+    calibrazione = ultima_calibrazione("mangime", prima_di=limite_dt)
+    baseline = calibrazione.valore_q if calibrazione else 0
+    dal = calibrazione.timestamp if calibrazione else None
+
+    tot_consegne = 0.0
+    q_consegne = ConsegnaMangime.query
     if data_limite is not None:
         q_consegne = q_consegne.filter(ConsegnaMangime.data < data_limite)
-        al = datetime.combine(data_limite - timedelta(days=1), dt_time(23, 59, 59))
-    consegnato = q_consegne.scalar() or 0
-    usato = _somma_consumo("mangime_qli", al=al)
-    return consegnato - usato
+    for c in q_consegne.all():
+        istante = datetime.combine(c.data, c.ora or dt_time(0, 0))
+        if dal is not None and istante < dal:
+            continue
+        if limite_dt is not None and istante >= limite_dt:
+            continue
+        tot_consegne += c.quantita_qli
+
+    al = datetime.combine(data_limite - timedelta(days=1), dt_time(23, 59, 59)) if data_limite is not None else None
+    usato = _somma_consumo("mangime_qli", dal=dal, al=al)
+    return baseline + tot_consegne - usato
 
 
 def giacenza_mangime():
@@ -327,6 +352,14 @@ def stato_mangime():
         if ultimo_pasto:
             soglia_testo += f" (≈ {soglia_pasti * ultimo_pasto:.1f} q)"
 
+    calibrazione = ultima_calibrazione("mangime")
+    calibrazione_testo = None
+    if calibrazione:
+        calibrazione_testo = (
+            f"Ultima ricalibrazione: {calibrazione.timestamp.strftime('%d/%m/%Y %H:%M')} "
+            f"({calibrazione.valore_q:.1f} q)"
+        )
+
     return {
         "giacenza": giacenza, "capacita": capacita,
         "soglia_pasti": soglia_pasti, "soglia_testo": soglia_testo,
@@ -335,6 +368,7 @@ def stato_mangime():
         "colore": colore_livello_pasti(stima, soglia_pasti),
         "perc": _perc_capacita(giacenza, capacita),
         "barra_testo": barra_testo,
+        "calibrazione_testo": calibrazione_testo,
     }
 
 
