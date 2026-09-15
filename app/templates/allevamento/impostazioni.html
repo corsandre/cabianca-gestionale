@@ -142,6 +142,76 @@
     </form>
 </div>
 
+<!-- Medicinali -->
+<h6 class="text-uppercase text-muted small mb-2">Medicinali (Trattamenti)</h6>
+<div class="cb-card p-0 mb-4" style="overflow-x:auto">
+    <table class="table table-sm mb-0">
+        <thead class="table-light">
+            <tr><th>Nome</th><th>Tipo</th><th>ml/kg</th><th>Giorni somm.</th><th>Giorni sosp.</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for m in medicinali %}
+            <tr>
+                <td class="fw-semibold">{{ m.nome }}</td>
+                <td class="text-muted">{{ m.tipo }}</td>
+                <td>
+                    <input type="number" name="ml_per_kg" form="frm-med-{{ m.id }}" class="form-control form-control-sm" step="0.01" min="0"
+                           value="{{ m.ml_per_kg if m.ml_per_kg is not none else '' }}" style="width:90px">
+                </td>
+                <td>
+                    <input type="number" name="giorni_somministrazione" form="frm-med-{{ m.id }}" class="form-control form-control-sm" min="1"
+                           value="{{ m.giorni_somministrazione }}" style="width:80px">
+                </td>
+                <td>
+                    <input type="number" name="giorni_sospensione" form="frm-med-{{ m.id }}" class="form-control form-control-sm" min="0"
+                           value="{{ m.giorni_sospensione }}" style="width:80px">
+                </td>
+                <td class="text-nowrap">
+                    <button type="submit" form="frm-med-{{ m.id }}" class="btn btn-sm btn-outline-secondary py-0" title="Salva"><i class="bi bi-check2"></i></button>
+                    <form method="post" action="{{ url_for('allevamento.medicinali_delete', mid=m.id) }}" class="d-inline" onsubmit="return confirm('Disattivare questo medicinale?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-danger py-0" title="Disattiva"><i class="bi bi-trash"></i></button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% for m in medicinali %}
+    <form id="frm-med-{{ m.id }}" method="post" action="{{ url_for('allevamento.medicinali_edit', mid=m.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+    {% endfor %}
+</div>
+<div class="cb-card p-3 mb-4">
+    <form method="post" action="{{ url_for('allevamento.medicinali_new') }}" class="row g-2 align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-3">
+            <label class="form-label small">Nome nuovo medicinale</label>
+            <input type="text" name="nome" class="form-control form-control-sm" required>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">Tipo</label>
+            <input type="text" name="tipo" class="form-control form-control-sm" value="iniettabile">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">ml/kg</label>
+            <input type="number" name="ml_per_kg" class="form-control form-control-sm" step="0.01" min="0">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">Giorni somm.</label>
+            <input type="number" name="giorni_somministrazione" class="form-control form-control-sm" min="1" value="1">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">Giorni sosp.</label>
+            <input type="number" name="giorni_sospensione" class="form-control form-control-sm" min="0" value="0">
+        </div>
+        <div class="col-md-1">
+            <button type="submit" class="btn btn-sm" style="background:#c2185b;color:#fff"><i class="bi bi-plus-circle"></i></button>
+        </div>
+    </form>
+</div>
+
 <!-- Storico cicli -->
 {% if cicli_precedenti %}
 <h6 class="text-uppercase text-muted small mb-2">Cicli precedenti</h6>

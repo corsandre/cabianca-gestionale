@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Allevamento – Trattamenti{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-capsule me-2" style="color:#c2185b"></i>Registro Trattamenti</h4>
+    {% if ciclo %}
+    <button class="btn btn-sm" style="background:#c2185b;color:#fff" data-bs-toggle="modal" data-bs-target="#modalTrattamento">
+        <i class="bi bi-plus-circle me-1"></i>Nuovo trattamento
+    </button>
+    {% endif %}
+</div>
+
+{% if not ciclo %}
+<div class="cb-card p-4 text-center text-muted">Nessun ciclo attivo.</div>
+{% else %}
+
+{% set n_da_ripetere = stati.values() | selectattr("da_ripetere") | list | length %}
+{% set n_sospensione = stati.values() | selectattr("in_sospensione") | list | length %}
+{% set n_in_corso = stati.values() | rejectattr("completo") | list | length %}
+
+<!-- KPI -->
+<div class="row g-2 mb-4">
+    <div class="col-4">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-4 fw-bold" style="color:#c2185b">{{ n_in_corso }}</div>
+            <small class="text-muted">Corsi in corso</small>
+        </div>
+    </div>
+    <div class="col-4">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-4 fw-bold {{ 'text-danger' if n_da_ripetere else 'text-muted' }}">{{ n_da_ripetere }}</div>
+            <small class="text-muted">Dosi da ripetere oggi</small>
+        </div>
+    </div>
+    <div class="col-4">
+        <div class="cb-card p-3 text-center">
+            <div class="fs-4 fw-bold text-warning-emphasis">{{ n_sospensione }}</div>
+            <small class="text-muted">In sospensione</small>
+        </div>
+    </div>
+</div>
+
+<!-- Elenco -->
+<div class="cb-card p-0" style="overflow-x:auto">
+    {% if lista %}
+    <table class="table table-sm mb-0">
+        <thead class="table-light">
+            <tr>
+                <th>Data inizio</th><th>Medicinale</th><th>Ambito</th><th>Capi</th>
+                <th>Dosi</th><th>Stato</th><th>Operatore</th>
+                {% if current_user.role == 'admin' %}<th></th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in lista %}
+            {% set s = stati[t.id] %}
+            <tr class="{{ 'table-danger' if s.da_ripetere }}">
+                <td>{{ t.data_inizio.strftime('%d/%m/%Y') }}</td>
+                <td>{{ t.medicinale.nome }}</td>
+                <td class="text-muted">
+                    {% if t.box_numero %}Box {{ t.box_numero }}{% else %}CAP {{ t.capannone_numero }} (tutto){% endif %}
+                </td>
+                <td class="fw-bold">{{ t.numero_animali }}</td>
+                <td>{{ s.fatte }}/{{ s.totali }}</td>
+                <td>
+                    {% if s.da_ripetere %}
+                    <span class="badge bg-danger">Da ripetere</span>
+                    {% elif not s.completo %}
+                    <span class="badge bg-secondary">In corso (prossima dose {{ s.prossima_data.strftime('%d/%m') }})</span>
+                    {% elif s.in_sospensione %}
+                    <span class="badge text-dark" style="background:#ffc107">In sospensione fino al {{ s.data_fine_sospensione.strftime('%d/%m/%Y') }}</span>
+                    {% else %}
+                    <span class="badge bg-success">Completato</span>
+                    {% endif %}
+                </td>
+                <td class="text-muted">{{ t.operatore or '–' }}</td>
+                {% if current_user.role == 'admin' %}
+                <td class="text-nowrap">
+                    {% if s.da_ripetere %}
+                    <form method="post" action="{{ url_for('allevamento.trattamenti_somministra', tid=t.id) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-danger py-0" title="Registra somministrazione">
+                            <i class="bi bi-check2-circle"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                    <form method="post" action="{{ url_for('allevamento.trattamenti_delete', tid=t.id) }}" class="d-inline" onsubmit="return confirm('Elimina?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-secondary py-0"><i class="bi bi-trash"></i></button>
+                    </form>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted p-3 mb-0">Nessun trattamento registrato.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Modal nuovo trattamento -->
+<div class="modal fade" id="modalTrattamento" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#c2185b;color:#fff">
+                <h5 class="modal-title"><i class="bi bi-capsule me-2"></i>Nuovo trattamento</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('allevamento.trattamenti_new') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Data inizio</label>
+                            <input type="date" name="data_inizio" class="form-control" value="{{ oggi.isoformat() }}" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Medicinale</label>
+                            <select name="medicinale_id" class="form-select" id="selMedicinale" onchange="aggiornaMedicinale()" required>
+                                {% for m in medicinali %}
+                                <option value="{{ m.id }}">{{ m.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Capannone</label>
+                            <select name="capannone_numero" class="form-select" id="selCap" required onchange="updateBoxes()">
+                                <option value="">Seleziona…</option>
+                                {% for cap in CAPANNONI %}<option value="{{ cap }}">CAP {{ cap }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Box <small class="text-muted">(vuoto = tutto il CAP)</small></label>
+                            <select name="box_numero" class="form-select" id="selBox">
+                                <option value="">– tutto il CAP –</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Numero animali</label>
+                        <input type="number" name="numero_animali" class="form-control" value="1" min="1" required>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-4">
+                            <label class="form-label small">ml/kg</label>
+                            <input type="number" name="ml_per_kg" id="inpMlKg" class="form-control form-control-sm" step="0.01" min="0">
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small">Giorni somm.</label>
+                            <input type="number" name="giorni_somministrazione" id="inpGiorniSomm" class="form-control form-control-sm" min="1" required>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small">Giorni sosp.</label>
+                            <input type="number" name="giorni_sospensione" id="inpGiorniSosp" class="form-control form-control-sm" min="0" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Operatore</label>
+                        <input type="text" name="operatore" class="form-control" placeholder="Chi ha fatto il trattamento">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Note</label>
+                        <textarea name="note" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn" style="background:#c2185b;color:#fff">Salva</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const BOX_PER_CAP = {{ BOX_PER_CAP | tojson }};
+const MEDICINALI = {
+    {% for m in medicinali %}
+    "{{ m.id }}": {ml_per_kg: {{ m.ml_per_kg | tojson }}, giorni_somministrazione: {{ m.giorni_somministrazione }}, giorni_sospensione: {{ m.giorni_sospensione }}}{{ ',' if not loop.last }}
+    {% endfor %}
+};
+
+function updateBoxes() {
+    const cap = document.getElementById('selCap').value;
+    const sel = document.getElementById('selBox');
+    sel.innerHTML = '<option value="">– tutto il CAP –</option>';
+    if (cap && BOX_PER_CAP[cap]) {
+        BOX_PER_CAP[cap].forEach(b => {
+            const o = document.createElement('option');
+            o.value = b; o.textContent = 'Box ' + b;
+            sel.appendChild(o);
+        });
+    }
+}
+
+function aggiornaMedicinale() {
+    const id = document.getElementById('selMedicinale').value;
+    const m = MEDICINALI[id];
+    if (!m) return;
+    document.getElementById('inpMlKg').value = m.ml_per_kg != null ? m.ml_per_kg : '';
+    document.getElementById('inpGiorniSomm').value = m.giorni_somministrazione;
+    document.getElementById('inpGiorniSosp').value = m.giorni_sospensione;
+}
+aggiornaMedicinale();
+</script>
+{% endblock %}

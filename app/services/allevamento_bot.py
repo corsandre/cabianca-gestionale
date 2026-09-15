@@ -44,7 +44,9 @@ def start_bot(app):
         PASTO_LINEA, PASTO_NUM, PASTO_MANG, PASTO_SIERO, PASTO_ACQUA,
         CENSIMENTO_FIELD, CENSIMENTO_BOX_NEXT, CENSIMENTO_CAP_NEXT, CENSIMENTO_CONFIRM,
         CENSIMENTO_RECAP_PICK,
-    ) = range(26)
+        TRATTAMENTO_SOMMINISTRA, TRATTAMENTO_MEDICINALE, TRATTAMENTO_CAP,
+        TRATTAMENTO_BOX, TRATTAMENTO_QTY,
+    ) = range(31)
 
     CAPANNONI = [1, 2, 3, 4, 5, 6, 7]
     BOX_PER_CAP = {
@@ -84,6 +86,7 @@ def start_bot(app):
             [InlineKeyboardButton("🔄 Spostamento", callback_data="spostamento")],
             [InlineKeyboardButton("🚚 Consegna siero", callback_data="consegna_siero"),
              InlineKeyboardButton("🌾 Consegna mangime", callback_data="consegna_mangime")],
+            [InlineKeyboardButton("💊 Trattamenti", callback_data="trattamenti_menu")],
             [InlineKeyboardButton("📊 Stato ciclo", callback_data="stato")],
         ])
 
@@ -165,6 +168,47 @@ def start_bot(app):
         elif data == "stato":
             await _send_stato(q, ctx, app)
             return MAIN_MENU
+        elif data == "trattamenti_menu":
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("📋 Da fare oggi", callback_data="trattamenti_lista")],
+                [InlineKeyboardButton("➕ Nuovo trattamento", callback_data="trattamento_nuovo")],
+            ])
+            await q.edit_message_text("💊 *Trattamenti*", parse_mode="Markdown", reply_markup=kb)
+            return MAIN_MENU
+        elif data == "trattamenti_lista":
+            righe = []
+            with app.app_context():
+                from app.models import Ciclo, Trattamento
+                from app.routes.allevamento import _stato_trattamento
+                ciclo = Ciclo.query.filter_by(attivo=True).first()
+                if ciclo:
+                    lista = Trattamento.query.filter_by(ciclo_id=ciclo.id).order_by(Trattamento.data_inizio).all()
+                    for t in lista:
+                        s = _stato_trattamento(t)
+                        if s["da_ripetere"]:
+                            ambito = f"Box {t.box_numero}" if t.box_numero else f"CAP {t.capannone_numero} (tutto)"
+                            righe.append((t.id, f"{t.medicinale.nome} — {ambito} ({s['fatte']}/{s['totali']})"))
+            if not righe:
+                await q.edit_message_text("✅ Nessuna dose da somministrare oggi.\n\nUsa /start per continuare.")
+                return ConversationHandler.END
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton(f"💉 {label}", callback_data=f"somm_{tid}")] for tid, label in righe
+            ])
+            await q.edit_message_text("🔴 *Dosi da somministrare oggi:*", parse_mode="Markdown", reply_markup=kb)
+            return TRATTAMENTO_SOMMINISTRA
+        elif data == "trattamento_nuovo":
+            with app.app_context():
+                from app.models import Medicinale
+                meds = Medicinale.query.filter_by(attivo=True).order_by(Medicinale.nome).all()
+                kb_rows = [[InlineKeyboardButton(m.nome, callback_data=str(m.id))] for m in meds]
+            if not kb_rows:
+                await q.edit_message_text("⚠️ Nessun medicinale configurato (Impostazioni web).\n\nUsa /start per continuare.")
+                return ConversationHandler.END
+            await q.edit_message_text(
+                "💊 *Nuovo trattamento*\nSeleziona il medicinale:", parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(kb_rows),
+            )
+            return TRATTAMENTO_MEDICINALE
 
         return MAIN_MENU
 
@@ -334,6 +378,101 @@ def start_bot(app):
             dettaglio.append(f"a CAP{cap_dest} box {box_dest}")
         dettaglio_txt = " — " + ", ".join(dettaglio) if dettaglio else ""
         await update.message.reply_text(f"✅ {qty} capi — {label}{dettaglio_txt} registrato.\n\nUsa /start per continuare.")
+        return ConversationHandler.END
+
+    # ── Trattamenti ──────────────────────────────────────────────────────
+
+    async def trattamento_somministra_cb(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        q = update.callback_query
+        await q.answer()
+        tid = int(q.data.replace("somm_", ""))
+        with app.app_context():
+            from app import db
+            from app.models import Trattamento, Somministrazione
+            from app.routes.allevamento import _stato_trattamento
+            t = db.session.get(Trattamento, tid)
+            if not t:
+                await q.edit_message_text("⚠️ Trattamento non trovato.")
+                return ConversationHandler.END
+            s = _stato_trattamento(t)
+            if s["completo"]:
+                await q.edit_message_text("Il corso di cura è già completo.\n\nUsa /start per continuare.")
+                return ConversationHandler.END
+            db.session.add(Somministrazione(
+                trattamento_id=t.id, numero_giorno=s["fatte"] + 1, data=date.today(),
+            ))
+            db.session.commit()
+            nome = t.medicinale.nome
+            totali = t.giorni_somministrazione
+            fatte = s["fatte"] + 1
+        await q.edit_message_text(
+            f"✅ Somministrazione {fatte}/{totali} registrata per {nome}.\n\nUsa /start per continuare."
+        )
+        return ConversationHandler.END
+
+    async def trattamento_medicinale(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        q = update.callback_query
+        await q.answer()
+        ctx.user_data["tratt_medicinale_id"] = int(q.data)
+        await q.edit_message_text("📍 Capannone:", reply_markup=kb_capannoni())
+        return TRATTAMENTO_CAP
+
+    async def trattamento_cap(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        q = update.callback_query
+        await q.answer()
+        cap = int(q.data)
+        ctx.user_data["tratt_cap"] = cap
+        await q.edit_message_text("📦 Box (o tutto il capannone):", reply_markup=kb_boxes(cap))
+        return TRATTAMENTO_BOX
+
+    async def trattamento_box(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        q = update.callback_query
+        await q.answer()
+        box = int(q.data)
+        ctx.user_data["tratt_box"] = box if box != 0 else None
+        await q.edit_message_text("Quanti animali?")
+        return TRATTAMENTO_QTY
+
+    async def trattamento_qty(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        try:
+            qty = int(update.message.text.strip())
+            if qty < 1:
+                raise ValueError
+        except ValueError:
+            await update.message.reply_text("⚠️ Inserisci un numero intero positivo.")
+            return TRATTAMENTO_QTY
+
+        medicinale_id = ctx.user_data.get("tratt_medicinale_id")
+        cap = ctx.user_data.get("tratt_cap")
+        box = ctx.user_data.get("tratt_box")
+
+        with app.app_context():
+            from app import db
+            from app.models import Ciclo, Medicinale, Trattamento, Somministrazione
+            ciclo = Ciclo.query.filter_by(attivo=True).first()
+            if not ciclo:
+                await update.message.reply_text("⚠️ Nessun ciclo attivo.")
+                return ConversationHandler.END
+            medicinale = db.session.get(Medicinale, medicinale_id)
+            oggi = date.today()
+            t = Trattamento(
+                ciclo_id=ciclo.id, medicinale_id=medicinale.id,
+                box_numero=box, capannone_numero=cap,
+                numero_animali=qty, data_inizio=oggi,
+                operatore=f"telegram:{update.effective_user.first_name or update.effective_user.id}",
+                ml_per_kg=medicinale.ml_per_kg,
+                giorni_somministrazione=medicinale.giorni_somministrazione,
+                giorni_sospensione=medicinale.giorni_sospensione,
+                registrato_da="telegram",
+            )
+            db.session.add(t)
+            db.session.flush()
+            db.session.add(Somministrazione(trattamento_id=t.id, numero_giorno=1, data=oggi))
+            db.session.commit()
+            nome = medicinale.nome
+
+        ambito = f"box {box}" if box else f"CAP {cap} (tutto)"
+        await update.message.reply_text(f"✅ Trattamento registrato: {nome}, {qty} capi, {ambito}.\n\nUsa /start per continuare.")
         return ConversationHandler.END
 
     # ── Consegna ──────────────────────────────────────────────────────────
@@ -857,6 +996,11 @@ def start_bot(app):
             CENSIMENTO_CAP_NEXT: [CallbackQueryHandler(censimento_cap_next)],
             CENSIMENTO_RECAP_PICK: [CallbackQueryHandler(censimento_recap_pick)],
             CENSIMENTO_CONFIRM: [CallbackQueryHandler(censimento_confirm)],
+            TRATTAMENTO_SOMMINISTRA: [CallbackQueryHandler(trattamento_somministra_cb)],
+            TRATTAMENTO_MEDICINALE: [CallbackQueryHandler(trattamento_medicinale)],
+            TRATTAMENTO_CAP: [CallbackQueryHandler(trattamento_cap)],
+            TRATTAMENTO_BOX: [CallbackQueryHandler(trattamento_box)],
+            TRATTAMENTO_QTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, trattamento_qty)],
         },
         fallbacks=[
             CommandHandler("cancel", cancel), CommandHandler("annulla", cancel),

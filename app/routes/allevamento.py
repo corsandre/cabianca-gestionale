@@ -940,6 +940,211 @@ def razione_save():
     return redirect(url_for("allevamento.razione", settimana=settimana_offset))
 
 
+# ── Trattamenti ────────────────────────────────────────────────────────────
+
+def _stato_trattamento(t):
+    """Progresso di un corso di cura: quante dosi fatte, se ne manca una da
+    fare oggi (è passato almeno un giorno dall'ultima), e — a corso finito —
+    fino a quando resta in sospensione prima del macello."""
+    somm = t.somministrazioni.all()  # già ordinate per numero_giorno (vedi relationship)
+    fatte = len(somm)
+    ultima = somm[-1] if somm else None
+    completo = fatte >= t.giorni_somministrazione
+    oggi = date.today()
+    da_ripetere = (not completo) and ultima is not None and oggi > ultima.data
+    data_fine_sospensione = None
+    if completo and ultima:
+        data_fine_sospensione = ultima.data + timedelta(days=t.giorni_sospensione)
+    return {
+        "fatte": fatte,
+        "totali": t.giorni_somministrazione,
+        "completo": completo,
+        "da_ripetere": da_ripetere,
+        "ultima_data": ultima.data if ultima else None,
+        "prossima_data": (ultima.data + timedelta(days=1)) if ultima and not completo else None,
+        "data_fine_sospensione": data_fine_sospensione,
+        "in_sospensione": bool(data_fine_sospensione and oggi < data_fine_sospensione),
+    }
+
+
+@bp.route("/trattamenti")
+@login_required
+def trattamenti():
+    _check_allevamento()
+    from app.models import Trattamento, Medicinale
+    ciclo = _get_ciclo_attivo()
+
+    lista = Trattamento.query.filter_by(
+        ciclo_id=ciclo.id if ciclo else -1
+    ).order_by(Trattamento.data_inizio.desc(), Trattamento.id.desc()).all() if ciclo else []
+
+    stati = {t.id: _stato_trattamento(t) for t in lista}
+    medicinali = Medicinale.query.filter_by(attivo=True).order_by(Medicinale.nome).all()
+
+    return render_template("allevamento/trattamenti.html",
+                           ciclo=ciclo, lista=lista, stati=stati, medicinali=medicinali,
+                           BOX_PER_CAP=BOX_PER_CAP, CAPANNONI=CAPANNONI,
+                           oggi=date.today())
+
+
+@bp.route("/trattamenti/new", methods=["POST"])
+@login_required
+def trattamenti_new():
+    _check_allevamento()
+    from app.models import Trattamento, Somministrazione, Medicinale
+    ciclo = _get_ciclo_attivo()
+    if not ciclo:
+        flash("Nessun ciclo attivo.", "danger")
+        return redirect(url_for("allevamento.trattamenti"))
+
+    try:
+        medicinale_id = int(request.form["medicinale_id"])
+        medicinale = db.session.get(Medicinale, medicinale_id)
+        if not medicinale:
+            raise ValueError("Medicinale non valido.")
+
+        box = request.form.get("box_numero", "").strip()
+        cap = request.form.get("capannone_numero", "").strip()
+        if not box and not cap:
+            raise ValueError("Seleziona un box o un capannone.")
+
+        data_str = request.form.get("data_inizio", str(date.today()))
+        data_inizio = date.fromisoformat(data_str)
+        qty = int(request.form["numero_animali"])
+        operatore = request.form.get("operatore", "").strip() or None
+        note = request.form.get("note", "").strip() or None
+
+        ml_val = request.form.get("ml_per_kg", "").strip()
+        ml_per_kg = float(ml_val.replace(",", ".")) if ml_val else medicinale.ml_per_kg
+        giorni_somm = int(request.form.get("giorni_somministrazione") or medicinale.giorni_somministrazione)
+        giorni_sosp = int(request.form.get("giorni_sospensione") or medicinale.giorni_sospensione)
+
+        t = Trattamento(
+            ciclo_id=ciclo.id, medicinale_id=medicinale.id,
+            box_numero=int(box) if box else None,
+            capannone_numero=int(cap) if cap else None,
+            numero_animali=qty, data_inizio=data_inizio,
+            operatore=operatore, note=note,
+            ml_per_kg=ml_per_kg, giorni_somministrazione=giorni_somm, giorni_sospensione=giorni_sosp,
+        )
+        db.session.add(t)
+        db.session.flush()
+        db.session.add(Somministrazione(trattamento_id=t.id, numero_giorno=1, data=data_inizio))
+        db.session.commit()
+        flash(f"Trattamento registrato: {medicinale.nome}, {qty} capi.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
+
+    return redirect(url_for("allevamento.trattamenti"))
+
+
+@bp.route("/trattamenti/<int:tid>/somministra", methods=["POST"])
+@login_required
+def trattamenti_somministra(tid):
+    _check_allevamento()
+    from app.models import Trattamento, Somministrazione
+    t = db.session.get(Trattamento, tid)
+    if not t:
+        flash("Trattamento non trovato.", "danger")
+        return redirect(url_for("allevamento.trattamenti"))
+
+    stato = _stato_trattamento(t)
+    if stato["completo"]:
+        flash("Il corso di cura è già completo.", "warning")
+        return redirect(url_for("allevamento.trattamenti"))
+
+    db.session.add(Somministrazione(
+        trattamento_id=t.id, numero_giorno=stato["fatte"] + 1, data=date.today(),
+    ))
+    db.session.commit()
+    flash(f"Somministrazione {stato['fatte'] + 1}/{stato['totali']} registrata.", "success")
+    return redirect(url_for("allevamento.trattamenti"))
+
+
+@bp.route("/trattamenti/<int:tid>/delete", methods=["POST"])
+@login_required
+def trattamenti_delete(tid):
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.models import Trattamento
+    t = db.session.get(Trattamento, tid)
+    if t:
+        db.session.delete(t)
+        db.session.commit()
+        flash("Trattamento eliminato.", "success")
+    return redirect(url_for("allevamento.trattamenti"))
+
+
+# ── Medicinali (Impostazioni) ──────────────────────────────────────────────
+
+@bp.route("/medicinali/new", methods=["POST"])
+@login_required
+def medicinali_new():
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.models import Medicinale
+    try:
+        nome = request.form["nome"].strip()
+        if not nome:
+            raise ValueError("Il nome è obbligatorio.")
+        tipo = request.form.get("tipo", "iniettabile").strip() or "iniettabile"
+        ml_val = request.form.get("ml_per_kg", "").strip()
+        db.session.add(Medicinale(
+            nome=nome, tipo=tipo,
+            ml_per_kg=float(ml_val.replace(",", ".")) if ml_val else None,
+            giorni_somministrazione=int(request.form.get("giorni_somministrazione") or 1),
+            giorni_sospensione=int(request.form.get("giorni_sospensione") or 0),
+        ))
+        db.session.commit()
+        flash(f"Medicinale '{nome}' aggiunto.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
+    return redirect(url_for("allevamento.impostazioni"))
+
+
+@bp.route("/medicinali/<int:mid>/edit", methods=["POST"])
+@login_required
+def medicinali_edit(mid):
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.models import Medicinale
+    m = db.session.get(Medicinale, mid)
+    if not m:
+        flash("Medicinale non trovato.", "danger")
+        return redirect(url_for("allevamento.impostazioni"))
+    try:
+        ml_val = request.form.get("ml_per_kg", "").strip()
+        m.ml_per_kg = float(ml_val.replace(",", ".")) if ml_val else None
+        m.giorni_somministrazione = int(request.form.get("giorni_somministrazione") or 1)
+        m.giorni_sospensione = int(request.form.get("giorni_sospensione") or 0)
+        db.session.commit()
+        flash(f"Medicinale '{m.nome}' aggiornato.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
+    return redirect(url_for("allevamento.impostazioni"))
+
+
+@bp.route("/medicinali/<int:mid>/delete", methods=["POST"])
+@login_required
+def medicinali_delete(mid):
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.models import Medicinale
+    m = db.session.get(Medicinale, mid)
+    if m:
+        m.attivo = False
+        db.session.commit()
+        flash(f"Medicinale '{m.nome}' disattivato.", "success")
+    return redirect(url_for("allevamento.impostazioni"))
+
+
 # ── Impostazioni / Cicli ───────────────────────────────────────────────────
 
 @bp.route("/impostazioni")
@@ -948,10 +1153,11 @@ def impostazioni():
     _check_allevamento()
     if current_user.role != "admin":
         abort(403)
-    from app.models import Ciclo
+    from app.models import Ciclo, Medicinale
     from app.services.allevamento_scorte import get_setting_float, get_setting_int, orario_pasto_str
     ciclo_attivo = _get_ciclo_attivo()
     cicli_precedenti = Ciclo.query.filter_by(attivo=False).order_by(Ciclo.data_inizio.desc()).all()
+    medicinali = Medicinale.query.filter_by(attivo=True).order_by(Medicinale.nome).all()
     soglia_mangime_pasti = get_setting_int("allevamento_soglia_mangime_pasti") or 0
     soglia_mangime_giorni, soglia_mangime_pasti_extra = divmod(soglia_mangime_pasti, 3)
     scorte_settings = {
@@ -965,7 +1171,7 @@ def impostazioni():
     }
     return render_template("allevamento/impostazioni.html",
                            ciclo_attivo=ciclo_attivo, cicli_precedenti=cicli_precedenti,
-                           scorte_settings=scorte_settings,
+                           scorte_settings=scorte_settings, medicinali=medicinali,
                            oggi=date.today())
 
 

@@ -495,3 +495,54 @@ class RazioneBox(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     ciclo = db.relationship("Ciclo", backref="razioni_box")
 
+
+class Medicinale(db.Model):
+    """Configurazione dei medicinali usati per i trattamenti (Impostazioni)."""
+    __tablename__ = "medicinali"
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False)
+    tipo = db.Column(db.String(30), default="iniettabile")
+    ml_per_kg = db.Column(db.Float)
+    giorni_somministrazione = db.Column(db.Integer, nullable=False, default=1)
+    giorni_sospensione = db.Column(db.Integer, nullable=False, default=0)
+    attivo = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class Trattamento(db.Model):
+    """Un corso di cura: una sola riga anche se dura più giorni (vedi
+    Somministrazione per le singole dosi). Dosaggio/giorni copiati dal
+    Medicinale al momento della creazione, così restano fissi anche se poi
+    si cambia la configurazione in Impostazioni."""
+    __tablename__ = "trattamenti"
+    id = db.Column(db.Integer, primary_key=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"), nullable=False)
+    medicinale_id = db.Column(db.Integer, db.ForeignKey("medicinali.id"), nullable=False)
+    box_numero = db.Column(db.Integer)
+    capannone_numero = db.Column(db.Integer)
+    numero_animali = db.Column(db.Integer, nullable=False)
+    data_inizio = db.Column(db.Date, nullable=False)
+    operatore = db.Column(db.String(100))
+    note = db.Column(db.Text)
+    ml_per_kg = db.Column(db.Float)
+    giorni_somministrazione = db.Column(db.Integer, nullable=False)
+    giorni_sospensione = db.Column(db.Integer, nullable=False)
+    registrato_da = db.Column(db.String(20), default="web")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ciclo = db.relationship("Ciclo", backref="trattamenti")
+    medicinale = db.relationship("Medicinale")
+    somministrazioni = db.relationship(
+        "Somministrazione", backref="trattamento", lazy="dynamic",
+        cascade="all, delete-orphan", order_by="Somministrazione.numero_giorno",
+    )
+
+
+class Somministrazione(db.Model):
+    """Una singola dose effettivamente data, dentro un Trattamento."""
+    __tablename__ = "somministrazioni"
+    id = db.Column(db.Integer, primary_key=True)
+    trattamento_id = db.Column(db.Integer, db.ForeignKey("trattamenti.id"), nullable=False)
+    numero_giorno = db.Column(db.Integer, nullable=False)
+    data = db.Column(db.Date, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+

@@ -342,6 +342,12 @@ def _init_db(app):
         for name, typ, color in cats:
             db.session.add(Category(name=name, type=typ, color=color))
 
+    # Seed medicinali di default per i trattamenti allevamento
+    from app.models import Medicinale
+    if Medicinale.query.count() == 0:
+        for nome in ("Cloxacillina (Cloxalene)", "Findol", "Micospectone"):
+            db.session.add(Medicinale(nome=nome, tipo="iniettabile", giorni_somministrazione=1, giorni_sospensione=0))
+
     # Seed default backup settings
     from app.models import Setting
     defaults = {
