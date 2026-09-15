@@ -23,14 +23,12 @@
         {{ card_scorta('Giacenza siero', 'bi-droplet', scorta_siero, testo_vuoto='Nessuna consegna aperta: cisterna vuota, in attesa di carico.', barra_label='Carico attuale: usato sul consegnato') }}
     </div>
     <div class="col-md-6">
-        {{ card_scorta('Giacenza mangime', 'bi-bag', scorta_mangime, mostra_scarto=false, mostra_consumo=true, barra_label='Riempimento silos: giacenza sulla capacità', nota_extra=scorta_mangime.calibrazione_testo) }}
+        {% call card_scorta('Giacenza mangime', 'bi-bag', scorta_mangime, mostra_scarto=false, mostra_consumo=true, barra_label='Riempimento silos: giacenza sulla capacità', nota_extra=scorta_mangime.calibrazione_testo) %}
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalRicalibra">
+            <i class="bi bi-arrow-repeat me-1"></i>Ricalibra giacenza
+        </button>
+        {% endcall %}
     </div>
-</div>
-
-<div class="mb-4">
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalRicalibra">
-        <i class="bi bi-arrow-repeat me-1"></i>Ricalibra giacenza
-    </button>
 </div>
 
 <!-- Tab -->
