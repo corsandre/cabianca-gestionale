@@ -144,6 +144,7 @@ def index():
                                scorta_mangime=stato_mangime(), scorta_siero=stato_siero(),
                                apertura_mangime=None,
                                stat_fine_ciclo={"capi": 0, "kg": 0}, stat_scarti={"capi": 0, "kg": 0},
+                               stat_agriturismo={"capi": 0, "kg": 0},
                                CAP_PER_BOX=CAP_PER_BOX, BOX_PER_CAP=BOX_PER_CAP,
                                POSTI_PER_CAP=POSTI_PER_CAP, CAPANNONI=CAPANNONI)
 
@@ -166,6 +167,7 @@ def index():
 
     stat_fine_ciclo = _statistiche_uscita(ciclo.id, "fine_ciclo")
     stat_scarti = _statistiche_uscita(ciclo.id, "scarto_sottopeso")
+    stat_agriturismo = _statistiche_uscita(ciclo.id, "agriturismo")
 
     totali_alimentazione_ciclo = {
         "mangime": db.session.query(db.func.sum(UsoPasto.mangime_qli)).filter(
@@ -205,6 +207,7 @@ def index():
                            scorta_mangime=stato_mangime(), scorta_siero=stato_siero(),
                            apertura_mangime=giacenza_mangime_a_data(ciclo.data_inizio),
                            stat_fine_ciclo=stat_fine_ciclo, stat_scarti=stat_scarti,
+                           stat_agriturismo=stat_agriturismo,
                            CAP_PER_BOX=CAP_PER_BOX, BOX_PER_CAP=BOX_PER_CAP,
                            POSTI_PER_CAP=POSTI_PER_CAP, CAPANNONI=CAPANNONI)
 
@@ -406,7 +409,7 @@ def censimento_new():
 
 def _statistiche_uscita(ciclo_id, categoria):
     """Capi e kg totali (quantità × peso medio) per una categoria di uscita
-    ('fine_ciclo' o 'scarto_sottopeso') di questo ciclo."""
+    ('fine_ciclo', 'scarto_sottopeso' o 'agriturismo') di questo ciclo."""
     from app.models import Spostamento
     capi = db.session.query(db.func.sum(Spostamento.quantita)).filter(
         Spostamento.ciclo_id == ciclo_id, Spostamento.tipo == "uscita",
@@ -427,8 +430,11 @@ def spostamenti():
     ciclo = _get_ciclo_attivo()
 
     tipo_filter = request.args.get("tipo", "")
+    categoria_filter = request.args.get("categoria", "")
     q = Spostamento.query.filter_by(ciclo_id=ciclo.id if ciclo else -1)
-    if tipo_filter:
+    if categoria_filter:
+        q = q.filter_by(tipo="uscita", categoria_uscita=categoria_filter)
+    elif tipo_filter:
         q = q.filter_by(tipo=tipo_filter)
     lista = q.order_by(Spostamento.data.desc(), Spostamento.id.desc()).limit(100).all() if ciclo else []
 
@@ -442,11 +448,13 @@ def spostamenti():
 
     stat_fine_ciclo = _statistiche_uscita(ciclo.id, "fine_ciclo") if ciclo else {"capi": 0, "kg": 0}
     stat_scarti = _statistiche_uscita(ciclo.id, "scarto_sottopeso") if ciclo else {"capi": 0, "kg": 0}
+    stat_agriturismo = _statistiche_uscita(ciclo.id, "agriturismo") if ciclo else {"capi": 0, "kg": 0}
 
     return render_template("allevamento/spostamenti.html",
                            ciclo=ciclo, lista=lista, totali=totali,
                            stat_fine_ciclo=stat_fine_ciclo, stat_scarti=stat_scarti,
-                           tipo_filter=tipo_filter,
+                           stat_agriturismo=stat_agriturismo,
+                           tipo_filter=tipo_filter, categoria_filter=categoria_filter,
                            BOX_PER_CAP=BOX_PER_CAP, CAPANNONI=CAPANNONI,
                            oggi=date.today())
 
@@ -483,7 +491,7 @@ def spostamenti_new():
         peso_medio = None
         if tipo == "uscita":
             categoria_uscita = request.form.get("categoria_uscita", "").strip()
-            if categoria_uscita not in ("fine_ciclo", "scarto_sottopeso"):
+            if categoria_uscita not in ("fine_ciclo", "scarto_sottopeso", "agriturismo"):
                 raise ValueError("Seleziona la categoria dell'uscita.")
         if tipo in ("entrata", "uscita"):
             peso_val = request.form.get("peso_medio_kg", "").strip()
