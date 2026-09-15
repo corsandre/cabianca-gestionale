@@ -16,7 +16,10 @@
 {% else %}
 
 <!-- Conteggio live per capannone -->
-<h6 class="text-uppercase text-muted small mb-2">Conteggio live (ultimo snapshot + delta eventi)</h6>
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h6 class="text-uppercase text-muted small mb-0">Conteggio live (ultimo snapshot + delta eventi)</h6>
+    <div class="fw-bold"><span style="color:#c2185b">{{ totale_live }}</span> <span class="text-muted small">suini totali</span></div>
+</div>
 <div class="row g-2 mb-4">
     {% for cap in CAPANNONI %}
     {% set boxes = BOX_PER_CAP[cap] %}
@@ -49,6 +52,7 @@
 
 <!-- Storico censimenti -->
 <h6 class="text-uppercase text-muted small mb-2">Storico censimenti</h6>
+<p class="text-muted small">Tutti i censimenti restano consultabili e immutati — clicca una riga per vedere il dettaglio per box registrato in quel momento.</p>
 <div class="cb-card p-0" style="overflow-x:auto">
     {% if storico %}
     <table class="table table-sm mb-0">
@@ -57,7 +61,7 @@
         </thead>
         <tbody>
             {% for c in storico %}
-            <tr>
+            <tr class="cb-riga-censimento" style="cursor:pointer" data-id="{{ c.id }}" title="Clicca per il dettaglio">
                 <td>{{ c.data.strftime('%d/%m/%Y') }}</td>
                 <td class="fw-bold" style="color:#c2185b">{{ storico_totali.get(c.id, 0) }}</td>
                 <td>{{ c.operatore or '–' }}</td>
@@ -71,6 +75,31 @@
     {% endif %}
 </div>
 {% endif %}
+
+<!-- Modal dettaglio censimento (sola lettura, dato immutato) -->
+<div class="modal fade" id="modalDettaglioCensimento" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#c2185b;color:#fff">
+                <h5 class="modal-title"><i class="bi bi-123 me-2"></i>Dettaglio censimento <span id="cbDettCensData"></span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <div><strong>Operatore:</strong> <span id="cbDettCensOperatore"></span></div>
+                        <div class="text-muted small" id="cbDettCensNote"></div>
+                    </div>
+                    <div class="fs-4 fw-bold" style="color:#c2185b">Totale: <span id="cbDettCensTotale"></span></div>
+                </div>
+                <div id="cbDettCensBody"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Modal nuovo censimento -->
 <div class="modal fade" id="modalCensimento" tabindex="-1">
@@ -138,6 +167,46 @@
 
 {% block extra_js %}
 <script>
+const CB_BOX_PER_CAP = {{ BOX_PER_CAP | tojson }};
+const CB_CAPANNONI = {{ CAPANNONI | tojson }};
+
+document.querySelectorAll('.cb-riga-censimento').forEach(function (tr) {
+    tr.addEventListener('click', async function () {
+        const id = tr.dataset.id;
+        const modalEl = document.getElementById('modalDettaglioCensimento');
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        document.getElementById('cbDettCensBody').innerHTML = '<p class="text-muted">Caricamento…</p>';
+        modal.show();
+        try {
+            const resp = await fetch(`/allevamento/censimento/${id}/dettaglio`);
+            const dati = await resp.json();
+            if (dati.error) throw new Error(dati.error);
+            document.getElementById('cbDettCensData').textContent = dati.data;
+            document.getElementById('cbDettCensOperatore').textContent = dati.operatore;
+            document.getElementById('cbDettCensNote').textContent = dati.note || '';
+            document.getElementById('cbDettCensTotale').textContent = dati.totale;
+
+            let html = '';
+            CB_CAPANNONI.forEach(function (cap) {
+                html += `<h6 class="text-uppercase small mb-2 mt-3">CAP ${cap}</h6><div class="row g-2 mb-2">`;
+                CB_BOX_PER_CAP[cap].forEach(function (b) {
+                    const info = dati.conteggi[b] || { quantita: 0, giorni_vita: null, peso_stimato_kg: null };
+                    html += `<div class="col-6 col-sm-4 col-md-3 col-lg-2">
+                        <div class="border rounded p-2 small">
+                            <div class="fw-semibold">Box ${b}: <span style="color:#c2185b">${info.quantita}</span></div>
+                            <div class="text-muted">${info.giorni_vita != null ? info.giorni_vita + ' gg' : ''}${info.peso_stimato_kg != null ? ' · ' + info.peso_stimato_kg + ' kg' : ''}</div>
+                        </div>
+                    </div>`;
+                });
+                html += '</div>';
+            });
+            document.getElementById('cbDettCensBody').innerHTML = html;
+        } catch (err) {
+            document.getElementById('cbDettCensBody').innerHTML = `<p class="text-danger">Errore nel caricamento: ${err.message}</p>`;
+        }
+    });
+});
+
 const cbCensimentoInputs = document.querySelectorAll('.cb-censimento-capi');
 const cbCensimentoTotale = document.querySelector('.cb-censimento-totale');
 

@@ -38,12 +38,13 @@ def start_bot(app):
     (
         MAIN_MENU,
         MORTALITA_CAP, MORTALITA_BOX, MORTALITA_QTY, MORTALITA_CAUSA,
-        SPOSTAMENTO_TIPO, SPOSTAMENTO_ORIG, SPOSTAMENTO_DEST, SPOSTAMENTO_QTY,
+        SPOSTAMENTO_TIPO, SPOSTAMENTO_ORIG, SPOSTAMENTO_BOX_ORIG,
+        SPOSTAMENTO_DEST, SPOSTAMENTO_BOX_DEST, SPOSTAMENTO_QTY,
         CONSEGNA_TIPO, CONSEGNA_QTY, CONSEGNA_SS, CONSEGNA_EXTRA, CONSEGNA_BOLLA,
         PASTO_LINEA, PASTO_NUM, PASTO_MANG, PASTO_SIERO, PASTO_ACQUA,
         CENSIMENTO_FIELD, CENSIMENTO_BOX_NEXT, CENSIMENTO_CAP_NEXT, CENSIMENTO_CONFIRM,
         CENSIMENTO_RECAP_PICK,
-    ) = range(24)
+    ) = range(26)
 
     CAPANNONI = [1, 2, 3, 4, 5, 6, 7]
     BOX_PER_CAP = {
@@ -67,10 +68,11 @@ def start_bot(app):
         rows = [buttons[i:i+4] for i in range(0, len(buttons), 4)]
         return InlineKeyboardMarkup(rows)
 
-    def kb_boxes(cap):
+    def kb_boxes(cap, tutto_cap=True):
         boxes = BOX_PER_CAP.get(cap, [])
         buttons = [InlineKeyboardButton(f"B{b}", callback_data=str(b)) for b in boxes]
-        buttons.append(InlineKeyboardButton("→ tutto il CAP", callback_data="0"))
+        if tutto_cap:
+            buttons.append(InlineKeyboardButton("→ tutto il CAP", callback_data="0"))
         rows = [buttons[i:i+5] for i in range(0, len(buttons), 5)]
         return InlineKeyboardMarkup(rows)
 
@@ -263,7 +265,15 @@ def start_bot(app):
     async def spostamento_orig(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         q = update.callback_query
         await q.answer()
-        ctx.user_data["spostamento_cap_orig"] = int(q.data)
+        cap = int(q.data)
+        ctx.user_data["spostamento_cap_orig"] = cap
+        await q.edit_message_text("📦 Box di origine:", reply_markup=kb_boxes(cap, tutto_cap=False))
+        return SPOSTAMENTO_BOX_ORIG
+
+    async def spostamento_box_orig(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        q = update.callback_query
+        await q.answer()
+        ctx.user_data["spostamento_box_orig"] = int(q.data)
         if ctx.user_data["spostamento_tipo"] == "uscita":
             await q.edit_message_text("Quanti capi escono/vengono macellati?")
             return SPOSTAMENTO_QTY
@@ -273,7 +283,15 @@ def start_bot(app):
     async def spostamento_dest(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         q = update.callback_query
         await q.answer()
-        ctx.user_data["spostamento_cap_dest"] = int(q.data)
+        cap = int(q.data)
+        ctx.user_data["spostamento_cap_dest"] = cap
+        await q.edit_message_text("📦 Box di destinazione:", reply_markup=kb_boxes(cap, tutto_cap=False))
+        return SPOSTAMENTO_BOX_DEST
+
+    async def spostamento_box_dest(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        q = update.callback_query
+        await q.answer()
+        ctx.user_data["spostamento_box_dest"] = int(q.data)
         await q.edit_message_text("Quanti capi vengono spostati?")
         return SPOSTAMENTO_QTY
 
@@ -289,6 +307,8 @@ def start_bot(app):
         tipo = ctx.user_data.get("spostamento_tipo")
         cap_orig = ctx.user_data.get("spostamento_cap_orig")
         cap_dest = ctx.user_data.get("spostamento_cap_dest")
+        box_orig = ctx.user_data.get("spostamento_box_orig")
+        box_dest = ctx.user_data.get("spostamento_box_dest")
 
         with app.app_context():
             from app import db
@@ -299,6 +319,7 @@ def start_bot(app):
                 return ConversationHandler.END
             s = Spostamento(
                 ciclo_id=ciclo.id, data=date.today(), tipo=tipo, quantita=qty,
+                box_origine=box_orig, box_destinazione=box_dest,
                 capannone_origine=cap_orig, capannone_destinazione=cap_dest,
                 registrato_da="telegram",
             )
@@ -306,7 +327,13 @@ def start_bot(app):
             db.session.commit()
 
         label = {"entrata": "entrata", "uscita": "uscita/macello", "interno": "spostamento interno"}[tipo]
-        await update.message.reply_text(f"✅ {qty} capi — {label} registrata.\n\nUsa /start per continuare.")
+        dettaglio = []
+        if box_orig:
+            dettaglio.append(f"da CAP{cap_orig} box {box_orig}")
+        if box_dest:
+            dettaglio.append(f"a CAP{cap_dest} box {box_dest}")
+        dettaglio_txt = " — " + ", ".join(dettaglio) if dettaglio else ""
+        await update.message.reply_text(f"✅ {qty} capi — {label}{dettaglio_txt} registrato.\n\nUsa /start per continuare.")
         return ConversationHandler.END
 
     # ── Consegna ──────────────────────────────────────────────────────────
@@ -793,7 +820,9 @@ def start_bot(app):
             ],
             SPOSTAMENTO_TIPO: [CallbackQueryHandler(spostamento_tipo)],
             SPOSTAMENTO_ORIG: [CallbackQueryHandler(spostamento_orig)],
+            SPOSTAMENTO_BOX_ORIG: [CallbackQueryHandler(spostamento_box_orig)],
             SPOSTAMENTO_DEST: [CallbackQueryHandler(spostamento_dest)],
+            SPOSTAMENTO_BOX_DEST: [CallbackQueryHandler(spostamento_box_dest)],
             SPOSTAMENTO_QTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, spostamento_qty)],
             CONSEGNA_QTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, consegna_qty)],
             CONSEGNA_SS: [

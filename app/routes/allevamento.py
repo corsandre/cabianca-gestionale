@@ -307,21 +307,48 @@ def censimento():
     from app.models import Censimento
     ciclo = _get_ciclo_attivo()
     live = _live_count(ciclo) if ciclo else {b: 0 for b in range(1, 55)}
+    totale_live = sum(live.values())
 
+    # Tutti i censimenti del ciclo devono restare consultabili, non solo gli ultimi.
     storico = Censimento.query.filter_by(
         ciclo_id=ciclo.id if ciclo else -1
-    ).order_by(Censimento.data.desc()).limit(20).all() if ciclo else []
+    ).order_by(Censimento.data.desc()).all() if ciclo else []
 
     storico_totali = {}
     for c in storico:
         storico_totali[c.id] = sum(cb.quantita for cb in c.conteggi.all())
 
     return render_template("allevamento/censimento.html",
-                           ciclo=ciclo, live=live, storico=storico,
-                           storico_totali=storico_totali,
+                           ciclo=ciclo, live=live, totale_live=totale_live,
+                           storico=storico, storico_totali=storico_totali,
                            BOX_PER_CAP=BOX_PER_CAP, CAPANNONI=CAPANNONI,
                            POSTI_PER_BOX_STANDARD=POSTI_PER_BOX_STANDARD,
                            oggi=date.today())
+
+
+@bp.route("/censimento/<int:cid>/dettaglio")
+@login_required
+def censimento_dettaglio(cid):
+    _check_allevamento()
+    from app.models import Censimento
+    cens = db.session.get(Censimento, cid)
+    if not cens:
+        return jsonify(error="Censimento non trovato."), 404
+    conteggi = {
+        str(cb.box_numero): {
+            "quantita": cb.quantita,
+            "giorni_vita": cb.giorni_vita,
+            "peso_stimato_kg": cb.peso_stimato_kg,
+        }
+        for cb in cens.conteggi.all()
+    }
+    return jsonify(
+        data=cens.data.strftime("%d/%m/%Y"),
+        operatore=cens.operatore or "–",
+        note=cens.note or "",
+        totale=sum(c["quantita"] for c in conteggi.values()),
+        conteggi=conteggi,
+    )
 
 
 @bp.route("/censimento/new", methods=["POST"])
