@@ -2,7 +2,7 @@ services:
   web:
     build: .
     ports:
-      - "${APP_PORT:-8080}:8080"
+      - "${APP_BIND:-0.0.0.0}:${APP_PORT:-8080}:8080"
     volumes:
       - ./data:/app/data
       - ./backups:/app/backups
