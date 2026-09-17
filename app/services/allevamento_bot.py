@@ -969,6 +969,7 @@ def start_bot(app):
         with app.app_context():
             from app import db
             from app.models import Ciclo, Censimento, CensimentoBox
+            from app.services.allevamento_scorte import peso_da_giorni, giorni_da_peso
             ciclo = Ciclo.query.filter_by(attivo=True).first()
             if not ciclo:
                 await q.edit_message_text("⚠️ Nessun ciclo attivo.")
@@ -978,11 +979,20 @@ def start_bot(app):
             db.session.add(cens)
             db.session.flush()
             for b, dati in conteggi.items():
+                giorni = dati.get("giorni")
+                peso = dati.get("peso")
+                # Basta un dato tra i due: l'altro si calcola dalla curva di
+                # accrescimento, stessa logica del censimento via web.
+                if dati.get("capi", 0) > 0:
+                    if peso is None and giorni is not None:
+                        peso = peso_da_giorni(giorni)
+                    elif giorni is None and peso is not None:
+                        giorni = giorni_da_peso(peso)
                 db.session.add(CensimentoBox(
                     censimento_id=cens.id, box_numero=b,
                     quantita=dati.get("capi", 0),
-                    giorni_vita=dati.get("giorni"),
-                    peso_stimato_kg=dati.get("peso"),
+                    giorni_vita=giorni,
+                    peso_stimato_kg=peso,
                 ))
             db.session.commit()
 
