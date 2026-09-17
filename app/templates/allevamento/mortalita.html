@@ -70,19 +70,24 @@
     </table>
 </div>
 
-<!-- Storico eventi ultimi 30gg -->
-<h6 class="text-uppercase text-muted small mb-2">Ultimi 30 giorni</h6>
+<!-- Storico mortalità del ciclo -->
+<h6 class="text-uppercase text-muted small mb-2">
+    Storico mortalità del ciclo
+    {% if pagination %}<span class="text-muted normal-case">({{ pagination.total }} eventi)</span>{% endif %}
+</h6>
 <div class="cb-card p-0" style="overflow-x:auto">
-    {% if ultimi %}
-    <table class="table table-sm mb-0">
+    {% if pagination and pagination.items %}
+    <table class="table table-sm mb-0 align-middle">
         <thead class="table-light">
             <tr>
                 <th>Data</th><th>CAP</th><th>Box</th><th>Capi</th><th>Causa</th><th>Note</th>
+                <th>PC alimentazione</th><th>Webfarm</th><th>RIFT</th><th>Fatto</th>
                 {% if current_user.role == 'admin' %}<th></th>{% endif %}
             </tr>
         </thead>
         <tbody>
-            {% for ev in ultimi %}
+            {% for ev in pagination.items %}
+            {% set completate = (ev.pc_alimentazione_data is not none) + (ev.webfarm_data is not none) + (ev.rift_data is not none) %}
             <tr>
                 <td>{{ ev.data.strftime('%d/%m/%Y') }}</td>
                 <td>{{ ev.capannone_numero }}</td>
@@ -90,6 +95,26 @@
                 <td class="text-danger fw-bold">{{ ev.quantita }}</td>
                 <td>{{ ev.causa or '–' }}</td>
                 <td class="text-muted">{{ ev.note or '' }}</td>
+                {% for azione, campo_data, campo_op, etichetta in [
+                    ('pc', ev.pc_alimentazione_data, ev.pc_alimentazione_operatore, 'PC alim.'),
+                    ('webfarm', ev.webfarm_data, ev.webfarm_operatore, 'Webfarm'),
+                    ('rift', ev.rift_data, ev.rift_operatore, 'RIFT'),
+                ] %}
+                <td>
+                    {% if campo_data %}
+                    <span class="badge bg-success cb-azione-badge" role="button" data-ev="{{ ev.id }}" data-azione="{{ azione }}" title="Click per annullare">
+                        <i class="bi bi-check-lg"></i> {{ campo_data.strftime('%d/%m %H:%M') }} · {{ campo_op }}
+                    </span>
+                    {% else %}
+                    <button type="button" class="btn btn-sm btn-outline-secondary cb-azione-btn" data-ev="{{ ev.id }}" data-azione="{{ azione }}">
+                        {{ etichetta }}
+                    </button>
+                    {% endif %}
+                </td>
+                {% endfor %}
+                <td class="text-center">
+                    <span class="badge {{ 'bg-success' if completate == 3 else ('bg-warning text-dark' if completate > 0 else 'bg-secondary') }}">{{ completate }}/3</span>
+                </td>
                 {% if current_user.role == 'admin' %}
                 <td>
                     <form method="post" action="{{ url_for('allevamento.mortalita_delete', ev_id=ev.id) }}" onsubmit="return confirm('Elimina questo evento?')">
@@ -102,8 +127,28 @@
             {% endfor %}
         </tbody>
     </table>
+    {% macro page_url(p) %}?pagina={{ p }}{% endmacro %}
+    {% if pagination.pages > 1 %}
+    <nav class="p-2">
+        <ul class="pagination pagination-sm justify-content-center mb-0">
+            {% if pagination.has_prev %}
+            <li class="page-item"><a class="page-link" href="{{ page_url(pagination.prev_num) }}">&laquo;</a></li>
+            {% endif %}
+            {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if p %}
+                <li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="{{ page_url(p) }}">{{ p }}</a></li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+                {% endif %}
+            {% endfor %}
+            {% if pagination.has_next %}
+            <li class="page-item"><a class="page-link" href="{{ page_url(pagination.next_num) }}">&raquo;</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
     {% else %}
-    <p class="text-muted p-3 mb-0">Nessun evento negli ultimi 30 giorni.</p>
+    <p class="text-muted p-3 mb-0">Nessun evento registrato in questo ciclo.</p>
     {% endif %}
 </div>
 {% endif %}
@@ -178,5 +223,46 @@ function updateBoxes() {
         });
     }
 }
+
+const CSRF_TOKEN = "{{ csrf_token() }}";
+
+document.querySelectorAll('.cb-azione-btn').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+        const ev = btn.dataset.ev, azione = btn.dataset.azione;
+        btn.disabled = true;
+        const fd = new FormData();
+        fd.append('csrf_token', CSRF_TOKEN);
+        try {
+            const resp = await fetch('/allevamento/mortalita/' + ev + '/segna/' + azione, {
+                method: 'POST', body: fd, credentials: 'same-origin',
+            });
+            const json = await resp.json();
+            if (!resp.ok || !json.ok) throw new Error(json.error || 'errore');
+            window.location.reload();
+        } catch (err) {
+            alert('Registrazione non riuscita: ' + err.message);
+            btn.disabled = false;
+        }
+    });
+});
+
+document.querySelectorAll('.cb-azione-badge').forEach(function (badge) {
+    badge.addEventListener('click', async function () {
+        if (!confirm('Annullare questa marcatura?')) return;
+        const ev = badge.dataset.ev, azione = badge.dataset.azione;
+        const fd = new FormData();
+        fd.append('csrf_token', CSRF_TOKEN);
+        try {
+            const resp = await fetch('/allevamento/mortalita/' + ev + '/annulla/' + azione, {
+                method: 'POST', body: fd, credentials: 'same-origin',
+            });
+            const json = await resp.json();
+            if (!resp.ok || !json.ok) throw new Error(json.error || 'errore');
+            window.location.reload();
+        } catch (err) {
+            alert('Annullamento non riuscito: ' + err.message);
+        }
+    });
+});
 </script>
 {% endblock %}

@@ -242,11 +242,13 @@ def mortalita():
         if m.data in griglia:
             griglia[m.data][m.capannone_numero] = griglia[m.data].get(m.capannone_numero, 0) + m.quantita
 
-    # Ultimi 30gg eventi
-    ultimi = EventoMortalita.query.filter(
+    # Storico completo del ciclo, paginato
+    pagina = request.args.get("pagina", 1, type=int)
+    pagination = EventoMortalita.query.filter(
         EventoMortalita.ciclo_id == ciclo.id if ciclo else False,
-        EventoMortalita.data >= oggi - timedelta(days=30),
-    ).order_by(EventoMortalita.data.desc(), EventoMortalita.id.desc()).all() if ciclo else []
+    ).order_by(EventoMortalita.data.desc(), EventoMortalita.id.desc()).paginate(
+        page=pagina, per_page=30
+    ) if ciclo else None
 
     tot_settimana = sum(sum(caps.values()) for caps in griglia.values())
 
@@ -254,7 +256,7 @@ def mortalita():
                            ciclo=ciclo, griglia=griglia, lun=lun, dom=dom,
                            settimana_offset=settimana_offset,
                            CAPANNONI=CAPANNONI, BOX_PER_CAP=BOX_PER_CAP,
-                           ultimi=ultimi, oggi=oggi,
+                           pagination=pagination, oggi=oggi,
                            tot_settimana=tot_settimana)
 
 
@@ -304,6 +306,52 @@ def mortalita_delete(ev_id):
         db.session.commit()
         flash("Evento eliminato.", "success")
     return redirect(url_for("allevamento.mortalita"))
+
+
+AZIONI_MORTALITA = {
+    "pc": ("pc_alimentazione_data", "pc_alimentazione_operatore"),
+    "webfarm": ("webfarm_data", "webfarm_operatore"),
+    "rift": ("rift_data", "rift_operatore"),
+}
+
+
+@bp.route("/mortalita/<int:ev_id>/segna/<azione>", methods=["POST"])
+@login_required
+def mortalita_segna(ev_id, azione):
+    _check_allevamento()
+    from datetime import datetime
+    from app.models import EventoMortalita
+    if azione not in AZIONI_MORTALITA:
+        return jsonify(error="Azione non valida."), 400
+    ev = db.session.get(EventoMortalita, ev_id)
+    if not ev:
+        return jsonify(error="Evento non trovato."), 404
+    campo_data, campo_operatore = AZIONI_MORTALITA[azione]
+    ora = datetime.now()
+    setattr(ev, campo_data, ora)
+    setattr(ev, campo_operatore, current_user.display_name or current_user.username)
+    db.session.commit()
+    return jsonify(
+        ok=True,
+        testo=f"{ora.strftime('%d/%m %H:%M')} · {getattr(ev, campo_operatore)}",
+    )
+
+
+@bp.route("/mortalita/<int:ev_id>/annulla/<azione>", methods=["POST"])
+@login_required
+def mortalita_annulla(ev_id, azione):
+    _check_allevamento()
+    from app.models import EventoMortalita
+    if azione not in AZIONI_MORTALITA:
+        return jsonify(error="Azione non valida."), 400
+    ev = db.session.get(EventoMortalita, ev_id)
+    if not ev:
+        return jsonify(error="Evento non trovato."), 404
+    campo_data, campo_operatore = AZIONI_MORTALITA[azione]
+    setattr(ev, campo_data, None)
+    setattr(ev, campo_operatore, None)
+    db.session.commit()
+    return jsonify(ok=True)
 
 
 # ── Censimento ─────────────────────────────────────────────────────────────

@@ -407,6 +407,13 @@ class EventoMortalita(db.Model):
     note = db.Column(db.Text)
     registrato_da = db.Column(db.String(20), default="web")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Le 3 azioni post-mortalità da tracciare (data/ora + chi le ha fatte)
+    pc_alimentazione_data = db.Column(db.DateTime)
+    pc_alimentazione_operatore = db.Column(db.String(100))
+    webfarm_data = db.Column(db.DateTime)
+    webfarm_operatore = db.Column(db.String(100))
+    rift_data = db.Column(db.DateTime)
+    rift_operatore = db.Column(db.String(100))
     ciclo = db.relationship("Ciclo", backref="morti")
 
 
