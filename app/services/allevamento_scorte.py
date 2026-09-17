@@ -415,6 +415,49 @@ def chiudi_consegne_siero_precedenti(data_chiusura, ora_chiusura=None, escludi_i
             c.ora_esaurimento = ora_chiusura
 
 
+def _punti_curva_accrescimento():
+    from app.models import CurvaAccrescimento
+    righe = CurvaAccrescimento.query.order_by(CurvaAccrescimento.eta_giorni).all()
+    return [(r.eta_giorni, r.peso_kg) for r in righe]
+
+
+def peso_da_giorni(giorni):
+    """Interpola la curva età→peso per stimare il peso dai giorni di vita.
+    Fuori dagli estremi della curva, mantiene il valore del punto più vicino
+    (nessuna estrapolazione oltre i dati noti)."""
+    punti = _punti_curva_accrescimento()
+    if not punti or giorni is None:
+        return None
+    if giorni <= punti[0][0]:
+        return punti[0][1]
+    if giorni >= punti[-1][0]:
+        return punti[-1][1]
+    for (x0, y0), (x1, y1) in zip(punti, punti[1:]):
+        if x0 <= giorni <= x1:
+            if x1 == x0:
+                return y0
+            return y0 + (y1 - y0) * (giorni - x0) / (x1 - x0)
+    return None
+
+
+def giorni_da_peso(peso):
+    """Funzione inversa: stima i giorni di vita dal peso, interpolando
+    sull'asse peso (la curva è monotona crescente)."""
+    punti = _punti_curva_accrescimento()
+    if not punti or peso is None:
+        return None
+    if peso <= punti[0][1]:
+        return punti[0][0]
+    if peso >= punti[-1][1]:
+        return punti[-1][0]
+    for (x0, y0), (x1, y1) in zip(punti, punti[1:]):
+        if y0 <= peso <= y1:
+            if y1 == y0:
+                return x0
+            return round(x0 + (x1 - x0) * (peso - y0) / (y1 - y0))
+    return None
+
+
 def scarto_consegna_siero(consegna, soglia_q=None):
     """Per una consegna chiusa, confronta il consumo reale pesato in cucina
     nel periodo con la quantità dichiarata (non pesata) alla consegna."""

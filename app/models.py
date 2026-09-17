@@ -395,6 +395,15 @@ class CensimentoBox(db.Model):
     peso_stimato_kg = db.Column(db.Float)     # peso medio stimato per capo
 
 
+class CurvaAccrescimento(db.Model):
+    """Tabella età (giorni) → peso (kg) per stimare l'uno dall'altro
+    al censimento, e per proiettare il peso odierno nel conteggio live."""
+    __tablename__ = "curva_accrescimento"
+    id = db.Column(db.Integer, primary_key=True)
+    eta_giorni = db.Column(db.Integer, nullable=False, unique=True)
+    peso_kg = db.Column(db.Float, nullable=False)
+
+
 class EventoMortalita(db.Model):
     __tablename__ = "eventi_mortalita"
     id = db.Column(db.Integer, primary_key=True)

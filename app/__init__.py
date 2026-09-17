@@ -356,6 +356,21 @@ def _init_db(app):
         for nome in ("Cloxacillina (Cloxalene)", "Findol", "Micospectone"):
             db.session.add(Medicinale(nome=nome, tipo="iniettabile", giorni_somministrazione=1, giorni_sospensione=0))
 
+    # Seed curva di accrescimento (età giorni → peso kg) con i dati reali
+    # Ca Bianca, già usati nella v1 dell'allevamento (32 punti, 0-217 giorni).
+    from app.models import CurvaAccrescimento
+    if CurvaAccrescimento.query.count() == 0:
+        CURVA_REALE = [
+            (0, 20.0), (7, 30.0), (14, 34.0), (21, 38.2), (28, 42.8), (35, 47.5),
+            (42, 52.3), (49, 57.2), (56, 62.2), (63, 67.3), (70, 72.5), (77, 77.7),
+            (84, 83.0), (91, 88.4), (98, 93.8), (105, 99.3), (112, 104.8), (119, 110.3),
+            (126, 115.8), (133, 121.2), (140, 126.5), (147, 131.7), (154, 136.8),
+            (161, 141.8), (168, 146.8), (175, 151.6), (182, 156.2), (189, 160.6),
+            (196, 164.9), (203, 169.1), (210, 173.0), (217, 174.0),
+        ]
+        for eta, peso in CURVA_REALE:
+            db.session.add(CurvaAccrescimento(eta_giorni=eta, peso_kg=peso))
+
     # Seed default backup settings
     from app.models import Setting
     defaults = {

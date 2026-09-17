@@ -30,12 +30,18 @@
             <div class="row g-1">
                 {% for b in boxes %}
                 {% set sopra_capienza = live.get(b,0) > POSTI_PER_BOX_STANDARD[b] %}
+                {% set proj = proiezione.get(b) %}
                 <div class="col-auto">
                     <span class="badge {{ 'bg-secondary' if live.get(b,0) == 0 else 'text-dark' }}"
                           style="{{ 'background:#fff3cd;border:1px solid #ffc107' if sopra_capienza else ('' if live.get(b,0) == 0 else 'background:#fce4ec;border:1px solid #c2185b') }}"
                           title="Box {{ b }} (cap.{{ POSTI_PER_BOX_STANDARD[b] }}){{ ' — SOPRA CAPIENZA' if sopra_capienza else '' }}">
                         B{{ b }}: {{ live.get(b, 0) }}{{ ' ⚠' if sopra_capienza else '' }}
                     </span>
+                    {% if proj and live.get(b,0) > 0 %}
+                    <div class="text-muted" style="font-size:0.7rem">
+                        {{ proj.giorni }}gg{% if proj.peso %} · {{ proj.peso | round(1) }}kg{% endif %}
+                    </div>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>

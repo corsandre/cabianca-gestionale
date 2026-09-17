@@ -356,6 +356,29 @@ def mortalita_annulla(ev_id, azione):
 
 # ── Censimento ─────────────────────────────────────────────────────────────
 
+def _proiezione_giorni_peso(ciclo):
+    """Per ogni box, proietta a oggi i giorni di vita dall'ultimo censimento
+    che li riportava, e ricalcola il peso stimato con la curva di
+    accrescimento (non riusa il peso salvato allora, che nel frattempo è
+    invecchiato)."""
+    from app.models import Censimento, CensimentoBox
+    from app.services.allevamento_scorte import peso_da_giorni
+    oggi = date.today()
+    righe = (
+        CensimentoBox.query.join(Censimento)
+        .filter(Censimento.ciclo_id == ciclo.id, CensimentoBox.giorni_vita.isnot(None))
+        .order_by(Censimento.data.desc(), Censimento.id.desc())
+        .all()
+    )
+    risultato = {}
+    for cb in righe:
+        if cb.box_numero in risultato:
+            continue
+        giorni_oggi = cb.giorni_vita + (oggi - cb.censimento.data).days
+        risultato[cb.box_numero] = {"giorni": giorni_oggi, "peso": peso_da_giorni(giorni_oggi)}
+    return risultato
+
+
 @bp.route("/censimento")
 @login_required
 def censimento():
@@ -364,6 +387,7 @@ def censimento():
     ciclo = _get_ciclo_attivo()
     live = _live_count(ciclo) if ciclo else {b: 0 for b in range(1, 55)}
     totale_live = sum(live.values())
+    proiezione = _proiezione_giorni_peso(ciclo) if ciclo else {}
 
     # Tutti i censimenti del ciclo devono restare consultabili, non solo gli ultimi.
     storico = Censimento.query.filter_by(
@@ -377,6 +401,7 @@ def censimento():
     return render_template("allevamento/censimento.html",
                            ciclo=ciclo, live=live, totale_live=totale_live,
                            storico=storico, storico_totali=storico_totali,
+                           proiezione=proiezione,
                            BOX_PER_CAP=BOX_PER_CAP, CAPANNONI=CAPANNONI,
                            POSTI_PER_BOX_STANDARD=POSTI_PER_BOX_STANDARD,
                            oggi=date.today())
@@ -427,6 +452,8 @@ def censimento_new():
         db.session.add(cens)
         db.session.flush()
 
+        from app.services.allevamento_scorte import peso_da_giorni, giorni_da_peso
+
         totale = 0
         for b in range(1, 55):
             val = request.form.get(f"box_{b}", "0").strip()
@@ -438,6 +465,13 @@ def censimento_new():
                 peso = float(peso_val.replace(",", ".")) if peso_val else None
             except ValueError:
                 peso = None
+            # Basta un dato tra i due: l'altro si calcola dalla curva di
+            # accrescimento. Se ci sono entrambi, si tengono quelli inseriti.
+            if qty > 0:
+                if peso is None and giorni is not None:
+                    peso = peso_da_giorni(giorni)
+                elif giorni is None and peso is not None:
+                    giorni = giorni_da_peso(peso)
             db.session.add(CensimentoBox(
                 censimento_id=cens.id, box_numero=b, quantita=qty,
                 giorni_vita=giorni, peso_stimato_kg=peso,
@@ -1263,6 +1297,65 @@ def medicinali_delete(mid):
     return redirect(url_for("allevamento.impostazioni"))
 
 
+# ── Curva di accrescimento (Impostazioni) ──────────────────────────────────
+
+@bp.route("/curva-accrescimento/new", methods=["POST"])
+@login_required
+def curva_new():
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.models import CurvaAccrescimento
+    try:
+        eta = int(request.form["eta_giorni"])
+        peso = float(request.form["peso_kg"].strip().replace(",", "."))
+        if CurvaAccrescimento.query.filter_by(eta_giorni=eta).first():
+            raise ValueError(f"Esiste già un punto a {eta} giorni.")
+        db.session.add(CurvaAccrescimento(eta_giorni=eta, peso_kg=peso))
+        db.session.commit()
+        flash(f"Punto {eta}gg → {peso}kg aggiunto.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
+    return redirect(url_for("allevamento.impostazioni"))
+
+
+@bp.route("/curva-accrescimento/<int:cid>/edit", methods=["POST"])
+@login_required
+def curva_edit(cid):
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.models import CurvaAccrescimento
+    c = db.session.get(CurvaAccrescimento, cid)
+    if not c:
+        flash("Punto non trovato.", "danger")
+        return redirect(url_for("allevamento.impostazioni"))
+    try:
+        c.peso_kg = float(request.form["peso_kg"].strip().replace(",", "."))
+        db.session.commit()
+        flash(f"Punto {c.eta_giorni}gg aggiornato.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
+    return redirect(url_for("allevamento.impostazioni"))
+
+
+@bp.route("/curva-accrescimento/<int:cid>/delete", methods=["POST"])
+@login_required
+def curva_delete(cid):
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.models import CurvaAccrescimento
+    c = db.session.get(CurvaAccrescimento, cid)
+    if c:
+        db.session.delete(c)
+        db.session.commit()
+        flash(f"Punto {c.eta_giorni}gg eliminato.", "success")
+    return redirect(url_for("allevamento.impostazioni"))
+
+
 # ── Impostazioni / Cicli ───────────────────────────────────────────────────
 
 @bp.route("/impostazioni")
@@ -1271,11 +1364,12 @@ def impostazioni():
     _check_allevamento()
     if current_user.role != "admin":
         abort(403)
-    from app.models import Ciclo, Medicinale
+    from app.models import Ciclo, Medicinale, CurvaAccrescimento
     from app.services.allevamento_scorte import get_setting_float, get_setting_int, orario_pasto_str
     ciclo_attivo = _get_ciclo_attivo()
     cicli_precedenti = Ciclo.query.filter_by(attivo=False).order_by(Ciclo.data_inizio.desc()).all()
     medicinali = Medicinale.query.filter_by(attivo=True).order_by(Medicinale.nome).all()
+    curva_accrescimento = CurvaAccrescimento.query.order_by(CurvaAccrescimento.eta_giorni).all()
     soglia_mangime_pasti = get_setting_int("allevamento_soglia_mangime_pasti") or 0
     soglia_mangime_giorni, soglia_mangime_pasti_extra = divmod(soglia_mangime_pasti, 3)
     scorte_settings = {
@@ -1290,6 +1384,7 @@ def impostazioni():
     return render_template("allevamento/impostazioni.html",
                            ciclo_attivo=ciclo_attivo, cicli_precedenti=cicli_precedenti,
                            scorte_settings=scorte_settings, medicinali=medicinali,
+                           curva_accrescimento=curva_accrescimento,
                            oggi=date.today())
 
 

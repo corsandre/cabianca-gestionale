@@ -212,6 +212,56 @@
     </form>
 </div>
 
+<!-- Curva di accrescimento -->
+<h6 class="text-uppercase text-muted small mb-2">Curva di accrescimento (età → peso)</h6>
+<p class="text-muted small">Usata al censimento per calcolare il dato mancante (basta inserire giorni di vita <em>oppure</em> peso) e nel conteggio live per stimare il peso odierno per box.</p>
+<div class="cb-card p-0 mb-4" style="overflow-x:auto;max-height:320px">
+    <table class="table table-sm mb-0">
+        <thead class="table-light" style="position:sticky;top:0">
+            <tr><th>Giorni di vita</th><th>Peso (kg)</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for c in curva_accrescimento %}
+            <tr>
+                <td class="fw-semibold">{{ c.eta_giorni }}</td>
+                <td>
+                    <input type="number" name="peso_kg" form="frm-curva-{{ c.id }}" class="form-control form-control-sm" step="0.1" min="0"
+                           value="{{ c.peso_kg }}" style="width:100px">
+                </td>
+                <td class="text-nowrap">
+                    <button type="submit" form="frm-curva-{{ c.id }}" class="btn btn-sm btn-outline-secondary py-0" title="Salva"><i class="bi bi-check2"></i></button>
+                    <form method="post" action="{{ url_for('allevamento.curva_delete', cid=c.id) }}" class="d-inline" onsubmit="return confirm('Eliminare questo punto della curva?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-danger py-0" title="Elimina"><i class="bi bi-trash"></i></button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% for c in curva_accrescimento %}
+    <form id="frm-curva-{{ c.id }}" method="post" action="{{ url_for('allevamento.curva_edit', cid=c.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+    {% endfor %}
+</div>
+<div class="cb-card p-3 mb-4">
+    <form method="post" action="{{ url_for('allevamento.curva_new') }}" class="row g-2 align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-4">
+            <label class="form-label small">Giorni di vita</label>
+            <input type="number" name="eta_giorni" class="form-control form-control-sm" min="0" required>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label small">Peso (kg)</label>
+            <input type="number" name="peso_kg" class="form-control form-control-sm" step="0.1" min="0" required>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-sm" style="background:#c2185b;color:#fff"><i class="bi bi-plus-circle"></i> Aggiungi punto</button>
+        </div>
+    </form>
+</div>
+
 <!-- Storico cicli -->
 {% if cicli_precedenti %}
 <h6 class="text-uppercase text-muted small mb-2">Cicli precedenti</h6>
