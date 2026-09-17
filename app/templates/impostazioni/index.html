@@ -26,7 +26,10 @@
                             {% endfor %}
                         </td>
                         <td>{% if u.active %}<span class="text-success">Attivo</span>{% else %}<span class="text-muted">Inattivo</span>{% endif %}</td>
-                        <td>
+                        <td class="text-nowrap">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalEditUser{{ u.id }}">
+                                <i class="bi bi-pencil"></i>
+                            </button>
                             {% if u.id != current_user.id %}
                             <form method="POST" action="{{ url_for('impostazioni.toggle_user', id=u.id) }}" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -38,6 +41,57 @@
                     {% endfor %}
                 </tbody>
             </table>
+
+            {% for u in users %}
+            <div class="modal fade" id="modalEditUser{{ u.id }}" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Modifica utente: {{ u.username }}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <form method="POST" action="{{ url_for('impostazioni.edit_user', id=u.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="modal-body">
+                                <div class="mb-2">
+                                    <label class="form-label form-label-sm mb-1">Nuova password <small class="text-muted">(lascia vuoto per non cambiarla)</small></label>
+                                    <input type="password" name="new_password" class="form-control form-control-sm" placeholder="min 6 caratteri" minlength="6">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label form-label-sm mb-1">Ruolo</label>
+                                    <select name="role" class="form-select form-select-sm" {{ 'disabled' if u.id == current_user.id }}>
+                                        <option value="operatore" {{ 'selected' if u.role == 'operatore' }}>Operatore</option>
+                                        <option value="consulente" {{ 'selected' if u.role == 'consulente' }}>Consulente (sola lettura)</option>
+                                        <option value="admin" {{ 'selected' if u.role == 'admin' }}>Amministratore</option>
+                                    </select>
+                                    {% if u.id == current_user.id %}
+                                    <input type="hidden" name="role" value="{{ u.role }}">
+                                    <small class="text-muted">Non puoi cambiare il tuo stesso ruolo.</small>
+                                    {% endif %}
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label form-label-sm mb-1 text-muted small">Sezioni accessibili</label>
+                                    <div class="d-flex gap-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="sections" value="finanza" id="editsec_finanza{{ u.id }}" {{ 'checked' if u.has_section('finanza') }}>
+                                            <label class="form-check-label" for="editsec_finanza{{ u.id }}">Finanza</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="sections" value="allevamento" id="editsec_allevamento{{ u.id }}" {{ 'checked' if u.has_section('allevamento') }}>
+                                            <label class="form-check-label" for="editsec_allevamento{{ u.id }}">Allevamento Suini</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annulla</button>
+                                <button type="submit" class="btn btn-cb btn-sm">Salva</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
 
             <h6>Nuovo utente</h6>
             <form method="POST" action="{{ url_for('impostazioni.new_user') }}" class="row g-2">

@@ -85,6 +85,34 @@ def new_user():
     return redirect(url_for("impostazioni.index"))
 
 
+@bp.route("/utente/<int:id>/modifica", methods=["POST"])
+@login_required
+@admin_required
+def edit_user(id):
+    user = User.query.get_or_404(id)
+
+    role = request.form.get("role", user.role)
+    sections = request.form.getlist("sections") or []
+    new_pw = request.form.get("new_password", "").strip()
+
+    if user.id == current_user.id and role != "admin":
+        flash("Non puoi rimuovere il tuo stesso ruolo di amministratore.", "warning")
+        return redirect(url_for("impostazioni.index"))
+
+    user.role = role
+    user.sections = json.dumps(sections)
+
+    if new_pw:
+        if len(new_pw) < 6:
+            flash("La nuova password deve avere almeno 6 caratteri.", "warning")
+            return redirect(url_for("impostazioni.index"))
+        user.password_hash = bcrypt.hashpw(new_pw.encode(), bcrypt.gensalt()).decode()
+
+    db.session.commit()
+    flash(f"Utente '{user.username}' aggiornato.", "success")
+    return redirect(url_for("impostazioni.index"))
+
+
 @bp.route("/utente/<int:id>/toggle", methods=["POST"])
 @login_required
 @admin_required
