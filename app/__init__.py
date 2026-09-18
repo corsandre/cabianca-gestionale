@@ -259,6 +259,7 @@ def _init_db(app):
         ("eventi_mortalita", "webfarm_operatore", "VARCHAR(100)"),
         ("eventi_mortalita", "rift_data", "DATETIME"),
         ("eventi_mortalita", "rift_operatore", "VARCHAR(100)"),
+        ("trattamenti", "chiuso_anticipatamente", "BOOLEAN DEFAULT 0"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

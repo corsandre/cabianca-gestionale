@@ -544,6 +544,7 @@ class Trattamento(db.Model):
     ml_per_kg = db.Column(db.Float)
     giorni_somministrazione = db.Column(db.Integer, nullable=False)
     giorni_sospensione = db.Column(db.Integer, nullable=False)
+    chiuso_anticipatamente = db.Column(db.Boolean, default=False)
     registrato_da = db.Column(db.String(20), default="web")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     ciclo = db.relationship("Ciclo", backref="trattamenti")

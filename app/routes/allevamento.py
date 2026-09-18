@@ -1070,7 +1070,7 @@ def _stato_trattamento(t):
     somm = t.somministrazioni.all()  # già ordinate per numero_giorno (vedi relationship)
     fatte = len(somm)
     ultima = somm[-1] if somm else None
-    completo = fatte >= t.giorni_somministrazione
+    completo = fatte >= t.giorni_somministrazione or t.chiuso_anticipatamente
     oggi = date.today()
     da_ripetere = (not completo) and ultima is not None and oggi > ultima.data
     data_fine_sospensione = None
@@ -1085,6 +1085,7 @@ def _stato_trattamento(t):
         "fatte": fatte,
         "totali": t.giorni_somministrazione,
         "completo": completo,
+        "chiuso_anticipatamente": t.chiuso_anticipatamente,
         "da_ripetere": da_ripetere,
         "ultima_data": ultima.data if ultima else None,
         "prossima_data": (ultima.data + timedelta(days=1)) if ultima and not completo else None,
@@ -1211,6 +1212,32 @@ def trattamenti_somministra(tid):
     ))
     db.session.commit()
     flash(f"Somministrazione {stato['fatte'] + 1}/{stato['totali']} registrata.", "success")
+    return redirect(url_for("allevamento.trattamenti"))
+
+
+@bp.route("/trattamenti/<int:tid>/chiudi", methods=["POST"])
+@login_required
+def trattamenti_chiudi(tid):
+    _check_allevamento()
+    from app.models import Trattamento
+    t = db.session.get(Trattamento, tid)
+    if not t:
+        flash("Trattamento non trovato.", "danger")
+        return redirect(url_for("allevamento.trattamenti"))
+
+    stato = _stato_trattamento(t)
+    if stato["completo"]:
+        flash("Il corso di cura è già completo.", "warning")
+        return redirect(url_for("allevamento.trattamenti"))
+
+    motivo = request.form.get("motivo", "").strip()
+    riga = f"Chiuso anticipatamente il {date.today().strftime('%d/%m/%Y')}"
+    if motivo:
+        riga += f": {motivo}"
+    t.note = f"{t.note}\n\n{riga}" if t.note else riga
+    t.chiuso_anticipatamente = True
+    db.session.commit()
+    flash("Trattamento chiuso.", "success")
     return redirect(url_for("allevamento.trattamenti"))
 
 
