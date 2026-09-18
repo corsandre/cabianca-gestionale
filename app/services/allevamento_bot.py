@@ -264,7 +264,7 @@ def start_bot(app):
         testo = update.message.text.strip()
         causa = None if testo.startswith("/skip") else testo
         await _salva_mortalita(update, ctx, app, causa)
-        return ConversationHandler.END
+        return MAIN_MENU
 
     async def _salva_mortalita(update, ctx, app, causa):
         cap = ctx.user_data.get("mortalita_cap")
@@ -693,7 +693,7 @@ def start_bot(app):
             f"% sostituzione s.s. (calcolata): {ss_txt}\n\nUsa /start per continuare.",
             reply_markup=kb_main(),
         )
-        return ConversationHandler.END
+        return MAIN_MENU
 
     # ── Censimento (percorso guidato, solo tastiera inline) ─────────────────
 
