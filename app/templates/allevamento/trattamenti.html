@@ -56,11 +56,12 @@
         <tbody>
             {% for t in lista %}
             {% set s = stati[t.id] %}
-            <tr class="{{ 'table-danger' if s.da_ripetere }}">
+            <tr class="{{ 'table-danger' if s.da_ripetere }}{{ ' cb-riga-nota' if t.note }}"
+                {% if t.note %}style="cursor:pointer" data-nota-target="nota{{ t.id }}" title="Clicca per vedere le note"{% endif %}>
                 <td>{{ t.data_inizio.strftime('%d/%m/%Y') }}</td>
                 <td>
                     {{ t.medicinale.nome }}
-                    {% if t.note %}<i class="bi bi-sticky ms-1 text-muted" title="{{ t.note }}"></i>{% endif %}
+                    {% if t.note %}<i class="bi bi-sticky ms-1 text-muted"></i>{% endif %}
                 </td>
                 <td class="text-muted">
                     {% if t.box_numero %}Box {{ t.box_numero }}{% else %}CAP {{ t.capannone_numero }} (tutto){% endif %}
@@ -85,7 +86,7 @@
                 </td>
                 <td class="text-muted">{{ t.operatore or '–' }}</td>
                 {% if current_user.role == 'admin' %}
-                <td class="text-nowrap">
+                <td class="text-nowrap" onclick="event.stopPropagation()">
                     {% if s.da_ripetere %}
                     <form method="post" action="{{ url_for('allevamento.trattamenti_somministra', tid=t.id) }}" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -107,6 +108,13 @@
                 </td>
                 {% endif %}
             </tr>
+            {% if t.note %}
+            <tr id="nota{{ t.id }}" class="d-none">
+                <td colspan="100%" class="bg-light">
+                    <small class="text-muted" style="white-space:pre-line">{{ t.note }}</small>
+                </td>
+            </tr>
+            {% endif %}
             {% endfor %}
         </tbody>
     </table>
@@ -253,6 +261,13 @@ const MEDICINALI = {
     "{{ m.id }}": {ml_per_kg: {{ m.ml_per_kg | tojson }}, giorni_somministrazione: {{ m.giorni_somministrazione }}, giorni_sospensione: {{ m.giorni_sospensione }}}{{ ',' if not loop.last }}
     {% endfor %}
 };
+
+document.querySelectorAll('.cb-riga-nota').forEach(function (tr) {
+    tr.addEventListener('click', function () {
+        const target = document.getElementById(tr.dataset.notaTarget);
+        if (target) target.classList.toggle('d-none');
+    });
+});
 
 function updateBoxes() {
     const cap = document.getElementById('selCap').value;
