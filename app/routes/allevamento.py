@@ -1376,6 +1376,7 @@ def impostazioni():
         "capacita_mangime_q": get_setting_float("allevamento_capacita_mangime_q"),
         "soglia_mangime_giorni": soglia_mangime_giorni,
         "soglia_mangime_pasti_extra": soglia_mangime_pasti_extra,
+        "ordine_mangime_q": get_setting_float("allevamento_ordine_mangime_q"),
         "soglia_scarto_siero_q": get_setting_float("allevamento_soglia_scarto_siero_q"),
         "orario_pasto_1": orario_pasto_str(1),
         "orario_pasto_2": orario_pasto_str(2),
@@ -1436,6 +1437,7 @@ def impostazioni_scorte():
     from app.services.allevamento_scorte import set_setting
     campi_numerici = [
         "allevamento_capacita_mangime_q", "allevamento_soglia_scarto_siero_q",
+        "allevamento_ordine_mangime_q",
     ]
     campi_orario = [
         "allevamento_orario_pasto_1", "allevamento_orario_pasto_2", "allevamento_orario_pasto_3",

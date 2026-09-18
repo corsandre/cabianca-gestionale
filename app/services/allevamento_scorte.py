@@ -26,6 +26,7 @@ DEFAULTS = {
     "allevamento_capacita_mangime_q": "400",
     "allevamento_soglia_mangime_pasti": "6",
     "allevamento_soglia_scarto_siero_q": "5",
+    "allevamento_ordine_mangime_q": "300",
 }
 
 ORARIO_KEYS = {
@@ -308,6 +309,34 @@ def stima_esaurimento(giacenza, consumo_ultimo_pasto, adesso=None):
     return None
 
 
+def stima_spazio_carico(giacenza, capacita, ordine_qli, consumo_ultimo_pasto, adesso=None):
+    """Simula in avanti (stesso modello 'ripeti ultimo pasto' di
+    stima_esaurimento) per trovare quando la giacenza sarà scesa abbastanza
+    da lasciare spazio nel silo per un nuovo carico da ordine_qli quintali,
+    senza superare la capacità. None se mancano i dati per calcolarlo."""
+    if giacenza is None or not capacita or not ordine_qli:
+        return None
+    soglia = capacita - ordine_qli
+    if giacenza <= soglia:
+        return {"disponibile_ora": True}
+    if not consumo_ultimo_pasto or consumo_ultimo_pasto <= 0:
+        return None
+    adesso = adesso or datetime.now()
+    data, pasto = _primo_pasto_futuro(adesso)
+    resto = giacenza
+    for n in range(1, 201):  # limite di sicurezza, ~66 giorni
+        resto -= consumo_ultimo_pasto
+        if resto <= soglia:
+            return {
+                "disponibile_ora": False,
+                "data": data, "pasto": pasto,
+                "istante": _datetime_pasto(data, pasto),
+                "giorno_testo": _testo_giorno(data),
+            }
+        data, pasto = _pasto_successivo(data, pasto)
+    return None
+
+
 def colore_livello_pasti(stima, soglia_pasti):
     """Semaforo scorta basato sui pasti residui stimati (non sui quintali):
     così la soglia segue automaticamente l'aumento del consumo invece di
@@ -337,8 +366,10 @@ def stato_mangime():
     giacenza = giacenza_mangime()
     capacita = get_setting_float("allevamento_capacita_mangime_q")
     soglia_pasti = get_setting_int("allevamento_soglia_mangime_pasti")
+    ordine_qli = get_setting_float("allevamento_ordine_mangime_q")
     ultimo_pasto = _ultimo_consumo_pasto("mangime_qli")
     stima = stima_esaurimento(giacenza, ultimo_pasto)
+    stima_carico = stima_spazio_carico(giacenza, capacita, ordine_qli, ultimo_pasto)
 
     barra_testo = None
     if giacenza is not None and capacita:
@@ -360,6 +391,17 @@ def stato_mangime():
             f"({calibrazione.valore_q:.1f} q)"
         )
 
+    carico_testo = None
+    if stima_carico:
+        intestazione = f"Spazio per un nuovo carico da {ordine_qli:.0f} q"
+        if stima_carico.get("disponibile_ora"):
+            carico_testo = f"{intestazione}: disponibile ora"
+        else:
+            carico_testo = (
+                f"{intestazione}: da {stima_carico['giorno_testo']} "
+                f"alle {stima_carico['istante'].strftime('%H:%M')} (dopo il Pasto {stima_carico['pasto']})"
+            )
+
     return {
         "giacenza": giacenza, "capacita": capacita,
         "soglia_pasti": soglia_pasti, "soglia_testo": soglia_testo,
@@ -369,6 +411,7 @@ def stato_mangime():
         "perc": _perc_capacita(giacenza, capacita),
         "barra_testo": barra_testo,
         "calibrazione_testo": calibrazione_testo,
+        "carico_testo": carico_testo,
     }
 
 

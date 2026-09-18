@@ -89,6 +89,9 @@ Uso: {{ card_scorta('Siero', 'bi-droplet', scorta_siero) }}
     {% if dati.soglia_testo %}
     <small class="text-muted d-block">{{ dati.soglia_testo }}</small>
     {% endif %}
+    {% if dati.carico_testo %}
+    <small class="text-muted d-block">{{ dati.carico_testo }}</small>
+    {% endif %}
     {% if nota_extra %}<small class="text-muted d-block">{{ nota_extra }}</small>{% endif %}
     {% if caller is defined %}<div class="mt-2">{{ caller() }}</div>{% endif %}
     {% endif %}
