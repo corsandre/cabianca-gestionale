@@ -843,6 +843,38 @@ def consegne_mangime_new():
     return redirect(url_for("allevamento.consegne", tab="mangime"))
 
 
+@bp.route("/consegne/mangime/<int:cid>/edit", methods=["POST"])
+@login_required
+def consegne_mangime_edit(cid):
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from datetime import time as dt_time
+    from app.models import ConsegnaMangime
+    c = db.session.get(ConsegnaMangime, cid)
+    if not c:
+        flash("Consegna non trovata.", "danger")
+        return redirect(url_for("allevamento.consegne", tab="mangime"))
+    try:
+        data_str = request.form.get("data", "").strip()
+        ora_str = request.form.get("ora", "").strip()
+        if not data_str or not ora_str:
+            raise ValueError("Data e ora sono obbligatorie.")
+        c.data = date.fromisoformat(data_str)
+        c.ora = dt_time.fromisoformat(ora_str)
+        c.quantita_qli = float(request.form["quantita_qli"])
+        c.tipo_mangime = request.form.get("tipo_mangime", "").strip() or None
+        c.numero_bolla = request.form.get("numero_bolla", "").strip() or None
+        c.fornitore = request.form.get("fornitore", "").strip() or None
+        c.note = request.form.get("note", "").strip() or None
+        db.session.commit()
+        flash("Consegna mangime aggiornata.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
+    return redirect(url_for("allevamento.consegne", tab="mangime"))
+
+
 @bp.route("/consegne/mangime/<int:cid>/bolla", methods=["POST"])
 @login_required
 def consegne_mangime_bolla(cid):

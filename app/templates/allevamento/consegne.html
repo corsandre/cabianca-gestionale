@@ -157,8 +157,12 @@
                     {% endif %}
                 </td>
                 {% if current_user.role == 'admin' %}
-                <td>
-                    <form method="post" action="{{ url_for('allevamento.consegne_mangime_delete', cid=c.id) }}" onsubmit="return confirm('Elimina?')">
+                <td class="text-nowrap">
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0" title="Modifica"
+                            data-bs-toggle="modal" data-bs-target="#modalModificaMangime{{ c.id }}">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <form method="post" action="{{ url_for('allevamento.consegne_mangime_delete', cid=c.id) }}" onsubmit="return confirm('Elimina?')" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="btn btn-sm btn-outline-danger py-0"><i class="bi bi-trash"></i></button>
                     </form>
@@ -173,6 +177,62 @@
     </table>
     {% else %}<p class="text-muted p-3 mb-0">Nessuna consegna mangime registrata.</p>{% endif %}
 </div>
+
+{% if current_user.role == 'admin' %}
+{% for c in mangime_list %}
+<div class="modal fade" id="modalModificaMangime{{ c.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#c2185b;color:#fff">
+                <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Modifica consegna mangime</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('allevamento.consegne_mangime_edit', cid=c.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Data</label>
+                            <input type="date" name="data" class="form-control" value="{{ c.data.isoformat() }}" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Ora</label>
+                            <input type="time" name="ora" class="form-control" value="{{ c.ora.strftime('%H:%M') if c.ora else '' }}" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Quantità (qli)</label>
+                        <input type="number" name="quantita_qli" class="form-control" step="0.01" min="0" value="{{ c.quantita_qli }}" required>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Tipo mangime</label>
+                            <input type="text" name="tipo_mangime" class="form-control" value="{{ c.tipo_mangime or '' }}" placeholder="es. LC 120 sbriciolato">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">N° bolla</label>
+                            <input type="text" name="numero_bolla" class="form-control" value="{{ c.numero_bolla or '' }}">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Fornitore</label>
+                        <input type="text" name="fornitore" class="form-control" value="{{ c.fornitore or '' }}">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Note</label>
+                        <textarea name="note" class="form-control" rows="2">{{ c.note or '' }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn" style="background:#c2185b;color:#fff">Salva</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
 {% endif %}
 {% endif %}
 
