@@ -124,8 +124,12 @@
                 </td>
                 <td class="text-muted">{{ s.motivo or '–' }}</td>
                 {% if current_user.role == 'admin' %}
-                <td>
-                    <form method="post" action="{{ url_for('allevamento.spostamenti_delete', sp_id=s.id) }}" onsubmit="return confirm('Elimina?')">
+                <td class="text-nowrap">
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0" title="Modifica"
+                            data-bs-toggle="modal" data-bs-target="#modalModificaSpostamento{{ s.id }}">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <form method="post" action="{{ url_for('allevamento.spostamenti_delete', sp_id=s.id) }}" onsubmit="return confirm('Elimina?')" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="btn btn-sm btn-outline-danger py-0"><i class="bi bi-trash"></i></button>
                     </form>
@@ -139,6 +143,104 @@
     <p class="text-muted p-3 mb-0">Nessuno spostamento registrato.</p>
     {% endif %}
 </div>
+
+{% if current_user.role == 'admin' %}
+{% for s in lista %}
+<div class="modal fade" id="modalModificaSpostamento{{ s.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#c2185b;color:#fff">
+                <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Modifica spostamento</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('allevamento.spostamenti_edit', sp_id=s.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Data</label>
+                            <input type="date" name="data" class="form-control" value="{{ s.data.isoformat() }}" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Tipo</label>
+                            <select name="tipo" class="form-select" required>
+                                <option value="interno" {{ 'selected' if s.tipo=='interno' }}>Interno (box→box)</option>
+                                <option value="entrata" {{ 'selected' if s.tipo=='entrata' }}>Entrata (da esterno)</option>
+                                <option value="uscita" {{ 'selected' if s.tipo=='uscita' }}>Uscita (macello/vendita)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">CAP origine</label>
+                            <select name="capannone_origine" class="form-select">
+                                <option value="">–</option>
+                                {% for cap in CAPANNONI %}<option value="{{ cap }}" {{ 'selected' if s.capannone_origine==cap }}>CAP {{ cap }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Box origine</label>
+                            <select name="box_origine" class="form-select">
+                                <option value="">–</option>
+                                {% for cap, boxes in BOX_PER_CAP.items() %}{% for b in boxes %}
+                                <option value="{{ b }}" {{ 'selected' if s.box_origine==b }}>Box {{ b }}</option>
+                                {% endfor %}{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">CAP destinazione</label>
+                            <select name="capannone_destinazione" class="form-select">
+                                <option value="">–</option>
+                                {% for cap in CAPANNONI %}<option value="{{ cap }}" {{ 'selected' if s.capannone_destinazione==cap }}>CAP {{ cap }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Box destinazione</label>
+                            <select name="box_destinazione" class="form-select">
+                                <option value="">–</option>
+                                {% for cap, boxes in BOX_PER_CAP.items() %}{% for b in boxes %}
+                                <option value="{{ b }}" {{ 'selected' if s.box_destinazione==b }}>Box {{ b }}</option>
+                                {% endfor %}{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Categoria uscita <small class="text-muted">(solo se tipo = uscita)</small></label>
+                        <select name="categoria_uscita" class="form-select">
+                            <option value="fine_ciclo" {{ 'selected' if s.categoria_uscita=='fine_ciclo' }}>Fine ciclo (165-180 kg)</option>
+                            <option value="scarto_sottopeso" {{ 'selected' if s.categoria_uscita=='scarto_sottopeso' }}>Scarto/sottopeso (macellazione anticipata)</option>
+                            <option value="agriturismo" {{ 'selected' if s.categoria_uscita=='agriturismo' }}>Macellati Ca Bianca Agriturismo</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Numero capi</label>
+                        <input type="number" name="quantita" class="form-control" min="1" value="{{ s.quantita }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Peso medio (kg) <small class="text-muted">(solo entrata/uscita)</small></label>
+                        <input type="number" name="peso_medio_kg" class="form-control" step="0.1" min="0" value="{{ s.peso_medio_kg if s.peso_medio_kg is not none else '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Motivo</label>
+                        <input type="text" name="motivo" class="form-control" value="{{ s.motivo or '' }}">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Note</label>
+                        <textarea name="note" class="form-control" rows="2">{{ s.note or '' }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn" style="background:#c2185b;color:#fff">Salva</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
 {% endif %}
 
 <!-- Modal -->

@@ -601,6 +601,65 @@ def spostamenti_new():
     return redirect(url_for("allevamento.spostamenti"))
 
 
+@bp.route("/spostamenti/<int:sp_id>/edit", methods=["POST"])
+@login_required
+def spostamenti_edit(sp_id):
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.models import Spostamento
+    s = db.session.get(Spostamento, sp_id)
+    if not s:
+        flash("Spostamento non trovato.", "danger")
+        return redirect(url_for("allevamento.spostamenti"))
+
+    try:
+        data_str = request.form.get("data", "").strip()
+        tipo = request.form["tipo"]
+        qty = int(request.form["quantita"])
+        motivo = request.form.get("motivo", "").strip() or None
+        note = request.form.get("note", "").strip() or None
+
+        box_orig = request.form.get("box_origine")
+        box_dest = request.form.get("box_destinazione")
+        cap_orig = request.form.get("capannone_origine")
+        cap_dest = request.form.get("capannone_destinazione")
+
+        if tipo in ("interno", "uscita") and not box_orig:
+            raise ValueError("Il box di origine è obbligatorio.")
+        if tipo in ("interno", "entrata") and not box_dest:
+            raise ValueError("Il box di destinazione è obbligatorio.")
+
+        categoria_uscita = None
+        peso_medio = None
+        if tipo == "uscita":
+            categoria_uscita = request.form.get("categoria_uscita", "").strip()
+            if categoria_uscita not in ("fine_ciclo", "scarto_sottopeso", "agriturismo"):
+                raise ValueError("Seleziona la categoria dell'uscita.")
+        if tipo in ("entrata", "uscita"):
+            peso_val = request.form.get("peso_medio_kg", "").strip()
+            peso_medio = float(peso_val.replace(",", ".")) if peso_val else None
+
+        s.data = date.fromisoformat(data_str)
+        s.tipo = tipo
+        s.quantita = qty
+        s.motivo = motivo
+        s.note = note
+        s.box_origine = int(box_orig) if box_orig else None
+        s.box_destinazione = int(box_dest) if box_dest else None
+        s.capannone_origine = int(cap_orig) if cap_orig else None
+        s.capannone_destinazione = int(cap_dest) if cap_dest else None
+        s.categoria_uscita = categoria_uscita
+        s.peso_medio_kg = peso_medio
+        db.session.commit()
+        flash("Spostamento aggiornato.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
+
+    return redirect(url_for("allevamento.spostamenti"))
+
+
 @bp.route("/spostamenti/<int:sp_id>/bolla", methods=["POST"])
 @login_required
 def spostamenti_bolla(sp_id):
