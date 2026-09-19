@@ -23,82 +23,93 @@ L'applicazione e' strutturata in sezioni indipendenti, ciascuna con tema visivo 
 
 ### Allevamento Suini (tema rosa)
 
-Gestione completa del ciclo produttivo per allevamento DOP Parma (7 capannoni, 54 box, 1822 posti).
+Gestione del ciclo produttivo per allevamento suini (7 capannoni, 54 box). Riscritta da zero (v2) con
+modelli molto più semplici rispetto alla versione originaria: niente tracciabilità bolla-per-bolla DOP,
+niente scheduler di allarmi/manutenzioni — solo i dati che vengono davvero usati ogni giorno in stalla.
+Ogni funzione è disponibile sia da web sia (per le operazioni quotidiane) dal bot Telegram.
 
-**Cicli e box**
-- **Panoramica** – Mappa SVG interattiva dell'allevamento: box colorati per linea/stato, click per modal con dettaglio box
-- **Cicli produttivi** – Creazione ciclo con accasamento multi-box, gestione lotti (bolle DOP), riaccasamento interciclo
-- **Timeline eventi** – Mortalità, frazionamenti, uscite macello (normali/scarti) con aggiornamento automatico conteggi
-- **Rigenera stime** – Ricalcolo retroattivo di tutte le razioni teoriche per un ciclo (admin)
+**Cicli**
+- Un `Ciclo` è un periodo produttivo semplice (nome, data inizio/fine, attivo). Solo un ciclo attivo alla volta.
+- **Panoramica** – conteggio live per capannone/box (ultimo censimento + delta di mortalità/spostamenti), giorni di
+  vita e peso stimato per box, contatori uscite macello (fine ciclo / scarto-sottopeso / Ca Bianca Agriturismo),
+  scorte mangime/siero
 
-**Sanità**
-- Trattamenti sanitari per box (principio attivo, dose, durata)
-- Registro inappetenza per box
-- Storico sanitario completo
+**Censimento**
+- Censimenti per box (`Censimento` + `CensimentoBox`): quantità, giorni di vita, peso stimato — **tutti i censimenti
+  restano consultabili e immutati** nello storico, con dettaglio per box
+- Basta inserire uno tra giorni di vita e peso: l'altro si calcola in automatico dalla curva di accrescimento
+- Paginato, con conteggio live proiettato a oggi (giorni/peso aggiornati anche tra un censimento e l'altro)
+
+**Mortalità**
+- Griglia settimanale per capannone + storico completo del ciclo (paginato, non solo ultimi 30gg)
+- Tre azioni marcabili per evento (rimozione dal PC di alimentazione, registrazione su Webfarm, su RIFT), ciascuna
+  con data/ora/operatore registrati al click
+
+**Spostamenti**
+- Entrata (da esterno) / Uscita (macello, con categoria: fine ciclo 165-180kg / scarto-sottopeso / Ca Bianca
+  Agriturismo) / Interno (box→box) — il box è sempre obbligatorio, non si sposta mai un intero capannone
+- Peso medio e foto bolla per entrate/uscite; contatori capi/kg per categoria di uscita, filtrabili cliccando la card
+- Modificabile e cancellabile (admin) dopo la registrazione
+
+**Consegne (mangime e siero)**
+- Registro consegne con data/ora, quantità, tipo/lotto, fornitore, foto bolla — modificabile e cancellabile (admin)
+- Giacenza mangime cumulativa (non si azzera tra cicli); giacenza siero per carico (la cisterna si svuota sempre
+  prima del carico successivo), con confronto tra quantità dichiarata alla consegna e consumo reale pesato in cucina
+- Stima "pasti/giorni residui" basata sull'ultimo pasto completo ripetuto in avanti (non una media storica)
+- Data/ora stimata in cui ci sarà di nuovo spazio per un carico di mangime da riordinare (quantità configurabile)
+- Ricalibrazione manuale della giacenza mangime (conteggio fisico silos, con data/ora dell'operazione)
 
 **Alimentazione**
-- Calcolo razioni teoriche per linea (mangime + siero + acqua) basato su curva di accrescimento e tabella sostituzione siero
-- Inserimento consumi reali a pasto con confronto teorico/effettivo
-- Storico consumo giornaliero aggregato per linea con drill-down a pasto
-- Livello cisterna acqua con alert soglie
+- Inserimento consumi reali per pasto/linea (mangime, siero, acqua); un pasto conta come completo solo quando
+  tutte le linee attive hanno un valore e l'orario configurato è passato
+- % di sostituzione sostanza secca del siero calcolata sul consumo reale
 
-**Magazzino & Ordini**
-- Registro consegne mangime con aggiornamento giacenza
-- Gestione ordini con cambio stato (in attesa / confermato / consegnato)
-
-**Allarmi**
-- Job schedulato h 06:00 per verifica automatica soglie (mortalità settimanale, giacenza mangime, cisterna acqua)
-- Silenziamento temporaneo e risoluzione allarmi
-
-**Manutenzioni**
-- Registro interventi per box (ordinaria/straordinaria) con scadenza e storico
-
-**Report**
-- Indice report per ciclo con statistiche: capi iniziali/finali, mortalità %, uscite macello (normali/scarti), peso effettivo, durata ciclo
-- Report trattamenti sanitari
-- Report movimenti (uscite macello, frazionamenti)
+**Trattamenti**
+- Registro trattamenti (`Medicinale`, `Trattamento`, `Somministrazione`): un corso di cura per box o intero
+  capannone, con dose per capo/totale calcolata da ml/kg × peso medio × numero animali
+- Evidenza delle dosi da ripetere, periodo di sospensione prima del macello
+- Chiusura anticipata di un trattamento non completato, con motivazione accodata alle note
 
 **Impostazioni**
-- Struttura fisica: capannoni/box con capienza e linea alimentazione
-- Curva di accrescimento (età → peso → razione giornaliera)
-- Tabella sostituzione siero (% per fascia d'età)
-- Parametri acqua, cisterna, numero pasti giornalieri
+- Struttura fisica: capannoni/box/linee alimentazione (costanti hardcoded, non modelli DB)
+- Curva di accrescimento (età → peso), usata per il censimento e il conteggio live
+- Medicinali disponibili per i trattamenti
+- Capacità silos, soglia di riordino (in pasti, non quintali fissi — segue l'aumento del consumo), quantità per
+  ordine, orari dei 3 pasti giornalieri
 
-**Modelli dati principali**
+**Modelli dati principali** (`app/models.py`)
 
 | Modello | Descrizione |
 |---|---|
-| `CicloProduttivo` | Periodo produttivo (accasamento → macello) |
-| `Lotto` | Singola bolla/consegna DOP con lettera nascita |
-| `BoxCiclo` | Associazione box ↔ ciclo con conteggio capi e peso |
-| `EventoCiclo` | Evento su un box: mortalita / frazionamento / uscita_macello / riaccasamento |
-| `CurvaAccrescimento` | Punti (età gg, peso kg, razione kg/gg) per interpolazione |
-| `TabellaSostSiero` | Fasce d'età con percentuale sostituzione siero |
-| `RazioneGiornaliera` | Razione teorica/reale per linea × giorno (is_stima flag) |
-| `TrattamentoSanitario` | Trattamenti sanitari per box |
-| `MagazzinoProdotto` | Giacenza attuale per tipo prodotto |
-| `Allarme` | Allarmi generati dallo scheduler con stato e silenziamento |
+| `Ciclo` | Periodo produttivo (nome, data inizio/fine, attivo) |
+| `Censimento` / `CensimentoBox` | Censimento per box, immutabile nello storico (quantità, giorni vita, peso stimato) |
+| `CurvaAccrescimento` | Punti (età gg, peso kg) per interpolare l'uno dall'altro |
+| `EventoMortalita` | Evento di mortalità per box/capannone, con le 3 azioni post-mortalità (data/ora/operatore) |
+| `Spostamento` | Entrata/uscita/interno, con categoria_uscita, peso medio, foto bolla |
+| `ConsegnaSiero` / `ConsegnaMangime` | Consegne con data/ora, quantità, foto bolla |
+| `CalibrazioneGiacenza` | Ricalibrazioni manuali della giacenza mangime nel tempo |
+| `UsoPasto` | Consumo reale per pasto/linea (mangime, siero, acqua) |
+| `RazioneBox` | Percentuale di razione per box (impostazione manuale) |
+| `Medicinale` | Farmaci disponibili (ml/kg, giorni somministrazione/sospensione) |
+| `Trattamento` / `Somministrazione` | Corso di cura per box/capannone e singole dosi |
 
-**Funzioni helper principali (`app/routes/allevamento.py`)**
+**Servizi principali** (`app/services/allevamento_scorte.py`)
 
 | Funzione | Descrizione |
 |---|---|
-| `_eta_da_peso(peso_kg)` | Interpola la curva: peso → età stimata in giorni |
-| `_peso_da_eta(eta_gg)` | Interpola la curva: età in giorni → peso stimato in kg |
-| `_razione_da_eta(eta_gg)` | Interpola la curva: età → razione giornaliera kg/capo |
-| `_perc_siero_da_eta(eta_gg)` | Tabella sostituzione: età → % siero |
-| `_calcola_razioni_linea(linea)` | Razione totale teorica per una linea (mangime, siero, acqua) |
-| `_calcola_razioni_linea_dettaglio(linea)` | Come sopra ma con dettaglio per box (per espansione UI) |
-| `_capi_storici_data(bc, data_target)` | Capi presenti in un BoxCiclo a una data specifica (ricostruisce da eventi) |
-| `_rigenera_stime_ciclo(ciclo, data_da)` | Rigenera tutte le `RazioneGiornaliera` stimate dal data_da a oggi |
-| `_calcola_acqua(mangime_kg, siero_litri)` | Calcola acqua aggiuntiva rispettando rapporto SS:Liquido |
-| `_genera_ciclo_id()` | Genera ID univoco formato `CICLO{aa}-{nn}-{YYYYMMDD}` |
-| `_calcola_data_vendita(lettera, data_arrivo)` | Data minima vendita DOP: 9 mesi dalla nascita (lettera mese) |
-| `_box_state(box, active_alarms_bc_ids)` | Stato box per mappa SVG (libero/attivo/allarme/in_uscita) |
-| `_allarmi_attivi_count()` | Conta allarmi attivi non silenziati (badge menu) |
-| `_get_setting_float(key, default)` | Legge un Setting dal DB e lo converte in float |
-| `_set_setting(key, value)` | Upsert di un record Setting |
-| `_admin_required()` | Guard helper: redirect se utente non è admin |
+| `peso_da_giorni` / `giorni_da_peso` | Interpolano la curva di accrescimento nei due sensi |
+| `pasto_completo` | Un pasto conta solo se l'orario è passato e tutte le linee attive hanno un valore |
+| `_ultimo_consumo_pasto` | Consumo dell'ultimo pasto completo, usato per proiettare in avanti |
+| `stima_esaurimento` | Simula pasto per pasto (ripetendo l'ultimo) fino a esaurimento scorta |
+| `stima_spazio_carico` | Come sopra, ma fino a quando c'è spazio per un nuovo carico da riordinare |
+| `giacenza_mangime` / `giacenza_siero` | Giacenza corrente (cumulativa per il mangime, per carico per il siero) |
+| `ultima_calibrazione` | Ultima ricalibrazione manuale prima di un certo istante (per calcoli storici coerenti) |
+| `scarto_consegna_siero` | Confronto tra siero dichiarato alla consegna e consumo reale pesato |
+
+Bot Telegram (`app/services/allevamento_bot.py`): stesse funzioni principali via percorsi guidati
+(censimento, mortalità, spostamenti, consegne, alimentazione, trattamenti), costruito come un'unica
+`ConversationHandler` con stato `MAIN_MENU` a cui ogni flusso deve tornare per lasciare i bottoni del
+menu funzionanti dopo la conferma.
 
 ## Funzionalita trasversali
 
