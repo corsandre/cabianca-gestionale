@@ -747,6 +747,40 @@ def consegne_siero_new():
     return redirect(url_for("allevamento.consegne", tab="siero"))
 
 
+@bp.route("/consegne/siero/<int:cid>/edit", methods=["POST"])
+@login_required
+def consegne_siero_edit(cid):
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from datetime import time as dt_time
+    from app.models import ConsegnaSiero
+    c = db.session.get(ConsegnaSiero, cid)
+    if not c:
+        flash("Consegna non trovata.", "danger")
+        return redirect(url_for("allevamento.consegne", tab="siero"))
+    try:
+        data_str = request.form.get("data", "").strip()
+        ora_str = request.form.get("ora", "").strip()
+        if not data_str or not ora_str:
+            raise ValueError("Data e ora sono obbligatorie.")
+        c.data = date.fromisoformat(data_str)
+        c.ora = dt_time.fromisoformat(ora_str)
+        c.quantita_qli = float(request.form["quantita_qli"])
+        ss = request.form.get("perc_sostanza_secca", "").strip()
+        c.perc_sostanza_secca = float(ss) if ss else None
+        c.lotto = request.form.get("lotto", "").strip() or None
+        c.speditore = request.form.get("speditore", "").strip() or None
+        c.trasportatore = request.form.get("trasportatore", "").strip() or None
+        c.note = request.form.get("note", "").strip() or None
+        db.session.commit()
+        flash("Consegna siero aggiornata.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
+    return redirect(url_for("allevamento.consegne", tab="siero"))
+
+
 @bp.route("/consegne/siero/<int:cid>/bolla", methods=["POST"])
 @login_required
 def consegne_siero_bolla(cid):
