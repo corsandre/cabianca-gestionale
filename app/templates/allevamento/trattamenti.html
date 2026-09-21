@@ -101,6 +101,10 @@
                         <i class="bi bi-x-circle"></i>
                     </button>
                     {% endif %}
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0" title="Modifica"
+                            data-bs-toggle="modal" data-bs-target="#modalModificaTrattamento{{ t.id }}">
+                        <i class="bi bi-pencil"></i>
+                    </button>
                     <form method="post" action="{{ url_for('allevamento.trattamenti_delete', tid=t.id) }}" class="d-inline" onsubmit="return confirm('Elimina?')">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="btn btn-sm btn-outline-secondary py-0"><i class="bi bi-trash"></i></button>
@@ -152,6 +156,95 @@
     </div>
 </div>
 {% endif %}
+{% endfor %}
+
+{% for t in lista %}
+<div class="modal fade" id="modalModificaTrattamento{{ t.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#c2185b;color:#fff">
+                <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Modifica trattamento</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('allevamento.trattamenti_edit', tid=t.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Data inizio</label>
+                            <input type="date" name="data_inizio" class="form-control" value="{{ t.data_inizio.isoformat() }}" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Medicinale</label>
+                            <select name="medicinale_id" class="form-select" required>
+                                {% for m in medicinali %}
+                                <option value="{{ m.id }}" {{ 'selected' if m.id == t.medicinale_id }}>{{ m.nome }}</option>
+                                {% endfor %}
+                                {% if t.medicinale_id not in medicinali | map(attribute='id') | list %}
+                                <option value="{{ t.medicinale_id }}" selected>{{ t.medicinale.nome }} (non più attivo)</option>
+                                {% endif %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Capannone</label>
+                            <select name="capannone_numero" class="form-select">
+                                <option value="">–</option>
+                                {% for cap in CAPANNONI %}<option value="{{ cap }}" {{ 'selected' if t.capannone_numero==cap }}>CAP {{ cap }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Box <small class="text-muted">(vuoto = tutto il CAP)</small></label>
+                            <select name="box_numero" class="form-select">
+                                <option value="">– tutto il CAP –</option>
+                                {% for cap, boxes in BOX_PER_CAP.items() %}{% for b in boxes %}
+                                <option value="{{ b }}" {{ 'selected' if t.box_numero==b }}>Box {{ b }}</option>
+                                {% endfor %}{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Numero animali</label>
+                            <input type="number" name="numero_animali" class="form-control" value="{{ t.numero_animali }}" min="1" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Peso medio a capo (kg)</label>
+                            <input type="number" name="peso_medio_kg" class="form-control" step="0.1" min="0" value="{{ t.peso_medio_kg if t.peso_medio_kg is not none else '' }}">
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-4">
+                            <label class="form-label small">ml/kg</label>
+                            <input type="number" name="ml_per_kg" class="form-control form-control-sm" step="0.01" min="0" value="{{ t.ml_per_kg if t.ml_per_kg is not none else '' }}">
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small">Giorni somm.</label>
+                            <input type="number" name="giorni_somministrazione" class="form-control form-control-sm" min="1" value="{{ t.giorni_somministrazione }}" required>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small">Giorni sosp.</label>
+                            <input type="number" name="giorni_sospensione" class="form-control form-control-sm" min="0" value="{{ t.giorni_sospensione }}" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Operatore</label>
+                        <input type="text" name="operatore" class="form-control" value="{{ t.operatore or '' }}">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Note</label>
+                        <textarea name="note" class="form-control" rows="2">{{ t.note or '' }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn" style="background:#c2185b;color:#fff">Salva</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endfor %}
 {% endif %}
 {% endif %}

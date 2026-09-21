@@ -1317,6 +1317,68 @@ def trattamenti_new():
     return redirect(url_for("allevamento.trattamenti"))
 
 
+@bp.route("/trattamenti/<int:tid>/edit", methods=["POST"])
+@login_required
+def trattamenti_edit(tid):
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.models import Trattamento, Medicinale
+    t = db.session.get(Trattamento, tid)
+    if not t:
+        flash("Trattamento non trovato.", "danger")
+        return redirect(url_for("allevamento.trattamenti"))
+
+    try:
+        medicinale_id = int(request.form["medicinale_id"])
+        medicinale = db.session.get(Medicinale, medicinale_id)
+        if not medicinale:
+            raise ValueError("Medicinale non valido.")
+
+        box = request.form.get("box_numero", "").strip()
+        cap = request.form.get("capannone_numero", "").strip()
+        if not box and not cap:
+            raise ValueError("Seleziona un box o un capannone.")
+
+        data_str = request.form.get("data_inizio", str(t.data_inizio))
+        data_inizio = date.fromisoformat(data_str)
+        qty = int(request.form["numero_animali"])
+        operatore = request.form.get("operatore", "").strip() or None
+        note = request.form.get("note", "").strip() or None
+
+        ml_val = request.form.get("ml_per_kg", "").strip()
+        ml_per_kg = float(ml_val.replace(",", ".")) if ml_val else medicinale.ml_per_kg
+        giorni_somm = int(request.form.get("giorni_somministrazione") or medicinale.giorni_somministrazione)
+        giorni_sosp = int(request.form.get("giorni_sospensione") or medicinale.giorni_sospensione)
+        peso_val = request.form.get("peso_medio_kg", "").strip()
+        peso_medio_kg = float(peso_val.replace(",", ".")) if peso_val else None
+
+        t.medicinale_id = medicinale.id
+        t.box_numero = int(box) if box else None
+        t.capannone_numero = int(cap) if cap else None
+        t.numero_animali = qty
+        t.peso_medio_kg = peso_medio_kg
+        t.operatore = operatore
+        t.note = note
+        t.ml_per_kg = ml_per_kg
+        t.giorni_somministrazione = giorni_somm
+        t.giorni_sospensione = giorni_sosp
+
+        if t.data_inizio != data_inizio:
+            t.data_inizio = data_inizio
+            prima = t.somministrazioni.first()  # ordinate per numero_giorno di default (vedi relationship)
+            if prima:
+                prima.data = data_inizio
+
+        db.session.commit()
+        flash(f"Trattamento aggiornato: {medicinale.nome}, {qty} capi.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
+
+    return redirect(url_for("allevamento.trattamenti"))
+
+
 @bp.route("/trattamenti/<int:tid>/somministra", methods=["POST"])
 @login_required
 def trattamenti_somministra(tid):
