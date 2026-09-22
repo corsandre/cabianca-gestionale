@@ -1118,21 +1118,34 @@ def razione():
     lun = oggi - timedelta(days=oggi.weekday()) + timedelta(weeks=settimana_offset)
     giorni = [lun + timedelta(days=i) for i in range(7)]
 
-    # Dati esistenti per la settimana + settimana precedente (carry-forward)
-    lun_prec = lun - timedelta(days=7)
+    # Tutto lo storico fino a fine settimana visualizzata: serve per poter
+    # ereditare il valore anche da settimane precedenti (non solo dal
+    # giorno prima nella stessa griglia), altrimenti il lunedì di ogni
+    # nuova settimana appare vuoto anche se il box aveva un valore.
     razioni_raw = RazioneBox.query.filter(
         RazioneBox.ciclo_id == ciclo.id if ciclo else False,
-        RazioneBox.data >= lun_prec,
         RazioneBox.data <= giorni[-1],
-    ).all() if ciclo else []
+    ).order_by(RazioneBox.data).all() if ciclo else []
 
-    # {box: {data: perc}}
-    razioni = {}
+    storico = {}  # {box: [(data, perc), ...]} ordinato per data
     for r in razioni_raw:
-        razioni.setdefault(r.box_numero, {})[r.data] = r.percentuale
+        storico.setdefault(r.box_numero, []).append((r.data, r.percentuale))
+
+    # {box: {data: perc}} solo valori esplicitamente inseriti in quel giorno
+    razioni = {}
+    # {box: {data: perc}} ultimo valore noto prima di quel giorno (ereditato)
+    ereditate = {}
+    for b, punti in storico.items():
+        for g in giorni:
+            esplicito = next((p for d, p in punti if d == g), None)
+            if esplicito is not None:
+                razioni.setdefault(b, {})[g] = esplicito
+            precedenti = [p for d, p in punti if d < g]
+            if precedenti:
+                ereditate.setdefault(b, {})[g] = precedenti[-1]
 
     return render_template("allevamento/razione.html",
-                           ciclo=ciclo, giorni=giorni, razioni=razioni,
+                           ciclo=ciclo, giorni=giorni, razioni=razioni, ereditate=ereditate,
                            settimana_offset=settimana_offset,
                            BOX_PER_CAP=BOX_PER_CAP, CAPANNONI=CAPANNONI,
                            lun=lun, GIORNI_SETTIMANA=GIORNI_SETTIMANA)

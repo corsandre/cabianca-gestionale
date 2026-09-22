@@ -54,7 +54,7 @@
                                style="min-width:55px;font-size:0.8rem"
                                step="1" min="0" max="100"
                                value="{{ razioni.get(b, {}).get(g, '') }}"
-                               placeholder="{{ razioni.get(b, {}).get(giorni[loop.index0 - 1], '') if loop.index0 > 0 else '' }}">
+                               placeholder="{{ ereditate.get(b, {}).get(g, '') }}">
                     </td>
                     {% endfor %}
                 </tr>
