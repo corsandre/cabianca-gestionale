@@ -1106,12 +1106,49 @@ def alimentazione_new():
 
 # ── Razione Box ────────────────────────────────────────────────────────────
 
+def _finalizza_razioni_passate(ciclo):
+    """Per ogni box, materializza una riga reale (stimato=True) per ogni
+    giorno passato (prima di oggi) senza un inserimento esplicito, copiando
+    l'ultimo valore noto — stessa filosofia già usata per i pasti
+    (allevamento_pasti._rifornisci_stime): oggi resta sempre libero/
+    modificabile, solo il passato viene "chiuso". Idempotente: i giorni
+    già presenti (manuali o già finalizzati prima) vengono saltati."""
+    from app.models import RazioneBox
+    oggi = date.today()
+
+    righe = RazioneBox.query.filter_by(ciclo_id=ciclo.id).order_by(RazioneBox.data).all()
+    per_box = {}
+    for r in righe:
+        per_box.setdefault(r.box_numero, {})[r.data] = r.percentuale
+
+    for b, valori in per_box.items():
+        cursore = min(valori)
+        ultimo_valore = valori[cursore]
+        while True:
+            prossimo = cursore + timedelta(days=1)
+            if prossimo >= oggi:
+                break
+            cursore = prossimo
+            if cursore in valori:
+                ultimo_valore = valori[cursore]
+            else:
+                db.session.add(RazioneBox(
+                    ciclo_id=ciclo.id, data=cursore, box_numero=b,
+                    percentuale=ultimo_valore, stimato=True,
+                ))
+                valori[cursore] = ultimo_valore
+    db.session.commit()
+
+
 @bp.route("/razione")
 @login_required
 def razione():
     _check_allevamento()
     from app.models import RazioneBox
     ciclo = _get_ciclo_attivo()
+
+    if ciclo:
+        _finalizza_razioni_passate(ciclo)
 
     settimana_offset = int(request.args.get("settimana", 0))
     oggi = date.today()
@@ -1127,20 +1164,21 @@ def razione():
         RazioneBox.data <= giorni[-1],
     ).order_by(RazioneBox.data).all() if ciclo else []
 
-    storico = {}  # {box: [(data, perc), ...]} ordinato per data
+    storico = {}  # {box: [(data, perc, stimato), ...]} ordinato per data
     for r in razioni_raw:
-        storico.setdefault(r.box_numero, []).append((r.data, r.percentuale))
+        storico.setdefault(r.box_numero, []).append((r.data, r.percentuale, r.stimato))
 
-    # {box: {data: perc}} solo valori esplicitamente inseriti in quel giorno
+    # {box: {data: {perc, stimato}}} solo valori esplicitamente presenti quel giorno
+    # (per i giorni passati, dopo la finalizzazione, sono sempre presenti)
     razioni = {}
-    # {box: {data: perc}} ultimo valore noto prima di quel giorno (ereditato)
+    # {box: {data: perc}} valore ereditato ma non ancora salvato (solo oggi/futuro nella griglia)
     ereditate = {}
     for b, punti in storico.items():
         for g in giorni:
-            esplicito = next((p for d, p in punti if d == g), None)
+            esplicito = next(((p, s) for d, p, s in punti if d == g), None)
             if esplicito is not None:
-                razioni.setdefault(b, {})[g] = esplicito
-            precedenti = [p for d, p in punti if d < g]
+                razioni.setdefault(b, {})[g] = {"perc": esplicito[0], "stimato": esplicito[1]}
+            precedenti = [p for d, p, s in punti if d < g]
             if precedenti:
                 ereditate.setdefault(b, {})[g] = precedenti[-1]
 
@@ -1184,9 +1222,10 @@ def razione_save():
                 ).first()
                 if esistente:
                     esistente.percentuale = perc
+                    esistente.stimato = False
                 else:
                     db.session.add(RazioneBox(
-                        ciclo_id=ciclo.id, data=g, box_numero=b, percentuale=perc
+                        ciclo_id=ciclo.id, data=g, box_numero=b, percentuale=perc, stimato=False,
                     ))
                 salvati += 1
 

@@ -48,12 +48,14 @@
                 <tr>
                     <td class="fw-bold text-center">{{ b }}</td>
                     {% for g in giorni %}
+                    {% set cella = razioni.get(b, {}).get(g) %}
                     <td>
                         <input type="number" name="raz_{{ b }}_{{ g.isoformat() }}"
-                               class="form-control form-control-sm text-center p-0"
+                               class="form-control form-control-sm text-center p-0 {{ 'bg-warning-subtle' if cella and cella.stimato }}"
                                style="min-width:55px;font-size:0.8rem"
                                step="1" min="0" max="100"
-                               value="{{ razioni.get(b, {}).get(g, '') }}"
+                               value="{{ cella.perc if cella else '' }}"
+                               title="{{ 'Propagato automaticamente dal giorno precedente' if cella and cella.stimato }}"
                                placeholder="{{ ereditate.get(b, {}).get(g, '') }}">
                     </td>
                     {% endfor %}
@@ -68,7 +70,11 @@
         <button type="submit" class="btn" style="background:#c2185b;color:#fff">
             <i class="bi bi-floppy me-1"></i>Salva razioni settimana
         </button>
-        <small class="text-muted ms-2">I campi vuoti ereditano il valore del giorno precedente.</small>
+        <small class="text-muted ms-2">
+            Oggi resta libero: se non scrivi nulla, dal giorno dopo il valore del giorno prima si registra da solo
+            (<span class="badge bg-warning-subtle text-dark border">giallo</span> = propagato automaticamente,
+            bianco = inserito da te).
+        </small>
     </div>
 </form>
 {% endif %}

@@ -508,6 +508,7 @@ class RazioneBox(db.Model):
     data = db.Column(db.Date, nullable=False)
     box_numero = db.Column(db.Integer, nullable=False)
     percentuale = db.Column(db.Float, nullable=False)
+    stimato = db.Column(db.Boolean, default=False)  # copiato dal giorno prima, non inserito a mano
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     ciclo = db.relationship("Ciclo", backref="razioni_box")
 
