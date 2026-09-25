@@ -77,7 +77,7 @@
         <thead class="table-light">
             <tr>
                 <th>Data</th><th>Tipo</th><th>Da</th><th>A</th><th>Capi</th>
-                <th>Peso medio</th><th>Bolla</th><th>Motivo</th>
+                <th>Peso medio</th><th>Bolla</th><th>Motivo</th><th>PC alimentazione</th>
                 {% if current_user.role == 'admin' %}<th></th>{% endif %}
             </tr>
         </thead>
@@ -123,6 +123,17 @@
                     {% else %}–{% endif %}
                 </td>
                 <td class="text-muted">{{ s.motivo or '–' }}</td>
+                <td>
+                    {% if s.pc_alimentazione_data %}
+                    <span class="badge bg-success cb-azione-badge" role="button" data-id="{{ s.id }}" data-azione="pc" title="Click per annullare">
+                        <i class="bi bi-check-lg"></i> {{ s.pc_alimentazione_data.strftime('%d/%m %H:%M') }} · {{ s.pc_alimentazione_operatore }}
+                    </span>
+                    {% else %}
+                    <button type="button" class="btn btn-sm btn-outline-secondary cb-azione-btn" data-id="{{ s.id }}" data-azione="pc">
+                        PC alim.
+                    </button>
+                    {% endif %}
+                </td>
                 {% if current_user.role == 'admin' %}
                 <td class="text-nowrap">
                     <button type="button" class="btn btn-sm btn-outline-secondary py-0" title="Modifica"
@@ -343,6 +354,44 @@
 
 {% block extra_js %}
 <script>
+const CSRF_TOKEN = "{{ csrf_token() }}";
+
+// Marcatura "fatto sul PC di alimentazione" (come in Mortalità)
+async function cbMarcaAzione(id, azione, operazione) {
+    const fd = new FormData();
+    fd.append('csrf_token', CSRF_TOKEN);
+    const resp = await fetch('/allevamento/spostamenti/' + id + '/' + operazione + '/' + azione, {
+        method: 'POST', body: fd, credentials: 'same-origin',
+    });
+    const json = await resp.json();
+    if (!resp.ok || !json.ok) throw new Error(json.error || 'errore');
+}
+
+document.querySelectorAll('.cb-azione-btn').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        try {
+            await cbMarcaAzione(btn.dataset.id, btn.dataset.azione, 'segna');
+            window.location.reload();
+        } catch (err) {
+            alert('Registrazione non riuscita: ' + err.message);
+            btn.disabled = false;
+        }
+    });
+});
+
+document.querySelectorAll('.cb-azione-badge').forEach(function (badge) {
+    badge.addEventListener('click', async function () {
+        if (!confirm('Annullare questa marcatura?')) return;
+        try {
+            await cbMarcaAzione(badge.dataset.id, badge.dataset.azione, 'annulla');
+            window.location.reload();
+        } catch (err) {
+            alert('Annullamento non riuscito: ' + err.message);
+        }
+    });
+});
+
 const BPC = {{ BOX_PER_CAP | tojson }};
 function buildBoxOptions(cap, sel) {
     sel.innerHTML = '<option value="" selected disabled>– seleziona box –</option>';

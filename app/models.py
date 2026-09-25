@@ -442,6 +442,9 @@ class Spostamento(db.Model):
     categoria_uscita = db.Column(db.String(20))  # 'fine_ciclo', 'scarto_sottopeso' o 'agriturismo', solo per tipo='uscita'
     peso_medio_kg = db.Column(db.Float)  # per entrata/uscita
     bolla_path = db.Column(db.String(300))
+    # Spostamento registrato anche sul PC di alimentazione (come per la mortalità)
+    pc_alimentazione_data = db.Column(db.DateTime)
+    pc_alimentazione_operatore = db.Column(db.String(100))
     registrato_da = db.Column(db.String(20), default="web")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     ciclo = db.relationship("Ciclo", backref="spostamenti")

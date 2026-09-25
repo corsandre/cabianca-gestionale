@@ -264,6 +264,8 @@ def _init_db(app):
         ("trattamenti", "chiuso_anticipatamente", "BOOLEAN DEFAULT 0"),
         ("razioni_box_v2", "stimato", "BOOLEAN DEFAULT 0"),
         ("consegne_siero", "speditore_id", "INTEGER REFERENCES speditori_siero(id)"),
+        ("spostamenti_animali", "pc_alimentazione_data", "DATETIME"),
+        ("spostamenti_animali", "pc_alimentazione_operatore", "VARCHAR(100)"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

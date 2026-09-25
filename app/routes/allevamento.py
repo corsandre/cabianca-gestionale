@@ -315,26 +315,36 @@ AZIONI_MORTALITA = {
 }
 
 
+AZIONI_SPOSTAMENTO = {
+    "pc": ("pc_alimentazione_data", "pc_alimentazione_operatore"),
+}
+
+
+def _marca_azione(modello, obj_id, azioni, azione, segna):
+    """Segna (data/ora attuale + operatore) o annulla un'azione post-registrazione
+    (es. "fatto sul PC di alimentazione") su un evento di mortalità o uno spostamento."""
+    from datetime import datetime
+    if azione not in azioni:
+        return jsonify(error="Azione non valida."), 400
+    obj = db.session.get(modello, obj_id)
+    if not obj:
+        return jsonify(error="Registrazione non trovata."), 404
+    campo_data, campo_operatore = azioni[azione]
+    ora = datetime.now() if segna else None
+    setattr(obj, campo_data, ora)
+    setattr(obj, campo_operatore, (current_user.display_name or current_user.username) if segna else None)
+    db.session.commit()
+    if not segna:
+        return jsonify(ok=True)
+    return jsonify(ok=True, testo=f"{ora.strftime('%d/%m %H:%M')} · {getattr(obj, campo_operatore)}")
+
+
 @bp.route("/mortalita/<int:ev_id>/segna/<azione>", methods=["POST"])
 @login_required
 def mortalita_segna(ev_id, azione):
     _check_allevamento()
-    from datetime import datetime
     from app.models import EventoMortalita
-    if azione not in AZIONI_MORTALITA:
-        return jsonify(error="Azione non valida."), 400
-    ev = db.session.get(EventoMortalita, ev_id)
-    if not ev:
-        return jsonify(error="Evento non trovato."), 404
-    campo_data, campo_operatore = AZIONI_MORTALITA[azione]
-    ora = datetime.now()
-    setattr(ev, campo_data, ora)
-    setattr(ev, campo_operatore, current_user.display_name or current_user.username)
-    db.session.commit()
-    return jsonify(
-        ok=True,
-        testo=f"{ora.strftime('%d/%m %H:%M')} · {getattr(ev, campo_operatore)}",
-    )
+    return _marca_azione(EventoMortalita, ev_id, AZIONI_MORTALITA, azione, segna=True)
 
 
 @bp.route("/mortalita/<int:ev_id>/annulla/<azione>", methods=["POST"])
@@ -342,16 +352,23 @@ def mortalita_segna(ev_id, azione):
 def mortalita_annulla(ev_id, azione):
     _check_allevamento()
     from app.models import EventoMortalita
-    if azione not in AZIONI_MORTALITA:
-        return jsonify(error="Azione non valida."), 400
-    ev = db.session.get(EventoMortalita, ev_id)
-    if not ev:
-        return jsonify(error="Evento non trovato."), 404
-    campo_data, campo_operatore = AZIONI_MORTALITA[azione]
-    setattr(ev, campo_data, None)
-    setattr(ev, campo_operatore, None)
-    db.session.commit()
-    return jsonify(ok=True)
+    return _marca_azione(EventoMortalita, ev_id, AZIONI_MORTALITA, azione, segna=False)
+
+
+@bp.route("/spostamenti/<int:sp_id>/segna/<azione>", methods=["POST"])
+@login_required
+def spostamenti_segna(sp_id, azione):
+    _check_allevamento()
+    from app.models import Spostamento
+    return _marca_azione(Spostamento, sp_id, AZIONI_SPOSTAMENTO, azione, segna=True)
+
+
+@bp.route("/spostamenti/<int:sp_id>/annulla/<azione>", methods=["POST"])
+@login_required
+def spostamenti_annulla(sp_id, azione):
+    _check_allevamento()
+    from app.models import Spostamento
+    return _marca_azione(Spostamento, sp_id, AZIONI_SPOSTAMENTO, azione, segna=False)
 
 
 # ── Censimento ─────────────────────────────────────────────────────────────
