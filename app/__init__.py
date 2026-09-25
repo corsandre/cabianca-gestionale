@@ -79,6 +79,8 @@ def create_app():
 
     # Logging
     logging.basicConfig(level=logging.INFO)
+    # httpx logga ogni richiesta con l'URL completo, che per Telegram contiene il token del bot
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     app.logger.setLevel(logging.INFO)
 
     # Error handlers
@@ -261,6 +263,7 @@ def _init_db(app):
         ("eventi_mortalita", "rift_operatore", "VARCHAR(100)"),
         ("trattamenti", "chiuso_anticipatamente", "BOOLEAN DEFAULT 0"),
         ("razioni_box_v2", "stimato", "BOOLEAN DEFAULT 0"),
+        ("consegne_siero", "speditore_id", "INTEGER REFERENCES speditori_siero(id)"),
     ]
     for table, col, col_type in _migrate_columns:
         try:
@@ -268,6 +271,26 @@ def _init_db(app):
             db.session.commit()
         except sqlalchemy.exc.OperationalError:
             db.session.rollback()  # Column already exists
+
+    # Backfill: speditori siero da testo libero ad anagrafica. Il testo intero
+    # finisce in "azienda" (da sistemare a mano); idempotente, tocca solo le
+    # consegne con testo e ancora senza speditore_id.
+    try:
+        nomi = db.session.execute(sqlalchemy.text(
+            "SELECT DISTINCT TRIM(speditore) FROM consegne_siero "
+            "WHERE speditore_id IS NULL AND TRIM(COALESCE(speditore, '')) != ''"
+        )).scalars().all()
+        for nome in nomi:
+            db.session.execute(sqlalchemy.text(
+                "INSERT OR IGNORE INTO speditori_siero (azienda, created_at) VALUES (:n, CURRENT_TIMESTAMP)"
+            ), {"n": nome})
+            db.session.execute(sqlalchemy.text(
+                "UPDATE consegne_siero SET speditore_id = (SELECT id FROM speditori_siero WHERE azienda = :n) "
+                "WHERE speditore_id IS NULL AND TRIM(speditore) = :n"
+            ), {"n": nome})
+        db.session.commit()
+    except sqlalchemy.exc.OperationalError:
+        db.session.rollback()
 
     # Backfill: ensure existing users have sections set
     try:

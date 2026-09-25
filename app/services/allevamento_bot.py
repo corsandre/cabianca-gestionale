@@ -538,6 +538,7 @@ def start_bot(app):
             await update.message.reply_text("⚠️ Inserisci un numero valido (es: 45.5).")
             return CONSEGNA_QTY
         ctx.user_data["consegna_qty"] = qty
+        ctx.user_data["consegna_speditore_id"] = None
         tipo = ctx.user_data.get("consegna_tipo", "siero")
         if tipo == "siero":
             await update.message.reply_text(
@@ -557,8 +558,28 @@ def start_bot(app):
             except ValueError:
                 await update.message.reply_text("⚠️ Inserisci un numero valido (es: 22.5) oppure /skip.")
                 return CONSEGNA_SS
-        await update.message.reply_text("Lotto / speditore (opzionale, scrivi /skip per saltare):")
+        with app.app_context():
+            from app.models import SpeditoreSiero
+            speditori = [(sp.id, sp.azienda) for sp in SpeditoreSiero.query.order_by(SpeditoreSiero.azienda)]
+        if not speditori:
+            ctx.user_data["consegna_speditore_id"] = None
+            await update.message.reply_text("📷 Foto della bolla (opzionale): invia la foto oppure /skip per saltare:")
+            return CONSEGNA_BOLLA
+        rows = [[InlineKeyboardButton(nome, callback_data=f"sped_{sid}")] for sid, nome in speditori]
+        rows.append([InlineKeyboardButton("– Nessuno –", callback_data="sped_0")])
+        await update.message.reply_text(
+            "Seleziona lo speditore (per aggiungerne uno nuovo usa il gestionale web):",
+            reply_markup=InlineKeyboardMarkup(rows),
+        )
         return CONSEGNA_EXTRA
+
+    async def consegna_speditore(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        q = update.callback_query
+        await q.answer()
+        sid = int(q.data.removeprefix("sped_"))
+        ctx.user_data["consegna_speditore_id"] = sid or None
+        await q.edit_message_text("📷 Foto della bolla (opzionale): invia la foto oppure /skip per saltare:")
+        return CONSEGNA_BOLLA
 
     async def consegna_extra(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         testo = update.message.text.strip()
@@ -595,7 +616,7 @@ def start_bot(app):
             if tipo == "siero":
                 db.session.add(ConsegnaSiero(
                     ciclo_id=ciclo.id, data=date.today(),
-                    quantita_qli=qty, speditore=extra,
+                    quantita_qli=qty, speditore_id=ctx.user_data.get("consegna_speditore_id"),
                     perc_sostanza_secca=ctx.user_data.get("consegna_ss"),
                     bolla_path=bolla_path,
                 ))
@@ -1031,6 +1052,7 @@ def start_bot(app):
                 CommandHandler("skip", consegna_ss),
             ],
             CONSEGNA_EXTRA: [
+                CallbackQueryHandler(consegna_speditore, pattern=r"^sped_\d+$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, consegna_extra),
                 CommandHandler("skip", consegna_extra),
             ],

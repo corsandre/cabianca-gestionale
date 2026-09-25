@@ -2,6 +2,23 @@
 {% from "components/scorta_card.html" import card_scorta %}
 {% block title %}Allevamento – Consegne{% endblock %}
 
+{% macro select_speditore(selezionato=none) %}
+<select name="speditore_id" class="form-select cb-speditore-select">
+    <option value="">– nessuno –</option>
+    {% for s in speditori %}
+    <option value="{{ s.id }}" {{ 'selected' if s.id == selezionato }}>{{ s.azienda }}{{ ' (' + s.tipo_siero + ')' if s.tipo_siero }}</option>
+    {% endfor %}
+    <option value="nuovo">＋ Nuovo speditore…</option>
+</select>
+<div class="cb-speditore-nuovo border rounded p-2 mt-2 d-none" style="background:#fdf2f6">
+    <div class="small fw-bold mb-2" style="color:#c2185b">Nuovo speditore</div>
+    <input type="text" name="speditore_azienda" class="form-control form-control-sm mb-2" placeholder="Azienda *">
+    <input type="text" name="speditore_indirizzo" class="form-control form-control-sm mb-2" placeholder="Indirizzo">
+    <input type="text" name="speditore_tipo_siero" class="form-control form-control-sm mb-2" placeholder="Tipo di siero (es. siero di Parmigiano)">
+    <input type="text" name="speditore_note" class="form-control form-control-sm" placeholder="Note">
+</div>
+{% endmacro %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="mb-0"><i class="bi bi-truck me-2" style="color:#c2185b"></i>Registro Consegne</h4>
@@ -69,7 +86,7 @@
                 <td class="fw-bold" style="color:#c2185b">{{ c.quantita_qli }}</td>
                 <td>{{ c.perc_sostanza_secca if c.perc_sostanza_secca is not none else '–' }}</td>
                 <td>{{ c.lotto or '–' }}</td>
-                <td>{{ c.speditore or '–' }}</td>
+                <td>{{ c.speditore_nome or '–' }}</td>
                 <td>{{ c.trasportatore or '–' }}</td>
                 <td class="text-muted">{{ c.note or '' }}</td>
                 <td>
@@ -164,13 +181,14 @@
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Lotto</label>
-                        <input type="text" name="lotto" class="form-control" value="{{ c.lotto or '' }}">
+                        <label class="form-label">Speditore</label>
+                        {{ select_speditore(c.speditore_id) }}
+                        {% if c.speditore and not c.speditore_id %}<div class="form-text">Valore precedente: {{ c.speditore }}</div>{% endif %}
                     </div>
                     <div class="row g-2 mb-3">
                         <div class="col-6">
-                            <label class="form-label">Speditore</label>
-                            <input type="text" name="speditore" class="form-control" value="{{ c.speditore or '' }}">
+                            <label class="form-label">Lotto</label>
+                            <input type="text" name="lotto" class="form-control" value="{{ c.lotto or '' }}">
                         </div>
                         <div class="col-6">
                             <label class="form-label">Trasportatore</label>
@@ -302,6 +320,87 @@
 {% endif %}
 {% endif %}
 
+<!-- Anagrafica speditori siero -->
+<div class="d-flex justify-content-between align-items-center mt-5 mb-2" id="speditori">
+    <h5 class="mb-0"><i class="bi bi-building me-2" style="color:#c2185b"></i>Speditori siero</h5>
+    <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalSpeditore">
+        <i class="bi bi-plus-lg me-1"></i>Nuovo speditore
+    </button>
+</div>
+<div class="cb-card p-0" style="overflow-x:auto">
+    {% if speditori %}
+    <table class="table table-sm mb-0">
+        <thead class="table-light">
+            <tr><th>Azienda</th><th>Indirizzo</th><th>Tipo di siero</th><th>Note</th><th>Consegne</th>
+            {% if current_user.role == 'admin' %}<th></th>{% endif %}</tr>
+        </thead>
+        <tbody>
+            {% for s in speditori %}
+            <tr>
+                <td class="fw-bold">{{ s.azienda }}</td>
+                <td>{{ s.indirizzo or '–' }}</td>
+                <td>{{ s.tipo_siero or '–' }}</td>
+                <td class="text-muted">{{ s.note or '' }}</td>
+                <td>{{ s.consegne | length }}</td>
+                {% if current_user.role == 'admin' %}
+                <td class="text-nowrap">
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0" title="Modifica"
+                            data-bs-toggle="modal" data-bs-target="#modalSpeditore{{ s.id }}">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    {% if not s.consegne %}
+                    <form method="post" action="{{ url_for('allevamento.speditori_delete', sid=s.id) }}" onsubmit="return confirm('Elimina speditore?')" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-danger py-0"><i class="bi bi-trash"></i></button>
+                    </form>
+                    {% endif %}
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}<p class="text-muted p-3 mb-0">Nessuno speditore registrato.</p>{% endif %}
+</div>
+
+{% for s in [none] + (speditori if current_user.role == 'admin' else []) %}
+<div class="modal fade" id="modalSpeditore{{ s.id if s else '' }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#c2185b;color:#fff">
+                <h5 class="modal-title"><i class="bi bi-building me-2"></i>{{ 'Modifica speditore' if s else 'Nuovo speditore' }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('allevamento.speditori_edit', sid=s.id) if s else url_for('allevamento.speditori_new') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Azienda</label>
+                        <input type="text" name="azienda" class="form-control" value="{{ s.azienda if s else '' }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Indirizzo</label>
+                        <input type="text" name="indirizzo" class="form-control" value="{{ (s.indirizzo or '') if s else '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo di siero</label>
+                        <input type="text" name="tipo_siero" class="form-control" value="{{ (s.tipo_siero or '') if s else '' }}" placeholder="es. siero di Parmigiano">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Note</label>
+                        <textarea name="note" class="form-control" rows="2">{{ (s.note or '') if s else '' }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn" style="background:#c2185b;color:#fff">Salva</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
 <!-- Modal siero -->
 <div class="modal fade" id="modalSiero" tabindex="-1">
     <div class="modal-dialog">
@@ -334,19 +433,19 @@
                             <input type="number" name="perc_sostanza_secca" class="form-control" step="0.1" min="0" max="100">
                         </div>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">Speditore</label>
+                        {{ select_speditore() }}
+                    </div>
                     <div class="row g-2 mb-3">
                         <div class="col-6">
                             <label class="form-label">Lotto</label>
                             <input type="text" name="lotto" class="form-control">
                         </div>
                         <div class="col-6">
-                            <label class="form-label">Speditore</label>
-                            <input type="text" name="speditore" class="form-control">
+                            <label class="form-label">Trasportatore</label>
+                            <input type="text" name="trasportatore" class="form-control">
                         </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Trasportatore</label>
-                        <input type="text" name="trasportatore" class="form-control">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Note</label>
@@ -481,6 +580,20 @@ document.getElementById('modalRicalibra').addEventListener('show.bs.modal', func
     document.getElementById('ricalibraData').value =
         `${adesso.getFullYear()}-${pad(adesso.getMonth() + 1)}-${pad(adesso.getDate())}`;
     document.getElementById('ricalibraOra').value = `${pad(adesso.getHours())}:${pad(adesso.getMinutes())}`;
+});
+
+// Select speditore: "Nuovo speditore…" mostra i campi per crearlo al volo
+document.querySelectorAll('.cb-speditore-select').forEach(function (sel) {
+    const box = sel.nextElementSibling;
+    const azienda = box.querySelector('input[name="speditore_azienda"]');
+    function aggiorna() {
+        const nuovo = sel.value === 'nuovo';
+        box.classList.toggle('d-none', !nuovo);
+        azienda.required = nuovo;
+        if (nuovo) azienda.focus();
+    }
+    sel.addEventListener('change', aggiorna);
+    aggiorna();
 });
 
 function cbComprimiImmagine(file, maxDim, qualita) {

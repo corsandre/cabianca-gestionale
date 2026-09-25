@@ -447,6 +447,16 @@ class Spostamento(db.Model):
     ciclo = db.relationship("Ciclo", backref="spostamenti")
 
 
+class SpeditoreSiero(db.Model):
+    __tablename__ = "speditori_siero"
+    id = db.Column(db.Integer, primary_key=True)
+    azienda = db.Column(db.String(200), nullable=False, unique=True)
+    indirizzo = db.Column(db.String(300))
+    tipo_siero = db.Column(db.String(100))
+    note = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class ConsegnaSiero(db.Model):
     __tablename__ = "consegne_siero"
     id = db.Column(db.Integer, primary_key=True)
@@ -458,12 +468,18 @@ class ConsegnaSiero(db.Model):
     data_esaurimento = db.Column(db.Date)  # data in cui la cisterna è stata svuotata/lavata (chiude il periodo)
     ora_esaurimento = db.Column(db.Time)  # ora precisa di chiusura, per non sovrapporre i consumi col carico successivo
     lotto = db.Column(db.String(50))
-    speditore = db.Column(db.String(200))
+    speditore = db.Column(db.String(200))  # legacy testo libero, sostituito da speditore_id
+    speditore_id = db.Column(db.Integer, db.ForeignKey("speditori_siero.id"))
     trasportatore = db.Column(db.String(200))
     note = db.Column(db.Text)
     bolla_path = db.Column(db.String(300))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     ciclo = db.relationship("Ciclo", backref="consegne_siero")
+    speditore_rel = db.relationship("SpeditoreSiero", backref="consegne")
+
+    @property
+    def speditore_nome(self):
+        return self.speditore_rel.azienda if self.speditore_rel else self.speditore
 
 
 class ConsegnaMangime(db.Model):

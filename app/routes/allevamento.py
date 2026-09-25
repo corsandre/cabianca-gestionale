@@ -697,7 +697,7 @@ def spostamenti_delete(sp_id):
 @login_required
 def consegne():
     _check_allevamento()
-    from app.models import ConsegnaSiero, ConsegnaMangime
+    from app.models import ConsegnaSiero, ConsegnaMangime, SpeditoreSiero
     from app.services.allevamento_scorte import stato_mangime, stato_siero, scarto_consegna_siero, get_setting_float
     ciclo = _get_ciclo_attivo()
 
@@ -726,6 +726,7 @@ def consegne():
                            tot_siero=tot_siero, tot_mangime=tot_mangime,
                            scorta_mangime=stato_mangime(), scorta_siero=stato_siero(),
                            scarti_siero=scarti_siero,
+                           speditori=SpeditoreSiero.query.order_by(SpeditoreSiero.azienda).all(),
                            oggi=date.today())
 
 
@@ -758,6 +759,101 @@ def mangime_ricalibra():
     return redirect(url_for("allevamento.consegne", tab="mangime"))
 
 
+def _speditore_campi_da_form(prefisso=""):
+    azienda = request.form.get(prefisso + "azienda", "").strip()
+    if not azienda:
+        raise ValueError("Il nome dell'azienda speditrice è obbligatorio.")
+    return dict(
+        azienda=azienda,
+        indirizzo=request.form.get(prefisso + "indirizzo", "").strip() or None,
+        tipo_siero=request.form.get(prefisso + "tipo_siero", "").strip() or None,
+        note=request.form.get(prefisso + "note", "").strip() or None,
+    )
+
+
+def _speditore_id_da_form():
+    """Legge lo speditore scelto nel modal consegna siero. Con "nuovo" crea
+    l'anagrafica al volo dai campi speditore_* (o riusa quella con lo stesso nome)."""
+    from app.models import SpeditoreSiero
+    valore = request.form.get("speditore_id", "").strip()
+    if valore == "nuovo":
+        campi = _speditore_campi_da_form("speditore_")
+        esistente = SpeditoreSiero.query.filter(
+            db.func.lower(SpeditoreSiero.azienda) == campi["azienda"].lower()
+        ).first()
+        if esistente:
+            return esistente.id
+        s = SpeditoreSiero(**campi)
+        db.session.add(s)
+        db.session.flush()
+        return s.id
+    return int(valore) if valore else None
+
+
+@bp.route("/consegne/speditori/new", methods=["POST"])
+@login_required
+def speditori_new():
+    _check_allevamento()
+    from app.models import SpeditoreSiero
+    try:
+        campi = _speditore_campi_da_form()
+        if SpeditoreSiero.query.filter(db.func.lower(SpeditoreSiero.azienda) == campi["azienda"].lower()).first():
+            raise ValueError(f"Speditore \"{campi['azienda']}\" già presente.")
+        db.session.add(SpeditoreSiero(**campi))
+        db.session.commit()
+        flash(f"Speditore {campi['azienda']} aggiunto.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
+    return redirect(url_for("allevamento.consegne", tab="siero") + "#speditori")
+
+
+@bp.route("/consegne/speditori/<int:sid>/edit", methods=["POST"])
+@login_required
+def speditori_edit(sid):
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.models import SpeditoreSiero
+    s = db.session.get(SpeditoreSiero, sid)
+    if not s:
+        flash("Speditore non trovato.", "danger")
+        return redirect(url_for("allevamento.consegne", tab="siero") + "#speditori")
+    try:
+        campi = _speditore_campi_da_form()
+        doppione = SpeditoreSiero.query.filter(
+            db.func.lower(SpeditoreSiero.azienda) == campi["azienda"].lower(), SpeditoreSiero.id != sid
+        ).first()
+        if doppione:
+            raise ValueError(f"Speditore \"{campi['azienda']}\" già presente.")
+        for k, v in campi.items():
+            setattr(s, k, v)
+        db.session.commit()
+        flash("Speditore aggiornato.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
+    return redirect(url_for("allevamento.consegne", tab="siero") + "#speditori")
+
+
+@bp.route("/consegne/speditori/<int:sid>/delete", methods=["POST"])
+@login_required
+def speditori_delete(sid):
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.models import SpeditoreSiero
+    s = db.session.get(SpeditoreSiero, sid)
+    if s:
+        if s.consegne:
+            flash(f"Impossibile eliminare {s.azienda}: è usato in {len(s.consegne)} consegne.", "danger")
+        else:
+            db.session.delete(s)
+            db.session.commit()
+            flash("Speditore eliminato.", "success")
+    return redirect(url_for("allevamento.consegne", tab="siero") + "#speditori")
+
+
 @bp.route("/consegne/siero/new", methods=["POST"])
 @login_required
 def consegne_siero_new():
@@ -786,7 +882,7 @@ def consegne_siero_new():
             quantita_qli=qty,
             perc_sostanza_secca=float(ss) if ss else None,
             lotto=request.form.get("lotto", "").strip() or None,
-            speditore=request.form.get("speditore", "").strip() or None,
+            speditore_id=_speditore_id_da_form(),
             trasportatore=request.form.get("trasportatore", "").strip() or None,
             note=request.form.get("note", "").strip() or None,
             bolla_path=_salva_bolla(request.files.get("bolla")),
@@ -829,7 +925,7 @@ def consegne_siero_edit(cid):
         ss = request.form.get("perc_sostanza_secca", "").strip()
         c.perc_sostanza_secca = float(ss) if ss else None
         c.lotto = request.form.get("lotto", "").strip() or None
-        c.speditore = request.form.get("speditore", "").strip() or None
+        c.speditore_id = _speditore_id_da_form()
         c.trasportatore = request.form.get("trasportatore", "").strip() or None
         c.note = request.form.get("note", "").strip() or None
         db.session.commit()
