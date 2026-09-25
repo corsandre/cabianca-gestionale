@@ -450,11 +450,16 @@ class Spostamento(db.Model):
 class SpeditoreSiero(db.Model):
     __tablename__ = "speditori_siero"
     id = db.Column(db.Integer, primary_key=True)
-    azienda = db.Column(db.String(200), nullable=False, unique=True)
+    # stessa azienda con sedi diverse = speditori diversi: unico solo azienda+indirizzo (controllato nelle route)
+    azienda = db.Column(db.String(200), nullable=False)
     indirizzo = db.Column(db.String(300))
     tipo_siero = db.Column(db.String(100))
     note = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @property
+    def etichetta(self):
+        return f"{self.azienda} ({self.indirizzo})" if self.indirizzo else self.azienda
 
 
 class ConsegnaSiero(db.Model):
@@ -477,9 +482,6 @@ class ConsegnaSiero(db.Model):
     ciclo = db.relationship("Ciclo", backref="consegne_siero")
     speditore_rel = db.relationship("SpeditoreSiero", backref="consegne")
 
-    @property
-    def speditore_nome(self):
-        return self.speditore_rel.azienda if self.speditore_rel else self.speditore
 
 
 class ConsegnaMangime(db.Model):

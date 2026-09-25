@@ -560,7 +560,7 @@ def start_bot(app):
                 return CONSEGNA_SS
         with app.app_context():
             from app.models import SpeditoreSiero
-            speditori = [(sp.id, sp.azienda) for sp in SpeditoreSiero.query.order_by(SpeditoreSiero.azienda)]
+            speditori = [(sp.id, sp.etichetta) for sp in SpeditoreSiero.query.order_by(SpeditoreSiero.azienda, SpeditoreSiero.indirizzo)]
         if not speditori:
             ctx.user_data["consegna_speditore_id"] = None
             await update.message.reply_text("📷 Foto della bolla (opzionale): invia la foto oppure /skip per saltare:")

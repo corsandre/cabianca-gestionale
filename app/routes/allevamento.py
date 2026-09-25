@@ -726,7 +726,7 @@ def consegne():
                            tot_siero=tot_siero, tot_mangime=tot_mangime,
                            scorta_mangime=stato_mangime(), scorta_siero=stato_siero(),
                            scarti_siero=scarti_siero,
-                           speditori=SpeditoreSiero.query.order_by(SpeditoreSiero.azienda).all(),
+                           speditori=SpeditoreSiero.query.order_by(SpeditoreSiero.azienda, SpeditoreSiero.indirizzo).all(),
                            oggi=date.today())
 
 
@@ -771,16 +771,24 @@ def _speditore_campi_da_form(prefisso=""):
     )
 
 
+def _speditore_esistente(campi):
+    """Speditore con stessa azienda e stesso indirizzo (senza badare a maiuscole):
+    stessa azienda con sede diversa è un altro speditore."""
+    from app.models import SpeditoreSiero
+    return SpeditoreSiero.query.filter(
+        db.func.lower(SpeditoreSiero.azienda) == campi["azienda"].lower(),
+        db.func.lower(db.func.coalesce(SpeditoreSiero.indirizzo, "")) == (campi["indirizzo"] or "").lower(),
+    ).first()
+
+
 def _speditore_id_da_form():
     """Legge lo speditore scelto nel modal consegna siero. Con "nuovo" crea
-    l'anagrafica al volo dai campi speditore_* (o riusa quella con lo stesso nome)."""
+    l'anagrafica al volo dai campi speditore_* (o riusa quella con stessa azienda e indirizzo)."""
     from app.models import SpeditoreSiero
     valore = request.form.get("speditore_id", "").strip()
     if valore == "nuovo":
         campi = _speditore_campi_da_form("speditore_")
-        esistente = SpeditoreSiero.query.filter(
-            db.func.lower(SpeditoreSiero.azienda) == campi["azienda"].lower()
-        ).first()
+        esistente = _speditore_esistente(campi)
         if esistente:
             return esistente.id
         s = SpeditoreSiero(**campi)
@@ -797,8 +805,8 @@ def speditori_new():
     from app.models import SpeditoreSiero
     try:
         campi = _speditore_campi_da_form()
-        if SpeditoreSiero.query.filter(db.func.lower(SpeditoreSiero.azienda) == campi["azienda"].lower()).first():
-            raise ValueError(f"Speditore \"{campi['azienda']}\" già presente.")
+        if _speditore_esistente(campi):
+            raise ValueError(f"Speditore \"{SpeditoreSiero(**campi).etichetta}\" già presente.")
         db.session.add(SpeditoreSiero(**campi))
         db.session.commit()
         flash(f"Speditore {campi['azienda']} aggiunto.", "success")
@@ -821,11 +829,9 @@ def speditori_edit(sid):
         return redirect(url_for("allevamento.consegne", tab="siero") + "#speditori")
     try:
         campi = _speditore_campi_da_form()
-        doppione = SpeditoreSiero.query.filter(
-            db.func.lower(SpeditoreSiero.azienda) == campi["azienda"].lower(), SpeditoreSiero.id != sid
-        ).first()
-        if doppione:
-            raise ValueError(f"Speditore \"{campi['azienda']}\" già presente.")
+        doppione = _speditore_esistente(campi)
+        if doppione and doppione.id != sid:
+            raise ValueError(f"Speditore \"{SpeditoreSiero(**campi).etichetta}\" già presente.")
         for k, v in campi.items():
             setattr(s, k, v)
         db.session.commit()
@@ -846,7 +852,7 @@ def speditori_delete(sid):
     s = db.session.get(SpeditoreSiero, sid)
     if s:
         if s.consegne:
-            flash(f"Impossibile eliminare {s.azienda}: è usato in {len(s.consegne)} consegne.", "danger")
+            flash(f"Impossibile eliminare {s.etichetta}: è usato in {len(s.consegne)} consegne.", "danger")
         else:
             db.session.delete(s)
             db.session.commit()

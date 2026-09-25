@@ -272,23 +272,23 @@ def _init_db(app):
         except sqlalchemy.exc.OperationalError:
             db.session.rollback()  # Column already exists
 
-    # Backfill: speditori siero da testo libero ad anagrafica. Il testo intero
-    # finisce in "azienda" (da sistemare a mano); idempotente, tocca solo le
-    # consegne con testo e ancora senza speditore_id.
+    # speditori_siero nasceva con UNIQUE(azienda): stessa azienda con sedi diverse
+    # deve poter esistere. SQLite non toglie un vincolo: ricostruisco la tabella.
     try:
-        nomi = db.session.execute(sqlalchemy.text(
-            "SELECT DISTINCT TRIM(speditore) FROM consegne_siero "
-            "WHERE speditore_id IS NULL AND TRIM(COALESCE(speditore, '')) != ''"
-        )).scalars().all()
-        for nome in nomi:
-            db.session.execute(sqlalchemy.text(
-                "INSERT OR IGNORE INTO speditori_siero (azienda, created_at) VALUES (:n, CURRENT_TIMESTAMP)"
-            ), {"n": nome})
-            db.session.execute(sqlalchemy.text(
-                "UPDATE consegne_siero SET speditore_id = (SELECT id FROM speditori_siero WHERE azienda = :n) "
-                "WHERE speditore_id IS NULL AND TRIM(speditore) = :n"
-            ), {"n": nome})
-        db.session.commit()
+        sql = db.session.execute(sqlalchemy.text(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='speditori_siero'"
+        )).scalar()
+        if sql and "UNIQUE (azienda)" in sql:
+            for stmt in (
+                "CREATE TABLE speditori_siero_new (id INTEGER NOT NULL, azienda VARCHAR(200) NOT NULL, "
+                "indirizzo VARCHAR(300), tipo_siero VARCHAR(100), note TEXT, created_at DATETIME, PRIMARY KEY (id))",
+                "INSERT INTO speditori_siero_new (id, azienda, indirizzo, tipo_siero, note, created_at) "
+                "SELECT id, azienda, indirizzo, tipo_siero, note, created_at FROM speditori_siero",
+                "DROP TABLE speditori_siero",
+                "ALTER TABLE speditori_siero_new RENAME TO speditori_siero",
+            ):
+                db.session.execute(sqlalchemy.text(stmt))
+            db.session.commit()
     except sqlalchemy.exc.OperationalError:
         db.session.rollback()
 
