@@ -1,7 +1,8 @@
 """
 Telegram bot per l'allevamento Ca Bianca v2.
 Comandi rapidi per registrare mortalità, spostamenti e consegne direttamente da Telegram.
-Richiede TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID nel .env.
+Richiede TELEGRAM_BOT_TOKEN nel .env. Con TELEGRAM_GROUP_ID il bot risponde solo nel gruppo
+aziendale e, in privato, solo ai membri di quel gruppo.
 """
 import logging
 import os
@@ -1027,7 +1028,103 @@ def start_bot(app):
 
     # ── Costruzione e avvio ───────────────────────────────────────────────
 
-    tg_app = Application.builder().token(token).build()
+    # ── Controllo accessi e menu personali nei gruppi ─────────────────────
+
+    import contextvars
+    import time as _time
+    from telegram import Message
+    from telegram.constants import ChatType
+    from telegram.ext import ExtBot, TypeHandler, ApplicationHandlerStop
+
+    try:
+        gruppo = {"id": int(app.config.get("TELEGRAM_GROUP_ID") or 0) or None}
+    except ValueError:
+        logger.error("TELEGRAM_GROUP_ID non è un numero: controllo accessi disattivato.")
+        gruppo = {"id": None}
+    _utente_corrente = contextvars.ContextVar("utente_corrente", default=None)
+    _proprietari = {}   # (chat_id, message_id) -> (user_id, nome) dei messaggi con menu nei gruppi
+    _membri = {}        # user_id -> (autorizzato, istante del controllo)
+    CACHE_MEMBRI_SEC = 600
+
+    class _BotConProprietari(ExtBot):
+        """Nei gruppi ricorda per chi è stato inviato/modificato ogni messaggio del bot,
+        così un collega non può premere i pulsanti del menu aperto da un altro."""
+
+        def _ricorda(self, msg):
+            utente = _utente_corrente.get()
+            if utente and isinstance(msg, Message) and msg.chat.type != ChatType.PRIVATE:
+                _proprietari[(msg.chat_id, msg.message_id)] = utente
+                while len(_proprietari) > 2000:
+                    _proprietari.pop(next(iter(_proprietari)))
+            return msg
+
+        async def send_message(self, *args, **kwargs):
+            return self._ricorda(await super().send_message(*args, **kwargs))
+
+        async def edit_message_text(self, *args, **kwargs):
+            return self._ricorda(await super().edit_message_text(*args, **kwargs))
+
+    async def _membro_del_gruppo(bot, user_id):
+        ora = _time.monotonic()
+        in_cache = _membri.get(user_id)
+        if in_cache and ora - in_cache[1] < CACHE_MEMBRI_SEC:
+            return in_cache[0]
+        try:
+            m = await bot.get_chat_member(gruppo["id"], user_id)
+            ok = m.status in ("creator", "administrator", "member") or (
+                m.status == "restricted" and getattr(m, "is_member", False))
+        except Exception as e:
+            logger.warning(f"Bot Telegram: verifica membro {user_id} fallita ({e})")
+            ok = in_cache[0] if in_cache else False  # errore di rete: tengo l'esito precedente
+        _membri[user_id] = (ok, ora)
+        return ok
+
+    async def controllo_accesso(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        chat, user = update.effective_chat, update.effective_user
+        if user:
+            _utente_corrente.set((user.id, user.first_name or str(user.id)))
+        if chat is None or user is None:
+            raise ApplicationHandlerStop
+        in_gruppo = chat.type in (ChatType.GROUP, ChatType.SUPERGROUP)
+
+        # Il gruppo diventato supergruppo cambia ID: seguo il nuovo senza perdere l'accesso
+        msg = update.effective_message
+        if gruppo["id"] and msg and msg.migrate_from_chat_id == gruppo["id"]:
+            gruppo["id"] = chat.id
+            logger.warning(f"Bot Telegram: il gruppo è diventato supergruppo, nuovo ID {chat.id}: "
+                           f"aggiornare TELEGRAM_GROUP_ID nel .env")
+
+        if gruppo["id"] is None:
+            if in_gruppo:
+                logger.warning(f"Bot Telegram: messaggio dal gruppo {chat.title!r} con ID {chat.id} "
+                               f"(TELEGRAM_GROUP_ID non configurato)")
+            return  # nessun gruppo configurato: tutti ammessi come prima
+
+        if in_gruppo:
+            if chat.id != gruppo["id"]:
+                logger.warning(f"Bot Telegram: ignorato gruppo non autorizzato {chat.title!r} ID {chat.id}")
+                raise ApplicationHandlerStop
+            q = update.callback_query
+            if q and q.message:
+                proprietario = _proprietari.get((chat.id, q.message.message_id))
+                if proprietario and proprietario[0] != user.id:
+                    await q.answer(f"Questo menu è di {proprietario[1]}. Apri il tuo con /menu", show_alert=True)
+                    raise ApplicationHandlerStop
+            return
+
+        if chat.type == ChatType.PRIVATE and await _membro_del_gruppo(ctx.bot, user.id):
+            return
+        logger.warning(f"Bot Telegram: utente non autorizzato {user.full_name!r} ID {user.id}")
+        if update.callback_query:
+            await update.callback_query.answer("Non autorizzato.", show_alert=True)
+        elif update.message and chat.type == ChatType.PRIVATE:
+            await update.message.reply_text(
+                "⛔ Non sei autorizzato a usare questo bot. Chiedi di essere aggiunto al gruppo dell'allevamento."
+            )
+        raise ApplicationHandlerStop
+
+    tg_app = Application.builder().bot(_BotConProprietari(token)).build()
+    tg_app.add_handler(TypeHandler(Update, controllo_accesso), group=-1)
 
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", cmd_start), CommandHandler("menu", cmd_start)],

@@ -27,6 +27,8 @@ class Config:
     # Telegram
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
     TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+    # Gruppo aziendale: il bot risponde solo lì e, in privato, solo ai suoi membri (vuoto = tutti)
+    TELEGRAM_GROUP_ID = os.getenv("TELEGRAM_GROUP_ID", "")
 
     # 4CloudOffice
     CLOUD_OFFICE_URL = os.getenv("CLOUD_OFFICE_URL", "")

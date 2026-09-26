@@ -204,6 +204,18 @@ Due usi dello stesso bot (`TELEGRAM_BOT_TOKEN`):
    - Comandi: `/start` e `/menu` (menu principale), `/cancel` (annulla), `/skip` per i campi facoltativi.
    - Gli speditori nuovi si creano dal web; il bot propone solo quelli esistenti.
 
+**Accesso e uso nel gruppo aziendale.** Con `TELEGRAM_GROUP_ID` impostato, il bot risponde solo nel gruppo
+aziendale e, in chat privata, solo a chi è membro di quel gruppo (verifica ricontrollata al massimo ogni 10 minuti):
+per dare o togliere l'accesso a un collega basta aggiungerlo o toglierlo dal gruppo. Messaggi da altri gruppi o
+da estranei vengono ignorati e registrati nel log. Nel gruppo ogni collega ha il proprio percorso separato; chi
+preme i pulsanti del menu aperto da un altro riceve l'avviso "Questo menu è di …". Se Telegram trasforma il
+gruppo in supergruppo (cambia ID) il bot segue il nuovo ID e chiede nel log di aggiornare `.env`.
+
+Configurazione su BotFather per l'uso nel gruppo: `/setprivacy` → **Disable** (altrimenti nel gruppo il bot non
+riceve i numeri scritti come risposta; dopo la modifica va tolto e riaggiunto al gruppo) e, una volta aggiunto,
+`/setjoingroups` → **Disable** (nessuno può aggiungerlo ad altri gruppi). Per trovare l'ID del gruppo: lasciare
+vuoto `TELEGRAM_GROUP_ID`, scrivere `/menu` nel gruppo e leggere l'ID nel log (`Bot Telegram: messaggio dal gruppo …`).
+
 Il bot è un'unica `ConversationHandler`: ogni flusso deve tornare allo stato `MAIN_MENU`, altrimenti i pulsanti
 del menu smettono di rispondere dopo la conferma.
 
@@ -305,7 +317,8 @@ Il file `.env` (creato da `setup.sh`, mai committato) contiene:
 | `SECRET_KEY` | Chiave per le sessioni Flask |
 | `DATABASE_URL` | Default `sqlite:///data/gestionale.db` |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_DISPLAY_NAME` | Utente admin creato al primo avvio |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Bot allevamento + notifiche. **Un solo server alla volta può usare il token** |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Bot allevamento + chat delle notifiche. **Un solo server alla volta può usare il token** |
+| `TELEGRAM_GROUP_ID` | Gruppo aziendale autorizzato a usare il bot (vuoto = nessun controllo) |
 | `CLOUD_OFFICE_URL`, `CLOUD_OFFICE_USER`, `CLOUD_OFFICE_PASSWORD` | Registratore di cassa 4CloudOffice |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Invio backup via email |
 | `IMAP_HOST`, `IMAP_PORT`, `IMAP_USER`, `IMAP_PASSWORD`, `IMAP_FOLDER`, `IMAP_SEARCH_FROM` | Recupero fatture SDI dalla casella email |
