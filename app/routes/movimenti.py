@@ -2,7 +2,7 @@ import os
 from datetime import date
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
-from werkzeug.utils import secure_filename
+import uuid
 from app import db
 from app.models import Transaction, Category, RevenueStream, Contact, Tag
 from app.utils.decorators import write_required, section_required
@@ -124,16 +124,11 @@ def _save_transaction(t):
         if f and f.filename:
             ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
             if ext in ALLOWED_EXTENSIONS:
-                filename = secure_filename(f.filename)
+                # nome casuale: non indovinabile e senza sovrascritture
+                filename = f"{uuid.uuid4().hex}.{ext}"
                 upload_dir = os.path.join(current_app.config["UPLOAD_FOLDER"], "movimenti")
                 os.makedirs(upload_dir, exist_ok=True)
-                filepath = os.path.join(upload_dir, filename)
-                # Avoid overwriting: append id or timestamp
-                if os.path.exists(filepath):
-                    base, extension = os.path.splitext(filename)
-                    filename = f"{base}_{int(date.today().strftime('%Y%m%d%H%M'))}_{id(t)}{extension}"
-                    filepath = os.path.join(upload_dir, filename)
-                f.save(filepath)
+                f.save(os.path.join(upload_dir, filename))
                 t.attachment_path = f"movimenti/{filename}"
 
         # Tags

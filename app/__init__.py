@@ -15,6 +15,10 @@ csrf = CSRFProtect()
 def create_app():
     app = Flask(__name__)
     app.config.from_object("app.config.Config")
+    # Dietro Caddy: IP reale del client e schema https dagli header X-Forwarded-*
+    # (la porta è pubblicata solo su 127.0.0.1, quindi gli header arrivano solo dal proxy)
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     # Ensure data directory exists
     os.makedirs(os.path.join(app.root_path, "..", "data"), exist_ok=True)
@@ -41,6 +45,18 @@ def create_app():
     @login_manager.user_loader
     def load_user(user_id):
         return db.session.get(User, int(user_id))
+
+    @app.before_request
+    def _proteggi_uploads():
+        # Allegati (bolle, fatture, ricevute) stanno sotto static/ ma non devono essere
+        # pubblici: solo per utenti loggati. normpath evita aggiramenti tipo "./uploads/..".
+        import posixpath
+        from flask import request, abort
+        from flask_login import current_user
+        if request.endpoint == "static" and not current_user.is_authenticated:
+            filename = posixpath.normpath((request.view_args or {}).get("filename", "")).lstrip("/")
+            if filename == "uploads" or filename.startswith("uploads/"):
+                abort(404)
 
     # Register blueprints
     from app.routes.auth import bp as auth_bp

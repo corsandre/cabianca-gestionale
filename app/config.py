@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,6 +11,15 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max upload
     UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "uploads")
+
+    # Cookie solo su HTTPS (produzione dietro Caddy). COOKIE_SECURE=0 solo per installazioni LAN in http,
+    # altrimenti il browser non rimanda il cookie e il login non funziona.
+    SESSION_COOKIE_SECURE = os.getenv("COOKIE_SECURE", "1") != "0"
+    SESSION_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_SECURE = SESSION_COOKIE_SECURE
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_DURATION = timedelta(days=30)
 
     # Azienda
     COMPANY_PIVA = "01846180196"
