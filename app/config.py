@@ -26,7 +26,9 @@ class Config:
 
     # Telegram
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+    TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")  # notifiche finanza (scadenze, banca, cassa, SDI…)
+    # notifiche di sistema (backup…); vuoto = vanno anche loro in TELEGRAM_CHAT_ID
+    TELEGRAM_SISTEMA_CHAT_ID = os.getenv("TELEGRAM_SISTEMA_CHAT_ID", "")
     # Gruppo aziendale: il bot risponde solo lì e, in privato, solo ai suoi membri (vuoto = tutti)
     TELEGRAM_GROUP_ID = os.getenv("TELEGRAM_GROUP_ID", "")
 

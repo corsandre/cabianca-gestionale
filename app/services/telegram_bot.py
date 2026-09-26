@@ -8,10 +8,13 @@ import requests
 logger = logging.getLogger(__name__)
 
 
-def send_telegram_message(message: str):
-    """Send a message via Telegram bot."""
+def send_telegram_message(message: str, canale: str = "finanza"):
+    """Invia una notifica via bot. canale="finanza" → TELEGRAM_CHAT_ID;
+    canale="sistema" → TELEGRAM_SISTEMA_CHAT_ID (se vuoto, ripiega su TELEGRAM_CHAT_ID)."""
     token = current_app.config.get("TELEGRAM_BOT_TOKEN", "")
     chat_id = current_app.config.get("TELEGRAM_CHAT_ID", "")
+    if canale == "sistema":
+        chat_id = current_app.config.get("TELEGRAM_SISTEMA_CHAT_ID") or chat_id
 
     if not token or not chat_id:
         logger.debug("Telegram not configured, skipping notification.")

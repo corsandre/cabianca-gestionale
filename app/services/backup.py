@@ -42,7 +42,7 @@ def run_backup():
 
     try:
         from app.services.telegram_bot import send_telegram_message
-        send_telegram_message(f"Backup completato: {backup_filename}")
+        send_telegram_message(f"Backup completato: {backup_filename}", canale="sistema")
     except Exception:
         pass
 

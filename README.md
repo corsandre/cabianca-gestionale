@@ -193,9 +193,14 @@ struttura fisica vanno aggiornate in entrambi i file.
 
 ## Bot Telegram
 
-Due usi dello stesso bot (`TELEGRAM_BOT_TOKEN`):
+Due usi dello stesso bot (`TELEGRAM_BOT_TOKEN`), su tre gruppi Telegram (allevamento, finanza, notifiche di sistema):
 
-1. **Notifiche** (`app/services/telegram_bot.py`) verso `TELEGRAM_CHAT_ID`: scadenze di pagamento, prodotti di inventario sotto scorta minima, esito dei backup.
+1. **Notifiche** (`app/services/telegram_bot.py`, `send_telegram_message(testo, canale=...)`), inviate a gruppi dedicati:
+   - canale `finanza` → `TELEGRAM_CHAT_ID` (gruppo *Finanza*): scadenze arretrate e dei prossimi 7 giorni, avvisi banca
+     (import CBI mancante, movimenti da riconciliare, esito import), scorte basse dell'inventario, sincronizzazione
+     cassa, fatture SDI importate da email;
+   - canale `sistema` → `TELEGRAM_SISTEMA_CHAT_ID` (gruppo *Notifiche sistema*): backup e notifiche tecniche future.
+   Nei gruppi delle notifiche il bot non risponde ai comandi e ignora i messaggi.
 2. **Bot allevamento** (`app/services/allevamento_bot.py`), avviato in un thread all'avvio dell'app. Menu a
    pulsanti con percorsi guidati:
    - 📋 Censimento, 🍽️ Registra consumo (linea → pasto → mangime → siero → acqua), 💀 Registra morte,
@@ -317,7 +322,9 @@ Il file `.env` (creato da `setup.sh`, mai committato) contiene:
 | `SECRET_KEY` | Chiave per le sessioni Flask |
 | `DATABASE_URL` | Default `sqlite:///data/gestionale.db` |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_DISPLAY_NAME` | Utente admin creato al primo avvio |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Bot allevamento + chat delle notifiche. **Un solo server alla volta può usare il token** |
+| `TELEGRAM_BOT_TOKEN` | Token del bot. **Un solo server alla volta può usare il token** |
+| `TELEGRAM_CHAT_ID` | Gruppo (o chat) delle notifiche finanza |
+| `TELEGRAM_SISTEMA_CHAT_ID` | Gruppo delle notifiche di sistema (backup); vuoto = in `TELEGRAM_CHAT_ID` |
 | `TELEGRAM_GROUP_ID` | Gruppo aziendale autorizzato a usare il bot (vuoto = nessun controllo) |
 | `CLOUD_OFFICE_URL`, `CLOUD_OFFICE_USER`, `CLOUD_OFFICE_PASSWORD` | Registratore di cassa 4CloudOffice |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Invio backup via email |

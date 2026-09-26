@@ -1041,6 +1041,14 @@ def start_bot(app):
     except ValueError:
         logger.error("TELEGRAM_GROUP_ID non è un numero: controllo accessi disattivato.")
         gruppo = {"id": None}
+    # gruppi che ricevono solo notifiche (finanza, sistema): lì il bot non risponde e non logga
+    gruppi_notifiche = set()
+    for chiave in ("TELEGRAM_CHAT_ID", "TELEGRAM_SISTEMA_CHAT_ID"):
+        try:
+            if int(app.config.get(chiave) or 0) < 0:
+                gruppi_notifiche.add(int(app.config.get(chiave)))
+        except ValueError:
+            pass
     _utente_corrente = contextvars.ContextVar("utente_corrente", default=None)
     _proprietari = {}   # (chat_id, message_id) -> (user_id, nome) dei messaggi con menu nei gruppi
     _membri = {}        # user_id -> (autorizzato, istante del controllo)
@@ -1093,6 +1101,9 @@ def start_bot(app):
             gruppo["id"] = chat.id
             logger.warning(f"Bot Telegram: il gruppo è diventato supergruppo, nuovo ID {chat.id}: "
                            f"aggiornare TELEGRAM_GROUP_ID nel .env")
+
+        if in_gruppo and chat.id in gruppi_notifiche:
+            raise ApplicationHandlerStop
 
         if gruppo["id"] is None:
             if in_gruppo:
