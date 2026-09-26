@@ -1103,15 +1103,37 @@ def start_bot(app):
     import asyncio
 
     async def _run_bot():
-        async with tg_app:
-            await tg_app.bot.set_my_commands([
-                BotCommand("start", "Apri il menu principale"),
-                BotCommand("menu", "Apri il menu principale"),
-                BotCommand("cancel", "Annulla l'operazione in corso"),
-            ])
-            await tg_app.start()
-            await tg_app.updater.start_polling(drop_pending_updates=True)
-            await asyncio.Event().wait()  # block until task is cancelled
+        # Riprova all'infinito: se Telegram non risponde all'avvio (es. rete non ancora
+        # pronta dopo un riavvio del server) il bot non deve restare spento per sempre.
+        # Una volta connesso, gli errori di rete durante il polling li gestisce PTB.
+        attesa = 5
+        while True:
+            try:
+                async with tg_app:
+                    try:
+                        await tg_app.bot.set_my_commands([
+                            BotCommand("start", "Apri il menu principale"),
+                            BotCommand("menu", "Apri il menu principale"),
+                            BotCommand("cancel", "Annulla l'operazione in corso"),
+                        ])
+                    except Exception as e:
+                        logger.warning(f"Bot Telegram: menu comandi non impostato ({e})")
+                    await tg_app.start()
+                    try:
+                        await tg_app.updater.start_polling(drop_pending_updates=True)
+                        logger.info("Bot Telegram allevamento connesso.")
+                        attesa = 5
+                        await asyncio.Event().wait()  # block until task is cancelled
+                    finally:
+                        # shutdown() (uscita dal with) rifiuta un'app ancora in esecuzione
+                        if tg_app.updater.running:
+                            await tg_app.updater.stop()
+                        if tg_app.running:
+                            await tg_app.stop()
+            except Exception as e:
+                logger.error(f"Bot Telegram: errore ({e!r}), nuovo tentativo tra {attesa}s")
+                await asyncio.sleep(attesa)
+                attesa = min(attesa * 2, 300)
 
     def _run():
         loop = asyncio.new_event_loop()
