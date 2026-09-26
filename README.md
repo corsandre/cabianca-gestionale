@@ -17,6 +17,7 @@ per le operazioni quotidiane di stalla.
 - [Utenti, ruoli e accesso alle sezioni](#utenti-ruoli-e-accesso-alle-sezioni)
 - [Attività pianificate](#attività-pianificate)
 - [Backup e ripristino](#backup-e-ripristino)
+- [Sicurezza](#sicurezza)
 - [Configurazione (.env)](#configurazione-env)
 - [Installazione](#installazione)
 - [Deploy di un aggiornamento](#deploy-di-un-aggiornamento)
@@ -260,6 +261,41 @@ APScheduler gira nel processo dell'app (fuso `Europe/Rome`):
 
 ---
 
+## Sicurezza
+
+**Server (VPS)**
+- **fail2ban** sul servizio SSH (`/etc/fail2ban/jail.local`): 5 tentativi falliti in 10 minuti → ban di 1 ora,
+  che cresce per chi ritorna fino a 1 settimana. `ignoreip` contiene localhost, l'IP della sede e la rete
+  ZeroTier, per non bloccare gli accessi legittimi. Stato: `sudo fail2ban-client status sshd`;
+  sbloccare un IP: `sudo fail2ban-client set sshd unbanip <ip>`.
+- Login di root via SSH disattivato; accesso con chiave (il login con password è ancora attivo, protetto da fail2ban).
+- Aggiornamenti di sicurezza automatici (`unattended-upgrades`).
+- `.env` con permessi `600`.
+
+**Caddy** (`/etc/caddy/Caddyfile`)
+- HTTPS con certificati automatici e redirect da HTTP.
+- Header: `Strict-Transport-Security`, `X-Content-Type-Options`, `X-Frame-Options: SAMEORIGIN`,
+  `Referrer-Policy`, `Permissions-Policy`; header `Server` rimosso.
+- **Log degli accessi** in `/var/log/caddy/access.log` (JSON, IP reale del client, rotazione 20 MB × 10 file,
+  max 30 giorni). A differenza dei log del container, sopravvive ai deploy.
+- Dopo ogni modifica: `sudo caddy validate --config /etc/caddy/Caddyfile` e `sudo systemctl reload caddy`.
+  Attenzione: `validate` eseguito come root crea il file di log se manca, di proprietà di root, e il reload poi
+  fallisce con `permission denied` (Caddy resta sulla configurazione precedente, il sito non si ferma):
+  `sudo chown caddy:caddy /var/log/caddy/access.log`.
+
+**Applicazione**
+- Login: dopo 5 tentativi falliti in 15 minuti dallo stesso IP (o 20 sullo stesso utente da IP diversi) il login
+  è bloccato per 15 minuti (HTTP 429). I tentativi falliti finiscono nel log con utente e IP. Il contatore è in
+  memoria e si azzera al riavvio.
+- L'IP reale arriva da Caddy tramite `X-Forwarded-For` (`ProxyFix`).
+- Il parametro `next` del login accetta solo percorsi interni (niente redirect verso siti esterni).
+- Cookie di sessione e "ricordami" `Secure`, `HttpOnly`, `SameSite=Lax`; "ricordami" valido 30 giorni.
+- CSRF su tutti i form (Flask-WTF), password con bcrypt.
+- Gli allegati in `app/static/uploads/` (foto bolle, fatture, ricevute) sono serviti solo agli utenti loggati;
+  i nuovi file hanno nomi casuali.
+
+---
+
 ## Configurazione (.env)
 
 Il file `.env` (creato da `setup.sh`, mai committato) contiene:
@@ -275,6 +311,7 @@ Il file `.env` (creato da `setup.sh`, mai committato) contiene:
 | `IMAP_HOST`, `IMAP_PORT`, `IMAP_USER`, `IMAP_PASSWORD`, `IMAP_FOLDER`, `IMAP_SEARCH_FROM` | Recupero fatture SDI dalla casella email |
 | `APP_PORT` | Porta del container (default 8080) |
 | `APP_BIND` | Interfaccia su cui pubblicare la porta: `127.0.0.1` dietro reverse proxy (produzione), `0.0.0.0` (default) in LAN |
+| `COOKIE_SECURE` | `1` (default): cookie solo su HTTPS. `0` solo se l'app è usata in http (LAN senza proxy), altrimenti il login non funziona |
 | `APP_HOST`, `APP_DEBUG` | Opzioni di esecuzione |
 
 Le impostazioni modificabili dal pannello (backup, scorte, orari pasti, soglie…) stanno invece nella tabella
@@ -419,6 +456,9 @@ Dockerfile  docker-compose.yml  gunicorn.conf.py  setup.sh  requirements.txt
 | Le modifiche al codice non si vedono | Serve `docker compose build --no-cache` + `up -d`, non `restart` |
 | Backup non creati ogni notte | Controllare la frequenza in Impostazioni → Backup (`Backup saltato…` nei log) |
 | Email del backup non arriva | Credenziali `SMTP_*` o destinatario in Impostazioni → Backup |
+| Login impossibile in LAN via http | Impostare `COOKIE_SECURE=0` in `.env` |
+| "Troppi tentativi falliti" al login | Blocco anti-forzatura: attendere 15 minuti o riavviare il container |
+| Reload di Caddy fallito con `permission denied` sul log | `sudo chown caddy:caddy /var/log/caddy/access.log` |
 | Foto bolla non caricata | Connessione instabile: la consegna è salvata, ricaricare la foto dall'icona 📷 |
 
 ---
