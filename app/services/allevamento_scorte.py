@@ -27,6 +27,7 @@ DEFAULTS = {
     "allevamento_soglia_mangime_pasti": "6",
     "allevamento_soglia_scarto_siero_q": "5",
     "allevamento_ordine_mangime_q": "300",
+    "allevamento_perc_ss_mangime": "100",  # % sostanza secca del mangime, per la s.s. in Alimentazione
 }
 
 ORARIO_KEYS = {

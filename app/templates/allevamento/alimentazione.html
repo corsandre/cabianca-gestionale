@@ -4,7 +4,17 @@
 {% block content %}
 <style>
 .cb-pasto-futuro { opacity: .55; }
+/* riga della sostanza secca: stessa voce grigia della % Brix, attaccata alla riga del pasto */
+.cb-riga-con-ss > td { border-bottom-width: 0; }
+.cb-riga-ss > td { padding-top: 0; font-size: .75rem; line-height: 1.2; white-space: nowrap; }
 </style>
+{% macro ss_testo(v, capi, per_giorno=false) %}
+{%- if v[0] is not none -%}
+<span title="Sostanza secca {{ 'del giorno' if per_giorno else 'del pasto' }}{{ (' su ' ~ capi ~ ' capi') if capi else '' }}">
+s.s. {{ '%.0f'|format(v[0]) }} kg{% if v[1] is not none %} · {{ '%.2f'|format(v[1]) }} kg/capo{{ '/giorno' if per_giorno }}{% endif %}
+</span>
+{%- endif -%}
+{% endmacro %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="mb-0"><i class="bi bi-basket me-2" style="color:#c2185b"></i>Registra consumo</h4>
 </div>
@@ -55,7 +65,7 @@
             </thead>
             <tbody>
                 {% for pasto in [1,2,3] %}
-                <tr class="{{ 'cb-pasto-futuro' if not avvenuto[pasto] else '' }}">
+                <tr class="cb-riga-con-ss {{ 'cb-pasto-futuro' if not avvenuto[pasto] else '' }}">
                     <td class="fw-bold">
                         Pasto {{ pasto }}
                         {% if not avvenuto[pasto] %}
@@ -96,9 +106,16 @@
                     <td class="fw-bold text-center">{{ totale_per_pasto[pasto].siero | round(2) }}</td>
                     <td class="fw-bold text-center">{{ totale_per_pasto[pasto].acqua | round(2) }}</td>
                 </tr>
+                <tr class="cb-riga-ss text-muted {{ 'cb-pasto-futuro' if not avvenuto[pasto] else '' }}">
+                    <td></td>
+                    {% for linea in [1,2,3] %}
+                    <td colspan="4" style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">{{ ss_testo(ss[(pasto, linea)], capi_linea[linea]) }}</td>
+                    {% endfor %}
+                    <td colspan="3" class="text-center" style="border-left:2px solid #dee2e6">{{ ss_testo(ss[(pasto, 'tot')], capi_totali) }}</td>
+                </tr>
                 {% endfor %}
                 <!-- Totali -->
-                <tr class="table-light fw-bold">
+                <tr class="table-light fw-bold cb-riga-con-ss">
                     <td>Totale</td>
                     {% for linea in [1,2,3] %}
                     <td class="{{ 'border-start border-2' if loop.first else '' }}" style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">{{ totali[linea].mangime | round(1) }}</td>
@@ -109,6 +126,13 @@
                     <td class="text-center border-start border-2" style="border-left:2px solid #dee2e6;color:#c2185b">{{ totale_giorno.mangime | round(2) }}</td>
                     <td class="text-center" style="color:#c2185b">{{ totale_giorno.siero | round(2) }}</td>
                     <td class="text-center" style="color:#c2185b">{{ totale_giorno.acqua | round(2) }}</td>
+                </tr>
+                <tr class="table-light cb-riga-ss text-muted">
+                    <td></td>
+                    {% for linea in [1,2,3] %}
+                    <td colspan="4" style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">{{ ss_testo(ss[('giorno', linea)], capi_linea[linea], per_giorno=true) }}</td>
+                    {% endfor %}
+                    <td colspan="3" class="text-center" style="border-left:2px solid #dee2e6">{{ ss_testo(ss[('giorno', 'tot')], capi_totali, per_giorno=true) }}</td>
                 </tr>
             </tbody>
         </table>
@@ -130,6 +154,10 @@
         tipo mangime: <strong>{{ tipo_mangime_attuale or 'non ancora impostato' }}</strong>,
         % sostanza secca siero: <strong>{{ (perc_ss_siero_attuale ~ '%') if perc_ss_siero_attuale is not none else 'non ancora impostata' }}</strong>.
         Se mancano, registrale nella pagina <a href="{{ url_for('allevamento.consegne') }}">Consegne</a>.
+        <br><i class="bi bi-info-circle me-1 invisible"></i>
+        Sostanza secca (s.s.): mangime al {{ '%g'|format(perc_ss_mangime) }}% (da <a href="{{ url_for('allevamento.impostazioni') }}">Impostazioni</a>)
+        + siero alla % Brix del suo carico; per capo sui suini presenti quel giorno
+        (linea 1: {{ capi_linea[1] }}, linea 2: {{ capi_linea[2] }}, linea 3: {{ capi_linea[3] }}).
     </div>
 
     <button type="submit" class="btn" style="background:#c2185b;color:#fff">

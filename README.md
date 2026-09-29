@@ -143,6 +143,10 @@ struttura fisica vanno aggiornate in entrambi i file.
   quando tutte le linee attive hanno un valore e l'orario configurato è passato.
 - I pasti non inseriti vengono stimati copiando l'ultimo reale (`stimato=True`), mai in modo retroattivo.
 - % di sostituzione della sostanza secca con il siero calcolata sul consumo reale e sulla % s.s. del carico in uso.
+- Sotto ogni pasto, in grigio, la **sostanza secca** per linea e totale: kg di s.s. (mangime alla % s.s. impostata
+  in Impostazioni, default 100%, + siero alla % Brix del suo carico) e kg di s.s. per capo, sui suini presenti
+  nei capannoni della linea in quel giorno (ricostruiti da censimento, mortalità e spostamenti fino a quella data).
+  Sotto il totale gli stessi valori per l'intera giornata.
 
 #### Razione box (`/allevamento/razione`)
 - Percentuale di razione per box, in una griglia settimanale.

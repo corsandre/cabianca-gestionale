@@ -80,11 +80,15 @@ def _get_ciclo_attivo():
     return Ciclo.query.filter_by(attivo=True).order_by(Ciclo.data_inizio.desc()).first()
 
 
-def _live_count(ciclo):
+def _live_count(ciclo, al_giorno=None):
+    """Capi per box: ultimo censimento ± mortalità e spostamenti successivi.
+    Con al_giorno ricostruisce la situazione a quella data (censimento e
+    eventi fino a quel giorno incluso), altrimenti ad adesso."""
     from app.models import Censimento, EventoMortalita, Spostamento
-    ultimo = Censimento.query.filter_by(ciclo_id=ciclo.id).order_by(
-        Censimento.data.desc(), Censimento.id.desc()
-    ).first()
+    q_cens = Censimento.query.filter_by(ciclo_id=ciclo.id)
+    if al_giorno:
+        q_cens = q_cens.filter(Censimento.data <= al_giorno)
+    ultimo = q_cens.order_by(Censimento.data.desc(), Censimento.id.desc()).first()
     if not ultimo:
         return {b: 0 for b in range(1, 55)}
 
@@ -95,6 +99,7 @@ def _live_count(ciclo):
     morti = EventoMortalita.query.filter(
         EventoMortalita.ciclo_id == ciclo.id,
         EventoMortalita.data >= ultimo.data,
+        *([EventoMortalita.data <= al_giorno] if al_giorno else []),
     ).all()
     for m in morti:
         if m.box_numero:
@@ -111,6 +116,7 @@ def _live_count(ciclo):
     spostamenti = Spostamento.query.filter(
         Spostamento.ciclo_id == ciclo.id,
         Spostamento.data >= ultimo.data,
+        *([Spostamento.data <= al_giorno] if al_giorno else []),
     ).all()
     for s in spostamenti:
         if s.tipo == "interno":
@@ -1176,12 +1182,50 @@ def alimentazione():
                 totali[linea]["mangime"], totali[linea]["siero"], perc_ss_siero_attuale
             )
 
+    # Sostanza secca (kg) per pasto/linea e per capo, con i capi presenti quel giorno
+    from app.services.allevamento_scorte import get_setting_float
+    perc_ss_mangime = get_setting_float("allevamento_perc_ss_mangime") or 100
+    capi_linea = {linea: 0 for linea in [1, 2, 3]}
+    if ciclo:
+        for box, capi in _live_count(ciclo, al_giorno=data_sel).items():
+            if box in LINEA_PER_BOX:
+                capi_linea[LINEA_PER_BOX[box]] += capi
+    capi_totali = sum(capi_linea.values())
+
+    def _ss_kg(p):
+        """kg di s.s. di un pasto/linea; None se c'è siero ma non si conosce il suo Brix."""
+        if p is None or (p.mangime_qli is None and p.siero_qli is None):
+            return None
+        brix = p.perc_ss_siero_rif if p.perc_ss_siero_rif is not None else perc_ss_siero_attuale
+        if p.siero_qli and brix is None:
+            return None
+        return (p.mangime_qli or 0) * 100 * perc_ss_mangime / 100 + (p.siero_qli or 0) * 100 * (brix or 0) / 100
+
+    def _per_capo(kg, capi):
+        return kg / capi if kg is not None and capi else None
+
+    ss = {}  # chiavi (pasto, linea), (pasto, "tot"), ("giorno", linea), ("giorno", "tot") -> (kg, kg per capo)
+    for pasto in [1, 2, 3]:
+        for linea in [1, 2, 3]:
+            kg = _ss_kg(pasti.get((pasto, linea)))
+            ss[(pasto, linea)] = (kg, _per_capo(kg, capi_linea[linea]))
+    for pasto in [1, 2, 3]:
+        valori = [ss[(pasto, l)][0] for l in [1, 2, 3] if ss[(pasto, l)][0] is not None]
+        kg = sum(valori) if valori else None
+        ss[(pasto, "tot")] = (kg, _per_capo(kg, capi_totali))
+    for chiave in [1, 2, 3, "tot"]:
+        valori = [ss[(p, chiave)][0] for p in [1, 2, 3] if ss[(p, chiave)][0] is not None]
+        kg = sum(valori) if valori else None
+        ss[("giorno", chiave)] = (kg, _per_capo(kg, capi_totali if chiave == "tot" else capi_linea[chiave]))
+
     return render_template("allevamento/alimentazione.html",
                            ciclo=ciclo, data_sel=data_sel, pasti=pasti, avvenuto=avvenuto,
                            totali=totali, tipo_mangime_attuale=tipo_mangime_attuale,
                            perc_ss_siero_attuale=perc_ss_siero_attuale,
                            perc_sostituzione=perc_sostituzione,
-                           totale_per_pasto=totale_per_pasto, totale_giorno=totale_giorno)
+                           totale_per_pasto=totale_per_pasto, totale_giorno=totale_giorno,
+                           ss=ss, capi_linea=capi_linea, capi_totali=capi_totali,
+                           perc_ss_mangime=perc_ss_mangime)
 
 
 @bp.route("/alimentazione/new", methods=["POST"])
@@ -1763,6 +1807,7 @@ def impostazioni():
         "soglia_mangime_pasti_extra": soglia_mangime_pasti_extra,
         "ordine_mangime_q": get_setting_float("allevamento_ordine_mangime_q"),
         "soglia_scarto_siero_q": get_setting_float("allevamento_soglia_scarto_siero_q"),
+        "perc_ss_mangime": get_setting_float("allevamento_perc_ss_mangime"),
         "orario_pasto_1": orario_pasto_str(1),
         "orario_pasto_2": orario_pasto_str(2),
         "orario_pasto_3": orario_pasto_str(3),
@@ -1822,7 +1867,7 @@ def impostazioni_scorte():
     from app.services.allevamento_scorte import set_setting
     campi_numerici = [
         "allevamento_capacita_mangime_q", "allevamento_soglia_scarto_siero_q",
-        "allevamento_ordine_mangime_q",
+        "allevamento_ordine_mangime_q", "allevamento_perc_ss_mangime",
     ]
     campi_orario = [
         "allevamento_orario_pasto_1", "allevamento_orario_pasto_2", "allevamento_orario_pasto_3",

@@ -85,6 +85,12 @@
                     </div>
                 </div>
                 <div class="mt-2">
+                    <label class="form-label small">% sostanza secca del mangime</label>
+                    <input type="number" name="allevamento_perc_ss_mangime" class="form-control form-control-sm"
+                           step="0.1" min="1" max="100" value="{{ scorte_settings.perc_ss_mangime }}" style="max-width:150px">
+                    <div class="form-text">Usata per la sostanza secca in Alimentazione (100 = mangime considerato tutto secco).</div>
+                </div>
+                <div class="mt-2">
                     <label class="form-label small">Soglia riordino</label>
                     <div class="d-flex align-items-center gap-2">
                         <input type="number" name="soglia_mangime_giorni" class="form-control form-control-sm"
