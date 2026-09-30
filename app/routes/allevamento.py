@@ -721,7 +721,9 @@ def spostamenti_delete(sp_id):
 def consegne():
     _check_allevamento()
     from app.models import ConsegnaSiero, ConsegnaMangime, SpeditoreSiero
-    from app.services.allevamento_scorte import stato_mangime, stato_siero, scarto_consegna_siero, get_setting_float
+    from app.services.allevamento_scorte import (
+        stato_mangime, stato_siero, scarto_consegna_siero, get_setting_float, attribuzione_siero,
+    )
     ciclo = _get_ciclo_attivo()
 
     tab = request.args.get("tab", "siero")
@@ -750,6 +752,7 @@ def consegne():
                            scorta_mangime=stato_mangime(), scorta_siero=stato_siero(),
                            scarti_siero=scarti_siero,
                            speditori=SpeditoreSiero.query.order_by(SpeditoreSiero.azienda, SpeditoreSiero.indirizzo).all(),
+                           attribuzione_siero=attribuzione_siero()["carichi"],
                            oggi=date.today())
 
 
@@ -883,6 +886,44 @@ def speditori_delete(sid):
     return redirect(url_for("allevamento.consegne", tab="siero") + "#speditori")
 
 
+def avvisi_nuovo_carico_siero(carico):
+    """Dopo aver registrato un carico di siero, segnala i pasti il cui siero potrebbe essere
+    finito nel carico sbagliato per colpa dell'orario (vedi attribuzione_siero):
+    - pasti a cisterna vuota attribuiti automaticamente a questo carico;
+    - l'ultimo pasto con siero nelle 3 ore prima dell'arrivo, rimasto nel carico precedente:
+      potrebbe essere stato rimandato per aspettare lo scarico (se il pasto è di molte ore
+      prima, es. pasto 1 con carico alle 10, è normale che resti nel carico precedente).
+    Ritorna una lista di messaggi (vuota se non c'è niente da segnalare)."""
+    from app.services.allevamento_scorte import (
+        attribuzione_siero, invalida_attribuzione_siero, _inizio_carico, orario_pasto_str,
+    )
+    invalida_attribuzione_siero()
+    att = attribuzione_siero()
+    giorno = lambda d: "di oggi" if d == date.today() else f"del {d.strftime('%d/%m')}"
+    avvisi = []
+    for p in att["carichi"].get(carico.id, {}).get("a_cisterna_vuota", []):
+        avvisi.append(
+            f"Il pasto {p['pasto']} {giorno(p['data'])} ({p['istante'].strftime('%H:%M')}) risulta dato a cisterna "
+            f"vuota: i suoi {p['siero']:.1f} q di siero sono stati attribuiti a questo carico. "
+            f"Se l'orario era diverso, indicalo in Alimentazione."
+        )
+    arrivo = _inizio_carico(carico)
+    prima = [
+        p for cid, v in att["carichi"].items() if cid != carico.id
+        for p in v["pasti"]
+        if p["data"] == arrivo.date() and arrivo - timedelta(hours=3) <= p["istante"] < arrivo
+        and not p["orario_effettivo"]
+    ]
+    if prima:
+        p = max(prima, key=lambda x: x["istante"])
+        avvisi.append(
+            f"Il pasto {p['pasto']} {giorno(p['data'])} (orario standard {orario_pasto_str(p['pasto'])}) è stato "
+            f"conteggiato nel carico precedente. Se è stato dato dopo l'arrivo di questo carico, "
+            f"indica l'orario effettivo in Alimentazione."
+        )
+    return avvisi
+
+
 @bp.route("/consegne/siero/new", methods=["POST"])
 @login_required
 def consegne_siero_new():
@@ -920,6 +961,8 @@ def consegne_siero_new():
         # La cisterna viene sempre svuotata prima del carico: chiude il periodo precedente.
         chiudi_consegne_siero_precedenti(data_consegna, ora)
         db.session.commit()
+        for avviso in avvisi_nuovo_carico_siero(c):
+            flash(avviso, "warning")
         if ajax:
             return jsonify(id=c.id, redirect=url_for("allevamento.consegne", tab="siero"))
         flash(f"Consegna siero registrata: {qty} qli.", "success")
@@ -1139,8 +1182,10 @@ def alimentazione():
     except ValueError:
         data_sel = date.today()
 
-    from app.services.allevamento_scorte import pasto_avvenuto
+    from app.services.allevamento_scorte import pasto_avvenuto, orario_pasto_str, orario_effettivo
     avvenuto = {pasto: pasto_avvenuto(data_sel, pasto) for pasto in [1, 2, 3]}
+    orari_standard = {pasto: orario_pasto_str(pasto) for pasto in [1, 2, 3]}
+    orari_effettivi = {pasto: orario_effettivo(data_sel, pasto) for pasto in [1, 2, 3]}
 
     pasti = {}
     if ciclo:
@@ -1225,7 +1270,43 @@ def alimentazione():
                            perc_sostituzione=perc_sostituzione,
                            totale_per_pasto=totale_per_pasto, totale_giorno=totale_giorno,
                            ss=ss, capi_linea=capi_linea, capi_totali=capi_totali,
-                           perc_ss_mangime=perc_ss_mangime)
+                           perc_ss_mangime=perc_ss_mangime,
+                           orari_standard=orari_standard, orari_effettivi=orari_effettivi)
+
+
+@bp.route("/alimentazione/orario", methods=["POST"])
+@login_required
+def alimentazione_orario():
+    """Registra (o toglie, con ora vuota) l'orario effettivo di un pasto in un giorno.
+    Vedi il docstring di services/allevamento_scorte.py per dove viene usato."""
+    _check_allevamento()
+    from datetime import time as dt_time
+    from app.models import OrarioPastoEffettivo
+    data_str = request.form.get("data", str(date.today()))
+    try:
+        data_pasto = date.fromisoformat(data_str)
+        pasto = int(request.form.get("pasto", 0))
+        if pasto not in (1, 2, 3):
+            raise ValueError("Pasto non valido.")
+        ora_str = request.form.get("ora", "").strip()
+        riga = OrarioPastoEffettivo.query.filter_by(data=data_pasto, pasto=pasto).first()
+        if ora_str:
+            ora = dt_time.fromisoformat(ora_str)
+            if riga:
+                riga.ora = ora
+            else:
+                riga = OrarioPastoEffettivo(data=data_pasto, pasto=pasto, ora=ora)
+                db.session.add(riga)
+            riga.operatore = current_user.display_name or current_user.username
+            flash(f"Pasto {pasto} del {data_pasto.strftime('%d/%m')}: orario effettivo {ora.strftime('%H:%M')}.", "success")
+        elif riga:
+            db.session.delete(riga)
+            flash(f"Pasto {pasto} del {data_pasto.strftime('%d/%m')}: torna all'orario standard.", "success")
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
+    return redirect(url_for("allevamento.alimentazione", data=data_str))
 
 
 @bp.route("/analisi")

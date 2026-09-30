@@ -522,6 +522,21 @@ class UsoPasto(db.Model):
     ciclo = db.relationship("Ciclo", backref="uso_pasti")
 
 
+class OrarioPastoEffettivo(db.Model):
+    """Orario reale di un pasto in un giorno preciso, quando è stato dato a un'ora diversa
+    da quella standard di Impostazioni (es. pasto ritardato per aspettare il carico di siero).
+    Vale per il pasto intero (tutte le linee) e sostituisce l'orario standard ovunque:
+    attribuzione del siero ai carichi, giacenze, stime, "pasto avvenuto"."""
+    __tablename__ = "orari_pasto_effettivi"
+    __table_args__ = (db.UniqueConstraint("data", "pasto", name="uq_orario_pasto_effettivo"),)
+    id = db.Column(db.Integer, primary_key=True)
+    data = db.Column(db.Date, nullable=False)
+    pasto = db.Column(db.Integer, nullable=False)
+    ora = db.Column(db.Time, nullable=False)
+    operatore = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class RazioneBox(db.Model):
     __tablename__ = "razioni_box_v2"
     id = db.Column(db.Integer, primary_key=True)

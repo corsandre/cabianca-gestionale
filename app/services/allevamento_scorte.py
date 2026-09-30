@@ -17,6 +17,32 @@ Un pasto del giorno corrente viene inserito automaticamente come "stimato"
 vanno esclusi dai consumi finché l'orario configurato del pasto non è
 passato, altrimenti la giacenza risulterebbe scalata in anticipo (anche
 negativa) per pasti che devono ancora avvenire.
+
+Orario di un pasto
+------------------
+Ogni pasto ha un istante: il giorno + l'orario standard di Impostazioni
+(allevamento_orario_pasto_1/2/3), oppure l'orario effettivo registrato per
+quel giorno in Alimentazione (OrarioPastoEffettivo) quando il pasto è stato
+dato a un'altra ora. _datetime_pasto() è l'unico punto che calcola l'istante,
+quindi l'orario effettivo vale ovunque: pasto avvenuto/sbiadito, giacenze e
+stime di mangime e siero, attribuzione del siero ai carichi.
+
+Attribuzione del siero ai carichi (attribuzione_siero)
+------------------------------------------------------
+Un carico copre l'intervallo [ora di arrivo, ora di chiusura): la chiusura è
+l'arrivo del carico successivo (la cisterna si svuota sempre prima) oppure
+"cisterna vuota" segnata a mano. Il siero di un pasto va:
+1. al carico aperto nell'istante del pasto;
+2. se in quell'istante nessun carico era aperto (cisterna segnata vuota e
+   carico nuovo non ancora arrivato) ma il pasto ha usato siero, quel siero
+   non può che venire dal carico successivo: il pasto viene attribuito al
+   primo carico arrivato dopo (pasto "a cisterna vuota", evidenziato in
+   Consegne). È la rete di sicurezza per i pasti ritardati di cui non è stato
+   indicato l'orario effettivo;
+3. se non c'è ancora un carico successivo, il pasto resta non attribuito
+   finché il carico non viene registrato.
+Un pasto nello stesso minuto dell'arrivo di un carico appartiene al carico
+nuovo (la cisterna è stata svuotata e ricaricata prima del pasto).
 """
 from datetime import date, datetime, timedelta, time as dt_time
 from app import db
@@ -56,13 +82,38 @@ def orario_pasto(pasto):
         return None
 
 
+def _orari_effettivi():
+    """{(data, pasto): ora} degli orari effettivi registrati. Letti una volta per
+    contesto (richiesta web, operazione del bot, job) perché _datetime_pasto è
+    chiamato in cicli lunghi; invalidare con invalida_orari_effettivi() dopo
+    averli modificati nella stessa richiesta."""
+    from flask import g
+    from app.models import OrarioPastoEffettivo
+    if "_orari_pasto_effettivi" not in g:
+        g._orari_pasto_effettivi = {(o.data, o.pasto): o.ora for o in OrarioPastoEffettivo.query.all()}
+    return g._orari_pasto_effettivi
+
+
+def invalida_orari_effettivi():
+    from flask import g
+    g.pop("_orari_pasto_effettivi", None)
+    g.pop("_attribuzione_siero", None)
+
+
+def orario_effettivo(data_pasto, pasto):
+    """Ora effettiva registrata per quel pasto in quel giorno, o None se vale l'orario standard."""
+    return _orari_effettivi().get((data_pasto, pasto))
+
+
 def _datetime_pasto(data_pasto, pasto):
-    """Istante nominale in cui un pasto avviene, secondo l'orario configurato."""
-    return datetime.combine(data_pasto, orario_pasto(pasto) or dt_time(0, 0))
+    """Istante in cui un pasto avviene: l'orario effettivo di quel giorno se registrato,
+    altrimenti l'orario standard di Impostazioni. Unico punto in cui si calcola."""
+    ora = orario_effettivo(data_pasto, pasto) or orario_pasto(pasto) or dt_time(0, 0)
+    return datetime.combine(data_pasto, ora)
 
 
 def pasto_avvenuto(data_pasto, pasto, adesso=None):
-    """True se l'orario nominale del pasto è già passato rispetto ad adesso.
+    """True se l'orario del pasto (effettivo o standard) è già passato rispetto ad adesso.
     Puramente basato sull'orario: usato per il display (es. righe sbiadite
     in Alimentazione), non garantisce che i dati siano completi su tutte
     le linee — per quello vedi pasto_completo()."""
@@ -225,13 +276,79 @@ def consegna_siero_aperta():
     ).first()
 
 
+def _inizio_carico(c):
+    return datetime.combine(c.data, c.ora or dt_time(0, 0))
+
+
+def _fine_carico(c):
+    """Istante di chiusura (escluso dal carico), None se il carico è ancora aperto."""
+    if not c.data_esaurimento:
+        return None
+    return datetime.combine(c.data_esaurimento, c.ora_esaurimento or dt_time(23, 59, 59))
+
+
+def attribuzione_siero():
+    """Assegna il siero di ogni pasto completo a un carico (regole nel docstring del modulo).
+
+    Ritorna {"carichi": {id_consegna: {"consumo": q, "pasti": [...], "a_cisterna_vuota": [...]}},
+             "non_attribuiti": [...]}, dove ogni pasto è
+    {"data", "pasto", "istante", "siero", "orario_effettivo"}. Calcolata una volta per contesto;
+    invalidare con invalida_attribuzione_siero() dopo aver cambiato carichi, pasti o orari."""
+    from flask import g
+    if "_attribuzione_siero" in g:
+        return g._attribuzione_siero
+
+    carichi = sorted(ConsegnaSiero.query.all(), key=lambda c: (_inizio_carico(c), c.id))
+    esito = {"carichi": {c.id: {"consumo": 0.0, "pasti": [], "a_cisterna_vuota": []} for c in carichi},
+             "non_attribuiti": []}
+
+    # siero per pasto (somma delle linee), solo pasti avvenuti e completi su tutte le linee attive
+    linee_attive = _linee_attive()
+    per_pasto = {}
+    for riga in UsoPasto.query.filter(UsoPasto.siero_qli > 0).all():
+        per_pasto[(riga.data, riga.pasto)] = per_pasto.get((riga.data, riga.pasto), 0) + riga.siero_qli
+    for (data_p, pasto), siero in sorted(per_pasto.items()):
+        if not pasto_completo("siero_qli", data_p, pasto, linee_attive):
+            continue
+        istante = _datetime_pasto(data_p, pasto)
+        voce = {"data": data_p, "pasto": pasto, "istante": istante, "siero": siero,
+                "orario_effettivo": orario_effettivo(data_p, pasto) is not None}
+
+        aperti = [c for c in carichi
+                  if _inizio_carico(c) <= istante and (_fine_carico(c) is None or istante < _fine_carico(c))]
+        if aperti:
+            dest = esito["carichi"][aperti[-1].id]
+            dest["consumo"] += siero
+            dest["pasti"].append(voce)
+            continue
+
+        # cisterna vuota nell'istante del pasto: solo se un carico precedente esiste (prima del
+        # primo carico in assoluto non c'è niente da attribuire) e ne è già arrivato uno dopo
+        precedente = any(_inizio_carico(c) <= istante for c in carichi)
+        successivo = next((c for c in carichi if _inizio_carico(c) > istante), None)
+        if precedente and successivo:
+            dest = esito["carichi"][successivo.id]
+            dest["consumo"] += siero
+            dest["pasti"].append(voce)
+            dest["a_cisterna_vuota"].append(voce)
+        else:
+            esito["non_attribuiti"].append(voce)
+
+    g._attribuzione_siero = esito
+    return esito
+
+
+def invalida_attribuzione_siero():
+    from flask import g
+    g.pop("_attribuzione_siero", None)
+
+
 def giacenza_siero():
     """None se non c'è nessuna consegna aperta (cisterna vuota, in attesa di carico)."""
     c = consegna_siero_aperta()
     if not c:
         return None
-    dal = datetime.combine(c.data, c.ora or dt_time(0, 0))
-    usato = _somma_consumo("siero_qli", dal=dal)
+    usato = attribuzione_siero()["carichi"][c.id]["consumo"]
     return {"consegna": c, "usato": usato, "giacenza": c.quantita_qli - usato}
 
 
@@ -507,9 +624,7 @@ def scarto_consegna_siero(consegna, soglia_q=None):
     nel periodo con la quantità dichiarata (non pesata) alla consegna."""
     if not consegna.data_esaurimento:
         return None
-    dal = datetime.combine(consegna.data, consegna.ora or dt_time(0, 0))
-    al = datetime.combine(consegna.data_esaurimento, consegna.ora_esaurimento or dt_time(23, 59, 59))
-    consumo = _somma_consumo("siero_qli", dal=dal, al=al)
+    consumo = attribuzione_siero()["carichi"].get(consegna.id, {}).get("consumo", 0.0)
     scarto = consumo - consegna.quantita_qli
     scarto_pct = (scarto / consegna.quantita_qli * 100) if consegna.quantita_qli else None
     in_allerta = soglia_q is not None and abs(scarto) >= soglia_q

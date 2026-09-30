@@ -73,6 +73,21 @@ s.s. {{ '%.0f'|format(v[0]) }} kg{% if v[1] is not none %} · {{ '%.2f'|format(v
                             <i class="bi bi-clock"></i>
                         </span>
                         {% endif %}
+                        <div>
+                            {% if orari_effettivi[pasto] %}
+                            <button type="button" class="btn btn-link p-0 small fw-normal text-decoration-none badge bg-warning-subtle text-warning-emphasis"
+                                    data-bs-toggle="modal" data-bs-target="#modalOrario{{ pasto }}"
+                                    title="Orario effettivo di questo giorno (standard {{ orari_standard[pasto] }}): clic per modificarlo">
+                                <i class="bi bi-clock-history"></i> {{ orari_effettivi[pasto].strftime('%H:%M') }}
+                            </button>
+                            {% else %}
+                            <button type="button" class="btn btn-link p-0 small fw-normal text-muted text-decoration-none"
+                                    data-bs-toggle="modal" data-bs-target="#modalOrario{{ pasto }}"
+                                    title="Orario standard: clic se questo pasto è stato dato a un'altra ora">
+                                {{ orari_standard[pasto] }}
+                            </button>
+                            {% endif %}
+                        </div>
                     </td>
                     {% for linea in [1,2,3] %}
                     {% set p = pasti.get((pasto, linea)) %}
@@ -146,6 +161,8 @@ s.s. {{ '%.0f'|format(v[0]) }} kg{% if v[1] is not none %} · {{ '%.2f'|format(v
         <i class="bi bi-clock me-1"></i>
         Le righe sbiadite sono pasti non ancora avvenuti in base agli orari impostati: il dato (anche se stimato)
         non viene ancora conteggiato nelle scorte. Cambia gli orari in <a href="{{ url_for('allevamento.impostazioni') }}">Impostazioni</a>.
+        Se un pasto è stato dato a un'ora diversa (es. rimandato per aspettare il siero), clicca il suo orario
+        sotto "Pasto": l'orario effettivo decide anche da quale carico di siero viene scalato.
     </p>
 
     <div class="cb-card p-3 mb-3 small text-muted">
@@ -164,6 +181,46 @@ s.s. {{ '%.0f'|format(v[0]) }} kg{% if v[1] is not none %} · {{ '%.2f'|format(v
         <i class="bi bi-floppy me-1"></i>Salva consumo
     </button>
 </form>
+
+{% for pasto in [1,2,3] %}
+<div class="modal fade" id="modalOrario{{ pasto }}" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#c2185b;color:#fff">
+                <h5 class="modal-title"><i class="bi bi-clock-history me-2"></i>Pasto {{ pasto }} · {{ data_sel.strftime('%d/%m') }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('allevamento.alimentazione_orario') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="data" value="{{ data_sel.isoformat() }}">
+                <input type="hidden" name="pasto" value="{{ pasto }}">
+                <div class="modal-body">
+                    <label class="form-label" for="oraPasto{{ pasto }}">Orario effettivo</label>
+                    <input type="time" name="ora" id="oraPasto{{ pasto }}" class="form-control" required
+                           value="{{ orari_effettivi[pasto].strftime('%H:%M') if orari_effettivi[pasto] else orari_standard[pasto] }}">
+                    <div class="form-text">
+                        Orario standard: {{ orari_standard[pasto] }}. Vale solo per questo giorno e per tutte le linee.
+                        Serve a scalare il siero dal carico giusto (es. pasto rimandato per aspettare lo scarico)
+                        e a considerare il pasto avvenuto all'ora vera.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn" style="background:#c2185b;color:#fff">Salva orario</button>
+                </div>
+            </form>
+            {% if orari_effettivi[pasto] %}
+            <form method="post" action="{{ url_for('allevamento.alimentazione_orario') }}" class="px-3 pb-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="data" value="{{ data_sel.isoformat() }}">
+                <input type="hidden" name="pasto" value="{{ pasto }}">
+                <input type="hidden" name="ora" value="">
+                <button type="submit" class="btn btn-sm btn-outline-secondary w-100">Torna all'orario standard ({{ orari_standard[pasto] }})</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endfor %}
 {% endif %}
 {% endblock %}
 

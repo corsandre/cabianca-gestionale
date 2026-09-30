@@ -614,25 +614,37 @@ def start_bot(app):
             if not ciclo:
                 await update.message.reply_text("⚠️ Nessun ciclo attivo.")
                 return ConversationHandler.END
+            # l'ora di arrivo è quella della registrazione: serve per chiudere il carico
+            # precedente e per scalare ogni pasto dal carico giusto (come dal web)
+            from datetime import datetime as _dt
+            adesso = _dt.now().replace(second=0, microsecond=0)
+            avvisi = []
             if tipo == "siero":
-                db.session.add(ConsegnaSiero(
-                    ciclo_id=ciclo.id, data=date.today(),
+                from app.services.allevamento_scorte import chiudi_consegne_siero_precedenti
+                from app.routes.allevamento import avvisi_nuovo_carico_siero
+                carico = ConsegnaSiero(
+                    ciclo_id=ciclo.id, data=adesso.date(), ora=adesso.time(),
                     quantita_qli=qty, speditore_id=ctx.user_data.get("consegna_speditore_id"),
                     perc_sostanza_secca=ctx.user_data.get("consegna_ss"),
                     bolla_path=bolla_path,
-                ))
+                )
+                db.session.add(carico)
+                chiudi_consegne_siero_precedenti(adesso.date(), adesso.time())
+                db.session.commit()
+                avvisi = avvisi_nuovo_carico_siero(carico)
             else:
                 db.session.add(ConsegnaMangime(
-                    ciclo_id=ciclo.id, data=date.today(),
+                    ciclo_id=ciclo.id, data=adesso.date(), ora=adesso.time(),
                     quantita_qli=qty, tipo_mangime=extra,
                     bolla_path=bolla_path,
                 ))
-            db.session.commit()
+                db.session.commit()
 
         emoji = "🚚" if tipo == "siero" else "🌾"
         foto_txt = " (con foto bolla)" if bolla_path else ""
+        avvisi_txt = "".join(f"\n\n⚠️ {a}" for a in avvisi)
         await update.message.reply_text(
-            f"{emoji} {qty} qli {tipo} registrati{foto_txt}.\n\nUsa /start per continuare."
+            f"{emoji} {qty} qli {tipo} registrati alle {adesso.strftime('%H:%M')}{foto_txt}.{avvisi_txt}\n\nUsa /start per continuare."
         )
         return ConversationHandler.END
 

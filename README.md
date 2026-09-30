@@ -138,6 +138,40 @@ struttura fisica vanno aggiornate in entrambi i file.
 - Stime: pasti/giorni residui (simulazione pasto per pasto ripetendo l'ultimo pasto completo, non una media
   storica) e data/ora in cui ci sarà spazio nei silos per un nuovo carico da riordinare.
 
+#### Orari dei pasti e attribuzione del siero ai carichi
+Il gestionale non registra quando la cucina distribuisce davvero un pasto: ogni pasto ha un **istante**, che è
+il giorno più l'orario standard di Impostazioni (es. pasto 2 alle 12:50). Da quell'istante dipendono: se il pasto
+è già avvenuto (righe sbiadite e scorte), giacenze e stime di mangime e siero, e **da quale carico di siero viene
+scalato**. Il calcolo sta tutto in `app/services/allevamento_scorte.py` (docstring del modulo).
+
+- **Orario effettivo.** Se un pasto viene dato a un'altra ora (es. rimandato per aspettare lo scarico del siero),
+  in Alimentazione si clicca l'orario sotto "Pasto N" e si indica l'ora reale di quel giorno
+  (`OrarioPastoEffettivo`, tabella `orari_pasto_effettivi`; vale per tutte le linee). L'orario effettivo sostituisce
+  quello standard ovunque, perché `_datetime_pasto()` è l'unico punto che calcola l'istante di un pasto. Si toglie
+  con "Torna all'orario standard".
+- **Carico di siero = intervallo [arrivo, chiusura).** Un carico si chiude all'arrivo del successivo (la cisterna si
+  svuota sempre prima) o con "cisterna vuota" segnata a mano. Un pasto nello stesso minuto dell'arrivo appartiene
+  al carico nuovo.
+- **Regole di attribuzione** (`attribuzione_siero()`, una sola funzione usata sia per la giacenza del carico aperto
+  sia per consumo e scarto dei carichi chiusi):
+  1. il siero di un pasto va al carico aperto nell'istante del pasto;
+  2. **rete di sicurezza**: se in quell'istante nessun carico era aperto (cisterna segnata vuota, carico nuovo non
+     ancora arrivato) ma il pasto ha usato siero, quel siero non può che venire dal carico successivo e viene
+     attribuito lì. In Consegne, nella colonna Periodo del carico compare "incl. pasto N del gg/mm, dato a cisterna
+     vuota";
+  3. se il carico successivo non è ancora stato registrato, il pasto resta non attribuito finché non arriva
+     (idem per i pasti precedenti al primo carico in assoluto).
+  Contano solo i pasti avvenuti e completi su tutte le linee con animali.
+- **Avvisi alla registrazione di un carico** (web e bot, `avvisi_nuovo_carico_siero()`): segnala i pasti attribuiti
+  al carico perché dati a cisterna vuota, e l'ultimo pasto con siero nelle 3 ore prima dell'arrivo rimasto nel carico
+  precedente, che potrebbe essere stato rimandato. In entrambi i casi suggerisce di indicare l'orario effettivo.
+- **Bot**: un carico registrato da Telegram prende come ora di arrivo l'ora della registrazione e chiude il carico
+  precedente, come dal web.
+
+Esempio (30/09): carico precedente segnato vuoto il 29/09 alle 18:37, carico nuovo arrivato alle 14:43, pasto 2
+rimandato a dopo lo scarico ma con orario standard 12:50. Senza orario effettivo il pasto cade a cisterna vuota e la
+regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade direttamente nel carico nuovo.
+
 #### Alimentazione (`/allevamento/alimentazione`)
 - Consumi reali per **pasto (1/2/3) e linea**: mangime, siero, acqua (quintali). Un pasto conta come completo solo
   quando tutte le linee attive hanno un valore e l'orario configurato è passato.

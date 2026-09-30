@@ -127,6 +127,11 @@
                         </button>
                     </form>
                     {% endif %}
+                    {% for p in attribuzione_siero.get(c.id, {}).get('a_cisterna_vuota', []) %}
+                    <div class="small text-warning-emphasis" title="All'orario del pasto nessun carico era aperto (cisterna segnata vuota): il siero usato non può che venire da questo carico">
+                        <i class="bi bi-info-circle"></i> incl. pasto {{ p.pasto }} del {{ p.data.strftime('%d/%m') }} ({{ '%.1f'|format(p.siero) }} q), dato a cisterna vuota
+                    </div>
+                    {% endfor %}
                 </td>
                 {% if current_user.role == 'admin' %}
                 <td class="text-nowrap">
