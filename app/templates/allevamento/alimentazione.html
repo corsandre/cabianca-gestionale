@@ -75,15 +75,16 @@ s.s. {{ '%.0f'|format(v[0]) }} kg{% if v[1] is not none %} · {{ '%.2f'|format(v
                         {% endif %}
                         <div>
                             {% if orari_effettivi[pasto] %}
-                            <button type="button" class="btn btn-link p-0 small fw-normal text-decoration-none badge bg-warning-subtle text-warning-emphasis"
+                            {# come le celle: bianco = inserito da voi, giallo = presunto dal gestionale #}
+                            <button type="button" class="btn btn-link p-0 small fw-normal text-decoration-none badge bg-white text-dark border"
                                     data-bs-toggle="modal" data-bs-target="#modalOrario{{ pasto }}"
-                                    title="Orario effettivo di questo giorno (standard {{ orari_standard[pasto] }}): clic per modificarlo">
+                                    title="Orario effettivo inserito per questo giorno (standard {{ orari_standard[pasto] }}): clic per modificarlo">
                                 <i class="bi bi-clock-history"></i> {{ orari_effettivi[pasto].strftime('%H:%M') }}
                             </button>
                             {% else %}
-                            <button type="button" class="btn btn-link p-0 small fw-normal text-muted text-decoration-none"
+                            <button type="button" class="btn btn-link p-0 small fw-normal text-decoration-none badge bg-warning-subtle text-warning-emphasis border border-warning-subtle"
                                     data-bs-toggle="modal" data-bs-target="#modalOrario{{ pasto }}"
-                                    title="Orario standard: clic se questo pasto è stato dato a un'altra ora">
+                                    title="Orario standard presunto: clic se questo pasto è stato dato a un'altra ora">
                                 {{ orari_standard[pasto] }}
                             </button>
                             {% endif %}
@@ -156,6 +157,7 @@ s.s. {{ '%.0f'|format(v[0]) }} kg{% if v[1] is not none %} · {{ '%.2f'|format(v
         <i class="bi bi-square-fill me-1" style="color:#fff3cd;-webkit-text-stroke:1px #ffc107"></i>
         I valori in giallo sono stimati (copiati dal pasto precedente): solo le celle che modifichi davvero
         diventano definitive al salvataggio, le altre restano stime aggiornabili anche se il campo non è vuoto.
+        Vale anche per l'orario sotto "Pasto": in giallo quello standard presunto, in bianco quello effettivo inserito.
     </p>
     <p class="text-muted small">
         <i class="bi bi-clock me-1"></i>

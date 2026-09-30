@@ -145,7 +145,8 @@ il giorno più l'orario standard di Impostazioni (es. pasto 2 alle 12:50). Da qu
 scalato**. Il calcolo sta tutto in `app/services/allevamento_scorte.py` (docstring del modulo).
 
 - **Orario effettivo.** Se un pasto viene dato a un'altra ora (es. rimandato per aspettare lo scarico del siero),
-  in Alimentazione si clicca l'orario sotto "Pasto N" e si indica l'ora reale di quel giorno
+  in Alimentazione si clicca l'orario sotto "Pasto N" (in giallo quello standard presunto, in bianco quello
+  effettivo inserito, come per le celle stimate/inserite) e si indica l'ora reale di quel giorno
   (`OrarioPastoEffettivo`, tabella `orari_pasto_effettivi`; vale per tutte le linee). L'orario effettivo sostituisce
   quello standard ovunque, perché `_datetime_pasto()` è l'unico punto che calcola l'istante di un pasto. Si toglie
   con "Torna all'orario standard".
