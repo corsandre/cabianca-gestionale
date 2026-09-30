@@ -1228,6 +1228,16 @@ def alimentazione():
                            perc_ss_mangime=perc_ss_mangime)
 
 
+@bp.route("/analisi")
+@login_required
+def analisi():
+    _check_allevamento()
+    from app.services.allevamento_analisi import dati_analisi
+    ciclo = _get_ciclo_attivo()
+    return render_template("allevamento/analisi.html", ciclo=ciclo,
+                           dati=dati_analisi(ciclo) if ciclo else None)
+
+
 @bp.route("/alimentazione/new", methods=["POST"])
 @login_required
 def alimentazione_new():

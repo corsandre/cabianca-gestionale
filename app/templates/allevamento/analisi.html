@@ -1,0 +1,830 @@
+{% extends "base.html" %}
+{% block title %}Allevamento – Analisi{% endblock %}
+
+{% block extra_head %}
+<style>
+.cb-analisi {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f7f8fa;
+  --ink: #1d1922;
+  --ink-2: #55525c;
+  --muted: #8a8791;
+  --grid: #e7e8ec;
+  --axis: #c9cbd2;
+  --border: rgba(29, 25, 34, 0.08);
+  --accent: #c2185b;
+  --accent-ink: #ffffff;
+  --accent-soft: #fbe6ee;
+  --l1: #2a78d6;
+  --l2: #e34948;
+  --l3: #008300;
+  --farina: #eda100;
+  --siero: #4a3aa7;
+  --acqua: #1baf7a;
+  --ss: #eb6834;
+  --mort: #c2185b;
+  --good: #0a7d0a;
+  --bad: #d03b3b;
+  --shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.cb-analisi { color: var(--ink); font-size: 14px; line-height: 1.45; display: grid; gap: 16px; }
+.cb-analisi h2 { font-family: "Yeseva One", Georgia, serif; font-weight: 400; margin: 0; text-wrap: balance; }
+.cb-analisi button { font: inherit; }
+.cb-analisi button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+
+
+.cb-analisi .chip { display: inline-flex; align-items: center; gap: 6px; background: var(--accent-soft); color: var(--ink); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; }
+
+/* filtri: una riga sopra tutto ciò che filtrano */
+.cb-analisi .filters {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+  background: var(--bg); padding-block: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.cb-analisi .fgroup { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cb-analisi .flabel { font-size: 12px; color: var(--muted); }
+.cb-analisi .seg { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 2px; box-shadow: var(--shadow); }
+.cb-analisi .seg button { border: 0; background: transparent; padding: 5px 11px; border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px; }
+.cb-analisi .seg button:hover { background: var(--surface-2); }
+.cb-analisi .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.cb-analisi .seg .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.cb-analisi .seg button[aria-pressed="true"] .dot { box-shadow: 0 0 0 2px #fff; }
+.cb-analisi .fnote { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+/* indicatori */
+.cb-analisi .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 12px; }
+.cb-analisi .kpi { background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--border); padding: 12px 14px 10px; display: grid; gap: 2px; align-content: start; }
+.cb-analisi .kpi .lab { font-size: 12.5px; color: var(--ink-2); }
+.cb-analisi .kpi .val { font-size: 26px; font-weight: 600; letter-spacing: -.01em; line-height: 1.15; }
+.cb-analisi .kpi .val small { font-size: 13px; font-weight: 400; color: var(--ink-2); margin-left: 3px; }
+.cb-analisi .kpi .sub { font-size: 12px; color: var(--ink-2); min-height: 17px; }
+.cb-analisi .kpi .delta { font-size: 12px; color: var(--ink-2); display: flex; align-items: center; gap: 4px; min-height: 17px; }
+.cb-analisi .kpi .delta.bad { color: var(--bad); }
+.cb-analisi .kpi .delta.good { color: var(--good); }
+.cb-analisi .kpi canvas { width: 100% !important; height: 34px !important; margin-top: 4px; }
+
+/* card grafici */
+.cb-analisi .grid-2 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }
+.cb-analisi .grid-2e { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 900px) { .cb-analisi .grid-2, .cb-analisi .grid-2e { grid-template-columns: minmax(0, 1fr); } }
+.cb-analisi .card { background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--border); padding: 14px 16px 12px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.cb-analisi .card-head { display: flex; align-items: flex-start; gap: 10px; }
+.cb-analisi .card-head h2 { font-size: 16.5px; }
+.cb-analisi .card-head p { margin: 2px 0 0; color: var(--ink-2); font-size: 12.5px; max-width: 70ch; }
+.cb-analisi .card-head .tbtn { margin-left: auto; flex: none; border: 1px solid var(--border); background: var(--surface-2); border-radius: 8px; padding: 4px 9px; font-size: 12px; cursor: pointer; color: var(--ink-2); }
+.cb-analisi .card-head .tbtn:hover { color: var(--ink); }
+.cb-analisi .legend { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.cb-analisi .legend button { border: 1px solid transparent; background: transparent; border-radius: 8px; padding: 3px 8px; cursor: pointer; font-size: 12.5px; color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px; }
+.cb-analisi .legend button:hover { background: var(--surface-2); }
+.cb-analisi .legend button[aria-pressed="false"] { opacity: .45; }
+.cb-analisi .legend svg { flex: none; }
+.cb-analisi .plot { position: relative; height: 270px; }
+.cb-analisi .plot.short { height: 220px; }
+.cb-analisi .plot.tall { height: 300px; }
+.cb-analisi .tablewrap { overflow-x: auto; max-height: 320px; }
+.cb-analisi .foot { font-size: 12px; color: var(--muted); }
+
+.cb-analisi table.data { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.cb-analisi table.data th, .cb-analisi table.data td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+.cb-analisi table.data th:first-child, .cb-analisi table.data td:first-child { text-align: left; }
+.cb-analisi table.data thead th { color: var(--ink-2); font-weight: 400; position: sticky; top: 0; background: var(--surface); }
+.cb-analisi table.data td.txt { text-align: left; white-space: normal; min-width: 220px; color: var(--ink-2); }
+.cb-analisi table.data tr.tot td { font-weight: 600; border-bottom: 0; }
+
+/* rispetto al peso vivo */
+.cb-analisi .pv { display: grid; gap: 12px; }
+.cb-analisi .pv-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 10px; }
+.cb-analisi .pv-row .nm { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
+.cb-analisi .pv-row .big { font-size: 20px; font-weight: 600; text-align: right; }
+.cb-analisi .pv-row .meta { grid-column: 1 / -1; font-size: 12px; color: var(--ink-2); }
+.cb-analisi .meter { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--grid); overflow: hidden; }
+.cb-analisi .meter i { display: block; height: 100%; border-radius: 3px; }
+
+/* medie per pasto */
+.cb-analisi .bar-in { display: inline-block; height: 6px; border-radius: 3px; vertical-align: middle; margin-left: 6px; opacity: .85; }
+
+.cb-analisi .events { max-height: 250px; overflow-y: auto; }
+.cb-analisi .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-2); }
+.cb-analisi .pill i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+@media (prefers-reduced-motion: reduce) { .cb-analisi * { transition: none !important; animation: none !important; } }
+
+.cb-analisi .chip { display: inline-flex; align-items: center; background: var(--accent-soft); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-baseline gap-2 mb-3">
+    <h4 class="mb-0"><i class="bi bi-graph-up me-2" style="color:#c2185b"></i>Analisi</h4>
+    {% if ciclo %}<span class="cb-analisi-chip" id="cicloChip" style="background:#fbe6ee;border-radius:999px;padding:3px 10px;font-size:12.5px"></span>{% endif %}
+</div>
+
+{% if not ciclo %}
+<div class="cb-card p-4 text-center text-muted">Nessun ciclo attivo.</div>
+{% else %}
+<div class="cb-analisi">
+
+  <div class="filters" role="group" aria-label="Filtri">
+    <div class="fgroup">
+      <span class="flabel" id="lab-periodo">Periodo</span>
+      <div class="seg" id="f-periodo" aria-labelledby="lab-periodo">
+        <button type="button" data-v="7">7 giorni</button>
+        <button type="button" data-v="14">14 giorni</button>
+        <button type="button" data-v="30">30 giorni</button>
+        <button type="button" data-v="ciclo">Tutto il ciclo</button>
+      </div>
+    </div>
+    <div class="fgroup">
+      <span class="flabel" id="lab-linea">Linea</span>
+      <div class="seg" id="f-linea" aria-labelledby="lab-linea">
+        <button type="button" data-v="tutte">Tutte</button>
+        <button type="button" data-v="1"><span class="dot" style="background:var(--l1)"></span>1 · CAP 1-3</button>
+        <button type="button" data-v="2"><span class="dot" style="background:var(--l2)"></span>2 · CAP 4</button>
+        <button type="button" data-v="3"><span class="dot" style="background:var(--l3)"></span>3 · CAP 5-7</button>
+      </div>
+    </div>
+    <div class="fgroup">
+      <span class="flabel" id="lab-vista">Valori</span>
+      <div class="seg" id="f-vista" aria-labelledby="lab-vista">
+        <button type="button" data-v="capo">Per capo</button>
+        <button type="button" data-v="tot">Totali</button>
+      </div>
+    </div>
+    <span class="fnote" id="fnote"></span>
+  </div>
+
+  <section class="kpis" id="kpis" aria-label="Indicatori del periodo"></section>
+
+  <div class="grid-2">
+    <section class="card" id="c-ss">
+      <div class="card-head"><div><h2>Sostanza secca al giorno</h2><p id="c-ss-sub"></p></div><button class="tbtn" type="button" data-table="ss">Tabella</button></div>
+      <div class="legend" data-legend="ss"></div>
+      <div class="plot" data-plot="ss"><canvas aria-label="Sostanza secca al giorno per linea" role="img"></canvas></div>
+      <div class="tablewrap" data-tablefor="ss" hidden></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><div><h2>Rispetto al peso vivo</h2><p>Sostanza secca giornaliera in % del peso medio stimato dalla curva di accrescimento, ultimo giorno completo.</p></div></div>
+      <div class="pv" id="pv"></div>
+    </section>
+  </div>
+
+  <div class="grid-2e">
+    <section class="card">
+      <div class="card-head"><div><h2>Da dove arriva la sostanza secca</h2><p id="c-comp-sub"></p></div><button class="tbtn" type="button" data-table="comp">Tabella</button></div>
+      <div class="legend" data-legend="comp"></div>
+      <div class="plot" data-plot="comp"><canvas aria-label="Sostanza secca da farina e da siero" role="img"></canvas></div>
+      <div class="tablewrap" data-tablefor="comp" hidden></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><div><h2>% di sostituzione con il siero</h2><p>Quota della sostanza secca che arriva dal siero, giorno per giorno.</p></div><button class="tbtn" type="button" data-table="sost">Tabella</button></div>
+      <div class="legend" data-legend="sost"></div>
+      <div class="plot" data-plot="sost"><canvas aria-label="Percentuale di sostituzione" role="img"></canvas></div>
+      <div class="tablewrap" data-tablefor="sost" hidden></div>
+    </section>
+  </div>
+
+  <div class="grid-2e">
+    <section class="card">
+      <div class="card-head"><div><h2>Come cresce la razione</h2><p id="c-idx-sub"></p></div><button class="tbtn" type="button" data-table="idx">Tabella</button></div>
+      <div class="legend" data-legend="idx"></div>
+      <div class="plot" data-plot="idx"><canvas aria-label="Crescita dei componenti della razione, base 100" role="img"></canvas></div>
+      <div class="tablewrap" data-tablefor="idx" hidden></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><div><h2>Medie per pasto</h2><p id="c-pasti-sub"></p></div></div>
+      <div class="tablewrap" style="max-height:none"><table class="data" id="t-pasti"></table></div>
+      <div class="foot" id="pasti-foot"></div>
+    </section>
+  </div>
+
+  <div class="grid-2">
+    <section class="card">
+      <div class="card-head"><div><h2>Mortalità</h2><p id="c-mort-sub"></p></div><button class="tbtn" type="button" data-table="mort">Tabella</button></div>
+      <div class="plot short" data-plot="mort"><canvas aria-label="Capi morti nel tempo" role="img"></canvas></div>
+      <div class="tablewrap" data-tablefor="mort" hidden></div>
+      <div class="events"><table class="data" id="t-eventi"></table></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><div><h2>Mortalità per capannone</h2><p id="c-cap-sub"></p></div><button class="tbtn" type="button" data-table="cap">Tabella</button></div>
+      <div class="legend" id="cap-legend"></div>
+      <div class="plot short" data-plot="cap"><canvas aria-label="Capi morti per capannone" role="img"></canvas></div>
+      <div class="tablewrap" data-tablefor="cap" hidden></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="card-head"><div><h2>Riepilogo settimanale</h2><p>Settimane da lunedì a domenica; l'ultima può essere parziale.</p></div></div>
+    <div class="tablewrap" style="max-height:none"><table class="data" id="t-sett"></table></div>
+  </section>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if ciclo %}
+<script id="dati" type="application/json">{{ dati | tojson }}</script>
+<script>
+(function () {
+  "use strict";
+  const RAW = JSON.parse(document.getElementById("dati").textContent);
+  const LINEE = [1, 2, 3];
+  const CAP_LINEA = { 1: 1, 2: 1, 3: 1, 4: 2, 5: 3, 6: 3, 7: 3 };
+  const PERC_M = RAW.perc_ss_mangime;
+  const SHAPE = { 1: "circle", 2: "triangle", 3: "rect" };   // seconda codifica oltre al colore
+  const OGGI = RAW.oggi;
+
+  // ── formattazione ──────────────────────────────────────────────
+  const nf = (v, d = 0) => v == null || !isFinite(v) ? "–" : v.toLocaleString("it-IT", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const pct = (v, d = 1) => v == null || !isFinite(v) ? "–" : nf(v, d) + "%";
+  const dt = s => new Date(s + "T12:00:00");
+  const ggmm = s => { const d = dt(s); return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0"); };
+  const lungo = s => dt(s).toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" });
+  const addDays = (s, n) => { const d = dt(s); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  const mean = a => { const v = a.filter(x => x != null && isFinite(x)); return v.length ? v.reduce((p, c) => p + c, 0) / v.length : null; };
+  const sum = a => a.reduce((p, c) => p + (c || 0), 0);
+  const css = n => getComputedStyle(document.querySelector(".cb-analisi")).getPropertyValue(n).trim();
+  const el = (tag, attrs = {}, text) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text != null) e.textContent = text; return e; };
+
+  // ── preparazione dati giornalieri ──────────────────────────────
+  // Brix: se un pasto non lo ha, si usa l'ultimo noto (o il primo noto per i giorni iniziali)
+  let primoBrix = null;
+  for (const g of RAW.giorni) for (const l in g.pasti) for (const p of g.pasti[l]) if (p.brix != null && primoBrix == null) primoBrix = p.brix;
+  let ultimoBrix = primoBrix;
+  const giorni = RAW.giorni.map(g => {
+    const r = { data: g.data, L: {} };
+    for (const l of LINEE) {
+      const ps = (g.pasti[l] || []).slice().sort((a, b) => a.pasto - b.pasto);
+      const x = { capi: g.capi[l] || 0, peso: g.peso[l] ?? null, eta: g.eta[l] ?? null, mang: 0, siero: 0, acqua: 0, ssM: 0, ssS: 0, stimati: 0, npasti: ps.length, pasti: {} };
+      for (const p of ps) {
+        if (p.brix != null) ultimoBrix = p.brix;
+        const brix = p.brix ?? ultimoBrix ?? 0;
+        const m = p.mang || 0, s = p.siero || 0, a = p.acqua || 0;
+        x.mang += m; x.siero += s; x.acqua += a;
+        x.ssM += m * 100 * PERC_M / 100; x.ssS += s * 100 * brix / 100;
+        if (p.stimato) x.stimati++;
+        x.pasti[p.pasto] = { mang: m, siero: s, acqua: a, ss: m * 100 * PERC_M / 100 + s * 100 * brix / 100 };
+      }
+      r.L[l] = x;
+    }
+    return r;
+  });
+  // giorni utili per l'alimentazione: con capi (dal primo censimento) e completi (fino a ieri)
+  const IERI = addDays(OGGI, -1);
+  const giorniAlim = giorni.filter(g => sum(LINEE.map(l => g.L[l].capi)) > 0 && g.data <= IERI && LINEE.some(l => g.L[l].npasti));
+
+  function agg(g, linea) {
+    const ls = linea === "tutte" ? LINEE : [Number(linea)];
+    const o = { capi: 0, mang: 0, siero: 0, acqua: 0, ssM: 0, ssS: 0, stimati: 0, pesoTot: 0, pesoCapi: 0, pasti: {} };
+    for (const l of ls) {
+      const x = g.L[l];
+      o.capi += x.capi; o.mang += x.mang; o.siero += x.siero; o.acqua += x.acqua; o.ssM += x.ssM; o.ssS += x.ssS; o.stimati += x.stimati;
+      if (x.peso != null) { o.pesoTot += x.peso * x.capi; o.pesoCapi += x.capi; }
+      for (const [p, v] of Object.entries(x.pasti)) {
+        const t = o.pasti[p] || (o.pasti[p] = { mang: 0, siero: 0, acqua: 0, ss: 0 });
+        t.mang += v.mang; t.siero += v.siero; t.acqua += v.acqua; t.ss += v.ss;
+      }
+    }
+    o.ss = o.ssM + o.ssS;
+    o.ssCapo = o.capi ? o.ss / o.capi : null;
+    o.sost = o.ss ? o.ssS / o.ss * 100 : null;
+    o.peso = o.pesoCapi ? o.pesoTot / o.pesoCapi : null;
+    return o;
+  }
+
+  // ── stato filtri ───────────────────────────────────────────────
+  const state = { periodo: "14", linea: "tutte", vista: "capo" };
+  try { const s = JSON.parse(localStorage.getItem("cb-analisi") || "null"); if (s) Object.assign(state, s); } catch (e) {}
+  const salva = () => { try { localStorage.setItem("cb-analisi", JSON.stringify(state)); } catch (e) {} };
+
+  function periodo() {
+    const n = state.periodo === "ciclo" ? giorniAlim.length : Math.min(Number(state.periodo), giorniAlim.length);
+    const cur = giorniAlim.slice(-n);
+    const prev = state.periodo === "ciclo" ? [] : giorniAlim.slice(Math.max(0, giorniAlim.length - 2 * n), giorniAlim.length - n);
+    return { cur, prev, n };
+  }
+  const lineeSel = () => state.linea === "tutte" ? LINEE : [Number(state.linea)];
+  const lineaNome = l => ({ 1: "Linea 1", 2: "Linea 2", 3: "Linea 3" })[l];
+
+  // ── tema per i grafici ─────────────────────────────────────────
+  let T = {};
+  function leggiTema() {
+    T = {
+      ink: css("--ink"), ink2: css("--ink-2"), muted: css("--muted"), grid: css("--grid"), axis: css("--axis"),
+      surface: css("--surface"), accent: css("--accent"),
+      L: { 1: css("--l1"), 2: css("--l2"), 3: css("--l3") },
+      farina: css("--farina"), siero: css("--siero"), acqua: css("--acqua"), ss: css("--ss"), mort: css("--mort"),
+    };
+    Chart.defaults.font.family = '"Varela Round", system-ui, sans-serif';
+    Chart.defaults.font.size = 12;
+    Chart.defaults.color = T.muted;
+    Chart.defaults.borderColor = T.grid;
+  }
+
+  // mirino verticale che segue il giorno sotto il puntatore
+  const crosshair = {
+    id: "crosshair",
+    afterDatasetsDraw(chart) {
+      const a = chart.tooltip && chart.tooltip.getActiveElements();
+      if (!a || !a.length) return;
+      const x = a[0].element.x, { top, bottom } = chart.chartArea, c = chart.ctx;
+      c.save(); c.strokeStyle = T.axis; c.lineWidth = 1; c.beginPath(); c.moveTo(x, top); c.lineTo(x, bottom); c.stroke(); c.restore();
+    },
+  };
+  // etichette a fine linea, solo se non si sovrappongono (altrimenti bastano legenda e tooltip)
+  const endLabels = {
+    id: "endLabels",
+    afterDatasetsDraw(chart, _a, opts) {
+      if (!opts || !opts.enabled) return;
+      const items = [];
+      chart.data.datasets.forEach((ds, i) => {
+        if (!chart.isDatasetVisible(i)) return;
+        const meta = chart.getDatasetMeta(i);
+        for (let k = ds.data.length - 1; k >= 0; k--) {
+          if (ds.data[k] != null) { const p = meta.data[k]; items.push({ y: p.y, x: p.x, t: ds.endLabel ? ds.endLabel(ds.data[k]) : ds.label }); break; }
+        }
+      });
+      items.sort((a, b) => a.y - b.y);
+      for (let i = 1; i < items.length; i++) if (items[i].y - items[i - 1].y < 14) return;
+      const c = chart.ctx; c.save(); c.fillStyle = T.ink2; c.font = '12px "Varela Round", system-ui, sans-serif'; c.textBaseline = "middle";
+      for (const it of items) c.fillText(it.t, it.x + 9, it.y);
+      c.restore();
+    },
+  };
+  Chart.register(crosshair, endLabels);
+
+  function baseOptions(extra = {}) {
+    return Object.assign({
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: "index", intersect: false },
+      layout: { padding: { right: 8, top: 4 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: T.surface, titleColor: T.ink2, bodyColor: T.ink, borderColor: T.axis, borderWidth: 1,
+          padding: 10, cornerRadius: 8, boxPadding: 4, usePointStyle: true, titleFont: { weight: "400" }, bodyFont: { weight: "600" },
+        },
+      },
+      scales: {
+        x: { grid: { display: false }, border: { color: T.axis }, ticks: { color: T.muted, maxRotation: 0, autoSkipPadding: 12 } },
+        y: { grid: { color: T.grid }, border: { display: false }, ticks: { color: T.muted, padding: 6 } },
+      },
+    }, extra);
+  }
+
+  const charts = {};
+  function draw(key, config) {
+    const box = document.querySelector(`[data-plot="${key}"]`);
+    if (charts[key]) charts[key].destroy();
+    charts[key] = new Chart(box.querySelector("canvas"), config);
+    legenda(key);
+    const tw = document.querySelector(`[data-tablefor="${key}"]`);
+    if (tw && !tw.hidden) tabellaDa(key);
+    return charts[key];
+  }
+
+  function swatch(ds, tipo) {
+    const ns = "http://www.w3.org/2000/svg";
+    const s = document.createElementNS(ns, "svg"); s.setAttribute("width", "18"); s.setAttribute("height", "12"); s.setAttribute("aria-hidden", "true");
+    if (tipo === "bar") {
+      const r = document.createElementNS(ns, "rect"); r.setAttribute("x", "3"); r.setAttribute("y", "1"); r.setAttribute("width", "12"); r.setAttribute("height", "10"); r.setAttribute("rx", "2"); r.setAttribute("fill", ds.backgroundColor); s.appendChild(r);
+    } else {
+      const l = document.createElementNS(ns, "line"); l.setAttribute("x1", "0"); l.setAttribute("x2", "18"); l.setAttribute("y1", "6"); l.setAttribute("y2", "6"); l.setAttribute("stroke", ds.borderColor); l.setAttribute("stroke-width", "2"); s.appendChild(l);
+      const st = ds.pointStyle || "circle";
+      let m;
+      if (st === "triangle") { m = document.createElementNS(ns, "path"); m.setAttribute("d", "M9 1.5 L13.5 9.5 L4.5 9.5 Z"); }
+      else if (st === "rect") { m = document.createElementNS(ns, "rect"); m.setAttribute("x", "5"); m.setAttribute("y", "2"); m.setAttribute("width", "8"); m.setAttribute("height", "8"); }
+      else { m = document.createElementNS(ns, "circle"); m.setAttribute("cx", "9"); m.setAttribute("cy", "6"); m.setAttribute("r", "4"); }
+      m.setAttribute("fill", ds.borderColor); m.setAttribute("stroke", T.surface); m.setAttribute("stroke-width", "1.5"); s.appendChild(m);
+    }
+    return s;
+  }
+  function legenda(key) {
+    const box = document.querySelector(`[data-legend="${key}"]`);
+    if (!box) return;
+    const ch = charts[key];
+    box.replaceChildren();
+    if (ch.data.datasets.length < 2) return;   // una sola serie: basta il titolo
+    ch.data.datasets.forEach((ds, i) => {
+      const b = el("button", { type: "button", "aria-pressed": String(ch.isDatasetVisible(i)) });
+      b.appendChild(swatch(ds, ds.type || ch.config.type));
+      b.appendChild(document.createTextNode(ds.label));
+      b.addEventListener("click", () => { ch.setDatasetVisibility(i, !ch.isDatasetVisible(i)); b.setAttribute("aria-pressed", String(ch.isDatasetVisible(i))); ch.update(); });
+      box.appendChild(b);
+    });
+  }
+
+  // vista tabella di qualunque grafico (stessi numeri, senza passare dal colore)
+  const fmtTab = {};
+  function tabellaDa(key) {
+    const ch = charts[key], tw = document.querySelector(`[data-tablefor="${key}"]`);
+    const f = fmtTab[key] || (v => nf(v, 2));
+    const t = el("table", { class: "data" }), th = el("thead"), hr = el("tr");
+    hr.appendChild(el("th", {}, ""));
+    ch.data.datasets.forEach(ds => hr.appendChild(el("th", {}, ds.label)));
+    th.appendChild(hr); t.appendChild(th);
+    const tb = el("tbody");
+    ch.data.labels.forEach((lab, i) => {
+      const tr = el("tr"); tr.appendChild(el("td", {}, Array.isArray(lab) ? lab.join(" ") : lab));
+      ch.data.datasets.forEach(ds => tr.appendChild(el("td", {}, f(ds.data[i]))));
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb); tw.replaceChildren(t);
+  }
+  document.querySelectorAll("[data-table]").forEach(b => b.addEventListener("click", () => {
+    const k = b.dataset.table, tw = document.querySelector(`[data-tablefor="${k}"]`), pl = document.querySelector(`[data-plot="${k}"]`);
+    const mostra = tw.hidden;
+    tw.hidden = !mostra; pl.hidden = mostra; b.textContent = mostra ? "Grafico" : "Tabella";
+    if (mostra) tabellaDa(k);
+  }));
+
+  // ── indicatori ─────────────────────────────────────────────────
+  function kpi(label, val, unit, sub, delta, spark, sparkColor) {
+    const k = el("article", { class: "kpi" });
+    k.appendChild(el("span", { class: "lab" }, label));
+    const v = el("span", { class: "val" }, val);
+    if (unit) v.appendChild(el("small", {}, unit));
+    k.appendChild(v);
+    k.appendChild(el("span", { class: "sub" }, sub || ""));
+    const d = el("span", { class: "delta" + (delta && delta.cls ? " " + delta.cls : "") });
+    if (delta) d.textContent = delta.text;
+    k.appendChild(d);
+    if (spark) { const c = el("canvas", { "aria-hidden": "true" }); k.appendChild(c); k._spark = { c, spark, sparkColor }; }
+    return k;
+  }
+  function deltaTxt(cur, prev, { unit = "%", buonoSeSale = null, dec = 1 } = {}) {
+    if (cur == null || prev == null || !prev) return { text: "nessun periodo precedente da confrontare" };
+    const d = (cur - prev) / Math.abs(prev) * 100;
+    const freccia = Math.abs(d) < 0.5 ? "=" : d > 0 ? "▲" : "▼";
+    let cls = "";
+    if (buonoSeSale !== null && Math.abs(d) >= 0.5) cls = (d > 0) === buonoSeSale ? "good" : "bad";
+    return { text: `${freccia} ${d > 0 ? "+" : ""}${nf(d, dec)}% sul periodo prima`, cls };
+  }
+  const sparks = [];
+  function drawKpis(P) {
+    const box = document.getElementById("kpis");
+    sparks.forEach(s => s.destroy()); sparks.length = 0;
+    box.replaceChildren();
+    const L = state.linea;
+    const cur = P.cur.map(g => agg(g, L)), prev = P.prev.map(g => agg(g, L));
+    const oggiAgg = agg(giorni[giorni.length - 1], L);
+    const inizioAgg = cur.length ? cur[0] : null;
+
+    // mortalità nel periodo (stesse date dell'alimentazione, tranne "tutto il ciclo")
+    const mort = mortalitaPeriodo();
+    const morti = sum(mort.cur.map(m => m.n)), mortiPrev = sum(mort.prev.map(m => m.n));
+    const base = mort.baseCapi;
+    const ss = mean(cur.map(o => o.ssCapo)), ssPrev = mean(prev.map(o => o.ssCapo));
+    const sost = mean(cur.map(o => o.sost)), sostPrev = mean(prev.map(o => o.sost));
+    const mang = mean(cur.map(o => o.mang)), mangPrev = mean(prev.map(o => o.mang));
+    const sie = mean(cur.map(o => o.siero)), siePrev = mean(prev.map(o => o.siero));
+    const capiMedi = mean(cur.map(o => o.capi));
+
+    box.append(
+      kpi("Capi presenti", nf(oggiAgg.capi), "", inizioAgg ? `${nf(inizioAgg.capi)} a inizio periodo` : "", { text: `peso medio stimato ${nf(oggiAgg.peso, 0)} kg` }),
+      kpi("Mortalità nel periodo", nf(morti), morti === 1 ? "capo" : "capi", `${pct(base ? morti / base * 100 : null, 2)} dei capi`,
+        mort.prev.length || state.periodo !== "ciclo" ? (morti === mortiPrev ? { text: "= come il periodo prima" } : { text: `${morti > mortiPrev ? "▲" : "▼"} ${nf(mortiPrev)} nel periodo prima`, cls: morti > mortiPrev ? "bad" : "good" }) : { text: "" }, mort.spark, "mort"),
+      kpi("Sostanza secca al giorno", nf(ss, 2), "kg/capo", `${nf(mean(cur.map(o => o.ss)), 0)} kg in totale`, deltaTxt(ss, ssPrev), cur.map(o => o.ssCapo), "ss"),
+      kpi("Sostituzione con siero", pct(sost), "", "media del periodo", deltaTxt(sost, sostPrev), cur.map(o => o.sost), "siero"),
+      kpi("Farina al giorno", nf(mang, 1), "q", `${nf(capiMedi ? mang * 100 / capiMedi : null, 2)} kg/capo`, deltaTxt(mang, mangPrev), cur.map(o => o.mang), "farina"),
+      kpi("Siero al giorno", nf(sie, 1), "q", `${nf(capiMedi ? sie * 100 / capiMedi : null, 2)} kg/capo`, deltaTxt(sie, siePrev), cur.map(o => o.siero), "siero"),
+    );
+    // sparkline: tutti grigi con l'ultimo punto nel colore della serie
+    box.querySelectorAll(".kpi").forEach(k => {
+      if (!k._spark) return;
+      const { c, spark, sparkColor } = k._spark, col = T[sparkColor];
+      const n = spark.length;
+      sparks.push(new Chart(c, {
+        type: sparkColor === "mort" ? "bar" : "line",
+        data: { labels: spark.map((_, i) => i), datasets: [{ data: spark, borderColor: T.axis, backgroundColor: sparkColor === "mort" ? spark.map((_, i) => i === n - 1 ? col : T.axis) : T.axis, borderWidth: sparkColor === "mort" ? 0 : 1.5, pointRadius: spark.map((_, i) => i === n - 1 ? 3 : 0), pointBackgroundColor: col, pointBorderWidth: 0, tension: 0.3, borderRadius: 2, maxBarThickness: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, animation: false, events: [], plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false, beginAtZero: sparkColor === "mort" } }, layout: { padding: 3 } },
+      }));
+    });
+  }
+
+  // ── mortalità ──────────────────────────────────────────────────
+  function mortiFiltrati() { return RAW.morti.filter(m => state.linea === "tutte" || CAP_LINEA[m.cap] === Number(state.linea)); }
+  function mortalitaPeriodo() {
+    const P = periodo(), ms = mortiFiltrati();
+    let da, a = IERI, daPrev = null, aPrev = null;
+    if (state.periodo === "ciclo") da = RAW.ciclo.inizio;
+    else { const n = Number(state.periodo); da = addDays(IERI, -(n - 1)); aPrev = addDays(da, -1); daPrev = addDays(da, -n); }
+    const cur = ms.filter(m => m.data >= da && m.data <= a);
+    const prev = daPrev ? ms.filter(m => m.data >= daPrev && m.data <= aPrev) : [];
+    // base per la %: capi del primo giorno con capi nel periodo (per "tutto il ciclo" il primo censimento)
+    const g0 = giorni.find(g => g.data >= da && sum(LINEE.map(l => g.L[l].capi)) > 0) || giorni.find(g => sum(LINEE.map(l => g.L[l].capi)) > 0);
+    const baseCapi = g0 ? agg(g0, state.linea).capi : null;
+    // serie giornaliera o settimanale
+    const giornaliero = state.periodo !== "ciclo";
+    const buckets = [];
+    if (giornaliero) { for (let d = da; d <= a; d = addDays(d, 1)) buckets.push({ da: d, a: d, lab: ggmm(d), n: 0 }); }
+    else {
+      let d = da; const dd = dt(d); const off = (dd.getDay() + 6) % 7; d = addDays(d, -off);
+      for (; d <= a; d = addDays(d, 7)) buckets.push({ da: d, a: addDays(d, 6), lab: ggmm(d), n: 0 });
+    }
+    for (const m of cur) { const b = buckets.find(b => m.data >= b.da && m.data <= b.a); if (b) b.n += m.n; }
+    return { cur, prev, baseCapi, buckets, giornaliero, da, a, spark: buckets.map(b => b.n) };
+  }
+
+  // ── grafici ────────────────────────────────────────────────────
+  function lineDs(label, data, color, shape, extra = {}) {
+    return Object.assign({
+      type: "line", label, data, borderColor: color, backgroundColor: color, borderWidth: 2, tension: 0.25,
+      pointStyle: shape || "circle", pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: color,
+      pointBorderColor: T.surface, pointBorderWidth: 1.5, spanGaps: true,
+    }, extra);
+  }
+
+  function drawAll() {
+    leggiTema();
+    const P = periodo(), labels = P.cur.map(g => ggmm(g.data)), perCapo = state.vista === "capo";
+    const unit = perCapo ? "kg/capo" : "kg";
+    document.getElementById("fnote").textContent = P.cur.length
+      ? `${lungo(P.cur[0].data)} – ${lungo(P.cur[P.cur.length - 1].data)} · la giornata di oggi è in corso ed è esclusa`
+      : "";
+    const primo = giorni.find(g => sum(LINEE.map(l => g.L[l].capi)) > 0);
+    const giornoCiclo = Math.round((dt(OGGI) - dt(RAW.ciclo.inizio)) / 864e5) + 1;
+    document.getElementById("cicloChip").textContent = `${RAW.ciclo.nome} · giorno ${giornoCiclo}`;
+
+    drawKpis(P);
+
+    // 1. sostanza secca per linea
+    const ls = lineeSel();
+    document.getElementById("c-ss-sub").textContent = perCapo
+      ? "Chilogrammi di sostanza secca per capo al giorno, da farina e siero. Passa sopra un giorno per i dettagli."
+      : "Chilogrammi di sostanza secca distribuiti in tutto il giorno, da farina e siero.";
+    fmtTab.ss = v => nf(v, perCapo ? 2 : 0) + " " + unit;
+    draw("ss", {
+      type: "line",
+      data: {
+        labels,
+        datasets: ls.map(l => lineDs(lineaNome(l), P.cur.map(g => { const o = agg(g, l); return perCapo ? o.ssCapo : o.ss; }), T.L[l], SHAPE[l],
+          { endLabel: v => `${l} · ${nf(v, perCapo ? 2 : 0)}` })),
+      },
+      options: baseOptions({
+        layout: { padding: { right: 62, top: 6 } },
+        plugins: Object.assign(baseOptions().plugins, {
+          endLabels: { enabled: true },
+          tooltip: Object.assign(baseOptions().plugins.tooltip, {
+            callbacks: {
+              title: it => lungo(P.cur[it[0].dataIndex].data),
+              label: c => ` ${nf(c.parsed.y, perCapo ? 2 : 0)} ${unit}   ${c.dataset.label}`,
+              afterBody: it => {
+                const g = P.cur[it[0].dataIndex], o = agg(g, state.linea);
+                const r = [`Capi: ${nf(o.capi)}`, `Da siero: ${pct(o.sost)}`];
+                if (o.stimati) r.push(`${o.stimati} pasti stimati (copiati)`);
+                return r;
+              },
+            },
+          }),
+        }),
+        scales: Object.assign(baseOptions().scales, { y: Object.assign(baseOptions().scales.y, { title: { display: true, text: unit, color: T.muted } }) }),
+      }),
+    });
+
+    // 1b. rispetto al peso vivo (ultimo giorno completo)
+    const pv = document.getElementById("pv"); pv.replaceChildren();
+    const ultimo = P.cur[P.cur.length - 1];
+    if (ultimo) {
+      const righe = ls.map(l => ({ l, o: agg(ultimo, l) }));
+      const maxPv = Math.max(...righe.map(r => r.o.peso ? r.o.ssCapo / r.o.peso * 100 : 0), 0.1);
+      for (const { l, o } of righe) {
+        const perc = o.peso ? o.ssCapo / o.peso * 100 : null;
+        const row = el("div", { class: "pv-row" });
+        const nm = el("span", { class: "nm" }); nm.appendChild(swatch({ borderColor: T.L[l], pointStyle: SHAPE[l] }, "line")); nm.appendChild(document.createTextNode(lineaNome(l)));
+        row.appendChild(nm); row.appendChild(el("span")); row.appendChild(el("span", { class: "big" }, pct(perc, 2)));
+        const m = el("div", { class: "meter" }); const i = el("i"); i.style.width = (perc ? perc / maxPv * 100 : 0) + "%"; i.style.background = T.L[l]; m.appendChild(i); row.appendChild(m);
+        row.appendChild(el("span", { class: "meta" }, `${nf(o.ssCapo, 2)} kg s.s. su ${nf(o.peso, 0)} kg di peso medio · ${nf(o.capi)} capi`));
+        pv.appendChild(row);
+      }
+      pv.appendChild(el("div", { class: "foot" }, `Giorno ${lungo(ultimo.data)}. Il peso viene dall'età media dell'ultimo censimento proiettata a quel giorno.`));
+    }
+
+    // 2. composizione farina / siero (barre impilate)
+    const agP = P.cur.map(g => agg(g, state.linea));
+    document.getElementById("c-comp-sub").textContent = (state.linea === "tutte" ? "Tutte le linee. " : lineaNome(state.linea) + ". ") +
+      `Farina considerata al ${nf(PERC_M)}% di s.s. (Impostazioni), siero alla % Brix del suo carico.`;
+    fmtTab.comp = v => nf(v, perCapo ? 2 : 0) + " " + unit;
+    const barDs = (label, data, color, top) => ({ type: "bar", label, data, backgroundColor: color, borderColor: T.surface, borderWidth: top ? { top: 2 } : 0, borderSkipped: "bottom", borderRadius: top ? { topLeft: 4, topRight: 4 } : 0, maxBarThickness: 24, stack: "s" });
+    draw("comp", {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          barDs("Da farina", agP.map(o => perCapo ? (o.capi ? o.ssM / o.capi : null) : o.ssM), T.farina, false),
+          barDs("Da siero", agP.map(o => perCapo ? (o.capi ? o.ssS / o.capi : null) : o.ssS), T.siero, true),
+        ],
+      },
+      options: baseOptions({
+        plugins: Object.assign(baseOptions().plugins, {
+          tooltip: Object.assign(baseOptions().plugins.tooltip, {
+            usePointStyle: false,
+            callbacks: {
+              title: it => lungo(P.cur[it[0].dataIndex].data),
+              label: c => ` ${nf(c.parsed.y, perCapo ? 2 : 0)} ${unit}   ${c.dataset.label}`,
+              footer: it => { const o = agP[it[0].dataIndex]; return `Totale ${nf(perCapo ? o.ssCapo : o.ss, perCapo ? 2 : 0)} ${unit} · siero ${pct(o.sost)}`; },
+            },
+          }),
+        }),
+        scales: { x: Object.assign(baseOptions().scales.x, { stacked: true }), y: Object.assign(baseOptions().scales.y, { stacked: true, title: { display: true, text: unit, color: T.muted } }) },
+      }),
+    });
+
+    // 3. % sostituzione per linea
+    fmtTab.sost = v => pct(v);
+    draw("sost", {
+      type: "line",
+      data: { labels, datasets: ls.map(l => lineDs(lineaNome(l), P.cur.map(g => agg(g, l).sost), T.L[l], SHAPE[l], { endLabel: v => `${l} · ${pct(v, 0)}` })) },
+      options: baseOptions({
+        layout: { padding: { right: 52, top: 6 } },
+        plugins: Object.assign(baseOptions().plugins, {
+          endLabels: { enabled: true },
+          tooltip: Object.assign(baseOptions().plugins.tooltip, { callbacks: { title: it => lungo(P.cur[it[0].dataIndex].data), label: c => ` ${pct(c.parsed.y)}   ${c.dataset.label}` } }),
+        }),
+        scales: Object.assign(baseOptions().scales, { y: Object.assign(baseOptions().scales.y, { beginAtZero: true, ticks: { color: T.muted, callback: v => v + "%" } }) }),
+      }),
+    });
+
+    // 4. crescita dei componenti (base 100 = primo giorno del periodo)
+    const comp = [
+      { k: "mang", label: "Farina", color: T.farina },
+      { k: "siero", label: "Siero", color: T.siero },
+      { k: "acqua", label: "Acqua", color: T.acqua },
+      { k: "ss", label: "Sostanza secca", color: T.ss },
+    ];
+    const val = (o, k) => perCapo ? (o.capi ? o[k] / o.capi : null) : o[k];
+    document.getElementById("c-idx-sub").textContent = `Ogni componente ${perCapo ? "per capo " : ""}messo a 100 il primo giorno del periodo (${P.cur.length ? lungo(P.cur[0].data) : "–"}): sopra 100 è aumentato, sotto è calato. Media mobile di 3 giorni per togliere il rumore dei singoli pasti.`;
+    const mm = arr => arr.map((_, i) => mean(arr.slice(Math.max(0, i - 2), i + 1)));
+    const idxDs = comp.map(c => {
+      const serie = mm(agP.map(o => val(o, c.k)));
+      const b = serie.find(v => v);
+      return lineDs(c.label, serie.map(v => b && v != null ? v / b * 100 : null), c.color, "circle", {
+        pointRadius: 0, pointHoverRadius: 5, endLabel: v => `${c.label} ${v >= 100 ? "+" : ""}${nf(v - 100, 0)}%`,
+      });
+    });
+    fmtTab.idx = v => nf(v, 1);
+    draw("idx", {
+      type: "line",
+      data: { labels, datasets: idxDs },
+      options: baseOptions({
+        layout: { padding: { right: 118, top: 6 } },
+        plugins: Object.assign(baseOptions().plugins, {
+          endLabels: { enabled: true },
+          tooltip: Object.assign(baseOptions().plugins.tooltip, {
+            callbacks: {
+              title: it => lungo(P.cur[it[0].dataIndex].data),
+              label: c => ` ${nf(c.parsed.y, 0)}   ${c.dataset.label} (${c.parsed.y >= 100 ? "+" : ""}${nf(c.parsed.y - 100, 0)}%)`,
+            },
+          }),
+        }),
+        scales: Object.assign(baseOptions().scales, { y: Object.assign(baseOptions().scales.y, { title: { display: true, text: "indice (inizio = 100)", color: T.muted } }) }),
+      }),
+    });
+
+    // 5. medie per pasto
+    const tp = document.getElementById("t-pasti"); tp.replaceChildren();
+    const capiMedi = mean(agP.map(o => o.capi));
+    document.getElementById("c-pasti-sub").textContent = `Quanto si distribuisce in media a ogni pasto nel periodo${state.linea === "tutte" ? ", tutte le linee" : ", " + lineaNome(state.linea)}. In grigio il valore per capo.`;
+    const thead = el("thead"), h = el("tr");
+    ["", "Farina", "Siero", "Acqua", "S.s."].forEach(t => h.appendChild(el("th", {}, t)));
+    thead.appendChild(h); tp.appendChild(thead);
+    const tb = el("tbody");
+    const righeP = [1, 2, 3].map(p => {
+      const vals = { mang: mean(agP.map(o => o.pasti[p] ? o.pasti[p].mang : null)), siero: mean(agP.map(o => o.pasti[p] ? o.pasti[p].siero : null)), acqua: mean(agP.map(o => o.pasti[p] ? o.pasti[p].acqua : null)), ss: mean(agP.map(o => o.pasti[p] ? o.pasti[p].ss : null)) };
+      return { lab: `Pasto ${p}`, vals };
+    });
+    const tot = { lab: "Giorno", vals: { mang: mean(agP.map(o => o.mang)), siero: mean(agP.map(o => o.siero)), acqua: mean(agP.map(o => o.acqua)), ss: mean(agP.map(o => o.ss)) } };
+    const maxV = { mang: Math.max(...righeP.map(r => r.vals.mang || 0)), siero: Math.max(...righeP.map(r => r.vals.siero || 0)), acqua: Math.max(...righeP.map(r => r.vals.acqua || 0)), ss: Math.max(...righeP.map(r => r.vals.ss || 0)) };
+    const col = { mang: T.farina, siero: T.siero, acqua: T.acqua, ss: T.ss };
+    for (const r of [...righeP, tot]) {
+      const tr = el("tr", r === tot ? { class: "tot" } : {});
+      tr.appendChild(el("td", {}, r.lab));
+      for (const k of ["mang", "siero", "acqua", "ss"]) {
+        const td = el("td");
+        const v = r.vals[k];
+        const main = k === "ss" ? `${nf(v, 0)} kg` : `${nf(v, 2)} q`;
+        const perc = capiMedi ? (k === "ss" ? v / capiMedi : v * 100 / capiMedi) : null;
+        td.appendChild(document.createTextNode(main));
+        if (r !== tot) { const b = el("span", { class: "bar-in" }); b.style.width = (maxV[k] ? (v || 0) / maxV[k] * 34 : 0) + "px"; b.style.background = col[k]; td.appendChild(b); }
+        td.appendChild(el("div", { class: "foot" }, `${nf(perc, 2)} kg/capo`));
+        tr.appendChild(td);
+      }
+      tb.appendChild(tr);
+    }
+    tp.appendChild(tb);
+    document.getElementById("pasti-foot").textContent = `Capi medi nel periodo: ${nf(capiMedi)}. 1 q = 100 kg. Le barrette confrontano i tre pasti fra loro.`;
+
+    // 6. mortalità nel tempo
+    const M = mortalitaPeriodo();
+    const mortiTot = sum(M.cur.map(m => m.n));
+    document.getElementById("c-mort-sub").textContent = `${nf(mortiTot)} ${mortiTot === 1 ? "capo" : "capi"} dal ${lungo(M.da)} a ieri` +
+      (M.baseCapi ? `, ${pct(mortiTot / M.baseCapi * 100, 2)} dei ${nf(M.baseCapi)} capi` : "") + `. ${M.giornaliero ? "Un giorno per colonna." : "Una settimana per colonna, a partire dal lunedì."}`;
+    fmtTab.mort = v => nf(v);
+    draw("mort", {
+      type: "bar",
+      data: { labels: M.buckets.map(b => b.lab), datasets: [{ label: "Capi morti", data: M.buckets.map(b => b.n), backgroundColor: T.mort, borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: "bottom", maxBarThickness: 24 }] },
+      options: baseOptions({
+        plugins: Object.assign(baseOptions().plugins, {
+          tooltip: Object.assign(baseOptions().plugins.tooltip, {
+            usePointStyle: false,
+            callbacks: {
+              title: it => { const b = M.buckets[it[0].dataIndex]; return M.giornaliero ? lungo(b.da) : `settimana ${ggmm(b.da)} – ${ggmm(b.a)}`; },
+              label: c => ` ${nf(c.parsed.y)} ${c.parsed.y === 1 ? "capo" : "capi"}`,
+            },
+          }),
+        }),
+        scales: Object.assign(baseOptions().scales, { y: Object.assign(baseOptions().scales.y, { beginAtZero: true, ticks: { color: T.muted, precision: 0 } }) }),
+      }),
+    });
+    // elenco eventi
+    const te = document.getElementById("t-eventi"); te.replaceChildren();
+    const eh = el("thead"), ehr = el("tr");
+    ["Data", "CAP", "Box", "Capi", "Causa"].forEach(t => ehr.appendChild(el("th", {}, t)));
+    eh.appendChild(ehr); te.appendChild(eh);
+    const eb = el("tbody");
+    const evs = M.cur.slice().sort((a, b) => b.data.localeCompare(a.data));
+    if (!evs.length) { const tr = el("tr"); const td = el("td", { colspan: "5", class: "txt" }, "Nessun capo morto nel periodo."); tr.appendChild(td); eb.appendChild(tr); }
+    for (const m of evs) {
+      const tr = el("tr");
+      tr.appendChild(el("td", {}, ggmm(m.data)));
+      const tdc = el("td"); const pl = el("span", { class: "pill" }); const dot = el("i"); dot.style.background = T.L[CAP_LINEA[m.cap]]; pl.appendChild(dot); pl.appendChild(document.createTextNode(String(m.cap))); tdc.appendChild(pl); tr.appendChild(tdc);
+      tr.appendChild(el("td", {}, m.box ? String(m.box) : "–"));
+      tr.appendChild(el("td", {}, String(m.n)));
+      tr.appendChild(el("td", { class: "txt" }, m.causa || "–"));
+      eb.appendChild(tr);
+    }
+    te.appendChild(eb);
+
+    // 7. mortalità per capannone (colore = linea del capannone)
+    const caps = [1, 2, 3, 4, 5, 6, 7].filter(c => state.linea === "tutte" || CAP_LINEA[c] === Number(state.linea));
+    const perCap = caps.map(c => sum(M.cur.filter(m => m.cap === c).map(m => m.n)));
+    document.getElementById("c-cap-sub").textContent = `Capi morti dal ${lungo(M.da)} a ieri. Il colore indica la linea del capannone.`;
+    fmtTab.cap = v => nf(v);
+    draw("cap", {
+      type: "bar",
+      data: { labels: caps.map(c => "CAP " + c), datasets: [{ label: "Capi morti", data: perCap, backgroundColor: caps.map(c => T.L[CAP_LINEA[c]]), borderRadius: { topRight: 4, bottomRight: 4 }, borderSkipped: "left", maxBarThickness: 18 }] },
+      options: baseOptions({
+        indexAxis: "y",
+        interaction: { mode: "nearest", axis: "y", intersect: false },
+        plugins: Object.assign(baseOptions().plugins, { tooltip: Object.assign(baseOptions().plugins.tooltip, { usePointStyle: false, callbacks: { label: c => ` ${nf(c.parsed.x)} ${c.parsed.x === 1 ? "capo" : "capi"} · linea ${CAP_LINEA[caps[c.dataIndex]]}` } }) }),
+        scales: {
+          x: { beginAtZero: true, grid: { color: T.grid }, border: { display: false }, ticks: { color: T.muted, precision: 0 } },
+          y: { grid: { display: false }, border: { color: T.axis }, ticks: { color: T.ink2 } },
+        },
+      }),
+    });
+    const cl = document.getElementById("cap-legend"); cl.replaceChildren();
+    for (const l of ls) { const s = el("span", { class: "pill" }); const i = el("i"); i.style.background = T.L[l]; s.appendChild(i); s.appendChild(document.createTextNode(lineaNome(l))); cl.appendChild(s); }
+
+    // 8. riepilogo settimanale (su tutto il periodo con dati di alimentazione)
+    const ts = document.getElementById("t-sett"); ts.replaceChildren();
+    const sh = el("thead"), shr = el("tr");
+    ["Settimana", "Capi medi", "Morti", "Farina (q)", "Siero (q)", "Acqua (q)", "S.s. kg/capo/g", "Sostituzione", "Peso medio"].forEach(t => shr.appendChild(el("th", {}, t)));
+    sh.appendChild(shr); ts.appendChild(sh);
+    const sb = el("tbody");
+    const sett = {};
+    for (const g of giorniAlim) {
+      const d = dt(g.data), lun = addDays(g.data, -((d.getDay() + 6) % 7));
+      (sett[lun] || (sett[lun] = [])).push(g);
+    }
+    const ms = mortiFiltrati();
+    let prevSS = null;
+    for (const lun of Object.keys(sett).sort()) {
+      const os = sett[lun].map(g => agg(g, state.linea));
+      const ss = mean(os.map(o => o.ssCapo));
+      const tr = el("tr");
+      tr.appendChild(el("td", {}, `${ggmm(lun)} – ${ggmm(addDays(lun, 6))}${sett[lun].length < 7 ? ` (${sett[lun].length} gg)` : ""}`));
+      tr.appendChild(el("td", {}, nf(mean(os.map(o => o.capi)))));
+      tr.appendChild(el("td", {}, nf(sum(ms.filter(m => m.data >= lun && m.data <= addDays(lun, 6)).map(m => m.n)))));
+      tr.appendChild(el("td", {}, nf(sum(os.map(o => o.mang)), 1)));
+      tr.appendChild(el("td", {}, nf(sum(os.map(o => o.siero)), 1)));
+      tr.appendChild(el("td", {}, nf(sum(os.map(o => o.acqua)), 1)));
+      tr.appendChild(el("td", {}, nf(ss, 2) + (prevSS ? `  (${ss >= prevSS ? "+" : ""}${nf((ss - prevSS) / prevSS * 100, 1)}%)` : "")));
+      tr.appendChild(el("td", {}, pct(mean(os.map(o => o.sost)))));
+      tr.appendChild(el("td", {}, nf(mean(os.map(o => o.peso)), 0) + " kg"));
+      sb.appendChild(tr);
+      prevSS = ss;
+    }
+    ts.appendChild(sb);
+  }
+
+  // ── filtri ─────────────────────────────────────────────────────
+  function bindSeg(id, key) {
+    const seg = document.getElementById(id);
+    const sync = () => seg.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === state[key])));
+    seg.addEventListener("click", e => {
+      const b = e.target.closest("button"); if (!b) return;
+      state[key] = b.dataset.v; sync(); salva(); drawAll();
+    });
+    sync();
+  }
+  bindSeg("f-periodo", "periodo"); bindSeg("f-linea", "linea"); bindSeg("f-vista", "vista");
+
+
+  drawAll();
+})();
+</script>
+{% endif %}
+{% endblock %}

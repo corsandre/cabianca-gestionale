@@ -160,6 +160,21 @@ struttura fisica vanno aggiornate in entrambi i file.
   sospensione prima del macello.
 - Modifica, chiusura anticipata con motivazione (accodata alle note), eliminazione.
 
+#### Analisi (`/allevamento/analisi`)
+- Pagina di grafici interattivi sul ciclo attivo, con una riga di filtri che vale per tutta la pagina: periodo
+  (7 / 14 / 30 giorni / tutto il ciclo), linea (tutte o una) e valori per capo o totali. La scelta resta salvata
+  nel browser.
+- Indicatori con sparkline e confronto col periodo precedente: capi presenti, mortalità, sostanza secca per capo al
+  giorno, % di sostituzione con siero, farina e siero medi al giorno.
+- Grafici: sostanza secca al giorno per linea, s.s. in % del peso vivo stimato, s.s. da farina e da siero,
+  % di sostituzione per linea, crescita dei componenti della razione (indice base 100 con media mobile a 3 giorni),
+  medie per pasto, mortalità nel tempo (giornaliera o settimanale), mortalità per capannone con elenco degli eventi,
+  riepilogo settimanale. Ogni grafico ha una vista tabella.
+- Le linee hanno i loro colori (1 blu, 2 rossa, 3 verde) più un simbolo diverso (● ▲ ■), perché rosso e verde non
+  bastano per chi ha difficoltà a distinguere i colori. Palette verificata con lo strumento della skill dataviz.
+- I dati grezzi giornalieri li prepara `app/services/allevamento_analisi.py`; aggregazioni e filtri sono calcolati nel
+  browser, quindi cambiare filtro non ricarica la pagina. La giornata in corso è esclusa dalle medie.
+
 #### Impostazioni allevamento (`/allevamento/impostazioni`, solo admin)
 - Apertura/chiusura ciclo.
 - Curva di accrescimento (età in giorni → peso in kg).
