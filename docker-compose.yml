@@ -10,3 +10,16 @@ services:
     env_file:
       - .env
     restart: unless-stopped
+
+  # Sorveglianza dell'impianto di alimentazione (vedi app/services/impianto/servizio.py).
+  # In modalità "Manuale" (default) non si collega a niente e resta in attesa.
+  impianto:
+    build: .
+    command: python -m app.services.impianto.servizio
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - RUOLO=impianto
+    restart: unless-stopped
