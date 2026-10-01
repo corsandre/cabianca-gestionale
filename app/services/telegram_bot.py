@@ -8,13 +8,21 @@ import requests
 logger = logging.getLogger(__name__)
 
 
-def send_telegram_message(message: str, canale: str = "finanza"):
-    """Invia una notifica via bot. canale="finanza" → TELEGRAM_CHAT_ID;
-    canale="sistema" → TELEGRAM_SISTEMA_CHAT_ID (se vuoto, ripiega su TELEGRAM_CHAT_ID)."""
-    token = current_app.config.get("TELEGRAM_BOT_TOKEN", "")
+def _chat_del_canale(canale):
+    """canale="finanza" → TELEGRAM_CHAT_ID; "sistema" → TELEGRAM_SISTEMA_CHAT_ID; "allevamento" →
+    TELEGRAM_GROUP_ID (gruppo del bot allevamento). Se il gruppo specifico manca, TELEGRAM_CHAT_ID."""
     chat_id = current_app.config.get("TELEGRAM_CHAT_ID", "")
     if canale == "sistema":
         chat_id = current_app.config.get("TELEGRAM_SISTEMA_CHAT_ID") or chat_id
+    elif canale == "allevamento":
+        chat_id = current_app.config.get("TELEGRAM_GROUP_ID") or chat_id
+    return chat_id
+
+
+def send_telegram_message(message: str, canale: str = "finanza"):
+    """Invia una notifica via bot nel gruppo del canale (vedi _chat_del_canale)."""
+    token = current_app.config.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = _chat_del_canale(canale)
 
     if not token or not chat_id:
         logger.debug("Telegram not configured, skipping notification.")
@@ -31,6 +39,23 @@ def send_telegram_message(message: str, canale: str = "finanza"):
         return True
     except Exception as e:
         logger.error(f"Telegram send error: {e}")
+        return False
+
+
+def send_telegram_foto(png: bytes, didascalia: str, canale: str = "sistema"):
+    """Invia una fotografia (PNG) con didascalia nel gruppo del canale."""
+    token = current_app.config.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = _chat_del_canale(canale)
+    if not token or not chat_id:
+        return False
+    try:
+        resp = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto",
+                             data={"chat_id": chat_id, "caption": didascalia[:1000], "parse_mode": "HTML"},
+                             files={"photo": ("schermo.png", png, "image/png")}, timeout=30)
+        resp.raise_for_status()
+        return True
+    except Exception as e:
+        logger.error(f"Telegram send photo error: {e}")
         return False
 
 

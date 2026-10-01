@@ -185,7 +185,10 @@ def create_app():
         _init_db(app)
 
     # Start scheduler for backups and notifications
-    _init_scheduler(app)
+    # il servizio dell'impianto (processo separato) usa l'app solo per il database: niente
+    # scheduler né bot Telegram, che girano già nel processo web
+    if os.environ.get("RUOLO") != "impianto":
+        _init_scheduler(app)
 
     return app
 
@@ -282,6 +285,7 @@ def _init_db(app):
         ("consegne_siero", "speditore_id", "INTEGER REFERENCES speditori_siero(id)"),
         ("spostamenti_animali", "pc_alimentazione_data", "DATETIME"),
         ("spostamenti_animali", "pc_alimentazione_operatore", "VARCHAR(100)"),
+        ("uso_pasti", "fonte", "VARCHAR(20)"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

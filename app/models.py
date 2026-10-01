@@ -517,6 +517,7 @@ class UsoPasto(db.Model):
     perc_siero = db.Column(db.Float)  # % sostituzione sostanza secca da siero nella ricetta
     perc_ss_siero_rif = db.Column(db.Float)  # % s.s. del carico di siero usato per calcolare perc_siero
     stimato = db.Column(db.Boolean, default=False)  # True se copiato dal pasto mattutino, non inserito manualmente
+    fonte = db.Column(db.String(20))  # None/"manuale" = inserito a mano, "impianto" = letto dal PC di alimentazione
     note = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     ciclo = db.relationship("Ciclo", backref="uso_pasti")
@@ -615,4 +616,64 @@ class CalibrazioneGiacenza(db.Model):
     operatore = db.Column(db.String(100))
     note = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# ── Impianto di alimentazione (collegamento opzionale, vedi services/impianto) ──────────────────
+
+class ImpiantoControllo(db.Model):
+    """Esito di un controllo periodico dell'impianto (heartbeat)."""
+    __tablename__ = "impianto_controlli"
+    id = db.Column(db.Integer, primary_key=True)
+    istante = db.Column(db.DateTime, nullable=False, index=True)   # ora reale del controllo
+    raggiungibile = db.Column(db.Boolean, nullable=False)
+    fase = db.Column(db.String(30))
+    stato = db.Column(db.String(200))                  # frase di stato così come scritta dall'impianto
+    ora_pc = db.Column(db.Time)                        # orologio dell'impianto
+    scarto_orologio_s = db.Column(db.Integer)          # ora reale − ora dell'impianto, in secondi
+    prossimo_pasto = db.Column(db.Time)                # orario dell'impianto
+    orari = db.Column(db.String(100))                  # orari dei pasti impostati, es. "07:00,12:50,18:00"
+    errore = db.Column(db.Text)
+
+
+class ImpiantoLinea(db.Model):
+    """Quantitativi di una linea in un pasto letti dall'impianto.
+    stato: proposta (da approvare, modalità con verifica) → approvata/scartata; registrata = scritta
+    nel gestionale in automatico. uso_pasto_id = riga di uso_pasti creata/aggiornata."""
+    __tablename__ = "impianto_letture_linee"
+    __table_args__ = (db.UniqueConstraint("data", "orario_pasto", "linea", name="uq_impianto_linea"),)
+    id = db.Column(db.Integer, primary_key=True)
+    data = db.Column(db.Date, nullable=False, index=True)
+    orario_pasto = db.Column(db.Time, nullable=False)   # orario del pasto sull'impianto (es. 07:00)
+    pasto = db.Column(db.Integer)                       # numero del pasto nel gestionale (1, 2, 3)
+    linea = db.Column(db.Integer, nullable=False)
+    acqua_qli = db.Column(db.Float)
+    siero_qli = db.Column(db.Float)
+    farina_qli = db.Column(db.Float)
+    totale_qli = db.Column(db.Float)
+    acqua_teorica_qli = db.Column(db.Float)
+    siero_teorico_qli = db.Column(db.Float)
+    farina_teorica_qli = db.Column(db.Float)
+    conferme = db.Column(db.Integer)                    # letture identiche che confermano i valori
+    confermato = db.Column(db.Boolean, default=False)
+    inizio = db.Column(db.DateTime)                     # ora reale di inizio e fine della linea
+    fine = db.Column(db.DateTime)
+    stato = db.Column(db.String(20), nullable=False, default="proposta")
+    uso_pasto_id = db.Column(db.Integer, db.ForeignKey("uso_pasti.id"))
+    decisa_da = db.Column(db.String(100))               # chi ha approvato/scartato
+    decisa_il = db.Column(db.DateTime)
+    note = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ImpiantoEvento(db.Model):
+    """Eventi del pasto e anomalie dell'impianto (con fotografia dello schermo per le anomalie)."""
+    __tablename__ = "impianto_eventi"
+    id = db.Column(db.Integer, primary_key=True)
+    istante = db.Column(db.DateTime, nullable=False, index=True)
+    tipo = db.Column(db.String(30), nullable=False)
+    orario_pasto = db.Column(db.Time)
+    linea = db.Column(db.Integer)
+    messaggio = db.Column(db.Text)
+    immagine = db.Column(db.String(300))                # percorso della fotografia, relativo alla cartella dati
+    anomalia = db.Column(db.Boolean, default=False)
 
