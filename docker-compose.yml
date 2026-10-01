@@ -23,3 +23,10 @@ services:
     environment:
       - RUOLO=impianto
     restart: unless-stopped
+
+# La rete ZeroTier verso il PC dell'impianto ha pacchetti da 1280 byte: con i 1500 standard di
+# Docker le risposte più grandi di un pacchetto (es. la fotografia dello schermo) si perdono.
+networks:
+  default:
+    driver_opts:
+      com.docker.network.driver.mtu: 1280

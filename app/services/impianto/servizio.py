@@ -9,8 +9,12 @@ Comportamento
   le impostazioni ogni minuto.
 - Controllo periodico (ogni `impianto_controllo_min`, 5 minuti se l'impianto non risponde):
   fotografia dello schermo + orari dei pasti. Salvato in impianto_controlli. Su Telegram (gruppo
-  sistema) SOLO: un riepilogo al giorno, orari cambiati, impianto non raggiungibile (dopo 3 tentativi)
-  o di nuovo raggiungibile, orologio dell'impianto spostato di oltre 2 minuti, stato sconosciuto.
+  sistema) SOLO: un riepilogo al giorno, impianto non raggiungibile (dopo 3 tentativi) o di nuovo
+  raggiungibile, orologio dell'impianto spostato di oltre 2 minuti, stato sconosciuto.
+- Orari dei pasti cambiati sull'impianto: tra un controllo e l'altro si rileggono solo gli orari
+  (file di pochi byte, niente fotografia) ogni 10 minuti, così anche un pasto anticipato viene seguito
+  dall'inizio; se al risveglio per un pasto lo schermo mostra un prossimo pasto diverso da quello
+  atteso, idem. In entrambi i casi messaggio nel gruppo dei pasti con gli orari prima e dopo.
 - Pasto: da `impianto_anticipo_min` minuti prima del prossimo pasto (orario letto sullo schermo,
   convertito in ora reale con lo scarto dell'orologio dell'impianto) una fotografia ogni
   `impianto_foto_s` secondi finché l'impianto torna in attesa. Se il pasto non parte entro 20 minuti
@@ -37,6 +41,7 @@ from .pasto import (TracciaPasto, PASTO_INIZIATO, PASTO_CONCLUSO, LINEA_INIZIATA
 log = logging.getLogger("impianto")
 TENTATIVI_PRIMA_DI_AVVISARE = 3
 MINUTI_PASTO_NON_PARTITO = 20
+MINUTI_CONTROLLO_ORARI = 10
 SECONDI_SCARTO_OROLOGIO = 120
 NOMI_COMPONENTI = {"acqua": "acqua", "siero": "siero", "farina": "farina"}
 
@@ -57,6 +62,7 @@ class Servizio:
         self.firma = None
         self.traccia = TracciaPasto()
         self.ultimo_controllo = None
+        self.ultimi_orari = None         # ultima rilettura dei soli orari
         self.scarto_s = None             # ora reale − ora dell'impianto
         self.prossimo_pc = None          # prossimo pasto, orologio dell'impianto
         self.orari = []
@@ -111,7 +117,21 @@ class Servizio:
             intervallo = timedelta(minutes=5 if self.guasti else int(impostazione("impianto_controllo_min") or 60))
             if not self.ultimo_controllo or adesso - self.ultimo_controllo >= intervallo:
                 self._controllo(adesso)
+            elif not self.guasti and (not self.ultimi_orari
+                                      or adesso - self.ultimi_orari >= timedelta(minutes=MINUTI_CONTROLLO_ORARI)):
+                self._controlla_orari(adesso)
             return 60
+
+    def _controlla_orari(self, adesso):
+        """Rilettura leggera dei soli orari: se sono cambiati, controllo completo (che avvisa)."""
+        self.ultimi_orari = adesso
+        try:
+            orari = self.lettore.orari_pasti()
+        except Exception as e:      # i guasti li gestisce il controllo periodico
+            log.info("rilettura orari non riuscita: %s", e)
+            return
+        if self.orari and orari and orari != self.orari:
+            self._controllo(adesso)
 
     def _prossimo_reale(self, adesso):
         if self.prossimo_pc is None or self.scarto_s is None:
@@ -134,7 +154,7 @@ class Servizio:
         from app import db
         from app.models import ImpiantoControllo
         esito = self.lettore.controllo()
-        self.ultimo_controllo = adesso
+        self.ultimo_controllo = self.ultimi_orari = adesso
         l = esito.lettura
         precedente = ImpiantoControllo.query.filter_by(raggiungibile=True).order_by(ImpiantoControllo.istante.desc()).first()
         c = ImpiantoControllo(istante=adesso, raggiungibile=esito.raggiungibile, errore=esito.errore)
@@ -159,14 +179,23 @@ class Servizio:
             self._manda("✅ Impianto di nuovo raggiungibile.", "sistema")
         self.guasti, self.avvisato_guasto = 0, False
 
+        atteso, atteso_reale = self.prossimo_pc, self._prossimo_reale(adesso)
         self.orari = esito.orari
         if l.prossimo_pasto:
             self.prossimo_pc = l.prossimo_pasto
         if c.scarto_orologio_s is not None:
             self.scarto_s = c.scarto_orologio_s
         if precedente:
-            if precedente.orari and c.orari != precedente.orari:
-                self._manda(f"🕐 <b>Orari dei pasti cambiati</b> sull'impianto: {precedente.orari} → {c.orari}", "sistema")
+            if precedente.orari and c.orari and c.orari != precedente.orari:
+                self._avvisa_orari(adesso, precedente.orari, c.orari, l.prossimo_pasto)
+            elif (atteso and atteso_reale and l.prossimo_pasto and l.prossimo_pasto != atteso and l.in_attesa
+                  and not self.traccia.in_corso
+                  and atteso_reale > adesso - timedelta(minutes=MINUTI_PASTO_NON_PARTITO)):
+                # orari uguali ma il pasto atteso non è più il prossimo e non è stato fatto (es. saltato a mano)
+                testo = (f"🕐 Il pasto delle {_hm(atteso)} non è più in programma: sull'impianto il "
+                         f"prossimo pasto è alle {_hm(l.prossimo_pasto)}.")
+                self._salva_evento("orari_cambiati", adesso, testo, atteso)
+                self._manda(testo, self._chat_pasti())
             if (precedente.scarto_orologio_s is not None and c.scarto_orologio_s is not None
                     and abs(c.scarto_orologio_s - precedente.scarto_orologio_s) > SECONDI_SCARTO_OROLOGIO):
                 self._manda(f"🕐 L'orologio dell'impianto si è spostato: ora è {self._scarto_testo(c.scarto_orologio_s)}.", "sistema")
@@ -181,6 +210,12 @@ class Servizio:
             self.riepilogo_del = adesso.date()
             self._manda(f"🟢 Impianto OK – pasti {c.orari.replace(',', ' · ')} – prossimo alle {_hm(l.prossimo_pasto)}"
                         f" – orologio dell'impianto {self._scarto_testo(c.scarto_orologio_s)}", "sistema")
+
+    def _avvisa_orari(self, adesso, prima, dopo, prossimo):
+        testo = (f"🕐 <b>Orari dei pasti cambiati</b> sull'impianto: {prima.replace(',', ' · ')} → "
+                 f"{dopo.replace(',', ' · ')}" + (f"\nProssimo pasto alle {_hm(prossimo)}." if prossimo else ""))
+        self._salva_evento("orari_cambiati", adesso, testo)
+        self._manda(testo, self._chat_pasti())
 
     @staticmethod
     def _scarto_testo(s):
@@ -202,6 +237,11 @@ class Servizio:
                 self._manda(f"⚠️ Durante il pasto l'impianto non risponde da 5 tentativi ({html.escape(str(e))}).", "sistema")
             return
         self.guasti = 0
+        if (lettura.in_attesa and lettura.prossimo_pasto and self.prossimo_pc
+                and lettura.prossimo_pasto != self.prossimo_pc and not self.traccia.in_corso):
+            # svegliati per un pasto che sullo schermo non c'è più: orario cambiato dall'ultimo controllo
+            self._controllo(adesso)          # rilegge gli orari, li salva e avvisa
+            return
         if lettura.in_attesa and lettura.prossimo_pasto:
             p = self._prossimo_reale(adesso)
             if (not self.traccia.in_corso and p and adesso > p + timedelta(minutes=MINUTI_PASTO_NON_PARTITO - 1)
@@ -251,14 +291,18 @@ class Servizio:
         elif e.tipo == LINEA_INIZIATA:
             self.inizio_linee[e.linea] = e.istante
             self._salva_evento(e.tipo, e.istante, None, e.pasto, e.linea)
+        elif e.tipo == LINEA_CONCLUSA and e.pasto is None:
+            self._anomalia(LINEA_NON_LETTA, e.istante,
+                           f"⚠️ Linea {e.linea}: valori letti ma orario del pasto non leggibile sullo schermo, "
+                           f"lettura non salvata: {e.dati['reale']}", self._png(img), None, e.linea)
         elif e.tipo == LINEA_CONCLUSA:
             lettura = salva_lettura_linea(e.istante.date(), e, self.orari, inizio=self.inizio_linee.get(e.linea))
             registrata = None
             if modalita() == AUTOMATICO and lettura.confermato:
                 registrata = registra(lettura)
             db.session.commit()
-            self.linee_pasto.append(lettura)
             r = e.dati["reale"]
+            self.linee_pasto.append(r)       # valori, non la riga del database: il riepilogo arriva in un giro successivo
             valori = " · ".join(f"{NOMI_COMPONENTI[k]} {_q(r[k])}" for k in COMPONENTI)
             if registrata:
                 esito = "registrata nel gestionale"
@@ -271,7 +315,7 @@ class Servizio:
             self._manda(f"✅ <b>Linea {e.linea}</b> (pasto delle {_hm(e.pasto)}): {valori} – totale {_q(r['totale'])}\n"
                         f"{esito}{avviso}", chat)
         elif e.tipo == PASTO_CONCLUSO:
-            tot = {k: sum((getattr(l, f"{k}_qli") or 0) for l in self.linee_pasto) for k in COMPONENTI}
+            tot = {k: sum(l.get(k) or 0 for l in self.linee_pasto) for k in COMPONENTI}
             durata = round((e.istante - self.inizio_pasto).total_seconds() / 60) if self.inizio_pasto else None
             self._salva_evento(e.tipo, e.istante, None, e.pasto)
             self._manda(f"🏁 Pasto delle {_hm(e.pasto)} concluso" + (f" in {durata} min" if durata else "") +

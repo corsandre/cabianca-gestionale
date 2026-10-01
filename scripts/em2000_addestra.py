@@ -38,6 +38,9 @@ NOTE = {
     "f-074138.png": {"stato1": "CICLO AUTOMATICO", "stato2": "SVUOTA BILANCIA"},
     "f-073915.png": {"stato1": "CICLO AUTOMATICO", "stato2": "ATTESA VASCA VUOTA"},
     "f-070821.png": {"ora_pc": "07.04.05"},
+    # schermata dal vivo del pasto delle 12:50 (dosaggio in corso: farina ancora in kg)
+    "live-131233.png": {"ora_pc": "13.12.33", "pasto_attuale": "12:50", "prossimo_pasto": "18:00", "linea": "L2 G1",
+                        ("farina", "reale"): "0 Kg", ("siero", "reale"): "11,68 Qli"},
     "f-080308.png": {"ora_pc": "07.58.52"},
     "f-071555.png": {"pasto_attuale": "07:00", "linea": "L1 G1",
                      ("acqua", "teorico"): "4,27 Qli", ("acqua", "reale"): "4,35 Qli",

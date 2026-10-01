@@ -108,6 +108,8 @@ class TracciaPasto:
             self._azzera()
             return eventi
 
+        if self.pasto is None and lettura.pasto_attuale is not None:
+            self.pasto = lettura.pasto_attuale      # orario non leggibile alla prima lettura: preso appena possibile
         if (lettura.linea is not None and lettura.linea != self.linea and lettura.fase != ATTESA_INIZIO
                 and (self.linea is None or lettura.fase in FASI_INIZIO_LINEA)):
             eventi += self._chiudi_linea(istante, lettura)
