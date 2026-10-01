@@ -155,6 +155,123 @@
 </div>
 
 <!-- Medicinali -->
+<h6 class="text-uppercase text-muted small mb-2" id="impianto">Impianto di alimentazione</h6>
+<div class="cb-card p-3 mb-4">
+    <form method="post" action="{{ url_for('impianto.impostazioni') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="row g-2 mb-3">
+            {% for chiave, descr in [
+                ('manuale', 'Nessun collegamento al PC: i consumi si inseriscono a mano, come sempre.'),
+                ('verifica', "Il gestionale legge il PC durante i pasti e propone i valori: entrano solo dopo l'approvazione in Alimentazione."),
+                ('automatico', 'Il gestionale legge il PC durante i pasti e registra i valori da solo, come dati reali.')] %}
+            <div class="col-md-4">
+                <label class="border rounded p-2 h-100 d-block {{ 'border-2' if impianto.impianto_modalita == chiave }}"
+                       style="cursor:pointer;{{ 'border-color:#c2185b !important;' if impianto.impianto_modalita == chiave }}">
+                    <input type="radio" class="form-check-input me-1" name="impianto_modalita" value="{{ chiave }}"
+                           {{ 'checked' if impianto.impianto_modalita == chiave }}>
+                    <strong>{{ impianto_info.modalita[chiave] }}</strong>
+                    <div class="small text-muted mt-1">{{ descr }}</div>
+                </label>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="row g-2">
+            <div class="col-md-3">
+                <label class="form-label small" for="impianto_tipo">Tipo di impianto</label>
+                <select name="impianto_tipo" id="impianto_tipo" class="form-select form-select-sm">
+                    {% for k, nome in impianto_info.tipi.items() %}<option value="{{ k }}" {{ 'selected' if impianto.impianto_tipo == k }}>{{ nome }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small" for="impianto_host">Indirizzo del PC</label>
+                <input type="text" name="impianto_host" id="impianto_host" class="form-control form-control-sm"
+                       value="{{ impianto.impianto_host }}" placeholder="es. 10.147.19.80">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small" for="impianto_porta">Porta SSH</label>
+                <input type="number" name="impianto_porta" id="impianto_porta" class="form-control form-control-sm" value="{{ impianto.impianto_porta }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small" for="impianto_utente">Utente</label>
+                <input type="text" name="impianto_utente" id="impianto_utente" class="form-control form-control-sm" value="{{ impianto.impianto_utente }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small" for="impianto_chat_pasti">Messaggi dei pasti</label>
+                <select name="impianto_chat_pasti" id="impianto_chat_pasti" class="form-select form-select-sm">
+                    {% for k, nome in [('allevamento', 'Gruppo allevamento'), ('sistema', 'Gruppo sistema'), ('nessuno', 'Nessun messaggio')] %}
+                    <option value="{{ k }}" {{ 'selected' if impianto.impianto_chat_pasti == k }}>{{ nome }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small" for="impianto_controllo_min">Controllo periodico (minuti)</label>
+                <input type="number" name="impianto_controllo_min" id="impianto_controllo_min" class="form-control form-control-sm" value="{{ impianto.impianto_controllo_min }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small" for="impianto_foto_s">Foto durante il pasto (secondi)</label>
+                <input type="number" name="impianto_foto_s" id="impianto_foto_s" class="form-control form-control-sm" value="{{ impianto.impianto_foto_s }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small" for="impianto_anticipo_min">Anticipo sul pasto (minuti)</label>
+                <input type="number" name="impianto_anticipo_min" id="impianto_anticipo_min" class="form-control form-control-sm" value="{{ impianto.impianto_anticipo_min }}">
+            </div>
+        </div>
+        <div class="form-text">
+            Il PC dell'impianto viene solo letto (fotografia dello schermo e tabelle degli orari): non vi si scrive niente.
+            Il controllo periodico e gli avvisi tecnici vanno nel gruppo Telegram "sistema".
+        </div>
+        <button type="submit" class="btn btn-sm mt-3" style="background:#c2185b;color:#fff"><i class="bi bi-save me-1"></i>Salva</button>
+    </form>
+
+    <hr class="my-3">
+    <div class="row g-3">
+        <div class="col-md-6">
+            <h6 class="mb-2"><i class="bi bi-key me-1" style="color:#c2185b"></i>Chiave di collegamento</h6>
+            {% if impianto_info.chiave_pubblica %}
+            <div class="form-text mb-1">Aggiungi questa riga al file <code>~/.ssh/authorized_keys</code> dell'utente indicato sul PC dell'impianto:</div>
+            <textarea class="form-control form-control-sm font-monospace" rows="3" readonly id="chiavePubblica">{{ impianto_info.chiave_pubblica }}</textarea>
+            {% else %}
+            <div class="form-text mb-1">Nessuna chiave: crea la chiave e aggiungila sul PC dell'impianto. Senza chiave si usa la password
+                della variabile <code>IMPIANTO_PASSWORD</code> (solo per prove).</div>
+            {% endif %}
+            <form method="post" action="{{ url_for('impianto.chiave') }}" class="mt-2"
+                  onsubmit="return {{ 'confirm(\'Creare una nuova chiave? Quella attuale smetterà di funzionare.\')' if impianto_info.chiave_pubblica else 'true' }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-secondary">{{ 'Crea una nuova chiave' if impianto_info.chiave_pubblica else 'Crea la chiave' }}</button>
+            </form>
+        </div>
+        <div class="col-md-6">
+            <h6 class="mb-2"><i class="bi bi-plug me-1" style="color:#c2185b"></i>Prova collegamento</h6>
+            {% set uc = impianto_info.ultimo_controllo %}
+            <div class="small text-muted mb-2">
+                {% if uc %}Ultimo controllo automatico: {{ uc.istante.strftime('%d/%m %H:%M') }} –
+                    {% if uc.raggiungibile %}<span class="text-success">raggiungibile</span>, {{ impianto_info.fasi.get(uc.fase, uc.fase) }}, prossimo pasto {{ uc.prossimo_pasto.strftime('%H:%M') if uc.prossimo_pasto else '?' }}
+                    {% else %}<span class="text-danger">non raggiungibile</span>{% endif %}
+                {% else %}Nessun controllo automatico ancora eseguito.{% endif %}
+            </div>
+            <form method="post" action="{{ url_for('impianto.prova') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-camera me-1"></i>Prova ora</button>
+            </form>
+            {% if impianto_info.ultima_prova %}
+            <a href="{{ url_for('impianto.immagine', nome='ultima_prova.png') }}" target="_blank" class="d-inline-block mt-2">
+                <img src="{{ url_for('impianto.immagine', nome='ultima_prova.png') }}" alt="Schermo dell'impianto all'ultima prova"
+                     class="border rounded" style="max-width:100%;width:320px">
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% if impianto_info.anomalie %}
+    <hr class="my-3">
+    <h6 class="mb-2"><i class="bi bi-exclamation-triangle me-1" style="color:#c2185b"></i>Ultime anomalie</h6>
+    <ul class="list-unstyled small mb-0">
+        {% for e in impianto_info.anomalie %}
+        <li class="mb-1">{{ e.istante.strftime('%d/%m %H:%M') }} – {{ e.messaggio | striptags }}
+            {% if e.immagine %}<a href="{{ url_for('impianto.immagine', nome=e.immagine) }}" target="_blank"><i class="bi bi-image"></i> schermo</a>{% endif %}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>
+
 <h6 class="text-uppercase text-muted small mb-2">Medicinali (Trattamenti)</h6>
 <div class="cb-card p-0 mb-4" style="overflow-x:auto">
     <table class="table table-sm mb-0">

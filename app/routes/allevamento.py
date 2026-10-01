@@ -1186,6 +1186,11 @@ def alimentazione():
     avvenuto = {pasto: pasto_avvenuto(data_sel, pasto) for pasto in [1, 2, 3]}
     orari_standard = {pasto: orario_pasto_str(pasto) for pasto in [1, 2, 3]}
     orari_effettivi = {pasto: orario_effettivo(data_sel, pasto) for pasto in [1, 2, 3]}
+    # letture dell'impianto di alimentazione del giorno (solo con il collegamento attivo)
+    from app.models import ImpiantoLinea
+    from app.services.impianto import modalita as modalita_impianto, MANUALE
+    letture_impianto = [] if modalita_impianto() == MANUALE else ImpiantoLinea.query.filter_by(
+        data=data_sel).order_by(ImpiantoLinea.orario_pasto, ImpiantoLinea.linea).all()
 
     pasti = {}
     if ciclo:
@@ -1271,7 +1276,8 @@ def alimentazione():
                            totale_per_pasto=totale_per_pasto, totale_giorno=totale_giorno,
                            ss=ss, capi_linea=capi_linea, capi_totali=capi_totali,
                            perc_ss_mangime=perc_ss_mangime,
-                           orari_standard=orari_standard, orari_effettivi=orari_effettivi)
+                           orari_standard=orari_standard, orari_effettivi=orari_effettivi,
+                           letture_impianto=letture_impianto)
 
 
 @bp.route("/alimentazione/orario", methods=["POST"])
@@ -1903,10 +1909,23 @@ def impostazioni():
         "orario_pasto_2": orario_pasto_str(2),
         "orario_pasto_3": orario_pasto_str(3),
     }
+    # impianto di alimentazione (collegamento opzionale)
+    import os
+    from app.models import ImpiantoControllo, ImpiantoEvento
+    from app.services import impianto as I
+    impianto = {k: I.impostazione(k) for k in I.DEFAULTS}
+    impianto_info = {
+        "modalita": I.NOMI_MODALITA, "tipi": I.TIPI, "fasi": I.NOMI_FASI,
+        "chiave_pubblica": I.chiave_pubblica(),
+        "ultimo_controllo": ImpiantoControllo.query.order_by(ImpiantoControllo.istante.desc()).first(),
+        "anomalie": ImpiantoEvento.query.filter_by(anomalia=True).order_by(ImpiantoEvento.istante.desc()).limit(8).all(),
+        "ultima_prova": os.path.exists(os.path.join(I.cartella_dati(), "ultima_prova.png")),
+    }
     return render_template("allevamento/impostazioni.html",
                            ciclo_attivo=ciclo_attivo, cicli_precedenti=cicli_precedenti,
                            scorte_settings=scorte_settings, medicinali=medicinali,
                            curva_accrescimento=curva_accrescimento,
+                           impianto=impianto, impianto_info=impianto_info,
                            oggi=date.today())
 
 

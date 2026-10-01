@@ -9,7 +9,7 @@ in alternativa, solo per prove, la password nella variabile d'ambiente IMPIANTO_
 """
 import os
 
-from .base import MANUALE, VERIFICA, AUTOMATICO, MODALITA, NOMI_MODALITA  # noqa: F401
+from .base import MANUALE, VERIFICA, AUTOMATICO, MODALITA, NOMI_MODALITA, NOMI_FASI  # noqa: F401
 
 TIPI = {"em2000": "EM2000"}
 DEFAULTS = {
@@ -45,9 +45,10 @@ def percorso_chiave():
     return os.path.join(cartella_dati(), "chiave")
 
 
-def crea_lettore():
-    """Lettore dell'impianto configurato, o None in modalità manuale / se manca l'indirizzo."""
-    if modalita() == MANUALE or not impostazione("impianto_host"):
+def crea_lettore(ignora_modalita=False):
+    """Lettore dell'impianto configurato, o None in modalità manuale / se manca l'indirizzo.
+    ignora_modalita=True solo per la "Prova collegamento" chiesta esplicitamente dall'admin."""
+    if (modalita() == MANUALE and not ignora_modalita) or not impostazione("impianto_host"):
         return None
     chiave = percorso_chiave() if os.path.exists(percorso_chiave()) else None
     tipo = impostazione("impianto_tipo")

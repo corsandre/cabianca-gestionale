@@ -75,6 +75,7 @@ def create_app():
     from app.routes.ricorrenti import bp as ricorrenti_bp
     from app.routes.finanza_impostazioni import bp as finanza_impostazioni_bp
     from app.routes.allevamento import bp as allevamento_bp
+    from app.routes.impianto import bp as impianto_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -92,6 +93,7 @@ def create_app():
     app.register_blueprint(ricorrenti_bp)
     app.register_blueprint(finanza_impostazioni_bp)
     app.register_blueprint(allevamento_bp)
+    app.register_blueprint(impianto_bp)
 
     # Logging
     logging.basicConfig(level=logging.INFO)

@@ -32,6 +32,12 @@ ATTESA_SVUOTAMENTO = "attesa_svuotamento"
 SVUOTAMENTO = "svuotamento"
 SCONOSCIUTA = "sconosciuta"              # stato mai visto: va segnalato con la fotografia
 FASI_DOSAGGIO_CONCLUSO = {MISCELAZIONE, RIEMPIMENTO, DISTRIBUZIONE, LAVAGGIO, ATTESA_SVUOTAMENTO, SVUOTAMENTO}
+NOMI_FASI = {
+    ATTESA_ORARIO: "in attesa del prossimo pasto", ATTESA_INIZIO: "pasto in partenza",
+    PREPARAZIONE: "preparazione della ricetta", STABILIZZAZIONE: "stabilizzazione", MISCELAZIONE: "miscelazione",
+    RIEMPIMENTO: "riempimento del tubo", DISTRIBUZIONE: "distribuzione ai box", LAVAGGIO: "lavaggio",
+    ATTESA_SVUOTAMENTO: "attesa svuotamento", SVUOTAMENTO: "svuotamento", SCONOSCIUTA: "stato sconosciuto",
+}
 
 COMPONENTI = ("acqua", "siero", "farina")
 

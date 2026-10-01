@@ -35,6 +35,52 @@ s.s. {{ '%.0f'|format(v[0]) }} kg{% if v[1] is not none %} · {{ '%.2f'|format(v
     </div>
 </div>
 
+{% if letture_impianto %}
+<!-- Letture dell'impianto di alimentazione del giorno -->
+<div class="cb-card p-0 mb-3" style="overflow-x:auto">
+    <div class="px-3 pt-2 pb-1 d-flex align-items-center gap-2">
+        <i class="bi bi-pc-display" style="color:#c2185b"></i><strong>Letture dal PC di alimentazione</strong>
+        <span class="small text-muted">valori reali letti dallo schermo dell'impianto a fine linea (in grigio il teorico della ricetta)</span>
+    </div>
+    <table class="table table-sm mb-0 align-middle">
+        <thead class="table-light">
+            <tr><th>Pasto</th><th>Linea</th><th>Farina</th><th>Siero</th><th>Acqua</th><th>Letture concordi</th><th>Stato</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for l in letture_impianto %}
+            <tr>
+                <td>{{ l.pasto or '?' }} <span class="text-muted small">({{ l.orario_pasto.strftime('%H:%M') }})</span></td>
+                <td>{{ l.linea }}</td>
+                {% for reale, teorico in [(l.farina_qli, l.farina_teorica_qli), (l.siero_qli, l.siero_teorico_qli), (l.acqua_qli, l.acqua_teorica_qli)] %}
+                <td>{{ reale }} <span class="text-muted small">({{ teorico if teorico is not none else '–' }})</span></td>
+                {% endfor %}
+                <td class="small">{{ l.conferme }}{% if not l.confermato %} <span class="text-warning-emphasis" title="Valori letti una sola volta">da controllare</span>{% endif %}</td>
+                <td class="small">
+                    {% if l.stato == 'proposta' %}<span class="badge bg-warning-subtle text-warning-emphasis">da approvare</span>
+                    {% elif l.stato == 'registrata' %}<span class="badge bg-success-subtle text-success-emphasis">registrata in automatico</span>
+                    {% elif l.stato == 'approvata' %}<span class="badge bg-success-subtle text-success-emphasis">approvata da {{ l.decisa_da }}</span>
+                    {% else %}<span class="badge bg-secondary-subtle text-secondary">scartata da {{ l.decisa_da }}</span>{% endif %}
+                    {% if l.note %}<div class="text-muted">{{ l.note }}</div>{% endif %}
+                </td>
+                <td class="text-nowrap">
+                    {% if l.stato == 'proposta' %}
+                    <form method="post" action="{{ url_for('impianto.approva', lid=l.id) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm py-0" style="background:#c2185b;color:#fff" title="Registra questi valori come reali">Approva</button>
+                    </form>
+                    <form method="post" action="{{ url_for('impianto.scarta', lid=l.id) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-secondary py-0">Scarta</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 <form method="post" action="{{ url_for('allevamento.alimentazione_new') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="data" value="{{ data_sel.isoformat() }}">
@@ -113,6 +159,7 @@ s.s. {{ '%.0f'|format(v[0]) }} kg{% if v[1] is not none %} · {{ '%.2f'|format(v
                         <input type="hidden" name="touched_{{ pasto }}_{{ linea }}" value="">
                     </td>
                     <td class="text-muted text-center small">
+                        {% if p and p.fonte == 'impianto' and not p.stimato %}<i class="bi bi-pc-display d-block" style="color:#c2185b" title="Valori letti dal PC di alimentazione"></i>{% endif %}
                         {% if p and p.perc_siero is not none %}
                         {{ p.perc_siero }}%{% if p.perc_ss_siero_rif is not none and p.siero_qli %} <span class="text-muted">({{ p.perc_ss_siero_rif }}%)</span>{% endif %}
                         {% else %}–{% endif %}
@@ -158,6 +205,7 @@ s.s. {{ '%.0f'|format(v[0]) }} kg{% if v[1] is not none %} · {{ '%.2f'|format(v
         I valori in giallo sono stimati (copiati dal pasto precedente): solo le celle che modifichi davvero
         diventano definitive al salvataggio, le altre restano stime aggiornabili anche se il campo non è vuoto.
         Vale anche per l'orario sotto "Pasto": in giallo quello standard presunto, in bianco quello effettivo inserito.
+        L'icona <i class="bi bi-pc-display" style="color:#c2185b"></i> indica i valori letti dal PC di alimentazione.
     </p>
     <p class="text-muted small">
         <i class="bi bi-clock me-1"></i>
