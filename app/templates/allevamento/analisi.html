@@ -93,6 +93,8 @@
 .cb-analisi table.data thead th { color: var(--ink-2); font-weight: 400; position: sticky; top: 0; background: var(--surface); }
 .cb-analisi table.data td.txt { text-align: left; white-space: normal; min-width: 220px; color: var(--ink-2); }
 .cb-analisi table.data tr.tot td { font-weight: 600; border-bottom: 0; }
+.cb-analisi #t-tot th { white-space: normal; }
+.cb-analisi table.data td.nota { text-align: left; white-space: normal; color: var(--muted); font-size: 12px; }
 
 /* rispetto al peso vivo */
 .cb-analisi .pv { display: grid; gap: 12px; }
@@ -157,6 +159,33 @@
   </div>
 
   <section class="kpis" id="kpis" aria-label="Indicatori del periodo"></section>
+
+  <div class="grid-2">
+    <section class="card">
+      <div class="card-head"><div><h2>Andamento dei capi</h2><p id="c-capi-sub"></p></div><button class="tbtn" type="button" data-table="capi">Tabella</button></div>
+      <div class="plot" data-plot="capi"><canvas aria-label="Capi presenti giorno per giorno" role="img"></canvas></div>
+      <div class="tablewrap" data-tablefor="capi" hidden></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><div><h2>Entrate e uscite</h2><p id="c-mov-sub"></p></div></div>
+      <div class="tablewrap" style="max-height:none"><table class="data" id="t-mov"></table></div>
+      <div class="foot" id="mov-foot"></div>
+    </section>
+  </div>
+
+  <div class="grid-2">
+    <section class="card">
+      <div class="card-head"><div><h2>Consumi al giorno</h2><p id="c-cons-sub"></p></div><button class="tbtn" type="button" data-table="cons">Tabella</button></div>
+      <div class="legend" data-legend="cons"></div>
+      <div class="plot" data-plot="cons"><canvas aria-label="Farina, siero e acqua al giorno" role="img"></canvas></div>
+      <div class="tablewrap" data-tablefor="cons" hidden></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><div><h2>Consumo nel periodo</h2><p id="c-tot-sub"></p></div></div>
+      <div class="tablewrap" style="max-height:none"><table class="data" id="t-tot"></table></div>
+      <div class="foot">«Per capo» è il totale del periodo per un capo: quanto ha consumato un maiale presente per tutto il periodo: ogni giorno il consumo diviso i capi di quel giorno, poi sommato. Così non si falsa quando entrano, escono o muoiono animali.</div>
+    </section>
+  </div>
 
   <div class="grid-2">
     <section class="card" id="c-ss">
@@ -307,6 +336,24 @@
   }
   const lineeSel = () => state.linea === "tutte" ? LINEE : [Number(state.linea)];
   const lineaNome = l => ({ 1: "Linea 1", 2: "Linea 2", 3: "Linea 3" })[l];
+  // consumo per capo in kg (farina, siero e acqua sono in quintali, la sostanza secca in kg)
+  const perCapoKg = (o, k) => o.capi ? (k === "ss" ? o.ss : o[k] * 100) / o.capi : null;
+
+  // ── capi, entrate e uscite ─────────────────────────────────────
+  const NOMI_USCITA = { fine_ciclo: "fine ciclo", scarto_sottopeso: "scarti/sottopeso", agriturismo: "Ca Bianca agriturismo" };
+  const nomeUscita = c => NOMI_USCITA[c] || "altre uscite";
+  const perData = Object.fromEntries(giorni.map(g => [g.data, g]));
+  // capi alla fine del giorno d (0 prima del primo censimento)
+  const capiAl = (d, L) => perData[d] ? agg(perData[d], L).capi : 0;
+  const entrateFiltrate = () => RAW.entrate.map(e => Object.assign({}, e, { n: state.linea === "tutte" ? e.n : (e.L[state.linea] || 0) })).filter(e => e.n > 0);
+  const usciteFiltrate = () => RAW.uscite.filter(u => state.linea === "tutte" || u.linea === Number(state.linea));
+  const tra = (arr, da, a) => arr.filter(x => x.data >= da && x.data <= a);
+  // date del periodo per capi e movimenti: fino a ieri come l'alimentazione; "tutto il ciclo" dal primo giorno
+  function intervallo() {
+    if (state.periodo === "ciclo") return { da: RAW.ciclo.inizio, a: IERI, daPrev: null, aPrev: null };
+    const n = Number(state.periodo), da = addDays(IERI, -(n - 1));
+    return { da, a: IERI, daPrev: addDays(da, -n), aPrev: addDays(da, -1) };
+  }
 
   // ── tema per i grafici ─────────────────────────────────────────
   let T = {};
@@ -467,29 +514,48 @@
     const box = document.getElementById("kpis");
     sparks.forEach(s => s.destroy()); sparks.length = 0;
     box.replaceChildren();
-    const L = state.linea;
+    const L = state.linea, perCapo = state.vista === "capo";
     const cur = P.cur.map(g => agg(g, L)), prev = P.prev.map(g => agg(g, L));
     const oggiAgg = agg(giorni[giorni.length - 1], L);
-    const inizioAgg = cur.length ? cur[0] : null;
+
+    // capi: a inizio periodo (0 per tutto il ciclo), entrati e usciti nel periodo
+    const I = intervallo();
+    const capiInizio = capiAl(addDays(I.da, -1), L);
+    const entrati = sum(tra(entrateFiltrate(), I.da, I.a).map(e => e.n));
+    const usc = tra(usciteFiltrate(), I.da, I.a), uscPrev = I.daPrev ? tra(usciteFiltrate(), I.daPrev, I.aPrev) : [];
+    const usciti = sum(usc.map(u => u.n));
+    const perCat = {};
+    for (const u of usc) perCat[u.categoria] = (perCat[u.categoria] || 0) + u.n;
 
     // mortalità nel periodo (stesse date dell'alimentazione, tranne "tutto il ciclo")
     const mort = mortalitaPeriodo();
     const morti = sum(mort.cur.map(m => m.n)), mortiPrev = sum(mort.prev.map(m => m.n));
     const base = mort.baseCapi;
-    const ss = mean(cur.map(o => o.ssCapo)), ssPrev = mean(prev.map(o => o.ssCapo));
+
+    // consumi: per capo (media dei valori giornalieri per capo) oppure totali dell'allevamento
+    const media = (os, k) => mean(os.map(o => perCapo ? perCapoKg(o, k) : (k === "ss" ? o.ss : o[k])));
+    const nelPeriodo = (os, k) => sum(os.map(o => perCapo ? perCapoKg(o, k) : (k === "ss" ? o.ss : o[k])));
+    const unita = k => perCapo ? "kg/capo" : (k === "ss" ? "kg" : "q");
+    const dec = k => perCapo ? 2 : (k === "ss" ? 0 : 1);
+    const consumo = (lab, k, col) => kpi(lab, nf(media(cur, k), dec(k)), unita(k), "media del periodo",
+      deltaTxt(media(cur, k), media(prev, k)), cur.map(o => perCapo ? perCapoKg(o, k) : (k === "ss" ? o.ss : o[k])), col);
     const sost = mean(cur.map(o => o.sost)), sostPrev = mean(prev.map(o => o.sost));
-    const mang = mean(cur.map(o => o.mang)), mangPrev = mean(prev.map(o => o.mang));
-    const sie = mean(cur.map(o => o.siero)), siePrev = mean(prev.map(o => o.siero));
-    const capiMedi = mean(cur.map(o => o.capi));
 
     box.append(
-      kpi("Capi presenti", nf(oggiAgg.capi), "", inizioAgg ? `${nf(inizioAgg.capi)} a inizio periodo` : "", { text: `peso medio stimato ${nf(oggiAgg.peso, 0)} kg` }),
-      kpi("Mortalità nel periodo", nf(morti), morti === 1 ? "capo" : "capi", `${pct(base ? morti / base * 100 : null, 2)} dei capi`,
+      kpi("Capi presenti", nf(oggiAgg.capi), "",
+        (state.periodo === "ciclo" ? "0 a inizio ciclo" : `${nf(capiInizio)} a inizio periodo`) + (entrati ? ` · ${nf(entrati)} entrati` : ""),
+        { text: `peso medio stimato ${nf(oggiAgg.peso, 0)} kg` }),
+      kpi("Mortalità nel periodo", nf(morti), morti === 1 ? "capo" : "capi", `${pct(base ? morti / base * 100 : null, 2)} dei ${nf(base)} capi`,
         mort.prev.length || state.periodo !== "ciclo" ? (morti === mortiPrev ? { text: "= come il periodo prima" } : { text: `${morti > mortiPrev ? "▲" : "▼"} ${nf(mortiPrev)} nel periodo prima`, cls: morti > mortiPrev ? "bad" : "good" }) : { text: "" }, mort.spark, "mort"),
-      kpi("Sostanza secca al giorno", nf(ss, 2), "kg/capo", `${nf(mean(cur.map(o => o.ss)), 0)} kg in totale`, deltaTxt(ss, ssPrev), cur.map(o => o.ssCapo), "ss"),
+      kpi("Uscite nel periodo", nf(usciti), usciti === 1 ? "capo" : "capi",
+        Object.entries(perCat).map(([c, n]) => `${nf(n)} ${nomeUscita(c)}`).join(" · ") || "nessuna uscita",
+        { text: usciti ? `${nf(sum(usc.map(u => u.n * (u.peso || 0))))} kg in totale` : (I.daPrev ? `${nf(sum(uscPrev.map(u => u.n)))} nel periodo prima` : "") }),
+      consumo("Farina al giorno", "mang", "farina"),
+      kpi(perCapo ? "Farina per capo nel periodo" : "Farina nel periodo", nf(nelPeriodo(cur, "mang"), perCapo ? 1 : 0), perCapo ? "kg" : "q",
+        `${nf(cur.length)} giorni`, deltaTxt(nelPeriodo(cur, "mang"), prev.length === cur.length ? nelPeriodo(prev, "mang") : null)),
+      consumo("Siero al giorno", "siero", "siero"),
+      consumo("Sostanza secca al giorno", "ss", "ss"),
       kpi("Sostituzione con siero", pct(sost), "", "media del periodo", deltaTxt(sost, sostPrev), cur.map(o => o.sost), "siero"),
-      kpi("Farina al giorno", nf(mang, 1), "q", `${nf(capiMedi ? mang * 100 / capiMedi : null, 2)} kg/capo`, deltaTxt(mang, mangPrev), cur.map(o => o.mang), "farina"),
-      kpi("Siero al giorno", nf(sie, 1), "q", `${nf(capiMedi ? sie * 100 / capiMedi : null, 2)} kg/capo`, deltaTxt(sie, siePrev), cur.map(o => o.siero), "siero"),
     );
     // sparkline: tutti grigi con l'ultimo punto nel colore della serie
     box.querySelectorAll(".kpi").forEach(k => {
@@ -507,15 +573,12 @@
   // ── mortalità ──────────────────────────────────────────────────
   function mortiFiltrati() { return RAW.morti.filter(m => state.linea === "tutte" || CAP_LINEA[m.cap] === Number(state.linea)); }
   function mortalitaPeriodo() {
-    const P = periodo(), ms = mortiFiltrati();
-    let da, a = IERI, daPrev = null, aPrev = null;
-    if (state.periodo === "ciclo") da = RAW.ciclo.inizio;
-    else { const n = Number(state.periodo); da = addDays(IERI, -(n - 1)); aPrev = addDays(da, -1); daPrev = addDays(da, -n); }
-    const cur = ms.filter(m => m.data >= da && m.data <= a);
-    const prev = daPrev ? ms.filter(m => m.data >= daPrev && m.data <= aPrev) : [];
-    // base per la %: capi del primo giorno con capi nel periodo (per "tutto il ciclo" il primo censimento)
-    const g0 = giorni.find(g => g.data >= da && sum(LINEE.map(l => g.L[l].capi)) > 0) || giorni.find(g => sum(LINEE.map(l => g.L[l].capi)) > 0);
-    const baseCapi = g0 ? agg(g0, state.linea).capi : null;
+    const ms = mortiFiltrati();
+    const { da, a, daPrev, aPrev } = intervallo();
+    const cur = tra(ms, da, a);
+    const prev = daPrev ? tra(ms, daPrev, aPrev) : [];
+    // base per la %: capi a inizio periodo più quelli entrati nel periodo (per tutto il ciclo: tutti gli entrati)
+    const baseCapi = capiAl(addDays(da, -1), state.linea) + sum(tra(entrateFiltrate(), da, a).map(e => e.n)) || null;
     // serie giornaliera o settimanale
     const giornaliero = state.periodo !== "ciclo";
     const buckets = [];
@@ -537,6 +600,75 @@
     }, extra);
   }
 
+  // ── andamento dei capi, entrate e uscite ───────────────────────
+  function drawCapi() {
+    const I = intervallo(), L = state.linea;
+    const ent = entrateFiltrate(), usc = usciteFiltrate(), mor = mortiFiltrati();
+    const da = state.periodo === "ciclo" ? addDays(RAW.ciclo.inizio, -1) : addDays(I.da, -1);   // il ciclo parte da 0
+    const date = [];
+    for (let d = da; d <= OGGI; d = addDays(d, 1)) date.push(d);
+    const capi = date.map(d => capiAl(d, L));
+    const eventi = d => {
+      const r = tra(ent, d, d).map(e => `+${nf(e.n)} entrati${e.origine === "censimento" ? " (consegna)" : ""}`);
+      const m = sum(tra(mor, d, d).map(x => x.n));
+      if (m) r.push(`−${nf(m)} ${m === 1 ? "morto" : "morti"}`);
+      for (const u of tra(usc, d, d)) r.push(`−${nf(u.n)} usciti (${nomeUscita(u.categoria)})`);
+      return r;
+    };
+    const conEventi = date.map(d => eventi(d).length > 0);
+    document.getElementById("c-capi-sub").textContent = (state.linea === "tutte" ? "Tutte le linee" : lineaNome(state.linea)) +
+      `, dal ${lungo(date[0])} a oggi. I punti segnano i giorni con consegne, morti o uscite: passaci sopra per i dettagli.`;
+    fmtTab.capi = v => nf(v);
+    draw("capi", {
+      type: "line",
+      data: { labels: date.map(ggmm), datasets: [lineDs("Capi presenti", capi, T.accent, "circle", {
+        stepped: "after", tension: 0, pointRadius: conEventi.map(e => e ? 4 : 0), pointHoverRadius: 5 })] },
+      options: baseOptions({
+        plugins: Object.assign(baseOptions().plugins, {
+          tooltip: Object.assign(baseOptions().plugins.tooltip, {
+            callbacks: {
+              title: it => lungo(date[it[0].dataIndex]),
+              label: c => ` ${nf(c.parsed.y)} capi presenti`,
+              afterBody: it => eventi(date[it[0].dataIndex]),
+            },
+          }),
+        }),
+        // tutto il ciclo parte da 0; nei periodi brevi la scala segue i capi, così si vedono le variazioni
+        scales: Object.assign(baseOptions().scales, { y: Object.assign(baseOptions().scales.y, { beginAtZero: state.periodo === "ciclo", ticks: { color: T.muted, precision: 0 } }) }),
+      }),
+    });
+
+    // bilancio del periodo: inizio + entrati − morti − usciti = fine
+    const tm = document.getElementById("t-mov"); tm.replaceChildren();
+    document.getElementById("c-mov-sub").textContent = `Dal ${lungo(I.da)} a ieri${state.linea === "tutte" ? "" : " · " + lineaNome(state.linea)}.`;
+    const tb = el("tbody");
+    const riga = (lab, v, cls, nota) => {
+      const tr = el("tr", cls ? { class: cls } : {});
+      tr.appendChild(el("td", {}, lab)); tr.appendChild(el("td", {}, v)); tr.appendChild(el("td", { class: "nota" }, nota || ""));
+      tb.appendChild(tr);
+    };
+    const inizio = capiAl(addDays(I.da, -1), L);
+    riga(state.periodo === "ciclo" ? "Capi a inizio ciclo" : `Capi al ${ggmm(addDays(I.da, -1))}`, nf(inizio));
+    const entP = tra(ent, I.da, I.a), morP = sum(tra(mor, I.da, I.a).map(x => x.n)), uscP = tra(usc, I.da, I.a);
+    for (const e of entP) riga(`+ Entrati il ${ggmm(e.data)}`, nf(e.n), "", e.origine === "censimento" ? "consegna di suinetti" : "");
+    riga("− Morti", nf(morP));
+    const cats = {};
+    for (const u of uscP) { const c = cats[u.categoria] || (cats[u.categoria] = { n: 0, kg: 0 }); c.n += u.n; c.kg += u.n * (u.peso || 0); }
+    for (const [c, v] of Object.entries(cats)) riga(`− Usciti: ${nomeUscita(c)}`, nf(v.n), "", v.kg ? `${nf(v.kg)} kg, ${nf(v.kg / v.n, 1)} kg/capo` : "");
+    if (!uscP.length) riga("− Usciti", "0");
+    const calcolati = inizio + sum(entP.map(e => e.n)) - morP - sum(uscP.map(u => u.n));
+    const contati = capiAl(I.a, L);
+    if (calcolati !== contati) {
+      riga("= Capi dal conto", nf(calcolati));
+      riga("Rettifiche dei censimenti", (contati > calcolati ? "+" : "−") + nf(Math.abs(contati - calcolati)), "",
+        state.linea === "tutte" ? "differenza trovata contando i capi a un censimento"
+                                : "spostamenti da o verso altre linee e differenze trovate ai censimenti");
+    }
+    riga(`= Capi al ${ggmm(I.a)}`, nf(contati), "tot");
+    tm.appendChild(tb);
+    document.getElementById("mov-foot").textContent = "I morti e le uscite sono quelli registrati; le entrate sono le consegne di suinetti registrate con un censimento.";
+  }
+
   function drawAll() {
     leggiTema();
     const P = periodo(), labels = P.cur.map(g => ggmm(g.data)), perCapo = state.vista === "capo";
@@ -549,6 +681,53 @@
     document.getElementById("cicloChip").textContent = `${RAW.ciclo.nome} · giorno ${giornoCiclo}`;
 
     drawKpis(P);
+    drawCapi();
+
+    // 0b. consumi al giorno (farina, siero, acqua) e totali del periodo
+    const agC = P.cur.map(g => agg(g, state.linea));
+    const unitC = perCapo ? "kg/capo" : "q";
+    const valC = (o, k) => perCapo ? perCapoKg(o, k) : o[k];
+    document.getElementById("c-cons-sub").textContent = (state.linea === "tutte" ? "Tutte le linee. " : lineaNome(state.linea) + ". ") +
+      (perCapo ? "Chilogrammi per capo al giorno." : "Quintali al giorno distribuiti in tutto l'allevamento.");
+    fmtTab.cons = v => nf(v, 2) + " " + unitC;
+    const compC = [{ k: "mang", label: "Farina", color: T.farina, shape: "circle" }, { k: "siero", label: "Siero", color: T.siero, shape: "triangle" }, { k: "acqua", label: "Acqua", color: T.acqua, shape: "rect" }];
+    draw("cons", {
+      type: "line",
+      data: { labels, datasets: compC.map(c => lineDs(c.label, agC.map(o => valC(o, c.k)), c.color, c.shape, { pointRadius: P.cur.length > 40 ? 0 : 3, endLabel: v => `${c.label} ${nf(v, perCapo ? 2 : 1)}` })) },
+      options: baseOptions({
+        layout: { padding: { right: 92, top: 6 } },
+        plugins: Object.assign(baseOptions().plugins, {
+          endLabels: { enabled: true },
+          tooltip: Object.assign(baseOptions().plugins.tooltip, {
+            callbacks: {
+              title: it => lungo(P.cur[it[0].dataIndex].data),
+              label: c => ` ${nf(c.parsed.y, 2)} ${unitC}   ${c.dataset.label}`,
+              afterBody: it => { const o = agC[it[0].dataIndex]; return [`Capi: ${nf(o.capi)}`].concat(o.stimati ? [`${o.stimati} pasti stimati`] : []); },
+            },
+          }),
+        }),
+        scales: Object.assign(baseOptions().scales, { y: Object.assign(baseOptions().scales.y, { beginAtZero: true, title: { display: true, text: unitC, color: T.muted } }) }),
+      }),
+    });
+    const tt = document.getElementById("t-tot"); tt.replaceChildren();
+    document.getElementById("c-tot-sub").textContent = P.cur.length
+      ? `${nf(P.cur.length)} giorni, dal ${lungo(P.cur[0].data)} al ${lungo(P.cur[P.cur.length - 1].data)}${state.linea === "tutte" ? "" : " · " + lineaNome(state.linea)}.`
+      : "Nessun giorno con dati nel periodo.";
+    const tth = el("thead"), tthr = el("tr");
+    ["", "Totale", "Per capo", "Per capo al giorno"].forEach(t => tthr.appendChild(el("th", {}, t)));
+    tth.appendChild(tthr); tt.appendChild(tth);
+    const ttb = el("tbody");
+    for (const c of [{ k: "mang", lab: "Farina" }, { k: "siero", lab: "Siero" }, { k: "acqua", lab: "Acqua" }, { k: "ss", lab: "Sostanza secca" }]) {
+      const tot = sum(agC.map(o => c.k === "ss" ? o.ss : o[c.k]));
+      const capo = sum(agC.map(o => perCapoKg(o, c.k)));
+      const tr = el("tr");
+      tr.appendChild(el("td", {}, c.lab));
+      tr.appendChild(el("td", {}, c.k === "ss" ? `${nf(tot / 100, 1)} q` : `${nf(tot, 1)} q`));
+      tr.appendChild(el("td", {}, `${nf(capo, 1)} kg`));
+      tr.appendChild(el("td", {}, `${nf(P.cur.length ? capo / P.cur.length : null, 2)} kg`));
+      ttb.appendChild(tr);
+    }
+    tt.appendChild(ttb);
 
     // 1. sostanza secca per linea
     const ls = lineeSel();
@@ -781,7 +960,7 @@
     // 8. riepilogo settimanale (su tutto il periodo con dati di alimentazione)
     const ts = document.getElementById("t-sett"); ts.replaceChildren();
     const sh = el("thead"), shr = el("tr");
-    ["Settimana", "Capi medi", "Morti", "Farina (q)", "Siero (q)", "Acqua (q)", "S.s. kg/capo/g", "Sostituzione", "Peso medio"].forEach(t => shr.appendChild(el("th", {}, t)));
+    ["Settimana", "Capi medi", "Morti", "Usciti", "Farina (q)", "Farina kg/capo/g", "Siero (q)", "Acqua (q)", "S.s. kg/capo/g", "Sostituzione", "Peso medio"].forEach(t => shr.appendChild(el("th", {}, t)));
     sh.appendChild(shr); ts.appendChild(sh);
     const sb = el("tbody");
     const sett = {};
@@ -789,7 +968,7 @@
       const d = dt(g.data), lun = addDays(g.data, -((d.getDay() + 6) % 7));
       (sett[lun] || (sett[lun] = [])).push(g);
     }
-    const ms = mortiFiltrati();
+    const ms = mortiFiltrati(), us = usciteFiltrate();
     let prevSS = null;
     for (const lun of Object.keys(sett).sort()) {
       const os = sett[lun].map(g => agg(g, state.linea));
@@ -797,8 +976,10 @@
       const tr = el("tr");
       tr.appendChild(el("td", {}, `${ggmm(lun)} – ${ggmm(addDays(lun, 6))}${sett[lun].length < 7 ? ` (${sett[lun].length} gg)` : ""}`));
       tr.appendChild(el("td", {}, nf(mean(os.map(o => o.capi)))));
-      tr.appendChild(el("td", {}, nf(sum(ms.filter(m => m.data >= lun && m.data <= addDays(lun, 6)).map(m => m.n)))));
+      tr.appendChild(el("td", {}, nf(sum(tra(ms, lun, addDays(lun, 6)).map(m => m.n)))));
+      tr.appendChild(el("td", {}, nf(sum(tra(us, lun, addDays(lun, 6)).map(u => u.n)))));
       tr.appendChild(el("td", {}, nf(sum(os.map(o => o.mang)), 1)));
+      tr.appendChild(el("td", {}, nf(mean(os.map(o => perCapoKg(o, "mang"))), 2)));
       tr.appendChild(el("td", {}, nf(sum(os.map(o => o.siero)), 1)));
       tr.appendChild(el("td", {}, nf(sum(os.map(o => o.acqua)), 1)));
       tr.appendChild(el("td", {}, nf(ss, 2) + (prevSS ? `  (${ss >= prevSS ? "+" : ""}${nf((ss - prevSS) / prevSS * 100, 1)}%)` : "")));

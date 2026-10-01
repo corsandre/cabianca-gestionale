@@ -1,13 +1,44 @@
 """Dati per la pagina Analisi dell'allevamento.
 
 Prepara le serie giornaliere grezze del ciclo (capi, età e peso stimati per
-linea, pasti con Brix del siero) più mortalità e consegne. Aggregazioni,
+linea, pasti con Brix del siero) più entrate di animali, mortalità, uscite e
+consegne. Aggregazioni,
 filtri (periodo, linea, per capo/totali) e grafici si calcolano nel browser,
 così cambiare filtro non richiede di ricaricare la pagina.
 """
 from datetime import date, timedelta
 
-from app.models import UsoPasto, EventoMortalita, ConsegnaSiero, ConsegnaMangime, Censimento
+from app.models import UsoPasto, EventoMortalita, ConsegnaSiero, ConsegnaMangime, Censimento, Spostamento
+
+
+def _capi_per_linea(conteggio, linea_per_box):
+    capi = {l: 0 for l in (1, 2, 3)}
+    for box, n in conteggio.items():
+        if box in linea_per_box:
+            capi[linea_per_box[box]] += n
+    return capi
+
+
+def _entrate(ciclo, censimenti, conteggi, live_count, linea_per_box):
+    """Animali entrati: i censimenti che aumentano i capi rispetto al giorno prima (consegne di
+    suinetti registrate con un censimento) più gli spostamenti di tipo entrata. Un censimento di
+    riassetto (stesso totale, box diversi) non è un'entrata."""
+    entrate = []
+    for c in censimenti:
+        dopo = {l: 0 for l in (1, 2, 3)}
+        for cb in conteggi[c.id]:
+            if cb.box_numero in linea_per_box:
+                dopo[linea_per_box[cb.box_numero]] += cb.quantita
+        prima = _capi_per_linea(live_count(ciclo, al_giorno=c.data - timedelta(days=1)), linea_per_box)
+        n = sum(dopo.values()) - sum(prima.values())
+        if n > 0:
+            entrate.append({"data": c.data.isoformat(), "n": n, "origine": "censimento",
+                            "L": {l: max(0, dopo[l] - prima[l]) for l in (1, 2, 3)}})
+    for s in Spostamento.query.filter_by(ciclo_id=ciclo.id, tipo="entrata").all():
+        l = linea_per_box.get(s.box_destinazione)
+        entrate.append({"data": s.data.isoformat(), "n": s.quantita, "origine": "entrata",
+                        "L": {x: (s.quantita if x == l else 0) for x in (1, 2, 3)}})
+    return sorted(entrate, key=lambda e: e["data"])
 
 
 def dati_analisi(ciclo):
@@ -57,6 +88,9 @@ def dati_analisi(ciclo):
                        "pasti": pasti_per_giorno.get(d, {})})
         d += timedelta(days=1)
 
+    uscite = [{"data": s.data.isoformat(), "box": s.box_origine, "linea": LINEA_PER_BOX.get(s.box_origine),
+               "n": s.quantita, "categoria": s.categoria_uscita, "peso": s.peso_medio_kg}
+              for s in Spostamento.query.filter_by(ciclo_id=ciclo.id, tipo="uscita").order_by(Spostamento.data).all()]
     morti = [{"data": m.data.isoformat(), "cap": m.capannone_numero, "box": m.box_numero,
               "n": m.quantita, "causa": m.causa or ""}
              for m in EventoMortalita.query.filter_by(ciclo_id=ciclo.id).order_by(EventoMortalita.data).all()]
@@ -71,6 +105,8 @@ def dati_analisi(ciclo):
         "oggi": oggi.isoformat(),
         "perc_ss_mangime": get_setting_float("allevamento_perc_ss_mangime") or 100,
         "giorni": giorni,
+        "entrate": _entrate(ciclo, censimenti, conteggi, _live_count, LINEA_PER_BOX),
+        "uscite": uscite,
         "morti": morti,
         "consegne_siero": consegne_siero,
         "consegne_mangime": consegne_mangime,
