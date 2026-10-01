@@ -17,7 +17,8 @@ from PIL import Image  # noqa: E402
 
 from app.services.impianto.em2000 import schermo as S  # noqa: E402
 
-# schermata: {zona: testo}. Zone tabella: (componente, colonna); stato1/stato2 sono frasi intere.
+# schermata: {zona: testo}. Zone tabella: (componente, colonna) per le righe della ricetta standard,
+# oppure ("riga", n, colonna) con n = riga della tabella; stato1/stato2 sono frasi intere.
 NOTE = {
     "f-065809.png": {"ora_pc": "06.53.53", "pasto_attuale": "18:00", "prossimo_pasto": "07:00", "linea": "L3 G1",
                      "stato1": "ATTESA ORARIO", "stato2": "ATTESA",
@@ -58,13 +59,22 @@ NOTE = {
                      ("siero", "teorico"): "16,70 Qli", ("siero", "reale"): "16,67 Qli",
                      ("farina", "teorico"): "5,01 Qli", ("farina", "reale"): "5,00 Qli",
                      ("totale", "teorico"): "26,30 Qli", ("totale", "reale"): "26,42 Qli"},
+    # sera del 01/10/2026: silos della coclea 1 finito, dosaggio completato dalla coclea 3 (riga SOS)
+    "sera-182224.png": {("riga", 0, "nome"): "ACQUA PRE", ("riga", 1, "nome"): "SIERO",
+                        ("riga", 2, "nome"): "COCLEA 1", ("riga", 3, "nr"): "SOS", ("riga", 3, "nome"): "COCLEA 3",
+                        ("riga", 3, "teorico"): "1,73 Qli", ("riga", 3, "reale"): "1,72 Qli",
+                        ("riga", 5, "nome"): "TOTALI RICETTA"},
 }
+
+
+# righe della ricetta standard (acqua, siero, una coclea, trattini, totale)
+RIGHE_STANDARD = {"acqua": 0, "siero": 1, "farina": 2, "totale": 4}
 
 
 def zona(img, nome):
     if isinstance(nome, tuple):
-        comp, col = nome
-        (x0, x1), (y0, y1) = S.COLONNE[col], S.RIGHE[comp]
+        riga, col = (nome[1], nome[2]) if nome[0] == "riga" else (RIGHE_STANDARD[nome[0]], nome[1])
+        (x0, x1), (y0, y1) = S.COLONNE[col], S.riga_tabella(riga)
         return img.crop((x0, y0, x1, y1))
     return img.crop(S.ZONE[nome])
 
@@ -86,6 +96,10 @@ def main(cartella):
                     camp.frasi["/".join(S.chiave(g) for _, g in gs[:-cifre])] = prefisso
                 else:
                     camp.impara_frase(zona(img, z), testo)
+            elif isinstance(z, tuple) and z[-1] in ("nr", "nome"):
+                # nel carattere della tabella "I" e "l" sono lo stesso glifo: resta "l" (vedi schermo._nome)
+                if not camp.impara_testo(zona(img, z), testo.replace("I", "l")):
+                    errori.append(f"{nome_file} {z}: '{testo}' non si allinea")
             elif not camp.impara_testo(zona(img, z), testo):
                 errori.append(f"{nome_file} {z}: '{testo}' non si allinea")
     # le cifre del numero box dopo "NR." si imparano dalla schermata del box 14

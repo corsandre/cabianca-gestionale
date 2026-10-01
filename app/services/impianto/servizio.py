@@ -22,8 +22,9 @@ Comportamento
 - Fine linea: valori confermati → impianto_letture_linee; in automatico registrati subito in
   uso_pasti, con verifica restano proposte da approvare in Alimentazione. Messaggi nel gruppo dei
   pasti (`impianto_chat_pasti`): inizio pasto, fine di ogni linea, riepilogo a fine pasto.
-- Anomalie (siero insufficiente, fase bloccata, stato sconosciuto, linea non letta): evento con la
-  fotografia dello schermo, inviata su Telegram (siero nel gruppo dei pasti, le altre nel gruppo sistema).
+- Anomalie (siero o farina insufficiente, silos finito, fase bloccata, stato sconosciuto, linea non
+  letta): evento con la fotografia dello schermo, inviata su Telegram (siero, farina e silos nel gruppo
+  dei pasti, le altre nel gruppo sistema).
 """
 import html
 import io
@@ -36,7 +37,8 @@ from . import (crea_lettore, impostazione, modalita, cartella_dati, percorso_chi
                MANUALE, AUTOMATICO, NOMI_MODALITA)
 from .base import ATTESA_ORARIO, SCONOSCIUTA, COMPONENTI
 from .pasto import (TracciaPasto, PASTO_INIZIATO, PASTO_CONCLUSO, LINEA_INIZIATA, LINEA_CONCLUSA,
-                    LINEA_NON_LETTA, SIERO_INSUFFICIENTE, STATO_SCONOSCIUTO, FASE_BLOCCATA)
+                    LINEA_NON_LETTA, SIERO_INSUFFICIENTE, STATO_SCONOSCIUTO, FASE_BLOCCATA,
+                    SILOS_FINITO, FARINA_INSUFFICIENTE)
 
 log = logging.getLogger("impianto")
 TENTATIVI_PRIMA_DI_AVVISARE = 3
@@ -48,6 +50,11 @@ NOMI_COMPONENTI = {"acqua": "acqua", "siero": "siero", "farina": "farina"}
 
 def _q(v):
     return "–" if v is None else f"{v:.2f}".replace(".", ",") + " q"
+
+
+def _silos(n):
+    """Coclea n → silos che la alimenta (coclea 1 = silos A, 2 = B, ...)."""
+    return f"silos {chr(64 + n)}" if 1 <= n <= 26 else f"coclea {n}"
 
 
 def _hm(t):
@@ -304,6 +311,9 @@ class Servizio:
             r = e.dati["reale"]
             self.linee_pasto.append(r)       # valori, non la riga del database: il riepilogo arriva in un giro successivo
             valori = " · ".join(f"{NOMI_COMPONENTI[k]} {_q(r[k])}" for k in COMPONENTI)
+            coclee = e.dati.get("coclee") or {}
+            if len(coclee) > 1:     # farina da più silos: dettaglio per coclea
+                valori += " (" + " + ".join(f"{_silos(n)} {_q(c['reale'])}" for n, c in sorted(coclee.items())) + ")"
             if registrata:
                 esito = "registrata nel gestionale"
             elif lettura.stato == "proposta" and lettura.note:
@@ -319,11 +329,24 @@ class Servizio:
             durata = round((e.istante - self.inizio_pasto).total_seconds() / 60) if self.inizio_pasto else None
             self._salva_evento(e.tipo, e.istante, None, e.pasto)
             self._manda(f"🏁 Pasto delle {_hm(e.pasto)} concluso" + (f" in {durata} min" if durata else "") +
-                        f": {len(self.linee_pasto)} linee – " + " · ".join(f"{k} {_q(v)}" for k, v in tot.items()), chat)
+                        (f": {len(self.linee_pasto)} linee – " + " · ".join(f"{k} {_q(v)}" for k, v in tot.items())
+                         if self.linee_pasto else ": nessuna linea letta, valori da inserire a mano."), chat)
         elif e.tipo == SIERO_INSUFFICIENTE:
             self._anomalia(e.tipo, e.istante,
                            f"🥛 <b>Siero insufficiente</b> sulla linea {e.linea}: {_q(e.dati['reale'])} invece di "
                            f"{_q(e.dati['teorico'])}. Cisterna finita?", self._png(img), e.pasto, e.linea, canale=chat)
+        elif e.tipo == SILOS_FINITO:
+            esaurite = ", ".join(f"{_silos(n)} (coclea {n})" for n in e.dati["esaurite"]) or "un silos"
+            esaurite = esaurite[0].upper() + esaurite[1:]
+            sostitute = ", ".join(f"{_silos(n)} (coclea {n})" for n in e.dati["sostitute"])
+            self._anomalia(e.tipo, e.istante,
+                           f"🌾 <b>{esaurite} vuoto</b>: finito durante il dosaggio della linea {e.linea} del pasto "
+                           f"delle {_hm(e.pasto)}, la dose la completa il {sostitute}.",
+                           self._png(img), e.pasto, e.linea, canale=chat)
+        elif e.tipo == FARINA_INSUFFICIENTE:
+            self._anomalia(e.tipo, e.istante,
+                           f"🌾 <b>Farina insufficiente</b> sulla linea {e.linea}: {_q(e.dati['reale'])} invece di "
+                           f"{_q(e.dati['teorico'])}. Silos finito?", self._png(img), e.pasto, e.linea, canale=chat)
         elif e.tipo == FASE_BLOCCATA:
             self._anomalia(e.tipo, e.istante,
                            f"⚠️ <b>Fase bloccata</b>: «{e.dati['fase']}» da {e.dati['minuti']} min sulla linea {e.linea}.",

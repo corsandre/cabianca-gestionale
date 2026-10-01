@@ -55,6 +55,14 @@ class LetturaSchermo:
     teorico: dict = field(default_factory=dict)   # componente -> quintali (+ "totale")
     reale: dict = field(default_factory=dict)
     tabella_coerente: bool = False           # reale: acqua + siero + farina = totale, tutto in quintali
+    # dettaglio della farina per coclea (= silos): numero -> {"teorico", "reale", "sostituzione"}.
+    # sostituzione=True: coclea entrata al posto di un'altra il cui silos si è esaurito durante il dosaggio
+    coclee: dict = field(default_factory=dict)
+    righe_sconosciute: list = field(default_factory=list)   # righe della ricetta con nome mai visto
+
+    @property
+    def sostituzioni(self):
+        return {n: c for n, c in self.coclee.items() if c.get("sostituzione")}
 
     @property
     def in_attesa(self):

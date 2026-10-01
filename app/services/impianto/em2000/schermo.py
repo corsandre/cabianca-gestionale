@@ -32,8 +32,16 @@ ZONE = {
     "stato1": (285, 32, 572, 50),
     "stato2": (285, 56, 572, 74),
 }
-COLONNE = {"teorico": (431, 501), "reale": (504, 556)}
-RIGHE = {"acqua": (258, 277), "siero": (283, 301), "farina": (307, 326), "totale": (357, 376)}
+# tabella della ricetta: righe da 25 pixel; il numero di righe cambia (es. una riga "SOS COCLEA 3" in
+# più quando un silos finisce durante il dosaggio), quindi le righe si riconoscono dal nome
+COLONNE = {"nr": (285, 315), "nome": (317, 428), "teorico": (431, 501), "reale": (504, 556)}
+TABELLA_Y, TABELLA_PASSO, TABELLA_RIGHE = 256, 25, 10
+
+
+def riga_tabella(i):
+    """(y0, y1) della riga i della tabella (0 = prima riga sotto l'intestazione)."""
+    y = TABELLA_Y + TABELLA_PASSO * i
+    return y + 2, y + 21
 
 FASI = {
     "ATTESA": ATTESA_ORARIO,
@@ -205,16 +213,54 @@ def leggi(img, camp=None):
         l.fase = SCONOSCIUTA
     else:
         l.fase = FASI.get(s2, SCONOSCIUTA)
-    testi = {}
-    for comp, (y0, y1) in RIGHE.items():
-        for col, (x0, x1) in COLONNE.items():
-            t = camp.testo(img.crop((x0, y0, x1, y1)))
-            testi[(comp, col)] = t
-            getattr(l, col)[comp] = _quintali(t)
+    _leggi_tabella(img, camp, l)
+    return l
+
+
+def _nome(testo):
+    # nel carattere della tabella "I" e "l" sono lo stesso glifo, imparato come "l" (da "Qli")
+    return testo.replace("l", "I")
+
+
+def _leggi_tabella(img, camp, l):
+    """Righe della ricetta fino a TOTALI RICETTA: acqua, siero, coclee (farina = somma delle coclee).
+    Le righe sotto (lavaggio) non interessano. Coerente se tutti i valori reali sono in quintali e la
+    somma dei componenti fa il totale."""
+    componenti, unita_ok, totale = [], True, None
+    for i in range(TABELLA_RIGHE):
+        y0, y1 = riga_tabella(i)
+        t = {col: camp.testo(img.crop((x0, y0, x1, y1))) for col, (x0, x1) in COLONNE.items()}
+        nome = _nome(t["nome"])
+        if not nome:
+            continue                                  # riga vuota o di trattini
+        te, re = _quintali(t["teorico"]), _quintali(t["reale"])
+        if nome == "TOTALI RICETTA":
+            totale = (te, re, t["reale"].endswith("Qli"))
+            break
+        if nome.startswith("ACQUA"):
+            comp = "acqua"
+        elif nome == "SIERO":
+            comp = "siero"
+        elif nome.startswith("COCLEA ") and nome[7:].isdigit():
+            comp = "farina"
+            sos = _nome(t["nr"]) == "SOS"
+            l.coclee[int(nome[7:])] = {"teorico": te, "reale": re, "sostituzione": sos}
+            if sos:
+                te = 0      # il teorico della sostituzione è la parte mancante della coclea sostituita
+        else:
+            l.righe_sconosciute.append(nome)
+            continue
+        componenti.append(re)
+        # in quintali; "0 Kg" solo per una coclea che non ha dato niente (silos già vuoto)
+        unita_ok = unita_ok and (t["reale"].endswith("Qli") or re == 0)
+        for col, v in (("teorico", te), ("reale", re)):
+            d = getattr(l, col)
+            d[comp] = None if v is None or (comp in d and d[comp] is None) else round(d.get(comp, 0) + v, 4)
+    if totale:
+        l.teorico["totale"], l.reale["totale"] = totale[0], totale[1]
     re = l.reale
     l.tabella_coerente = (
-        all(re.get(c) is not None for c in ("acqua", "siero", "farina", "totale"))
-        and all(testi[(c, "reale")].endswith("Qli") for c in ("acqua", "siero", "farina", "totale"))
-        and abs(re["acqua"] + re["siero"] + re["farina"] - re["totale"]) <= 0.011
+        totale is not None and totale[2] and unita_ok and not l.righe_sconosciute
+        and all(re.get(c) is not None for c in ("acqua", "siero", "farina", "totale"))
+        and abs(sum(componenti) - re["totale"]) <= 0.011
     )
-    return l
