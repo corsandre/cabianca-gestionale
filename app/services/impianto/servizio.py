@@ -28,6 +28,10 @@ Comportamento
 - Cisterna del siero e silos: "finito ora" quando finiscono durante un dosaggio (si ricorda quando,
   nell'impostazione impianto_vuoto_siero / impianto_vuoto_silos_<n>), "ancora vuoto, finito il ..."
   ai pasti successivi, "di nuovo in uso" quando tornano a dare la dose piena.
+- Impostazioni dell'impianto (Brix del siero, % del siero nelle ricette): rilette con gli orari; se
+  cambiano, messaggio nel gruppo dei pasti. L'ultimo valore visto è in impianto_parametri.
+- EM2000 su un'altra schermata (es. Menu principale): avviso, controlli ogni 5 minuti finché non torna
+  su Situazione impianto, poi conferma. Il riepilogo giornaliero parte solo con dati leggibili.
 - Lettura incompleta: in una schermata riconosciuta qualcosa non si legge (riga della ricetta mai
   vista, ora o linea illeggibili...; vedi LetturaSchermo.problemi). Durante il pasto deve ripetersi in
   due fotografie di fila, al controllo periodico si conferma con una seconda fotografia. Fotografia
@@ -90,6 +94,7 @@ class Servizio:
         self.linee_pasto = []
         self.problemi_prec = set()       # problemi di lettura della fotografia precedente
         self.segnalati_oggi = {}         # problema / stato sconosciuto -> giorno in cui è stato segnalato
+        self.schermata_errata = None     # stato della schermata non riconosciuta, finché non torna giusta
 
     # ── Telegram ───────────────────────────────────────────────────────────
     def _manda(self, testo, canale, png=None):
@@ -131,7 +136,8 @@ class Servizio:
             if self.traccia.in_corso or self._pasto_vicino(adesso):
                 self._fotografa(adesso)
                 return max(15, int(impostazione("impianto_foto_s") or 60))
-            intervallo = timedelta(minutes=5 if self.guasti else int(impostazione("impianto_controllo_min") or 60))
+            intervallo = timedelta(minutes=5 if self.guasti or self.schermata_errata
+                                   else int(impostazione("impianto_controllo_min") or 60))
             if not self.ultimo_controllo or adesso - self.ultimo_controllo >= intervallo:
                 self._controllo(adesso)
             elif not self.guasti and (not self.ultimi_orari
@@ -149,6 +155,43 @@ class Servizio:
             return
         if self.orari and orari and orari != self.orari:
             self._controllo(adesso)
+        self._controlla_parametri(adesso)
+
+    def _controlla_parametri(self, adesso):
+        """Brix del siero e % del siero nelle ricette: messaggio se cambiati dall'ultima volta."""
+        import json
+        from app import db
+        from app.models import Setting
+        try:
+            nuovi = self.lettore.parametri()
+        except Exception as e:
+            log.info("lettura delle impostazioni dell'impianto non riuscita: %s", e)
+            return
+        if not nuovi:
+            return
+        s = db.session.get(Setting, "impianto_parametri")
+        vecchi = json.loads(s.value) if s and s.value else None
+        if vecchi == nuovi:
+            return
+        if s:
+            s.value = json.dumps(nuovi)
+        else:
+            db.session.add(Setting(key="impianto_parametri", value=json.dumps(nuovi)))
+        db.session.commit()
+        if vecchi is None:
+            return          # prima lettura: si memorizza e basta
+        pct = lambda v: "–" if v is None else f"{v:.1f}".replace(".", ",") + "%"
+        cambi = []
+        if vecchi.get("brix") != nuovi.get("brix"):
+            cambi.append(f"Brix del siero {pct(vecchi.get('brix'))} → <b>{pct(nuovi.get('brix'))}</b>")
+        vs, ns = vecchi.get("siero") or {}, nuovi.get("siero") or {}
+        for ricetta in sorted(set(vs) | set(ns)):
+            if vs.get(ricetta) != ns.get(ricetta):
+                cambi.append(f"siero nella «{html.escape(ricetta)}» {pct(vs.get(ricetta))} → <b>{pct(ns.get(ricetta))}</b>")
+        if cambi:
+            testo = "🧪 <b>Impostazioni dell'impianto cambiate</b>: " + "; ".join(cambi) + "."
+            self._salva_evento("parametri_cambiati", adesso, testo)
+            self._manda(testo, self._chat_pasti())
 
     def _prossimo_reale(self, adesso):
         if self.prossimo_pc is None or self.scarto_s is None:
@@ -222,15 +265,23 @@ class Servizio:
             for evento in self.traccia.aggiorna(adesso, l):
                 self._evento(evento, None)
             self.inizio_pasto, self.inizio_linee = None, {}
-        if l.fase == SCONOSCIUTA and self._da_segnalare(adesso, f"stato:{l.stato}"):
-            self._anomalia(STATO_SCONOSCIUTO, adesso, self._testo_sconosciuto(l.stato), esito.immagine_png)
+        if l.fase == SCONOSCIUTA:
+            self.schermata_errata = l.stato or "?"
+            if self._da_segnalare(adesso, f"stato:{l.stato}"):
+                self._anomalia(STATO_SCONOSCIUTO, adesso, self._testo_sconosciuto(l.stato), esito.immagine_png)
+        elif self.schermata_errata:
+            self.segnalati_oggi.pop(f"stato:{self.schermata_errata}", None)   # se ricapita, si riavvisa
+            self.schermata_errata = None
+            self._manda("✅ EM2000 di nuovo sulla schermata «Situazione impianto»: i pasti vengono seguiti.", "sistema")
         if l.problemi():
             try:            # conferma con una seconda fotografia (una sola può essere a metà aggiornamento)
                 img2, l2 = self.lettore.fotografa()
                 self._problemi(adesso, set(l.problemi()) & set(l2.problemi()), img2)
             except Exception as ex:
                 log.info("seconda fotografia non riuscita: %s", ex)
-        if self.riepilogo_del != adesso.date() and adesso.hour >= 6:
+        self._controlla_parametri(adesso)
+        if (self.riepilogo_del != adesso.date() and adesso.hour >= 6 and l.fase != SCONOSCIUTA
+                and l.prossimo_pasto and l.ora_pc):
             self.riepilogo_del = adesso.date()
             self._manda(f"🟢 Impianto OK – pasti {c.orari.replace(',', ' · ')} – prossimo alle {_hm(l.prossimo_pasto)}"
                         f" – orologio dell'impianto {self._scarto_testo(c.scarto_orologio_s)}", "sistema")

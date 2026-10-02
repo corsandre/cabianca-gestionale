@@ -18,6 +18,9 @@ from . import paradox, schermo
 
 EM2000 = "/root/.wine/drive_d/em2000"
 ORARI_DB = f"{EM2000}/pc/db/new/ORARI.DB"
+COMPO_DB = f"{EM2000}/pc/db/new/COMPO.DB"                 # componenti: SIERO.PERSECCO = Brix impostato
+RICETTECOMPO_DB = f"{EM2000}/pc/db/new/RICETTECOMPO.DB"   # % di ogni componente in ogni ricetta
+RICETTE_DB = f"{EM2000}/pc/db/new/Ricette.DB"             # nomi delle ricette
 CMD_FOTOGRAFIA = "XAUTHORITY=/root/.Xauthority nice -n 19 xwd -root -display :0 -silent | nice -n 19 gzip -1"
 
 
@@ -84,6 +87,22 @@ class LettoreEM2000(LettoreImpianto):
             if h or m:
                 orari.append(time(h, m))
         return sorted(set(orari))
+
+    def parametri(self):
+        """Brix del siero (COMPO.DB) e % del siero nelle ricette che lo usano (RICETTECOMPO.DB): sono
+        i valori che l'operatore cambia sul PC a ogni carico di siero."""
+        siero = next((c for c in paradox.leggi(self._leggi_file(COMPO_DB))
+                      if (c.get("NOME") or "").strip().upper() == "SIERO"), None)
+        if siero is None:
+            return {}
+        nomi = {r["NR"]: (r.get("NOME") or "").strip() or f"ricetta {r['NR']}"
+                for r in paradox.leggi(self._leggi_file(RICETTE_DB)) if r.get("NR")}
+        perc = {}
+        for r in paradox.leggi(self._leggi_file(RICETTECOMPO_DB)):
+            if r.get("NRRICETTA") and r.get("NRCOMPO") == siero["NR"] and r.get("PER"):
+                perc[nomi.get(r["NRRICETTA"], f"ricetta {r['NRRICETTA']}")] = round(r["PER"], 2)
+        brix = siero.get("PERSECCO")
+        return {"brix": round(brix, 2) if brix is not None else None, "siero": perc}
 
     def controllo(self):
         try:

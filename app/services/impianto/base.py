@@ -136,5 +136,10 @@ class LettoreImpianto:
     def orari_pasti(self) -> list:
         raise NotImplementedError
 
+    def parametri(self) -> dict:
+        """Impostazioni dell'impianto da sorvegliare (es. Brix del siero e sua % nelle ricette).
+        {"brix": float o None, "siero": {nome ricetta: %}}; {} se il tipo di impianto non lo prevede."""
+        return {}
+
     def chiudi(self):
         pass
