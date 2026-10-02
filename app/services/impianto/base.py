@@ -55,14 +55,57 @@ class LetturaSchermo:
     teorico: dict = field(default_factory=dict)   # componente -> quintali (+ "totale")
     reale: dict = field(default_factory=dict)
     tabella_coerente: bool = False           # reale: acqua + siero + farina = totale, tutto in quintali
-    # dettaglio della farina per coclea (= silos): numero -> {"teorico", "reale", "sostituzione"}.
-    # sostituzione=True: coclea entrata al posto di un'altra il cui silos si è esaurito durante il dosaggio
-    coclee: dict = field(default_factory=dict)
+    # righe della ricetta così come sono sullo schermo: {"comp": acqua/siero/farina, "coclea": n o None,
+    # "sos": bool, "teorico", "reale"} (quintali). Una riga "sos" è entrata al posto della riga normale più
+    # vicina sopra di lei, finita durante il dosaggio (es. siero → acqua + farina, coclea 1 → coclea 3).
+    righe: list = field(default_factory=list)
     righe_sconosciute: list = field(default_factory=list)   # righe della ricetta con nome mai visto
 
     @property
     def sostituzioni(self):
-        return {n: c for n, c in self.coclee.items() if c.get("sostituzione")}
+        """[(riga sostituita, riga che la sostituisce)]"""
+        out, normale = [], None
+        for r in self.righe:
+            if r["sos"]:
+                if normale is not None:
+                    out.append((normale, r))
+            else:
+                normale = r
+        return out
+
+    def problemi(self):
+        """Cosa non si è riuscito a leggere in una schermata riconosciuta (stato noto): serve a
+        segnalare con la fotografia schermate nuove o cambiate, da insegnare al lettore."""
+        if self.fase == SCONOSCIUTA:
+            return []          # schermata non riconosciuta: la segnala già "stato sconosciuto"
+        p = []
+        if self.ora_pc is None:
+            p.append("ora del PC illeggibile")
+        if self.prossimo_pasto is None:
+            p.append("prossimo pasto illeggibile")
+        if self.fase != ATTESA_ORARIO:
+            if self.pasto_attuale is None:
+                p.append("orario del pasto in corso illeggibile")
+            if self.linea is None:
+                p.append("linea illeggibile")
+        for nome in self.righe_sconosciute:
+            p.append(f"riga della ricetta mai vista: «{nome}»")
+        if not self.righe:
+            p.append("tabella della ricetta illeggibile")
+        elif any(r["reale"] is None or r["teorico"] is None for r in self.righe):
+            p.append("valori della ricetta illeggibili")
+        if self.reale.get("totale") is None:
+            p.append("totale della ricetta illeggibile")
+        return list(dict.fromkeys(p))
+
+    @property
+    def farina_per_silos(self):
+        """coclea (= silos) → quintali di farina caricati, sommando tutte le sue righe"""
+        out = {}
+        for r in self.righe:
+            if r["comp"] == "farina" and r["reale"] is not None:
+                out[r["coclea"]] = round(out.get(r["coclea"], 0) + r["reale"], 4)
+        return out
 
     @property
     def in_attesa(self):

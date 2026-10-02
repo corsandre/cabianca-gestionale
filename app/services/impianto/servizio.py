@@ -22,9 +22,17 @@ Comportamento
 - Fine linea: valori confermati → impianto_letture_linee; in automatico registrati subito in
   uso_pasti, con verifica restano proposte da approvare in Alimentazione. Messaggi nel gruppo dei
   pasti (`impianto_chat_pasti`): inizio pasto, fine di ogni linea, riepilogo a fine pasto.
-- Anomalie (siero o farina insufficiente, silos finito, fase bloccata, stato sconosciuto, linea non
-  letta): evento con la fotografia dello schermo, inviata su Telegram (siero, farina e silos nel gruppo
-  dei pasti, le altre nel gruppo sistema).
+- Anomalie (siero o farina insufficiente, cisterna del siero o silos finiti, fase bloccata, stato
+  sconosciuto, linea non letta): evento con la fotografia dello schermo, inviata su Telegram (siero,
+  farina e silos nel gruppo dei pasti, le altre nel gruppo sistema).
+- Cisterna del siero e silos: "finito ora" quando finiscono durante un dosaggio (si ricorda quando,
+  nell'impostazione impianto_vuoto_siero / impianto_vuoto_silos_<n>), "ancora vuoto, finito il ..."
+  ai pasti successivi, "di nuovo in uso" quando tornano a dare la dose piena.
+- Lettura incompleta: in una schermata riconosciuta qualcosa non si legge (riga della ricetta mai
+  vista, ora o linea illeggibili...; vedi LetturaSchermo.problemi). Durante il pasto deve ripetersi in
+  due fotografie di fila, al controllo periodico si conferma con una seconda fotografia. Fotografia
+  nel gruppo sistema, al massimo una al giorno per tipo di problema (idem per lo stato sconosciuto
+  visto ai controlli periodici).
 """
 import html
 import io
@@ -38,7 +46,7 @@ from . import (crea_lettore, impostazione, modalita, cartella_dati, percorso_chi
 from .base import ATTESA_ORARIO, SCONOSCIUTA, COMPONENTI
 from .pasto import (TracciaPasto, PASTO_INIZIATO, PASTO_CONCLUSO, LINEA_INIZIATA, LINEA_CONCLUSA,
                     LINEA_NON_LETTA, SIERO_INSUFFICIENTE, STATO_SCONOSCIUTO, FASE_BLOCCATA,
-                    SILOS_FINITO, FARINA_INSUFFICIENTE)
+                    SILOS_FINITO, SIERO_FINITO, FARINA_INSUFFICIENTE)
 
 log = logging.getLogger("impianto")
 TENTATIVI_PRIMA_DI_AVVISARE = 3
@@ -80,6 +88,8 @@ class Servizio:
         self.inizio_pasto = None
         self.inizio_linee = {}
         self.linee_pasto = []
+        self.problemi_prec = set()       # problemi di lettura della fotografia precedente
+        self.segnalati_oggi = {}         # problema / stato sconosciuto -> giorno in cui è stato segnalato
 
     # ── Telegram ───────────────────────────────────────────────────────────
     def _manda(self, testo, canale, png=None):
@@ -210,9 +220,15 @@ class Servizio:
             # servizio avviato (o riavviato) a pasto già in corso: lo si segue da qui
             for evento in self.traccia.aggiorna(adesso, l):
                 self._evento(evento, None)
-        if l.fase == SCONOSCIUTA:
+        if l.fase == SCONOSCIUTA and self._da_segnalare(adesso, f"stato:{l.stato}"):
             self._anomalia(STATO_SCONOSCIUTO, adesso, f"Stato dell'impianto mai visto: {html.escape(l.stato or '?')}",
                            esito.immagine_png)
+        if l.problemi():
+            try:            # conferma con una seconda fotografia (una sola può essere a metà aggiornamento)
+                img2, l2 = self.lettore.fotografa()
+                self._problemi(adesso, set(l.problemi()) & set(l2.problemi()), img2)
+            except Exception as ex:
+                log.info("seconda fotografia non riuscita: %s", ex)
         if self.riepilogo_del != adesso.date() and adesso.hour >= 6:
             self.riepilogo_del = adesso.date()
             self._manda(f"🟢 Impianto OK – pasti {c.orari.replace(',', ' · ')} – prossimo alle {_hm(l.prossimo_pasto)}"
@@ -258,8 +274,90 @@ class Servizio:
                                f"⚠️ <b>Pasto delle {_hm(self.prossimo_pc)} non partito</b>: l'impianto è ancora in attesa.",
                                self._png(img))
             self.prossimo_pc = lettura.prossimo_pasto
+        problemi = set(lettura.problemi())
+        self._problemi(adesso, problemi & self.problemi_prec, img)
+        self.problemi_prec = problemi
         for evento in self.traccia.aggiorna(adesso, lettura):
             self._evento(evento, img)
+
+    # ── letture incomplete ─────────────────────────────────────────────────
+    def _da_segnalare(self, adesso, chiave):
+        if self.segnalati_oggi.get(chiave) == adesso.date():
+            return False
+        self.segnalati_oggi[chiave] = adesso.date()
+        return True
+
+    def _problemi(self, adesso, problemi, img):
+        nuovi = sorted(p for p in problemi if self._da_segnalare(adesso, p))
+        if nuovi:
+            self._anomalia("lettura_incompleta", adesso,
+                           "🔍 <b>Lettura incompleta</b> dello schermo dell'impianto: " +
+                           "; ".join(html.escape(p) for p in nuovi[:5]) +
+                           (f" e altri {len(nuovi) - 5}" if len(nuovi) > 5 else "") + ". Schermata da insegnare al lettore.",
+                           self._png(img) if not isinstance(img, (bytes, type(None))) else img)
+
+    # ── cisterna del siero e silos ─────────────────────────────────────────
+    @staticmethod
+    def _chiave_vuoto(chiave):
+        return "impianto_vuoto_siero" if chiave[0] == "siero" else f"impianto_vuoto_silos_{chiave[1]}"
+
+    @staticmethod
+    def _nome_esaurito(chiave):
+        return "Cisterna del siero" if chiave[0] == "siero" else f"Silos {chr(64 + chiave[1])} (coclea {chiave[1]})"
+
+    @staticmethod
+    def _materiale(c):
+        """'7,69 q di acqua' / '0,40 q di farina (silos C)' per una riga di sostituzione"""
+        if c["comp"] == "farina":
+            return f"{_q(c['reale'])} di farina" + (f" ({_silos(c['coclea'])})" if c["coclea"] else "")
+        return f"{_q(c['reale'])} di {c['comp']}"
+
+    def _esaurito(self, e, img, chat):
+        import json
+        from app import db
+        from app.models import Setting
+        d = e.dati
+        siero = e.tipo == SIERO_FINITO
+        chiave = ("siero",) if siero else ("silos", d["coclea"])
+        nome, icona = self._nome_esaurito(chiave), "🥛" if siero else "🌾"
+        finito, vuoto = ("finita", "vuota") if siero else ("finito", "vuoto")
+        con = " e ".join(self._materiale(c) for c in d["con"])
+        dove = f"linea {e.linea} del pasto delle {_hm(e.pasto)}"
+        nome_imp = self._chiave_vuoto(chiave)
+        s = db.session.get(Setting, nome_imp)
+        if d["finito_ora"]:
+            dal = d["dal"]
+            testo = (f"{icona} <b>{nome}: {finito} ora</b>, durante il dosaggio della {dove} (alle {dal:%H:%M}): "
+                     f"caricati {_q(d['reale'])} su {_q(d['teorico'])}, completato con {con}.")
+            valore = json.dumps({"dal": dal.isoformat(timespec="minutes"), "pasto": _hm(e.pasto), "linea": e.linea})
+        else:
+            prima = json.loads(s.value) if s and s.value else {}
+            if prima.get("dal"):
+                quando = datetime.fromisoformat(prima["dal"])
+                da = f"{finito} il {quando:%d/%m} alle {quando:%H:%M}, pasto delle {prima['pasto']}"
+            else:
+                da = f"era già {vuoto}, non so da quando"
+            testo = f"{icona} <b>{nome}: ancora {vuoto}</b> ({da}): la {dove} è stata fatta con {con}."
+            valore = s.value if s else json.dumps({"dal": None})
+        if s:
+            s.value = valore
+        else:
+            db.session.add(Setting(key=nome_imp, value=valore))
+        db.session.commit()
+        self._anomalia(e.tipo, e.istante, testo, self._png(img), e.pasto, e.linea, canale=chat)
+
+    def _ricaricato(self, chiave, e, chat):
+        from app import db
+        from app.models import Setting
+        s = db.session.get(Setting, self._chiave_vuoto(chiave))
+        if not s:
+            return
+        db.session.delete(s)
+        db.session.commit()
+        testo = (f"{'🥛' if chiave[0] == 'siero' else '🌾'} <b>{self._nome_esaurito(chiave)}: di nuovo in uso</b>, "
+                 f"dose piena sulla linea {e.linea} del pasto delle {_hm(e.pasto)}.")
+        self._salva_evento("ricaricato", e.istante, testo, e.pasto, e.linea)
+        self._manda(testo, chat)
 
     @staticmethod
     def _png(img):
@@ -311,9 +409,9 @@ class Servizio:
             r = e.dati["reale"]
             self.linee_pasto.append(r)       # valori, non la riga del database: il riepilogo arriva in un giro successivo
             valori = " · ".join(f"{NOMI_COMPONENTI[k]} {_q(r[k])}" for k in COMPONENTI)
-            coclee = e.dati.get("coclee") or {}
-            if len(coclee) > 1:     # farina da più silos: dettaglio per coclea
-                valori += " (" + " + ".join(f"{_silos(n)} {_q(c['reale'])}" for n, c in sorted(coclee.items())) + ")"
+            silos = e.dati.get("silos") or {}
+            if len(silos) > 1:     # farina da più silos: dettaglio per silos
+                valori += " (" + " + ".join(f"{_silos(n)} {_q(q)}" for n, q in sorted(silos.items())) + ")"
             if registrata:
                 esito = "registrata nel gestionale"
             elif lettura.stato == "proposta" and lettura.note:
@@ -324,6 +422,8 @@ class Servizio:
             self._salva_evento(e.tipo, e.istante, valori, e.pasto, e.linea)
             self._manda(f"✅ <b>Linea {e.linea}</b> (pasto delle {_hm(e.pasto)}): {valori} – totale {_q(r['totale'])}\n"
                         f"{esito}{avviso}", chat)
+            for chiave in e.dati.get("piene") or []:
+                self._ricaricato(tuple(chiave), e, chat)
         elif e.tipo == PASTO_CONCLUSO:
             tot = {k: sum(l.get(k) or 0 for l in self.linee_pasto) for k in COMPONENTI}
             durata = round((e.istante - self.inizio_pasto).total_seconds() / 60) if self.inizio_pasto else None
@@ -335,14 +435,8 @@ class Servizio:
             self._anomalia(e.tipo, e.istante,
                            f"🥛 <b>Siero insufficiente</b> sulla linea {e.linea}: {_q(e.dati['reale'])} invece di "
                            f"{_q(e.dati['teorico'])}. Cisterna finita?", self._png(img), e.pasto, e.linea, canale=chat)
-        elif e.tipo == SILOS_FINITO:
-            esaurite = ", ".join(f"{_silos(n)} (coclea {n})" for n in e.dati["esaurite"]) or "un silos"
-            esaurite = esaurite[0].upper() + esaurite[1:]
-            sostitute = ", ".join(f"{_silos(n)} (coclea {n})" for n in e.dati["sostitute"])
-            self._anomalia(e.tipo, e.istante,
-                           f"🌾 <b>{esaurite} vuoto</b>: finito durante il dosaggio della linea {e.linea} del pasto "
-                           f"delle {_hm(e.pasto)}, la dose la completa il {sostitute}.",
-                           self._png(img), e.pasto, e.linea, canale=chat)
+        elif e.tipo in (SILOS_FINITO, SIERO_FINITO):
+            self._esaurito(e, img, chat)
         elif e.tipo == FARINA_INSUFFICIENTE:
             self._anomalia(e.tipo, e.istante,
                            f"🌾 <b>Farina insufficiente</b> sulla linea {e.linea}: {_q(e.dati['reale'])} invece di "

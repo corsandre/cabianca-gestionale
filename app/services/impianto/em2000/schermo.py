@@ -224,9 +224,11 @@ def _nome(testo):
 
 def _leggi_tabella(img, camp, l):
     """Righe della ricetta fino a TOTALI RICETTA: acqua, siero, coclee (farina = somma delle coclee).
-    Le righe sotto (lavaggio) non interessano. Coerente se tutti i valori reali sono in quintali e la
-    somma dei componenti fa il totale."""
-    componenti, unita_ok, totale = [], True, None
+    Le righe "SOS" sostituiscono la riga normale sopra di loro finita durante il dosaggio: il loro
+    teorico è la parte mancante, quindi il teorico di un componente conta solo le righe normali, il
+    reale tutte le righe di quel materiale. Le righe sotto (lavaggio) non interessano. Coerente se la
+    somma dei componenti fa il totale (valori in quintali o in kg, che EM2000 usa per i numeri piccoli)."""
+    totale = None
     for i in range(TABELLA_RIGHE):
         y0, y1 = riga_tabella(i)
         t = {col: camp.testo(img.crop((x0, y0, x1, y1))) for col, (x0, x1) in COLONNE.items()}
@@ -235,32 +237,30 @@ def _leggi_tabella(img, camp, l):
             continue                                  # riga vuota o di trattini
         te, re = _quintali(t["teorico"]), _quintali(t["reale"])
         if nome == "TOTALI RICETTA":
-            totale = (te, re, t["reale"].endswith("Qli"))
+            totale = (te, re)
             break
+        coclea = None
         if nome.startswith("ACQUA"):
             comp = "acqua"
         elif nome == "SIERO":
             comp = "siero"
         elif nome.startswith("COCLEA ") and nome[7:].isdigit():
-            comp = "farina"
-            sos = _nome(t["nr"]) == "SOS"
-            l.coclee[int(nome[7:])] = {"teorico": te, "reale": re, "sostituzione": sos}
-            if sos:
-                te = 0      # il teorico della sostituzione è la parte mancante della coclea sostituita
+            comp, coclea = "farina", int(nome[7:])
         else:
             l.righe_sconosciute.append(nome)
             continue
-        componenti.append(re)
-        # in quintali; "0 Kg" solo per una coclea che non ha dato niente (silos già vuoto)
-        unita_ok = unita_ok and (t["reale"].endswith("Qli") or re == 0)
-        for col, v in (("teorico", te), ("reale", re)):
-            d = getattr(l, col)
-            d[comp] = None if v is None or (comp in d and d[comp] is None) else round(d.get(comp, 0) + v, 4)
+        l.righe.append({"comp": comp, "coclea": coclea, "sos": _nome(t["nr"]) == "SOS", "teorico": te, "reale": re})
+    for comp in ("acqua", "siero", "farina"):
+        righe = [r for r in l.righe if r["comp"] == comp]
+        normali = [r for r in righe if not r["sos"]]
+        l.reale[comp] = None if not righe or any(r["reale"] is None for r in righe) else round(sum(r["reale"] for r in righe), 4)
+        l.teorico[comp] = None if not normali or any(r["teorico"] is None for r in normali) else round(sum(r["teorico"] for r in normali), 4)
     if totale:
-        l.teorico["totale"], l.reale["totale"] = totale[0], totale[1]
+        l.teorico["totale"], l.reale["totale"] = totale
     re = l.reale
     l.tabella_coerente = (
-        totale is not None and totale[2] and unita_ok and not l.righe_sconosciute
+        totale is not None and not l.righe_sconosciute and bool(l.righe)
+        and all(r["reale"] is not None for r in l.righe)
         and all(re.get(c) is not None for c in ("acqua", "siero", "farina", "totale"))
-        and abs(sum(componenti) - re["totale"]) <= 0.011
+        and abs(sum(r["reale"] for r in l.righe) - re["totale"]) <= 0.011
     )
