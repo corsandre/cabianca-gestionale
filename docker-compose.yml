@@ -1,6 +1,8 @@
 services:
   web:
     build: .
+    image: cabianca-gestionale:latest
+    pull_policy: build          # immagine locale: mai scaricarla da internet
     ports:
       - "${APP_BIND:-0.0.0.0}:${APP_PORT:-8080}:8080"
     volumes:
@@ -13,8 +15,12 @@ services:
 
   # Sorveglianza dell'impianto di alimentazione (vedi app/services/impianto/servizio.py).
   # In modalità "Manuale" (default) non si collega a niente e resta in attesa.
+  # Stessa immagine del gestionale (costruita dal servizio web), parte dopo di lui.
   impianto:
-    build: .
+    image: cabianca-gestionale:latest
+    pull_policy: never
+    depends_on:
+      - web
     command: python -m app.services.impianto.servizio
     volumes:
       - ./data:/app/data

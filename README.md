@@ -2,7 +2,8 @@
 
 Applicazione gestionale per **Fattoria Ca Bianca**: contabilità, fatturazione elettronica, banca, magazzino e
 gestione dell'allevamento suini. Web app Flask in Docker, usabile da PC e da smartphone (PWA), con un bot Telegram
-per le operazioni quotidiane di stalla.
+per le operazioni quotidiane di stalla. Dalla versione 2.0 può collegarsi al PC dell'impianto di alimentazione
+(EM2000) per leggere i consumi dei pasti e sorvegliarlo.
 
 ---
 
@@ -12,6 +13,7 @@ per le operazioni quotidiane di stalla.
 - [Sezioni](#sezioni)
   - [Finanza](#finanza-tema-verde)
   - [Allevamento Suini](#allevamento-suini-tema-rosa)
+  - [Impianto di alimentazione](#impianto-di-alimentazione-collegamento-al-pc-dalla-20)
 - [Bot Telegram](#bot-telegram)
 - [Funzionalità trasversali](#funzionalità-trasversali)
 - [Utenti, ruoli e accesso alle sezioni](#utenti-ruoli-e-accesso-alle-sezioni)
@@ -37,6 +39,8 @@ Internet ──HTTPS──▶ Caddy (VPS, certificati automatici) ──▶ 127.
                                                                               ├─ Flask app
                                                                               ├─ APScheduler (job notturni)
                                                                               └─ Bot Telegram allevamento (thread)
+                                                                          container Docker "impianto" (stessa immagine)
+                                                                              └─ servizio di sorveglianza ──SSH via ZeroTier──▶ PC impianto (EM2000)
                                                      volumi: data/ (SQLite)  backups/  app/static/uploads/
 ```
 
@@ -49,6 +53,9 @@ Internet ──HTTPS──▶ Caddy (VPS, certificati automatici) ──▶ 127.
   possono finire nel database sbagliato. Macchine di sviluppo o vecchi server (es. il Raspberry usato prima del
   VPS) **non devono avviare il container** con il token di produzione. Per provare il codice in locale si usa una
   copia del DB e `docker compose run` senza avviare il bot (vedi [Deploy](#deploy-di-un-aggiornamento)).
+- **Due container, un database.** `web` è il gestionale; `impianto` è il servizio che sorveglia l'impianto di
+  alimentazione (processo separato, così un aggiornamento del gestionale non interrompe un pasto seguito). Usano la
+  stessa immagine e lo stesso `data/`; il servizio parte con `RUOLO=impianto` e non avvia né scheduler né bot.
 - Tutto il codice, i template e gli static sono **copiati nell'immagine** al build: ogni modifica richiede un
   rebuild; `docker compose restart` non aggiorna nulla.
 
@@ -199,12 +206,20 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
 - Pagina di grafici interattivi sul ciclo attivo, con una riga di filtri che vale per tutta la pagina: periodo
   (7 / 14 / 30 giorni / tutto il ciclo), linea (tutte o una) e valori per capo o totali. La scelta resta salvata
   nel browser.
-- Indicatori con sparkline e confronto col periodo precedente: capi presenti, mortalità, sostanza secca per capo al
-  giorno, % di sostituzione con siero, farina e siero medi al giorno.
+- Indicatori con sparkline e confronto col periodo precedente: capi presenti (con "tutto il ciclo" si parte da 0
+  e si vedono gli entrati), mortalità in % dei capi a inizio periodo più gli entrati, uscite per tipo con i kg,
+  farina al giorno e per capo nel periodo, siero e sostanza secca al giorno, % di sostituzione con siero. Il filtro
+  "per capo / totali" decide quale dei due valori mostrano.
+- Andamento dei capi (a gradini, punti nei giorni con consegne, morti o uscite) con il bilancio del periodo:
+  inizio + entrati − morti − usciti = fine (le "rettifiche" sono le differenze trovate ai censimenti o, per una
+  linea, gli spostamenti tra linee). Gli entrati sono i censimenti che aumentano i capi (consegne di suinetti)
+  più gli spostamenti di tipo entrata.
+- Consumi al giorno di farina, siero e acqua e tabella del consumo nel periodo: totale, per capo (ogni giorno il
+  consumo diviso i capi di quel giorno, poi sommato) e per capo al giorno.
 - Grafici: sostanza secca al giorno per linea, s.s. in % del peso vivo stimato, s.s. da farina e da siero,
   % di sostituzione per linea, crescita dei componenti della razione (indice base 100 con media mobile a 3 giorni),
   medie per pasto, mortalità nel tempo (giornaliera o settimanale), mortalità per capannone con elenco degli eventi,
-  riepilogo settimanale. Ogni grafico ha una vista tabella.
+  riepilogo settimanale (con usciti e farina kg/capo/g). Ogni grafico ha una vista tabella.
 - Le linee hanno i loro colori (1 blu, 2 rossa, 3 verde) più un simbolo diverso (● ▲ ■), perché rosso e verde non
   bastano per chi ha difficoltà a distinguere i colori. Palette verificata con lo strumento della skill dataviz.
 - I dati grezzi giornalieri li prepara `app/services/allevamento_analisi.py`; aggregazioni e filtri sono calcolati nel
@@ -216,6 +231,7 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
 - Medicinali (ml/kg, giorni di somministrazione e sospensione).
 - Scorte: capacità silos, soglia di riordino (in pasti, così segue l'aumento dei consumi), quantità per ordine,
   soglia di scarto siero, orari dei 3 pasti.
+- Impianto di alimentazione: modalità del collegamento, indirizzo del PC, chiave, prova (vedi sotto).
 
 #### Modelli dati (`app/models.py`)
 
@@ -230,10 +246,13 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
 | `ConsegnaSiero` | `consegne_siero` | Carichi di siero, con `speditore_id` e chiusura del carico |
 | `ConsegnaMangime` | `consegne_mangime` | Consegne di mangime |
 | `CalibrazioneGiacenza` | `calibrazioni_giacenza` | Ricalibrazioni manuali della giacenza mangime |
-| `UsoPasto` | `uso_pasti` | Consumo per pasto/linea, reale o stimato |
+| `UsoPasto` | `uso_pasti` | Consumo per pasto/linea, reale o stimato; `fonte` = `impianto` se letto dal PC di alimentazione |
 | `RazioneBox` | `razioni_box_v2` | % razione per box e giorno, reale o stimata |
 | `Medicinale` | `medicinali` | Farmaci disponibili |
 | `Trattamento` / `Somministrazione` | `trattamenti` / `somministrazioni` | Corso di cura e singole dosi |
+| `ImpiantoControllo` | `impianto_controlli` | Controlli periodici dell'impianto (raggiungibile, stato, orologio, orari) |
+| `ImpiantoLinea` | `impianto_letture_linee` | Quantitativi letti per pasto e linea: proposta → approvata/scartata, o registrata |
+| `ImpiantoEvento` | `impianto_eventi` | Eventi dei pasti e anomalie, con la fotografia dello schermo |
 
 #### Servizi (`app/services/`)
 
@@ -242,6 +261,83 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
 | `allevamento_scorte.py` | Giacenze mangime/siero, curva di accrescimento (`peso_da_giorni`, `giorni_da_peso`), `pasto_completo`, stime di esaurimento e spazio per il carico, ricalibrazioni, scarto dei carichi di siero |
 | `allevamento_pasti.py` | Registrazione pasti, stime dei pasti mancanti, calcolo % siero |
 | `allevamento_bot.py` | Bot Telegram dell'allevamento |
+| `allevamento_analisi.py` | Dati giornalieri per la pagina Analisi (capi, età, pasti, entrate, uscite, morti) |
+| `impianto/` | Collegamento all'impianto di alimentazione (vedi sotto) |
+
+---
+
+### Impianto di alimentazione (collegamento al PC, dalla 2.0)
+
+L'impianto di alimentazione (software **EM2000**, su un PC Linux) prepara e distribuisce i pasti. Il gestionale può
+collegarsi al PC **in sola lettura**: fotografa lo schermo, ne legge i valori e segue i pasti. Sul PC non viene
+scritto niente e non resta nessun file (la fotografia viaggia compressa sulla connessione SSH).
+
+**Tre modalità** (Impostazioni allevamento → *Impianto di alimentazione*):
+
+| Modalità | Cosa fa |
+|---|---|
+| **Manuale** (default) | Nessuna connessione al PC: il gestionale funziona come senza impianto collegato. Per le aziende che non hanno il collegamento |
+| **Automatico con verifica** | Sorveglianza completa e messaggi, ma i consumi letti sono *proposte* da approvare o scartare in Alimentazione |
+| **Automatico** | I consumi letti entrano direttamente come dati reali (`fonte = impianto`). Un pasto già inserito a mano non viene toccato |
+
+**Cosa fa il servizio** (`app/services/impianto/servizio.py`, container `impianto`):
+- *Controllo periodico* (default ogni 60 minuti, 5 se il PC non risponde): fotografia dello schermo e orari dei pasti
+  impostati sull'impianto, salvati in `impianto_controlli`. Tra un controllo e l'altro rilegge solo gli orari ogni
+  10 minuti, così un pasto anticipato viene seguito dall'inizio. Nel gruppo *sistema*: riepilogo giornaliero,
+  impianto non raggiungibile (dopo 3 tentativi) e di nuovo raggiungibile, orologio del PC spostato.
+- *Pasto*: da qualche minuto prima dell'orario (convertito in ora reale con lo scarto dell'orologio del PC) una
+  fotografia ogni 60 secondi finché l'impianto torna in attesa. Fine di ogni linea: i quantitativi letti più volte
+  uguali (dalla miscelazione in poi, solo se acqua + siero + farina = totale) diventano la lettura della linea.
+  Nel gruppo dei pasti (default *allevamento*): inizio pasto, fine di ogni linea con i quantitativi, riepilogo.
+- *Avvisi*: pasto non partito, orari dei pasti cambiati o pasto saltato, cisterna del siero o silos **finiti ora**
+  (con orario e quantità) o **ancora vuoti** dal giorno in cui sono finiti, **di nuovo in uso** quando tornano a dare
+  la dose piena, siero o farina insufficienti, fase bloccata, stato mai visto, **lettura incompleta** (una schermata
+  riconosciuta in cui qualcosa non si legge: va insegnata al lettore). Le anomalie arrivano con la fotografia.
+- Se il pasto parte più di 15 minuti dopo l'orario del gestionale, viene registrato anche l'orario effettivo
+  (serve ad attribuire il siero al carico giusto).
+
+**Come si legge lo schermo** (`app/services/impianto/em2000/schermo.py`): il carattere di EM2000 è una bitmap
+fissa, quindi ogni carattere si riconosce per confronto esatto con un campionario (`em2000/campionario.json`); le
+frasi di stato in grassetto, dove le lettere si toccano, si riconoscono intere. La tabella della ricetta si legge
+riga per riga dal nome (ACQUA, SIERO, COCLEA n, TOTALI RICETTA). Quando un componente finisce durante il dosaggio,
+EM2000 aggiunge righe **SOS** che lo sostituiscono: siero finito → acqua (la parte acqua del siero) + farina (la sua
+sostanza secca); silos finito → un'altra coclea (coclea 1 = silos A, 2 = B, 3 = C). Ogni riga SOS sostituisce la
+riga normale più vicina sopra di lei. Il teorico viene solo dalle righe della ricetta, il reale da tutte le righe
+di quel materiale.
+
+**Insegnare una schermata nuova**: salvare la schermata (PNG), aggiungere in `scripts/em2000_addestra.py` i testi
+che contiene e rilanciare lo script. Se un testo non si allinea ai caratteri trovati il campionario non viene
+salvato.
+
+**Configurazione del collegamento**
+1. Il PC dell'impianto e il server devono essere sulla stessa rete privata (es. ZeroTier). Sul server, con `ufw`,
+   va aperta la porta UDP di ZeroTier (`sudo ufw allow 9993/udp`), altrimenti il server non comunica con gli altri
+   nodi della rete.
+2. Chiave SSH: da Impostazioni (*Crea la chiave*) oppure con `ssh-keygen -t ed25519 -f data/impianto/chiave`.
+   La chiave privata resta in `data/impianto/` (mai nel repository).
+3. Sul PC, nel file `~/.ssh/authorized_keys` dell'utente con cui ci si collega, una riga con la chiave pubblica,
+   limitata all'indirizzo del server e senza tunnel:
+   ```
+   from="<IP del server nella rete privata>",no-port-forwarding,no-X11-forwarding,no-agent-forwarding ssh-ed25519 AAAA… gestionale
+   ```
+   Per togliere l'accesso basta cancellare la riga.
+4. In Impostazioni: indirizzo e utente del PC, modalità, poi **Prova ora** (si collega anche in Manuale, solo su
+   richiesta). La chiave dell'host del PC viene memorizzata in `data/impianto/known_hosts` al primo collegamento.
+5. Docker: la rete dei container ha MTU 1280 (`docker-compose.yml`), perché sulla rete ZeroTier pacchetti più grandi
+   si perdono e la fotografia dello schermo non arriva.
+
+Stato che il servizio ricorda nelle impostazioni (`settings`): `impianto_vuoto_siero` e `impianto_vuoto_silos_<n>`
+(da quando la cisterna o un silos sono vuoti). Fotografie delle anomalie in `data/impianto/anomalie/`.
+
+| File | Contenuto |
+|---|---|
+| `services/impianto/__init__.py` | Impostazioni, modalità, creazione del lettore, chiave |
+| `services/impianto/base.py` | Modalità, fasi del pasto, `LetturaSchermo` (righe, sostituzioni, problemi di lettura) |
+| `services/impianto/em2000/` | Lettore EM2000: SSH (paramiko), fotografia, lettura dello schermo, tabelle Paradox (orari) |
+| `services/impianto/pasto.py` | `TracciaPasto`: segue il pasto lettura per lettura ed emette gli eventi |
+| `services/impianto/registrazione.py` | Dalle letture ai consumi del gestionale (proposte, registrazione, orario effettivo) |
+| `services/impianto/servizio.py` | Il servizio: controlli, pasti, messaggi, anomalie |
+| `routes/impianto.py` | Impostazioni, chiave, prova, fotografie, approvazione/scarto delle letture |
 
 ---
 
@@ -253,7 +349,10 @@ Due usi dello stesso bot (`TELEGRAM_BOT_TOKEN`), su tre gruppi Telegram (allevam
    - canale `finanza` → `TELEGRAM_CHAT_ID` (gruppo *Finanza*): scadenze arretrate e dei prossimi 7 giorni, avvisi banca
      (import CBI mancante, movimenti da riconciliare, esito import), scorte basse dell'inventario, sincronizzazione
      cassa, fatture SDI importate da email;
-   - canale `sistema` → `TELEGRAM_SISTEMA_CHAT_ID` (gruppo *Notifiche sistema*): backup e notifiche tecniche future.
+   - canale `sistema` → `TELEGRAM_SISTEMA_CHAT_ID` (gruppo *Notifiche sistema*): backup, stato dell'impianto di
+     alimentazione e sue anomalie tecniche (con la fotografia dello schermo, `send_telegram_foto`);
+   - canale `allevamento` → `TELEGRAM_GROUP_ID` (gruppo dell'allevamento): pasti seguiti dall'impianto, cisterna del
+     siero e silos (il gruppo dei pasti si sceglie nelle impostazioni dell'impianto).
    Nei gruppi delle notifiche il bot non risponde ai comandi e ignora i messaggi.
 2. **Bot allevamento** (`app/services/allevamento_bot.py`), avviato in un thread all'avvio dell'app. Menu a
    pulsanti con percorsi guidati:
@@ -341,6 +440,9 @@ APScheduler gira nel processo dell'app (fuso `Europe/Rome`):
   sbloccare un IP: `sudo fail2ban-client set sshd unbanip <ip>`.
 - Login di root via SSH disattivato; accesso con chiave (il login con password è ancora attivo, protetto da fail2ban).
 - Aggiornamenti di sicurezza automatici (`unattended-upgrades`).
+- `ufw`: aperte solo SSH, 80, 443 e la porta UDP di ZeroTier (9993) per il collegamento all'impianto.
+- **PC dell'impianto**: accesso con chiave limitata all'indirizzo del server e senza tunnel; il servizio esegue solo
+  la fotografia dello schermo e la lettura di file.
 - `.env` con permessi `600`.
 
 **Caddy** (`/etc/caddy/Caddyfile`)
@@ -439,7 +541,8 @@ docker compose down
 docker compose up -d
 
 # 3. verifica
-docker compose logs web --tail=50
+docker compose ps
+docker compose logs web impianto --tail=50
 ```
 
 Dopo il riavvio è normale vedere per circa un minuto qualche `409 Conflict` del bot: è la connessione della
@@ -461,8 +564,9 @@ vuota. Mai usare `docker compose up` su una macchina che non sia la produzione.
 Comandi utili:
 
 ```bash
-docker compose logs -f web      # log in tempo reale
-docker compose ps               # stato del container
+docker compose logs -f web      # log in tempo reale del gestionale
+docker compose logs -f impianto # log del servizio dell'impianto di alimentazione
+docker compose ps               # stato dei container
 docker compose down             # ferma (i dati restano nei volumi)
 ```
 
@@ -492,19 +596,22 @@ app/
     banca.py anagrafica.py inventario.py categorie.py analisi.py scadenzario.py
     finanza_impostazioni.py impostazioni.py
     allevamento.py     # tutta la sezione Allevamento
+    impianto.py        # impostazioni e letture dell'impianto di alimentazione
   services/
     sdi_parser.py sdi_importer.py email_fetcher.py pdf_parser.py   # fatture elettroniche
     cbi_parser.py reconciliation.py rules_engine.py                # banca
     cloud_office.py recurring_generator.py export.py               # cassa, ricorrenti, CSV
     backup.py telegram_bot.py                                      # backup e notifiche
     allevamento_scorte.py allevamento_pasti.py allevamento_bot.py  # allevamento
+    allevamento_analisi.py
+    impianto/          # collegamento all'impianto di alimentazione (servizio, lettore EM2000)
   templates/           # Jinja2, tutti estendono base.html; una cartella per sezione
     components/        # sidebar_nav.html, scorta_card.html, …
   static/
     css/style.css      # branding Ca Bianca
     uploads/           # allegati e foto bolle (volume)
   utils/decorators.py  # role_required, admin_required, write_required, section_required
-scripts/               # script di manutenzione una tantum
+scripts/               # script di manutenzione; em2000_addestra.py costruisce il campionario dello schermo
 Dockerfile  docker-compose.yml  gunicorn.conf.py  setup.sh  requirements.txt
 ```
 
@@ -534,6 +641,9 @@ Dockerfile  docker-compose.yml  gunicorn.conf.py  setup.sh  requirements.txt
 | "Troppi tentativi falliti" al login | Blocco anti-forzatura: attendere 15 minuti o riavviare il container |
 | Reload di Caddy fallito con `permission denied` sul log | `sudo chown caddy:caddy /var/log/caddy/access.log` |
 | Foto bolla non caricata | Connessione instabile: la consegna è salvata, ricaricare la foto dall'icona 📷 |
+| Impianto "non raggiungibile" | PC spento o rete privata giù; dal server `ping` del PC. Se il ping non passa, controllare la porta UDP di ZeroTier su `ufw` |
+| Fotografia dello schermo che non arriva (timeout) | MTU della rete Docker: deve restare 1280 (`docker-compose.yml`) |
+| "Lettura incompleta" su Telegram | Schermata nuova o cambiata: insegnarla con `scripts/em2000_addestra.py` |
 
 ---
 
@@ -545,7 +655,8 @@ Dockerfile  docker-compose.yml  gunicorn.conf.py  setup.sh  requirements.txt
 - **Job pianificati**: APScheduler
 - **Bot**: python-telegram-bot
 - **Deploy**: Docker Compose, Caddy (HTTPS)
-- **Integrazioni**: SDI/FatturaPA (XML, p7m) via IMAP, 4CloudOffice, estratti conto CBI, SMTP
+- **Integrazioni**: SDI/FatturaPA (XML, p7m) via IMAP, 4CloudOffice, estratti conto CBI, SMTP, impianto di
+  alimentazione EM2000 (SSH con paramiko, lettura dello schermo con Pillow)
 
 ## Licenza
 

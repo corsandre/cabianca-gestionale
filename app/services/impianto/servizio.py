@@ -217,9 +217,11 @@ class Servizio:
                     and abs(c.scarto_orologio_s - precedente.scarto_orologio_s) > SECONDI_SCARTO_OROLOGIO):
                 self._manda(f"🕐 L'orologio dell'impianto si è spostato: ora è {self._scarto_testo(c.scarto_orologio_s)}.", "sistema")
         if l.fase not in (ATTESA_ORARIO, SCONOSCIUTA) and not self.traccia.in_corso:
-            # servizio avviato (o riavviato) a pasto già in corso: lo si segue da qui
+            # servizio avviato (o riavviato) a pasto già in corso: lo si segue da qui, ma l'inizio vero
+            # del pasto e della linea in corso non si conosce (niente durata né orario effettivo)
             for evento in self.traccia.aggiorna(adesso, l):
                 self._evento(evento, None)
+            self.inizio_pasto, self.inizio_linee = None, {}
         if l.fase == SCONOSCIUTA and self._da_segnalare(adesso, f"stato:{l.stato}"):
             self._anomalia(STATO_SCONOSCIUTO, adesso, f"Stato dell'impianto mai visto: {html.escape(l.stato or '?')}",
                            esito.immagine_png)

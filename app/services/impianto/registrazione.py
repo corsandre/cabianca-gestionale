@@ -7,7 +7,10 @@
     la correzione dell'utente, la lettura resta proposta con una nota;
   - con l'approvazione esplicita (modalità con verifica) la lettura sostituisce quanto c'è.
 - Se il pasto è partito più di 15 minuti dopo l'orario standard del gestionale, si registra anche
-  l'orario effettivo (serve a scalare il siero dal carico giusto).
+  l'orario effettivo (serve a scalare il siero dal carico giusto). Inizio del pasto = inizio della linea 1
+  (le linee successive partono normalmente 20-40 minuti dopo); sconosciuto se il servizio ha
+  agganciato il pasto già in corso.
+- Quantitativi arrotondati a 2 decimali di quintale, come nell'inserimento a mano.
 - Il numero del pasto (1-3) è la posizione dell'orario tra quelli impostati sull'impianto: un pasto
   rinviato (es. 14:39 invece di 12:50) resta il pasto 2.
 """
@@ -36,8 +39,9 @@ def salva_lettura_linea(data, evento, orari_impianto, inizio=None):
     elif l.stato in ("registrata", "approvata"):
         return l          # già nel gestionale: una seconda lettura non cambia niente
     l.pasto = numero_pasto(evento.pasto, orari_impianto)
-    l.acqua_qli, l.siero_qli, l.farina_qli, l.totale_qli = r["acqua"], r["siero"], r["farina"], r["totale"]
-    l.acqua_teorica_qli, l.siero_teorico_qli, l.farina_teorica_qli = t.get("acqua"), t.get("siero"), t.get("farina")
+    q = lambda v: None if v is None else round(v, 2)
+    l.acqua_qli, l.siero_qli, l.farina_qli, l.totale_qli = q(r["acqua"]), q(r["siero"]), q(r["farina"]), q(r["totale"])
+    l.acqua_teorica_qli, l.siero_teorico_qli, l.farina_teorica_qli = q(t.get("acqua")), q(t.get("siero")), q(t.get("farina"))
     l.conferme, l.confermato = evento.dati["conferme"], evento.dati["confermato"]
     l.inizio, l.fine = inizio, evento.istante
     return l
@@ -45,7 +49,7 @@ def salva_lettura_linea(data, evento, orari_impianto, inizio=None):
 
 def registra(lettura, operatore="impianto", sovrascrivi_manuali=False):
     """Scrive la lettura in uso_pasti. Restituisce la riga UsoPasto, o None se non scritta."""
-    from app.models import UsoPasto, OrarioPastoEffettivo
+    from app.models import UsoPasto, OrarioPastoEffettivo, ImpiantoLinea
     from app.routes.allevamento import _get_ciclo_attivo
     from app.services.allevamento_pasti import registra_pasto
     from app.services.allevamento_scorte import orario_pasto, invalida_orari_effettivi
@@ -74,12 +78,15 @@ def registra(lettura, operatore="impianto", sovrascrivi_manuali=False):
 
     # pasto partito molto dopo l'orario standard → orario effettivo (una volta per pasto)
     standard = orario_pasto(lettura.pasto)
-    if lettura.inizio and standard:
-        scarto = abs((lettura.inizio - datetime.combine(lettura.data, standard)).total_seconds()) / 60
+    inizio = db.session.query(ImpiantoLinea.inizio).filter(
+        ImpiantoLinea.data == lettura.data, ImpiantoLinea.orario_pasto == lettura.orario_pasto,
+        ImpiantoLinea.linea == 1).scalar()
+    if inizio and standard:
+        scarto = abs((inizio - datetime.combine(lettura.data, standard)).total_seconds()) / 60
         if scarto > MINUTI_ORARIO_EFFETTIVO and not OrarioPastoEffettivo.query.filter_by(
                 data=lettura.data, pasto=lettura.pasto).first():
             db.session.add(OrarioPastoEffettivo(data=lettura.data, pasto=lettura.pasto,
-                                                ora=(lettura.inizio - timedelta(seconds=lettura.inizio.second)).time(),
+                                                ora=(inizio - timedelta(seconds=inizio.second)).time(),
                                                 operatore="impianto"))
             invalida_orari_effettivi()
     return riga
