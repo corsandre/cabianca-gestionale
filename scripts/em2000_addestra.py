@@ -59,6 +59,8 @@ NOTE = {
                      ("siero", "teorico"): "16,70 Qli", ("siero", "reale"): "16,67 Qli",
                      ("farina", "teorico"): "5,01 Qli", ("farina", "reale"): "5,00 Qli",
                      ("totale", "teorico"): "26,30 Qli", ("totale", "reale"): "26,42 Qli"},
+    # 02/10/2026: EM2000 lasciato sul menu principale (il servizio deve dirlo, non "stato mai visto")
+    "menu-103657.png": {"titolo": "MENU PRINCIPALE"},
     # sera del 01/10/2026: silos della coclea 1 finito, dosaggio completato dalla coclea 3 (riga SOS)
     "sera-182224.png": {("riga", 0, "nome"): "ACQUA PRE", ("riga", 1, "nome"): "SIERO",
                         ("riga", 2, "nome"): "COCLEA 1", ("riga", 3, "nr"): "SOS", ("riga", 3, "nome"): "COCLEA 3",
@@ -86,7 +88,7 @@ def main(cartella):
     for nome_file, testi in NOTE.items():
         img = Image.open(os.path.join(cartella, nome_file)).convert("RGB")
         for z, testo in testi.items():
-            if z in ("stato1", "stato2"):
+            if z in ("stato1", "stato2", "titolo"):
                 prefisso = next((p for p in S.PREFISSI_BOX if testo.startswith(p)), None)
                 if prefisso:
                     # solo i glifi del prefisso (tutti tranne le cifre finali): il numero del box cambia.

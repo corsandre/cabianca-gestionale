@@ -31,6 +31,7 @@ ZONE = {
     "linea": (16, 110, 183, 125),
     "stato1": (285, 32, 572, 50),
     "stato2": (285, 56, 572, 74),
+    "titolo": (215, 55, 500, 90),       # titolo delle altre schermate di EM2000 (es. MENU PRINCIPALE)
 }
 # tabella della ricetta: righe da 25 pixel; il numero di righe cambia (es. una riga "SOS COCLEA 3" in
 # più quando un silos finisce durante il dosaggio), quindi le righe si riconoscono dal nome
@@ -66,12 +67,17 @@ def decodifica_xwd(dati):
     h = struct.unpack(">25I", dati[:100])
     header_size, larghezza, altezza = h[0], h[4], h[5]
     byte_order, bpp, bpl, ncolori = h[7], h[11], h[12], h[19]
-    if bpp != 32:
-        raise ValueError(f"profondità colore non gestita: {bpp} bit")
+    # 32 bit per pixel di solito; dal 02/10/2026 il PC a volte dà 24 bit per pixel (3 byte) con righe
+    # lunghe come a 32 (spazio vuoto in fondo): si usa sempre la lunghezza di riga dichiarata
+    byte_px = bpp // 8
+    modi = {4: "BGRX" if byte_order == 0 else "XRGB", 3: "BGR" if byte_order == 0 else "RGB"}
+    if byte_px not in modi or bpl < larghezza * byte_px:
+        raise ValueError(f"formato della fotografia non gestito: {bpp} bit per pixel, {bpl} byte per riga")
     inizio = header_size + ncolori * 12
     raw = dati[inizio:inizio + bpl * altezza]
-    return Image.frombuffer("RGB", (larghezza, altezza), raw, "raw",
-                            "BGRX" if byte_order == 0 else "XRGB", bpl, 1)
+    if len(raw) < bpl * altezza:
+        raise ValueError("fotografia incompleta")
+    return Image.frombuffer("RGB", (larghezza, altezza), raw, "raw", modi[byte_px], bpl, 1)
 
 
 # ── glifi ──────────────────────────────────────────────────────────────────
@@ -213,6 +219,11 @@ def leggi(img, camp=None):
         l.fase = SCONOSCIUTA
     else:
         l.fase = FASI.get(s2, SCONOSCIUTA)
+    if l.fase == SCONOSCIUTA:
+        titolo = camp.frase(img.crop(ZONE["titolo"]))
+        if titolo:      # EM2000 è su un'altra schermata (non "Situazione impianto"): si dice quale
+            l.stato = titolo
+            return l
     _leggi_tabella(img, camp, l)
     return l
 

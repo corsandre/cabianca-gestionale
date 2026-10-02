@@ -223,8 +223,7 @@ class Servizio:
                 self._evento(evento, None)
             self.inizio_pasto, self.inizio_linee = None, {}
         if l.fase == SCONOSCIUTA and self._da_segnalare(adesso, f"stato:{l.stato}"):
-            self._anomalia(STATO_SCONOSCIUTO, adesso, f"Stato dell'impianto mai visto: {html.escape(l.stato or '?')}",
-                           esito.immagine_png)
+            self._anomalia(STATO_SCONOSCIUTO, adesso, self._testo_sconosciuto(l.stato), esito.immagine_png)
         if l.problemi():
             try:            # conferma con una seconda fotografia (una sola può essere a metà aggiornamento)
                 img2, l2 = self.lettore.fotografa()
@@ -281,6 +280,15 @@ class Servizio:
         self.problemi_prec = problemi
         for evento in self.traccia.aggiorna(adesso, lettura):
             self._evento(evento, img)
+
+    @staticmethod
+    def _testo_sconosciuto(stato):
+        if stato == "MENU PRINCIPALE":
+            return ("⚠️ <b>EM2000 è sul Menu principale</b>: per seguire i pasti va lasciato sulla schermata "
+                    "«6) Situazione impianto».")
+        if stato and stato.startswith("fotografia non leggibile"):
+            return f"⚠️ L'impianto risponde ma la {html.escape(stato)}."
+        return f"❓ Stato dell'impianto mai visto: «{html.escape(stato or '?')}»."
 
     # ── letture incomplete ─────────────────────────────────────────────────
     def _da_segnalare(self, adesso, chiave):
@@ -448,8 +456,7 @@ class Servizio:
                            f"⚠️ <b>Fase bloccata</b>: «{e.dati['fase']}» da {e.dati['minuti']} min sulla linea {e.linea}.",
                            self._png(img), e.pasto, e.linea)
         elif e.tipo == STATO_SCONOSCIUTO:
-            self._anomalia(e.tipo, e.istante, f"❓ Stato dell'impianto mai visto: «{html.escape(e.dati.get('stato') or '?')}».",
-                           self._png(img), e.pasto, e.linea)
+            self._anomalia(e.tipo, e.istante, self._testo_sconosciuto(e.dati.get("stato")), self._png(img), e.pasto, e.linea)
         elif e.tipo == LINEA_NON_LETTA:
             self._anomalia(e.tipo, e.istante,
                            f"⚠️ Linea {e.linea} del pasto delle {_hm(e.pasto)} non letta: valori da inserire a mano.",

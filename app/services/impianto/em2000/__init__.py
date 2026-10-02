@@ -13,7 +13,7 @@ import io
 import os
 from datetime import time
 
-from ..base import LettoreImpianto, EsitoControllo
+from ..base import LettoreImpianto, EsitoControllo, LetturaSchermo, SCONOSCIUTA
 from . import paradox, schermo
 
 EM2000 = "/root/.wine/drive_d/em2000"
@@ -69,7 +69,11 @@ class LettoreEM2000(LettoreImpianto):
 
     # ── letture ────────────────────────────────────────────────────────────
     def fotografa(self):
-        img = schermo.decodifica_xwd(gzip.decompress(self._esegui(CMD_FOTOGRAFIA)))
+        dati = self._esegui(CMD_FOTOGRAFIA)        # errori qui: il PC non risponde
+        try:
+            img = schermo.decodifica_xwd(gzip.decompress(dati))
+        except Exception as e:                     # il PC risponde, ma la fotografia non si legge
+            return None, LetturaSchermo(fase=SCONOSCIUTA, stato=f"fotografia non leggibile ({e})")
         return img, schermo.leggi(img, self._camp)
 
     def orari_pasti(self):
@@ -84,10 +88,12 @@ class LettoreEM2000(LettoreImpianto):
     def controllo(self):
         try:
             img, lettura = self.fotografa()
-            png = io.BytesIO()
-            img.save(png, "PNG")
-            return EsitoControllo(raggiungibile=True, lettura=lettura, orari=self.orari_pasti(),
-                                  immagine_png=png.getvalue())
+            png = None
+            if img is not None:
+                b = io.BytesIO()
+                img.save(b, "PNG")
+                png = b.getvalue()
+            return EsitoControllo(raggiungibile=True, lettura=lettura, orari=self.orari_pasti(), immagine_png=png)
         except Exception as e:   # PC spento, rete assente, EM2000 chiuso...
             self.chiudi()
             return EsitoControllo(raggiungibile=False, errore=f"{type(e).__name__}: {e}")
