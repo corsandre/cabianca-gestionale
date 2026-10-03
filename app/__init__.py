@@ -453,6 +453,14 @@ def _init_scheduler(app):
                 from app.services.backup import run_backup
                 run_backup()
 
+        def avvisi_allevamento():
+            with app.app_context():
+                try:
+                    from app.services.allevamento_avvisi import controlla
+                    controlla()
+                except Exception as e:
+                    app.logger.error(f"Errore avvisi allevamento: {e}")
+
         def check_deadlines():
             with app.app_context():
                 from app.services.telegram_bot import check_and_notify_deadlines
@@ -487,6 +495,7 @@ def _init_scheduler(app):
         if app.config.get("CLOUD_OFFICE_USER") and app.config.get("CLOUD_OFFICE_PASSWORD"):
             scheduler.add_job(sync_cassa, "cron", hour=4, minute=0)
         scheduler.add_job(check_deadlines, "cron", hour=8, minute=0)
+        scheduler.add_job(avvisi_allevamento, "interval", minutes=1)   # invia una volta al giorno, all'orario impostato
         if app.config.get("IMAP_HOST") and app.config.get("IMAP_USER"):
             scheduler.add_job(fetch_emails, "cron", hour="8,14,20", minute=30)
         scheduler.start()

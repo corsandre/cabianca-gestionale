@@ -8,8 +8,7 @@ Comportamento
 - Modalità manuale: nessuna connessione all'impianto; il servizio resta in attesa e ricontrolla
   le impostazioni ogni minuto.
 - Controllo periodico (ogni `impianto_controllo_min`, 5 minuti se l'impianto non risponde):
-  fotografia dello schermo + orari dei pasti. Salvato in impianto_controlli. Su Telegram (gruppo
-  sistema) SOLO: un riepilogo al giorno, impianto non raggiungibile (dopo 3 tentativi) o di nuovo
+  fotografia dello schermo + orari dei pasti. Salvato in impianto_controlli. Su Telegram SOLO: un riepilogo al giorno, impianto non raggiungibile (dopo 3 tentativi) o di nuovo
   raggiungibile, orologio dell'impianto spostato di oltre 2 minuti, stato sconosciuto.
 - Orari dei pasti cambiati sull'impianto: tra un controllo e l'altro si rileggono solo gli orari
   (file di pochi byte, niente fotografia) ogni 10 minuti, così anche un pasto anticipato viene seguito
@@ -24,7 +23,8 @@ Comportamento
   pasti (`impianto_chat_pasti`): inizio pasto, fine di ogni linea, riepilogo a fine pasto.
 - Anomalie (siero o farina insufficiente, cisterna del siero o silos finiti, fase bloccata, stato
   sconosciuto, linea non letta): evento con la fotografia dello schermo, inviata su Telegram (siero,
-  farina e silos nel gruppo dei pasti, le altre nel gruppo sistema).
+  farina e silos). Tutti i messaggi dell'impianto vanno nel gruppo scelto nelle impostazioni
+  (impianto_chat_pasti, default allevamento).
 - Cisterna del siero e silos: "finito ora" quando finiscono durante un dosaggio (si ricorda quando,
   nell'impostazione impianto_vuoto_siero / impianto_vuoto_silos_<n>), "ancora vuoto, finito il ..."
   ai pasti successivi, "di nuovo in uso" quando tornano a dare la dose piena.
@@ -35,7 +35,7 @@ Comportamento
 - Lettura incompleta: in una schermata riconosciuta qualcosa non si legge (riga della ricetta mai
   vista, ora o linea illeggibili...; vedi LetturaSchermo.problemi). Durante il pasto deve ripetersi in
   due fotografie di fila, al controllo periodico si conferma con una seconda fotografia. Fotografia
-  nel gruppo sistema, al massimo una al giorno per tipo di problema (idem per lo stato sconosciuto
+  al massimo una al giorno per tipo di problema (idem per lo stato sconosciuto
   visto ai controlli periodici).
 """
 import html
@@ -233,10 +233,10 @@ class Servizio:
             if self.guasti >= TENTATIVI_PRIMA_DI_AVVISARE and not self.avvisato_guasto:
                 self.avvisato_guasto = True
                 self._manda(f"⚠️ <b>Impianto non raggiungibile</b> da {self.guasti} tentativi.\n"
-                            f"{html.escape(esito.errore or '')}", "sistema")
+                            f"{html.escape(esito.errore or '')}", self._chat_pasti())
             return
         if self.avvisato_guasto:
-            self._manda("✅ Impianto di nuovo raggiungibile.", "sistema")
+            self._manda("✅ Impianto di nuovo raggiungibile.", self._chat_pasti())
         self.guasti, self.avvisato_guasto = 0, False
 
         atteso, atteso_reale = self.prossimo_pc, self._prossimo_reale(adesso)
@@ -258,7 +258,7 @@ class Servizio:
                 self._manda(testo, self._chat_pasti())
             if (precedente.scarto_orologio_s is not None and c.scarto_orologio_s is not None
                     and abs(c.scarto_orologio_s - precedente.scarto_orologio_s) > SECONDI_SCARTO_OROLOGIO):
-                self._manda(f"🕐 L'orologio dell'impianto si è spostato: ora è {self._scarto_testo(c.scarto_orologio_s)}.", "sistema")
+                self._manda(f"🕐 L'orologio dell'impianto si è spostato: ora è {self._scarto_testo(c.scarto_orologio_s)}.", self._chat_pasti())
         if l.fase not in (ATTESA_ORARIO, SCONOSCIUTA) and not self.traccia.in_corso:
             # servizio avviato (o riavviato) a pasto già in corso: lo si segue da qui, ma l'inizio vero
             # del pasto e della linea in corso non si conosce (niente durata né orario effettivo)
@@ -270,9 +270,7 @@ class Servizio:
             if self._da_segnalare(adesso, f"stato:{l.stato}"):
                 self._anomalia(STATO_SCONOSCIUTO, adesso, self._testo_sconosciuto(l.stato), esito.immagine_png)
         elif self.schermata_errata:
-            self.segnalati_oggi.pop(f"stato:{self.schermata_errata}", None)   # se ricapita, si riavvisa
-            self.schermata_errata = None
-            self._manda("✅ EM2000 di nuovo sulla schermata «Situazione impianto»: i pasti vengono seguiti.", "sistema")
+            self._schermata_tornata(esito.immagine_png)
         if l.problemi():
             try:            # conferma con una seconda fotografia (una sola può essere a metà aggiornamento)
                 img2, l2 = self.lettore.fotografa()
@@ -284,7 +282,7 @@ class Servizio:
                 and l.prossimo_pasto and l.ora_pc):
             self.riepilogo_del = adesso.date()
             self._manda(f"🟢 Impianto OK – pasti {c.orari.replace(',', ' · ')} – prossimo alle {_hm(l.prossimo_pasto)}"
-                        f" – orologio dell'impianto {self._scarto_testo(c.scarto_orologio_s)}", "sistema")
+                        f" – orologio dell'impianto {self._scarto_testo(c.scarto_orologio_s)}", self._chat_pasti())
 
     def _avvisa_orari(self, adesso, prima, dopo, prossimo):
         testo = (f"🕐 <b>Orari dei pasti cambiati</b> sull'impianto: {prima.replace(',', ' · ')} → "
@@ -309,7 +307,7 @@ class Servizio:
             self.guasti += 1
             log.warning("fotografia non riuscita: %s", e)
             if self.guasti == 5:
-                self._manda(f"⚠️ Durante il pasto l'impianto non risponde da 5 tentativi ({html.escape(str(e))}).", "sistema")
+                self._manda(f"⚠️ Durante il pasto l'impianto non risponde da 5 tentativi ({html.escape(str(e))}).", self._chat_pasti())
             return
         self.guasti = 0
         if (lettura.in_attesa and lettura.prossimo_pasto and self.prossimo_pc
@@ -326,11 +324,19 @@ class Servizio:
                                f"⚠️ <b>Pasto delle {_hm(self.prossimo_pc)} non partito</b>: l'impianto è ancora in attesa.",
                                self._png(img))
             self.prossimo_pc = lettura.prossimo_pasto
+        if lettura.fase != SCONOSCIUTA and self.schermata_errata:
+            self._schermata_tornata(self._png(img))
         problemi = set(lettura.problemi())
         self._problemi(adesso, problemi & self.problemi_prec, img)
         self.problemi_prec = problemi
         for evento in self.traccia.aggiorna(adesso, lettura):
             self._evento(evento, img)
+
+    def _schermata_tornata(self, png):
+        self.segnalati_oggi.pop(f"stato:{self.schermata_errata}", None)   # se ricapita, si riavvisa
+        self.schermata_errata = None
+        self._manda("✅ EM2000 di nuovo sulla schermata «Situazione impianto»: i pasti vengono seguiti.",
+                    self._chat_pasti(), png)
 
     @staticmethod
     def _testo_sconosciuto(stato):
@@ -442,9 +448,9 @@ class Servizio:
                                       messaggio=messaggio, immagine=percorso, anomalia=anomalia))
         db.session.commit()
 
-    def _anomalia(self, tipo, istante, messaggio, png, orario=None, linea=None, canale="sistema"):
+    def _anomalia(self, tipo, istante, messaggio, png, orario=None, linea=None, canale=None):
         self._salva_evento(tipo, istante, messaggio, orario, linea, png, anomalia=True)
-        self._manda(messaggio, canale, png)
+        self._manda(messaggio, canale or self._chat_pasti(), png)
 
     def _evento(self, e, img):
         from app import db
@@ -507,6 +513,8 @@ class Servizio:
                            f"⚠️ <b>Fase bloccata</b>: «{e.dati['fase']}» da {e.dati['minuti']} min sulla linea {e.linea}.",
                            self._png(img), e.pasto, e.linea)
         elif e.tipo == STATO_SCONOSCIUTO:
+            self.schermata_errata = e.dati.get("stato") or "?"
+            self.segnalati_oggi[f"stato:{self.schermata_errata}"] = e.istante.date()
             self._anomalia(e.tipo, e.istante, self._testo_sconosciuto(e.dati.get("stato")), self._png(img), e.pasto, e.linea)
         elif e.tipo == LINEA_NON_LETTA:
             self._anomalia(e.tipo, e.istante,

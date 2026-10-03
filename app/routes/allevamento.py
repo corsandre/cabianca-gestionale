@@ -1892,6 +1892,7 @@ def impostazioni():
         abort(403)
     from app.models import Ciclo, Medicinale, CurvaAccrescimento
     from app.services.allevamento_scorte import get_setting_float, get_setting_int, orario_pasto_str
+    from app.services.allevamento_avvisi import orario_avvisi
     ciclo_attivo = _get_ciclo_attivo()
     cicli_precedenti = Ciclo.query.filter_by(attivo=False).order_by(Ciclo.data_inizio.desc()).all()
     medicinali = Medicinale.query.filter_by(attivo=True).order_by(Medicinale.nome).all()
@@ -1908,6 +1909,7 @@ def impostazioni():
         "orario_pasto_1": orario_pasto_str(1),
         "orario_pasto_2": orario_pasto_str(2),
         "orario_pasto_3": orario_pasto_str(3),
+        "orario_avvisi": orario_avvisi(),
     }
     # impianto di alimentazione (collegamento opzionale)
     import os
@@ -1981,6 +1983,7 @@ def impostazioni_scorte():
     ]
     campi_orario = [
         "allevamento_orario_pasto_1", "allevamento_orario_pasto_2", "allevamento_orario_pasto_3",
+        "allevamento_orario_avvisi",
     ]
     try:
         for campo in campi_numerici:

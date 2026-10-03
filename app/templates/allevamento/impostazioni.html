@@ -148,6 +148,19 @@
                        value="{{ scorte_settings.orario_pasto_3 }}">
             </div>
         </div>
+        <hr class="my-3">
+        <h6 class="mb-2"><i class="bi bi-bell me-1" style="color:#c2185b"></i>Avvisi giornalieri</h6>
+        <div class="form-text mb-2">
+            Ogni giorno a quest'ora arriva nel gruppo Telegram dell'allevamento l'elenco dei trattamenti con una dose
+            da ripetere. Se non ce ne sono, nessun messaggio.
+        </div>
+        <div class="row g-2">
+            <div class="col-4">
+                <label class="form-label small">Orario</label>
+                <input type="time" name="allevamento_orario_avvisi" class="form-control form-control-sm"
+                       value="{{ scorte_settings.orario_avvisi }}">
+            </div>
+        </div>
         <button type="submit" class="btn btn-sm mt-3" style="background:#c2185b;color:#fff">
             <i class="bi bi-save me-1"></i>Salva
         </button>
@@ -196,7 +209,7 @@
                 <input type="text" name="impianto_utente" id="impianto_utente" class="form-control form-control-sm" value="{{ impianto.impianto_utente }}">
             </div>
             <div class="col-md-2">
-                <label class="form-label small" for="impianto_chat_pasti">Messaggi dei pasti</label>
+                <label class="form-label small" for="impianto_chat_pasti">Messaggi dell'impianto</label>
                 <select name="impianto_chat_pasti" id="impianto_chat_pasti" class="form-select form-select-sm">
                     {% for k, nome in [('allevamento', 'Gruppo allevamento'), ('sistema', 'Gruppo sistema'), ('nessuno', 'Nessun messaggio')] %}
                     <option value="{{ k }}" {{ 'selected' if impianto.impianto_chat_pasti == k }}>{{ nome }}</option>{% endfor %}

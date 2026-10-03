@@ -231,6 +231,8 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
 - Medicinali (ml/kg, giorni di somministrazione e sospensione).
 - Scorte: capacità silos, soglia di riordino (in pasti, così segue l'aumento dei consumi), quantità per ordine,
   soglia di scarto siero, orari dei 3 pasti.
+- Avvisi giornalieri: orario (default 07:00) del messaggio con i trattamenti da ripetere nel giorno
+  (`app/services/allevamento_avvisi.py`, nessun messaggio se non ce ne sono).
 - Impianto di alimentazione: modalità del collegamento, indirizzo del PC, chiave, prova (vedi sotto).
 
 #### Modelli dati (`app/models.py`)
@@ -282,13 +284,17 @@ scritto niente e non resta nessun file (la fotografia viaggia compressa sulla co
 
 **Cosa fa il servizio** (`app/services/impianto/servizio.py`, container `impianto`):
 - *Controllo periodico* (default ogni 60 minuti, 5 se il PC non risponde): fotografia dello schermo e orari dei pasti
-  impostati sull'impianto, salvati in `impianto_controlli`. Tra un controllo e l'altro rilegge solo gli orari ogni
-  10 minuti, così un pasto anticipato viene seguito dall'inizio. Nel gruppo *sistema*: riepilogo giornaliero,
-  impianto non raggiungibile (dopo 3 tentativi) e di nuovo raggiungibile, orologio del PC spostato.
+  impostati sull'impianto, salvati in `impianto_controlli`. Tra un controllo e l'altro rilegge ogni 10 minuti solo
+  gli orari, il Brix del siero e la % del siero nelle ricette: un pasto anticipato viene seguito dall'inizio e un
+  cambio di Brix o sostituzione viene segnalato. Riepilogo giornaliero, impianto non raggiungibile (dopo 3
+  tentativi) e di nuovo raggiungibile, orologio del PC spostato.
+- *Schermata*: EM2000 va lasciato su «Situazione impianto». Se è su un'altra schermata (es. Menu principale) arriva
+  un avviso con la fotografia, i controlli diventano ogni 5 minuti e, appena torna giusta, una conferma con la foto.
 - *Pasto*: da qualche minuto prima dell'orario (convertito in ora reale con lo scarto dell'orologio del PC) una
   fotografia ogni 60 secondi finché l'impianto torna in attesa. Fine di ogni linea: i quantitativi letti più volte
   uguali (dalla miscelazione in poi, solo se acqua + siero + farina = totale) diventano la lettura della linea.
-  Nel gruppo dei pasti (default *allevamento*): inizio pasto, fine di ogni linea con i quantitativi, riepilogo.
+  Messaggi: inizio pasto, fine di ogni linea con i quantitativi, riepilogo. **Tutti i messaggi dell'impianto**
+  vanno nel gruppo scelto nelle impostazioni (default *allevamento*).
 - *Avvisi*: pasto non partito, orari dei pasti cambiati o pasto saltato, cisterna del siero o silos **finiti ora**
   (con orario e quantità) o **ancora vuoti** dal giorno in cui sono finiti, **di nuovo in uso** quando tornano a dare
   la dose piena, siero o farina insufficienti, fase bloccata, stato mai visto, **lettura incompleta** (una schermata
@@ -349,10 +355,10 @@ Due usi dello stesso bot (`TELEGRAM_BOT_TOKEN`), su tre gruppi Telegram (allevam
    - canale `finanza` → `TELEGRAM_CHAT_ID` (gruppo *Finanza*): scadenze arretrate e dei prossimi 7 giorni, avvisi banca
      (import CBI mancante, movimenti da riconciliare, esito import), scorte basse dell'inventario, sincronizzazione
      cassa, fatture SDI importate da email;
-   - canale `sistema` → `TELEGRAM_SISTEMA_CHAT_ID` (gruppo *Notifiche sistema*): backup, stato dell'impianto di
-     alimentazione e sue anomalie tecniche (con la fotografia dello schermo, `send_telegram_foto`);
-   - canale `allevamento` → `TELEGRAM_GROUP_ID` (gruppo dell'allevamento): pasti seguiti dall'impianto, cisterna del
-     siero e silos (il gruppo dei pasti si sceglie nelle impostazioni dell'impianto).
+   - canale `sistema` → `TELEGRAM_SISTEMA_CHAT_ID` (gruppo *Notifiche sistema*): backup e notifiche tecniche del server;
+   - canale `allevamento` → `TELEGRAM_GROUP_ID` (gruppo dell'allevamento): tutti i messaggi dell'impianto di
+     alimentazione (pasti, silos, siero, stato, anomalie con la fotografia dello schermo, `send_telegram_foto`) e
+     ogni mattina i trattamenti da ripetere.
    Nei gruppi delle notifiche il bot non risponde ai comandi e ignora i messaggi.
 2. **Bot allevamento** (`app/services/allevamento_bot.py`), avviato in un thread all'avvio dell'app. Menu a
    pulsanti con percorsi guidati:
@@ -415,6 +421,7 @@ APScheduler gira nel processo dell'app (fuso `Europe/Rome`):
 | 03:00 | Generazione spese ricorrenti | |
 | 04:00 | Sincronizzazione registratore di cassa | Solo se configurato 4CloudOffice |
 | 08:00 | Notifica scadenze su Telegram | |
+| configurabile (default 07:00) | Trattamenti da ripetere nel giorno (gruppo allevamento) | Controllato ogni minuto, inviato una volta al giorno |
 | 08:30, 14:30, 20:30 | Recupero fatture SDI da email (IMAP) | Solo se configurato IMAP |
 
 ---
