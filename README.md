@@ -296,8 +296,9 @@ scritto niente e non resta nessun file (la fotografia viaggia compressa sulla co
   Messaggi: inizio pasto, fine di ogni linea con i quantitativi, riepilogo. **Tutti i messaggi dell'impianto**
   vanno nel gruppo scelto nelle impostazioni (default *allevamento*).
 - *Avvisi*: pasto non partito, orari dei pasti cambiati o pasto saltato, cisterna del siero o silos **finiti ora**
-  (con orario e quantità) o **ancora vuoti** dal giorno in cui sono finiti, **di nuovo in uso** quando tornano a dare
-  la dose piena, siero o farina insufficienti, fase bloccata, stato mai visto, **lettura incompleta** (una schermata
+  (con orario e quantità), **di nuovo in uso** quando tornano a dare la dose piena; cisterna **ancora vuota** ai
+  pasti successivi; silos **saltato da EM2000** una volta al giorno (EM2000 ricorda la sostituzione e non riprova
+  la coclea finché non finiscono gli altri silos, quindi una coclea a 0 non vuol dire silos vuoto), siero o farina insufficienti, fase bloccata, stato mai visto, **lettura incompleta** (una schermata
   riconosciuta in cui qualcosa non si legge: va insegnata al lettore). Le anomalie arrivano con la fotografia.
 - Se il pasto parte più di 15 minuti dopo l'orario del gestionale, viene registrato anche l'orario effettivo
   (serve ad attribuire il siero al carico giusto).
@@ -308,7 +309,8 @@ frasi di stato in grassetto, dove le lettere si toccano, si riconoscono intere. 
 riga per riga dal nome (ACQUA, SIERO, COCLEA n, TOTALI RICETTA). Quando un componente finisce durante il dosaggio,
 EM2000 aggiunge righe **SOS** che lo sostituiscono: siero finito → acqua (la parte acqua del siero) + farina (la sua
 sostanza secca); silos finito → un'altra coclea (coclea 1 = silos A, 2 = B, 3 = C). Ogni riga SOS sostituisce la
-riga normale più vicina sopra di lei. Il teorico viene solo dalle righe della ricetta, il reale da tutte le righe
+riga più vicina sopra di lei che non ha dato tutta la dose, anche se è a sua volta una SOS (catena coclea 1 →
+coclea 3 → coclea 2 quando finisce anche il silos della coclea 3). Il teorico viene solo dalle righe della ricetta, il reale da tutte le righe
 di quel materiale.
 
 **Insegnare una schermata nuova**: salvare la schermata (PNG), aggiungere in `scripts/em2000_addestra.py` i testi

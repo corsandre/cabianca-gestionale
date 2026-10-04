@@ -12,8 +12,8 @@ Regole
   da altro. Siero finito → acqua (la parte acqua del siero) + farina (la sua sostanza secca); silos
   finito → un'altra coclea. Evento siero_finito / silos_finito una volta per pasto per cisterna o
   silos, appena il dosaggio è concluso (valori definitivi), con l'istante in cui la sostituzione è
-  comparsa e finito_ora = il componente ha dato qualcosa prima di finire (altrimenti era già vuoto
-  dall'inizio). La farina della linea resta la somma di tutte le coclee.
+  comparsa e finito_ora = il componente ha dato qualcosa prima di finire (altrimenti era già vuoto, o
+  per un silos EM2000 lo sta saltando perché ricorda la sostituzione). La farina della linea resta la somma di tutte le coclee.
 - A fine linea, "piene": siero e coclee che hanno dato la dose piena (servono a capire che una
   cisterna o un silos vuoti sono stati ricaricati).
 - Siero o farina insufficiente: a fine linea reale sotto il teorico di oltre SOGLIA_Q senza una

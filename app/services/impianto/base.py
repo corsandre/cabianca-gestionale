@@ -56,21 +56,25 @@ class LetturaSchermo:
     reale: dict = field(default_factory=dict)
     tabella_coerente: bool = False           # reale: acqua + siero + farina = totale, tutto in quintali
     # righe della ricetta così come sono sullo schermo: {"comp": acqua/siero/farina, "coclea": n o None,
-    # "sos": bool, "teorico", "reale"} (quintali). Una riga "sos" è entrata al posto della riga normale più
-    # vicina sopra di lei, finita durante il dosaggio (es. siero → acqua + farina, coclea 1 → coclea 3).
+    # "sos": bool, "teorico", "reale"} (quintali). Una riga "sos" è entrata al posto della riga più vicina
+    # sopra di lei che non ha dato tutta la sua dose, anche se è a sua volta una sostituzione (es. siero →
+    # acqua + farina; coclea 1 → coclea 3 → coclea 2 quando finisce anche il silos della 3).
     righe: list = field(default_factory=list)
     righe_sconosciute: list = field(default_factory=list)   # righe della ricetta con nome mai visto
 
     @property
     def sostituzioni(self):
         """[(riga sostituita, riga che la sostituisce)]"""
-        out, normale = [], None
-        for r in self.righe:
-            if r["sos"]:
-                if normale is not None:
-                    out.append((normale, r))
-            else:
-                normale = r
+        out = []
+        for i, r in enumerate(self.righe):
+            if not r["sos"]:
+                continue
+            sopra = self.righe[:i]
+            incompleta = next((p for p in reversed(sopra) if p["teorico"] is not None and p["reale"] is not None
+                               and p["comp"] != "acqua" and p["reale"] < p["teorico"] - 0.05), None)
+            normale = next((p for p in reversed(sopra) if not p["sos"]), None)
+            if incompleta or normale:
+                out.append((incompleta or normale, r))
         return out
 
     def problemi(self):

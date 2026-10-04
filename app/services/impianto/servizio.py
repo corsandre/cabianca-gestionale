@@ -26,8 +26,10 @@ Comportamento
   farina e silos). Tutti i messaggi dell'impianto vanno nel gruppo scelto nelle impostazioni
   (impianto_chat_pasti, default allevamento).
 - Cisterna del siero e silos: "finito ora" quando finiscono durante un dosaggio (si ricorda quando,
-  nell'impostazione impianto_vuoto_siero / impianto_vuoto_silos_<n>), "ancora vuoto, finito il ..."
-  ai pasti successivi, "di nuovo in uso" quando tornano a dare la dose piena.
+  nell'impostazione impianto_vuoto_siero / impianto_vuoto_silos_<n>), "di nuovo in uso" quando tornano
+  a dare la dose piena. Ai pasti successivi: siero "ancora vuota"; silos "saltato da EM2000" una volta
+  al giorno, perché EM2000 ricorda la sostituzione e non riprova la coclea finché non finiscono gli altri
+  silos (una coclea a 0 non vuol dire silos vuoto: può essere già stato ricaricato).
 - Impostazioni dell'impianto (Brix del siero, % del siero nelle ricette): rilette con gli orari; se
   cambiano, messaggio nel gruppo dei pasti. L'ultimo valore visto è in impianto_parametri.
 - EM2000 su un'altra schermata (es. Menu principale): avviso, controlli ogni 5 minuti finché non torna
@@ -399,13 +401,23 @@ class Servizio:
             valore = json.dumps({"dal": dal.isoformat(timespec="minutes"), "pasto": _hm(e.pasto), "linea": e.linea})
         else:
             prima = json.loads(s.value) if s and s.value else {}
-            if prima.get("dal"):
-                quando = datetime.fromisoformat(prima["dal"])
-                da = f"{finito} il {quando:%d/%m} alle {quando:%H:%M}, pasto delle {prima['pasto']}"
-            else:
-                da = f"era già {vuoto}, non so da quando"
-            testo = f"{icona} <b>{nome}: ancora {vuoto}</b> ({da}): la {dove} è stata fatta con {con}."
+            quando = datetime.fromisoformat(prima["dal"]) if prima.get("dal") else None
             valore = s.value if s else json.dumps({"dal": None})
+            if siero:
+                da = (f"{finito} il {quando:%d/%m} alle {quando:%H:%M}, pasto delle {prima['pasto']}" if quando
+                      else f"era già {vuoto}, non so da quando")
+                testo = f"{icona} <b>{nome}: ancora {vuoto}</b> ({da}): la {dove} è stata fatta con {con}."
+            else:
+                # coclea a 0: EM2000 ricorda la sostituzione e non riprova il silos finché non finiscono gli
+                # altri, quindi il silos può anche essere stato ricaricato. Un promemoria al giorno.
+                if not self._da_segnalare(e.istante, f"saltato:{chiave}"):
+                    self._salva_evento(e.tipo, e.istante, f"{nome}: saltato ({dove})", e.pasto, e.linea)
+                    return
+                da = (f"dalla fine del silos il {quando:%d/%m} alle {quando:%H:%M}" if quando
+                      else "da prima che il servizio la vedesse")
+                testo = (f"{icona} <b>{nome}: saltato da EM2000</b> – la {dove} è stata fatta con {con}. "
+                         f"Il PC ricorda la sostituzione ({da}) e non riprova il silos finché non finiscono gli altri: "
+                         f"se l'hai già ricaricato non serve fare niente.")
         if s:
             s.value = valore
         else:
