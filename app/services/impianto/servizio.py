@@ -25,11 +25,12 @@ Comportamento
   sconosciuto, linea non letta): evento con la fotografia dello schermo, inviata su Telegram (siero,
   farina e silos). Tutti i messaggi dell'impianto vanno nel gruppo scelto nelle impostazioni
   (impianto_chat_pasti, default allevamento).
-- Cisterna del siero e silos: "finito ora" quando finiscono durante un dosaggio (si ricorda quando,
-  nell'impostazione impianto_vuoto_siero / impianto_vuoto_silos_<n>), "di nuovo in uso" quando tornano
-  a dare la dose piena. Ai pasti successivi: siero "ancora vuota"; silos "saltato da EM2000" una volta
-  al giorno, perché EM2000 ricorda la sostituzione e non riprova la coclea finché non finiscono gli altri
-  silos (una coclea a 0 non vuol dire silos vuoto: può essere già stato ricaricato).
+- Cisterna del siero e silos: "finito ora" quando finiscono durante un dosaggio dopo aver dato una parte
+  vera della dose (QUOTA_FINITO_ORA; se erano già segnati vuoti serve più di metà dose, altrimenti sono i
+  pochi kg che pompa e coclea tirano prima di fermarsi). Si ricorda quando, nell'impostazione
+  impianto_vuoto_siero / impianto_vuoto_silos_<n>. Finché restano vuoti: "ancora vuoto" una volta al
+  giorno (per un silos con la coclea a 0 "saltato da EM2000": EM2000 ricorda la sostituzione e non
+  riprova la coclea finché non finiscono gli altri). "Di nuovo in uso" quando tornano a dare la dose piena.
 - Impostazioni dell'impianto (Brix del siero, % del siero nelle ricette): rilette con gli orari; se
   cambiano, messaggio nel gruppo dei pasti. L'ultimo valore visto è in impianto_parametri.
 - EM2000 su un'altra schermata (es. Menu principale): avviso, controlli ogni 5 minuti finché non torna
@@ -381,6 +382,11 @@ class Servizio:
             return f"{_q(c['reale'])} di farina" + (f" ({_silos(c['coclea'])})" if c["coclea"] else "")
         return f"{_q(c['reale'])} di {c['comp']}"
 
+    # quota della dose sotto la quale una cisterna/silos già segnato vuoto è "ancora vuoto" (la pompa o la
+    # coclea partono e tirano qualche kg prima di fermarsi), e sopra la quale un componente non ancora segnato
+    # vuoto si considera "finito ora" (ha dato una parte vera della dose)
+    QUOTA_FINITO_ORA, QUOTA_DOPO_RICARICA = 0.10, 0.50
+
     def _esaurito(self, e, img, chat):
         import json
         from app import db
@@ -394,35 +400,39 @@ class Servizio:
         dove = f"linea {e.linea} del pasto delle {_hm(e.pasto)}"
         nome_imp = self._chiave_vuoto(chiave)
         s = db.session.get(Setting, nome_imp)
-        if d["finito_ora"]:
+        quota = (d["reale"] or 0) / d["teorico"] if d.get("teorico") else 0
+        gia_vuoto = s is not None
+        if quota >= self.QUOTA_FINITO_ORA and (not gia_vuoto or quota >= self.QUOTA_DOPO_RICARICA):
             dal = d["dal"]
             testo = (f"{icona} <b>{nome}: {finito} ora</b>, durante il dosaggio della {dove} (alle {dal:%H:%M}): "
                      f"caricati {_q(d['reale'])} su {_q(d['teorico'])}, completato con {con}.")
             valore = json.dumps({"dal": dal.isoformat(timespec="minutes"), "pasto": _hm(e.pasto), "linea": e.linea})
-        else:
-            prima = json.loads(s.value) if s and s.value else {}
-            quando = datetime.fromisoformat(prima["dal"]) if prima.get("dal") else None
-            valore = s.value if s else json.dumps({"dal": None})
-            if siero:
-                da = (f"{finito} il {quando:%d/%m} alle {quando:%H:%M}, pasto delle {prima['pasto']}" if quando
-                      else f"era già {vuoto}, non so da quando")
-                testo = f"{icona} <b>{nome}: ancora {vuoto}</b> ({da}): la {dove} è stata fatta con {con}."
+            if s:
+                s.value = valore
             else:
-                # coclea a 0: EM2000 ricorda la sostituzione e non riprova il silos finché non finiscono gli
-                # altri, quindi il silos può anche essere stato ricaricato. Un promemoria al giorno.
-                if not self._da_segnalare(e.istante, f"saltato:{chiave}"):
-                    self._salva_evento(e.tipo, e.istante, f"{nome}: saltato ({dove})", e.pasto, e.linea)
-                    return
-                da = (f"dalla fine del silos il {quando:%d/%m} alle {quando:%H:%M}" if quando
-                      else "da prima che il servizio la vedesse")
-                testo = (f"{icona} <b>{nome}: saltato da EM2000</b> – la {dove} è stata fatta con {con}. "
-                         f"Il PC ricorda la sostituzione ({da}) e non riprova il silos finché non finiscono gli altri: "
-                         f"se l'hai già ricaricato non serve fare niente.")
-        if s:
-            s.value = valore
+                db.session.add(Setting(key=nome_imp, value=valore))
+            db.session.commit()
+            self.segnalati_oggi[f"vuoto:{chiave}"] = e.istante.date()   # oggi non serve anche "ancora vuoto"
+            self._anomalia(e.tipo, e.istante, testo, self._png(img), e.pasto, e.linea, canale=chat)
+            return
+        # già vuoto (o mai visto finire): conferma una volta al giorno
+        if not s:
+            db.session.add(Setting(key=nome_imp, value=json.dumps({"dal": None})))
+            db.session.commit()
+        if not self._da_segnalare(e.istante, f"vuoto:{chiave}"):
+            self._salva_evento(e.tipo, e.istante, f"{nome}: ancora {vuoto} ({dove})", e.pasto, e.linea)
+            return
+        prima = json.loads(s.value) if s and s.value else {}
+        quando = datetime.fromisoformat(prima["dal"]) if prima.get("dal") else None
+        da = (f"{finito} il {quando:%d/%m} alle {quando:%H:%M}" + (f", pasto delle {prima['pasto']}" if prima.get("pasto") else "")
+              if quando else "non so da quando")
+        if not siero and not d["reale"]:
+            # coclea a 0: EM2000 ricorda la sostituzione e non riprova il silos finché non finiscono gli altri
+            testo = (f"{icona} <b>{nome}: saltato da EM2000</b> ({da}) – la {dove} è stata fatta con {con}. "
+                     f"Il PC non riprova il silos finché non finiscono gli altri: se l'hai già ricaricato non serve fare niente.")
         else:
-            db.session.add(Setting(key=nome_imp, value=valore))
-        db.session.commit()
+            tirati = f" (ha tirato solo {_q(d['reale'])})" if d["reale"] else ""
+            testo = f"{icona} <b>{nome}: ancora {vuoto}</b>{tirati} – {da}. La {dove} è stata fatta con {con}."
         self._anomalia(e.tipo, e.istante, testo, self._png(img), e.pasto, e.linea, canale=chat)
 
     def _ricaricato(self, chiave, e, chat):

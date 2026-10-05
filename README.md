@@ -296,8 +296,9 @@ scritto niente e non resta nessun file (la fotografia viaggia compressa sulla co
   Messaggi: inizio pasto, fine di ogni linea con i quantitativi, riepilogo. **Tutti i messaggi dell'impianto**
   vanno nel gruppo scelto nelle impostazioni (default *allevamento*).
 - *Avvisi*: pasto non partito, orari dei pasti cambiati o pasto saltato, cisterna del siero o silos **finiti ora**
-  (con orario e quantità), **di nuovo in uso** quando tornano a dare la dose piena; cisterna **ancora vuota** ai
-  pasti successivi; silos **saltato da EM2000** una volta al giorno (EM2000 ricorda la sostituzione e non riprova
+  (con orario e quantità: solo se hanno dato una parte vera della dose, non i pochi kg che pompa e coclea tirano
+  quando sono già vuote), **di nuovo in uso** quando tornano a dare la dose piena; finché restano vuoti **ancora
+  vuoto** una volta al giorno; silos **saltato da EM2000** (coclea a 0) (EM2000 ricorda la sostituzione e non riprova
   la coclea finché non finiscono gli altri silos, quindi una coclea a 0 non vuol dire silos vuoto), siero o farina insufficienti, fase bloccata, stato mai visto, **lettura incompleta** (una schermata
   riconosciuta in cui qualcosa non si legge: va insegnata al lettore). Le anomalie arrivano con la fotografia.
 - Se il pasto parte più di 15 minuti dopo l'orario del gestionale, viene registrato anche l'orario effettivo
