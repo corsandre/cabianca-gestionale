@@ -78,6 +78,8 @@
                     <span class="badge bg-secondary">In corso (prossima dose {{ s.prossima_data.strftime('%d/%m') }})</span>
                     {% elif s.in_sospensione %}
                     <span class="badge text-dark" style="background:#ffc107">In sospensione fino al {{ s.data_fine_sospensione.strftime('%d/%m/%Y') }}</span>
+                    {% elif s.deceduto %}
+                    <span class="badge bg-dark">Chiuso – animale deceduto</span>
                     {% elif s.chiuso_anticipatamente %}
                     <span class="badge bg-secondary">Chiuso anticipatamente</span>
                     {% else %}
@@ -146,6 +148,12 @@
                     </p>
                     <label class="form-label">Motivazione <small class="text-muted">(opzionale, aggiunta alle note)</small></label>
                     <textarea name="motivo" class="form-control" rows="2" placeholder="es. animale guarito prima, macellato, ecc."></textarea>
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" name="deceduto" value="1" id="deceduto{{ t.id }}">
+                        <label class="form-check-label" for="deceduto{{ t.id }}">
+                            Deceduto <small class="text-muted">(l'animale è morto: nessun periodo di sospensione)</small>
+                        </label>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annulla</button>

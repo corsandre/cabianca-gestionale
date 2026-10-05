@@ -97,6 +97,8 @@ def create_app():
 
     # Logging
     logging.basicConfig(level=logging.INFO)
+    # il job degli avvisi gira ogni minuto: le righe INFO di apscheduler riempirebbero il registro
+    logging.getLogger("apscheduler").setLevel(logging.WARNING)
     # httpx logga ogni richiesta con l'URL completo, che per Telegram contiene il token del bot
     logging.getLogger("httpx").setLevel(logging.WARNING)
     app.logger.setLevel(logging.INFO)
@@ -288,6 +290,7 @@ def _init_db(app):
         ("spostamenti_animali", "pc_alimentazione_data", "DATETIME"),
         ("spostamenti_animali", "pc_alimentazione_operatore", "VARCHAR(100)"),
         ("uso_pasti", "fonte", "VARCHAR(20)"),
+        ("trattamenti", "deceduto", "BOOLEAN DEFAULT 0"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

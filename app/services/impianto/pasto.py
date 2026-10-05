@@ -16,6 +16,8 @@ Regole
   per un silos EM2000 lo sta saltando perché ricorda la sostituzione). La farina della linea resta la somma di tutte le coclee.
 - A fine linea, "piene": siero e coclee che hanno dato la dose piena (servono a capire che una
   cisterna o un silos vuoti sono stati ricaricati).
+- Inizio miscelazione: la prima lettura della linea in fase di miscelazione (componenti caricati), con i
+  quantitativi letti in quel momento; una volta per linea.
 - Siero o farina insufficiente: a fine linea reale sotto il teorico di oltre SOGLIA_Q senza una
   sostituzione che lo spieghi.
 - Stato sconosciuto: una frase di stato mai vista per 2 letture di fila (va mandata la fotografia).
@@ -42,6 +44,7 @@ PASTO_INIZIATO, PASTO_CONCLUSO = "pasto_iniziato", "pasto_concluso"
 LINEA_INIZIATA, LINEA_CONCLUSA, LINEA_NON_LETTA = "linea_iniziata", "linea_conclusa", "linea_non_letta"
 SIERO_INSUFFICIENTE, STATO_SCONOSCIUTO, FASE_BLOCCATA = "siero_insufficiente", "stato_sconosciuto", "fase_bloccata"
 SILOS_FINITO, SIERO_FINITO, FARINA_INSUFFICIENTE = "silos_finito", "siero_finito", "farina_insufficiente"
+MISCELAZIONE_INIZIATA = "miscelazione_iniziata"
 ANOMALIE = {LINEA_NON_LETTA, SIERO_INSUFFICIENTE, STATO_SCONOSCIUTO, FASE_BLOCCATA, SILOS_FINITO, SIERO_FINITO,
             FARINA_INSUFFICIENTE}
 
@@ -97,6 +100,7 @@ class TracciaPasto:
         self.esauriti_segnalati = set()   # cisterna/silos già segnalati in questo pasto
         self.sos_visti = {}         # chiave -> istante in cui la sostituzione è comparsa (linea corrente)
         self.ultima = None          # ultima lettura della linea corrente
+        self.miscelazione_vista = False
         self.fase = None
         self.fase_dal = None
         self.fase_segnalata = False
@@ -136,7 +140,7 @@ class TracciaPasto:
                         and reale[comp] < teorico[comp] - SOGLIA_Q):
                     eventi.append(Evento(tipo, istante, self.pasto, self.linea, lettura=lettura,
                                          dati={"reale": reale[comp], "teorico": teorico[comp]}))
-        self.linea, self.valori, self.sos_visti, self.ultima = None, [], {}, None
+        self.linea, self.valori, self.sos_visti, self.ultima, self.miscelazione_vista = None, [], {}, None, False
         return eventi
 
     def aggiorna(self, istante, lettura):
@@ -175,6 +179,10 @@ class TracciaPasto:
             self.ultima = lettura
             for chiave in esaurimenti(lettura):
                 self.sos_visti.setdefault(chiave, istante)
+            if lettura.fase == MISCELAZIONE and not self.miscelazione_vista:
+                self.miscelazione_vista = True
+                eventi.append(Evento(MISCELAZIONE_INIZIATA, istante, self.pasto, self.linea, lettura=lettura,
+                                     dati={"reale": dict(lettura.reale), "silos": lettura.farina_per_silos}))
             if lettura.fase in FASI_DOSAGGIO_CONCLUSO:
                 if lettura.tabella_coerente:
                     self.valori.append((dict(lettura.reale), dict(lettura.teorico), lettura))

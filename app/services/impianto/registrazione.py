@@ -10,7 +10,8 @@
   l'orario effettivo (serve a scalare il siero dal carico giusto). Inizio del pasto = inizio della linea 1
   (le linee successive partono normalmente 20-40 minuti dopo); sconosciuto se il servizio ha
   agganciato il pasto già in corso.
-- Quantitativi arrotondati a 2 decimali di quintale, come nell'inserimento a mano.
+- Quantitativi arrotondati a 2 decimali di quintale, come nell'inserimento a mano. Siero sotto 0,15 q
+  su una linea = non erogato, spostato nell'acqua (normalizza_siero).
 - Il numero del pasto (1-3) è la posizione dell'orario tra quelli impostati sull'impianto: un pasto
   rinviato (es. 14:39 invece di 12:50) resta il pasto 2.
 """
@@ -19,6 +20,16 @@ from datetime import datetime, timedelta
 from app import db
 
 MINUTI_ORARIO_EFFETTIVO = 15
+
+
+def normalizza_siero(reale):
+    """Siero sotto SIERO_MINIMO_Q su una linea = non erogato (residuo a cisterna vuota): va nell'acqua."""
+    from app.services.allevamento_scorte import SIERO_MINIMO_Q
+    r = dict(reale)
+    if r.get("siero") is not None and 0 < r["siero"] < SIERO_MINIMO_Q:
+        r["acqua"] = round((r.get("acqua") or 0) + r["siero"], 4)
+        r["siero"] = 0.0
+    return r
 
 
 def numero_pasto(orario, orari_impianto):
@@ -86,7 +97,7 @@ def registra(lettura, operatore="impianto", sovrascrivi_manuali=False):
         if scarto > MINUTI_ORARIO_EFFETTIVO and not OrarioPastoEffettivo.query.filter_by(
                 data=lettura.data, pasto=lettura.pasto).first():
             db.session.add(OrarioPastoEffettivo(data=lettura.data, pasto=lettura.pasto,
-                                                ora=(inizio - timedelta(seconds=inizio.second)).time(),
+                                                ora=inizio.replace(second=0, microsecond=0).time(),
                                                 operatore="impianto"))
             invalida_orari_effettivi()
     return riga

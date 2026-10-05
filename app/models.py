@@ -583,6 +583,7 @@ class Trattamento(db.Model):
     giorni_somministrazione = db.Column(db.Integer, nullable=False)
     giorni_sospensione = db.Column(db.Integer, nullable=False)
     chiuso_anticipatamente = db.Column(db.Boolean, default=False)
+    deceduto = db.Column(db.Boolean, default=False)   # chiuso perché l'animale è morto: niente sospensione
     registrato_da = db.Column(db.String(20), default="web")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     ciclo = db.relationship("Ciclo", backref="trattamenti")

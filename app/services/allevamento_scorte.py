@@ -287,6 +287,11 @@ def _fine_carico(c):
     return datetime.combine(c.data_esaurimento, c.ora_esaurimento or dt_time(23, 59, 59))
 
 
+# siero sotto questa quantità (per linea, o per pasto a cisterna vuota) non conta come erogato: con la
+# cisterna vuota la pompa tira pochi litri di residuo o di acqua di lavaggio (richiesta di Andrea, 05/10/2026)
+SIERO_MINIMO_Q = 0.15
+
+
 def attribuzione_siero():
     """Assegna il siero di ogni pasto completo a un carico (regole nel docstring del modulo).
 
@@ -326,6 +331,8 @@ def attribuzione_siero():
         # primo carico in assoluto non c'è niente da attribuire) e ne è già arrivato uno dopo
         precedente = any(_inizio_carico(c) <= istante for c in carichi)
         successivo = next((c for c in carichi if _inizio_carico(c) > istante), None)
+        if siero < SIERO_MINIMO_Q:
+            continue    # pochi litri a cisterna vuota (residuo nella linea): non sono siero di un carico
         if precedente and successivo:
             dest = esito["carichi"][successivo.id]
             dest["consumo"] += siero

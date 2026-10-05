@@ -215,6 +215,14 @@
                     <option value="{{ k }}" {{ 'selected' if impianto.impianto_chat_pasti == k }}>{{ nome }}</option>{% endfor %}
                 </select>
             </div>
+            <div class="col-md-2">
+                <label class="form-label small" for="impianto_messaggi">Messaggi dei pasti</label>
+                <select name="impianto_messaggi" id="impianto_messaggi" class="form-select form-select-sm"
+                        title="Completi: anche fine del carico dei componenti e «tra 1 minuto riempimento tubi» per ogni linea">
+                    {% for k, nome in [('completi', 'Completi'), ('essenziali', 'Essenziali')] %}
+                    <option value="{{ k }}" {{ 'selected' if impianto.impianto_messaggi == k }}>{{ nome }}</option>{% endfor %}
+                </select>
+            </div>
             <div class="col-md-3">
                 <label class="form-label small" for="impianto_controllo_min">Controllo periodico (minuti)</label>
                 <input type="number" name="impianto_controllo_min" id="impianto_controllo_min" class="form-control form-control-sm" value="{{ impianto.impianto_controllo_min }}">
@@ -265,6 +273,13 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-camera me-1"></i>Prova ora</button>
             </form>
+            {% if impianto.impianto_modalita != 'manuale' %}
+            <form method="post" action="{{ url_for('impianto.aggiorna') }}" class="d-inline-block mt-1">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-secondary" title="Il servizio rilegge schermata, orari, Brix e ricette e risponde su Telegram">
+                    <i class="bi bi-arrow-repeat me-1"></i>Aggiorna dal PC</button>
+            </form>
+            {% endif %}
             {% if impianto_info.ultima_prova %}
             <a href="{{ url_for('impianto.immagine', nome='ultima_prova.png') }}" target="_blank" class="d-inline-block mt-2">
                 <img src="{{ url_for('impianto.immagine', nome='ultima_prova.png') }}" alt="Schermo dell'impianto all'ultima prova"

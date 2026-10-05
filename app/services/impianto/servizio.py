@@ -50,15 +50,17 @@ from datetime import datetime, timedelta
 
 from . import (crea_lettore, impostazione, modalita, cartella_dati, percorso_chiave,
                MANUALE, AUTOMATICO, NOMI_MODALITA)
-from .base import ATTESA_ORARIO, SCONOSCIUTA, COMPONENTI
+from .base import ATTESA_ORARIO, SCONOSCIUTA, COMPONENTI, PREPARAZIONE, STABILIZZAZIONE, MISCELAZIONE, NOMI_FASI
 from .pasto import (TracciaPasto, PASTO_INIZIATO, PASTO_CONCLUSO, LINEA_INIZIATA, LINEA_CONCLUSA,
                     LINEA_NON_LETTA, SIERO_INSUFFICIENTE, STATO_SCONOSCIUTO, FASE_BLOCCATA,
-                    SILOS_FINITO, SIERO_FINITO, FARINA_INSUFFICIENTE)
+                    SILOS_FINITO, SIERO_FINITO, FARINA_INSUFFICIENTE, MISCELAZIONE_INIZIATA)
 
 log = logging.getLogger("impianto")
 TENTATIVI_PRIMA_DI_AVVISARE = 3
 MINUTI_PASTO_NON_PARTITO = 20
 MINUTI_CONTROLLO_ORARI = 10
+SECONDI_FOTO_CARICO = 20           # durante il carico dei componenti, per cogliere l'inizio della miscelazione
+SECONDI_MISCELAZIONE_RISERVA = 360  # se la durata della ricetta non si legge
 SECONDI_SCARTO_OROLOGIO = 120
 NOMI_COMPONENTI = {"acqua": "acqua", "siero": "siero", "farina": "farina"}
 
@@ -98,6 +100,8 @@ class Servizio:
         self.problemi_prec = set()       # problemi di lettura della fotografia precedente
         self.segnalati_oggi = {}         # problema / stato sconosciuto -> giorno in cui è stato segnalato
         self.schermata_errata = None     # stato della schermata non riconosciuta, finché non torna giusta
+        self.aggancio = False            # True mentre si aggancia un pasto già in corso (niente doppioni)
+        self.riempimento = None          # (istante, linea, pasto): avviso "tra 1 minuto riempimento tubi"
 
     # ── Telegram ───────────────────────────────────────────────────────────
     def _manda(self, testo, canale, png=None):
@@ -136,9 +140,16 @@ class Servizio:
                     self.lettore = None
                 return 60
             adesso = datetime.now()
+            self._richiesta_aggiornamento(adesso)
             if self.traccia.in_corso or self._pasto_vicino(adesso):
                 self._fotografa(adesso)
-                return max(15, int(impostazione("impianto_foto_s") or 60))
+                self._avviso_riempimento(datetime.now())
+                attesa = max(15, int(impostazione("impianto_foto_s") or 60))
+                if self.traccia.fase in (PREPARAZIONE, STABILIZZAZIONE):
+                    attesa = min(attesa, SECONDI_FOTO_CARICO)
+                if self.riempimento:
+                    attesa = max(1, min(attesa, int((self.riempimento[0] - datetime.now()).total_seconds()) + 1))
+                return attesa
             intervallo = timedelta(minutes=5 if self.guasti or self.schermata_errata
                                    else int(impostazione("impianto_controllo_min") or 60))
             if not self.ultimo_controllo or adesso - self.ultimo_controllo >= intervallo:
@@ -158,6 +169,14 @@ class Servizio:
             return
         if self.orari and orari and orari != self.orari:
             self._controllo(adesso)
+        elif not self.schermata_errata:
+            # anche la schermata: se EM2000 è su un'altra pagina, controllo completo subito (che avvisa)
+            try:
+                _, lettura = self.lettore.fotografa()
+                if lettura.fase == SCONOSCIUTA:
+                    self._controllo(adesso)
+            except Exception as e:
+                log.info("fotografia del controllo leggero non riuscita: %s", e)
         self._controlla_parametri(adesso)
 
     def _controlla_parametri(self, adesso):
@@ -265,8 +284,12 @@ class Servizio:
         if l.fase not in (ATTESA_ORARIO, SCONOSCIUTA) and not self.traccia.in_corso:
             # servizio avviato (o riavviato) a pasto già in corso: lo si segue da qui, ma l'inizio vero
             # del pasto e della linea in corso non si conosce (niente durata né orario effettivo)
-            for evento in self.traccia.aggiorna(adesso, l):
-                self._evento(evento, None)
+            self.aggancio = True
+            try:
+                for evento in self.traccia.aggiorna(adesso, l):
+                    self._evento(evento, None)
+            finally:
+                self.aggancio = False
             self.inizio_pasto, self.inizio_linee = None, {}
         if l.fase == SCONOSCIUTA:
             self.schermata_errata = l.stato or "?"
@@ -350,6 +373,66 @@ class Servizio:
             return f"⚠️ L'impianto risponde ma la {html.escape(stato)}."
         return f"❓ Stato dell'impianto mai visto: «{html.escape(stato or '?')}»."
 
+    # ── messaggi di dettaglio del pasto ────────────────────────────────────
+    def _messaggi_completi(self):
+        return impostazione("impianto_messaggi") != "essenziali"
+
+    def _miscelazione(self, e, chat):
+        """Componenti caricati: messaggio e sveglia un minuto prima del riempimento dei tubi."""
+        self._salva_evento(e.tipo, e.istante, None, e.pasto, e.linea)
+        if self.aggancio or not self._messaggi_completi():
+            return
+        r = e.dati["reale"]
+        valori = " · ".join(f"{NOMI_COMPONENTI[k]} {_q(r.get(k))}" for k in COMPONENTI)
+        self._manda(f"🥣 <b>Linea {e.linea}</b>: componenti caricati ({valori}), inizia la miscelazione.", chat)
+        try:
+            durata = self.lettore.durata_miscelazione(e.lettura) if e.lettura else None
+        except Exception as ex:
+            log.info("durata della miscelazione non letta: %s", ex)
+            durata = None
+        self.riempimento = (e.istante + timedelta(seconds=(durata or SECONDI_MISCELAZIONE_RISERVA) - 60), e.linea, e.pasto)
+
+    def _avviso_riempimento(self, adesso):
+        if not self.riempimento or adesso < self.riempimento[0]:
+            return
+        _, linea, pasto = self.riempimento
+        self.riempimento = None
+        if self.traccia.in_corso and self.traccia.linea == linea and self.traccia.fase == MISCELAZIONE:
+            self._manda(f"⏱️ <b>Linea {linea}</b>: tra 1 minuto riempimento dei tubi.", self._chat_pasti())
+
+    # ── aggiornamento chiesto dal gestionale o dal bot ──────────────────────
+    def _richiesta_aggiornamento(self, adesso):
+        from app import db
+        from app.models import Setting
+        s = db.session.get(Setting, "impianto_richiesta_aggiornamento")
+        if not s:
+            return
+        chi = s.value or ""
+        db.session.delete(s)
+        db.session.commit()
+        self._controllo(adesso)
+        self._controlla_parametri(adesso)
+        self._manda(self._testo_stato(adesso, chi), self._chat_pasti())
+
+    def _testo_stato(self, adesso, chi=""):
+        import json
+        from app import db
+        from app.models import ImpiantoControllo, Setting
+        c = ImpiantoControllo.query.order_by(ImpiantoControllo.istante.desc()).first()
+        richiesta = f" (richiesto da {html.escape(chi)})" if chi else ""
+        if not c or not c.raggiungibile:
+            return f"🔄 Aggiornamento dal PC{richiesta}: impianto <b>non raggiungibile</b>."
+        p = db.session.get(Setting, "impianto_parametri")
+        par = json.loads(p.value) if p and p.value else {}
+        pct = lambda v: "–" if v is None else f"{v:.1f}".replace(".", ",") + "%"
+        righe = [f"🔄 <b>Aggiornato dal PC alle {adesso:%H:%M}</b>{richiesta}",
+                 f"Schermata: {'⚠️ ' + html.escape(c.stato or '?') if c.fase == SCONOSCIUTA else 'Situazione impianto, ' + NOMI_FASI.get(c.fase, c.fase)}",
+                 f"Pasti: {(c.orari or '?').replace(',', ' · ')} – prossimo alle {_hm(c.prossimo_pasto)}"]
+        if par:
+            righe.append(f"Brix del siero {pct(par.get('brix'))}" + "".join(
+                f" · siero nella «{html.escape(k)}» {pct(v)}" for k, v in (par.get("siero") or {}).items()))
+        return "\n".join(righe)
+
     # ── letture incomplete ─────────────────────────────────────────────────
     def _da_segnalare(self, adesso, chiave):
         if self.segnalati_oggi.get(chiave) == adesso.date():
@@ -387,11 +470,21 @@ class Servizio:
     # vuoto si considera "finito ora" (ha dato una parte vera della dose)
     QUOTA_FINITO_ORA, QUOTA_DOPO_RICARICA = 0.10, 0.50
 
+    def _gia_segnalato(self, e, nome):
+        """Lo stesso avviso per lo stesso pasto e linea c'è già (es. servizio riavviato a pasto in corso)."""
+        from app.models import ImpiantoEvento
+        oggi = datetime.combine(e.istante.date(), datetime.min.time())
+        return ImpiantoEvento.query.filter(
+            ImpiantoEvento.tipo == e.tipo, ImpiantoEvento.orario_pasto == e.pasto, ImpiantoEvento.linea == e.linea,
+            ImpiantoEvento.istante >= oggi, ImpiantoEvento.messaggio.like(f"%{nome}%")).first() is not None
+
     def _esaurito(self, e, img, chat):
         import json
         from app import db
         from app.models import Setting
         d = e.dati
+        if self._gia_segnalato(e, self._nome_esaurito(("siero",) if e.tipo == SIERO_FINITO else ("silos", d["coclea"]))):
+            return
         siero = e.tipo == SIERO_FINITO
         chiave = ("siero",) if siero else ("silos", d["coclea"])
         nome, icona = self._nome_esaurito(chiave), "🥛" if siero else "🌾"
@@ -480,8 +573,11 @@ class Servizio:
         chat = self._chat_pasti()
         if e.tipo == PASTO_INIZIATO:
             self.inizio_pasto, self.inizio_linee, self.linee_pasto = e.istante, {}, []
-            self._salva_evento(e.tipo, e.istante, None, e.pasto)
-            self._manda(f"🐷 Pasto delle {_hm(e.pasto)} iniziato.", chat)
+            self._salva_evento(e.tipo, e.istante, "agganciato già in corso" if self.aggancio else None, e.pasto)
+            if not self.aggancio:        # agganciato dopo un riavvio: non è l'inizio vero, niente messaggio
+                self._manda(f"🐷 Pasto delle {_hm(e.pasto)} iniziato.", chat)
+        elif e.tipo == MISCELAZIONE_INIZIATA:
+            self._miscelazione(e, chat)
         elif e.tipo == LINEA_INIZIATA:
             self.inizio_linee[e.linea] = e.istante
             self._salva_evento(e.tipo, e.istante, None, e.pasto, e.linea)
@@ -490,6 +586,8 @@ class Servizio:
                            f"⚠️ Linea {e.linea}: valori letti ma orario del pasto non leggibile sullo schermo, "
                            f"lettura non salvata: {e.dati['reale']}", self._png(img), None, e.linea)
         elif e.tipo == LINEA_CONCLUSA:
+            from .registrazione import normalizza_siero
+            e.dati["reale"] = normalizza_siero(e.dati["reale"])
             lettura = salva_lettura_linea(e.istante.date(), e, self.orari, inizio=self.inizio_linee.get(e.linea))
             registrata = None
             if modalita() == AUTOMATICO and lettura.confermato:

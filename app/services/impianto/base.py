@@ -140,6 +140,10 @@ class LettoreImpianto:
     def orari_pasti(self) -> list:
         raise NotImplementedError
 
+    def durata_miscelazione(self, lettura) -> Optional[int]:
+        """Secondi di miscelazione della ricetta in uso sulla linea letta, None se non si sa."""
+        return None
+
     def parametri(self) -> dict:
         """Impostazioni dell'impianto da sorvegliare (es. Brix del siero e sua % nelle ricette).
         {"brix": float o None, "siero": {nome ricetta: %}}; {} se il tipo di impianto non lo prevede."""

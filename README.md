@@ -200,7 +200,8 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
 - Registro dei trattamenti (`Medicinale`, `Trattamento`, `Somministrazione`) per box o intero capannone.
 - Dose per capo e totale = ml/kg × peso medio × numero animali; dosi da ripetere in evidenza; periodo di
   sospensione prima del macello.
-- Modifica, chiusura anticipata con motivazione (accodata alle note), eliminazione.
+- Modifica, chiusura anticipata con motivazione (accodata alle note) e casella «Deceduto» (animale morto: nessun
+  periodo di sospensione), eliminazione.
 
 #### Analisi (`/allevamento/analisi`)
 - Pagina di grafici interattivi sul ciclo attivo, con una riga di filtri che vale per tutta la pagina: periodo
@@ -288,12 +289,19 @@ scritto niente e non resta nessun file (la fotografia viaggia compressa sulla co
   gli orari, il Brix del siero e la % del siero nelle ricette: un pasto anticipato viene seguito dall'inizio e un
   cambio di Brix o sostituzione viene segnalato. Riepilogo giornaliero, impianto non raggiungibile (dopo 3
   tentativi) e di nuovo raggiungibile, orologio del PC spostato.
-- *Schermata*: EM2000 va lasciato su «Situazione impianto». Se è su un'altra schermata (es. Menu principale) arriva
+- *Aggiorna dal PC*: pulsante in Alimentazione e nelle impostazioni dell'impianto, e nel bot Telegram: il servizio
+  rilegge subito schermata, orari, Brix e ricette e risponde nel gruppo entro un minuto. Se il servizio riparte a
+  pasto in corso lo segue senza mandare di nuovo «iniziato» né gli avvisi già inviati.
+- *Schermata*: EM2000 va lasciato su «Situazione impianto» (controllata anche dal controllo leggero ogni 10 minuti). Se è su un'altra schermata (es. Menu principale) arriva
   un avviso con la fotografia, i controlli diventano ogni 5 minuti e, appena torna giusta, una conferma con la foto.
 - *Pasto*: da qualche minuto prima dell'orario (convertito in ora reale con lo scarto dell'orologio del PC) una
   fotografia ogni 60 secondi finché l'impianto torna in attesa. Fine di ogni linea: i quantitativi letti più volte
   uguali (dalla miscelazione in poi, solo se acqua + siero + farina = totale) diventano la lettura della linea.
-  Messaggi: inizio pasto, fine di ogni linea con i quantitativi, riepilogo. **Tutti i messaggi dell'impianto**
+  Messaggi: inizio pasto, per ogni linea fine del carico dei componenti (inizio miscelazione) e «tra 1 minuto
+  riempimento dei tubi» (durata della miscelazione dalla ricetta, Ricette.DB; foto ogni 20 s durante il carico per
+  cogliere l'inizio; disattivabili con «Messaggi dei pasti: essenziali»), fine di ogni linea con i quantitativi,
+  riepilogo. Siero sotto 0,15 q su una linea = non erogato (residuo a cisterna vuota), registrato nell'acqua e mai
+  attribuito a un carico. **Tutti i messaggi dell'impianto**
   vanno nel gruppo scelto nelle impostazioni (default *allevamento*).
 - *Avvisi*: pasto non partito, orari dei pasti cambiati o pasto saltato, cisterna del siero o silos **finiti ora**
   (con orario e quantità: solo se hanno dato una parte vera della dose, non i pochi kg che pompa e coclea tirano

@@ -48,10 +48,14 @@ def impostazioni():
         chat = request.form.get("impianto_chat_pasti", "allevamento")
         if chat not in ("allevamento", "sistema", "nessuno"):
             raise ValueError("Gruppo Telegram non valido.")
+        messaggi = request.form.get("impianto_messaggi", "completi")
+        if messaggi not in ("completi", "essenziali"):
+            raise ValueError("Scelta dei messaggi non valida.")
         host = request.form.get("impianto_host", "").strip()
         if modalita != I.MANUALE and not host:
             raise ValueError("Per collegarsi all'impianto serve il suo indirizzo.")
         valori = {"impianto_modalita": modalita, "impianto_tipo": tipo, "impianto_chat_pasti": chat,
+                  "impianto_messaggi": messaggi,
                   "impianto_host": host, "impianto_utente": request.form.get("impianto_utente", "").strip() or "root"}
         for campo, (mn, mx) in CAMPI_NUMERICI.items():
             v = int(request.form.get(campo, I.DEFAULTS[campo]) or I.DEFAULTS[campo])
@@ -99,6 +103,29 @@ def prova():
         flash(f"Collegamento riuscito alle {datetime.now():%H:%M}: {I.NOMI_FASI.get(l.fase, l.fase)}, ora dell'impianto "
               f"{l.ora_pc or '?'}, prossimo pasto {l.prossimo_pasto or '?'}, orari {orari}.", "success")
     return redirect(url_for("allevamento.impostazioni") + "#impianto")
+
+
+def richiedi_aggiornamento(chi):
+    """Chiede al servizio dell'impianto di rileggere subito il PC (risponde su Telegram entro un minuto).
+    Usata dal pulsante del gestionale e dal bot."""
+    from app.models import Setting
+    if I.modalita() == I.MANUALE:
+        return False
+    _salva("impianto_richiesta_aggiornamento", chi)
+    db.session.commit()
+    return True
+
+
+@bp.route("/aggiorna", methods=["POST"])
+@login_required
+def aggiorna():
+    _check_allevamento()
+    chi = current_user.display_name or current_user.username
+    if richiedi_aggiornamento(chi):
+        flash("Richiesta inviata: il servizio rilegge il PC e risponde nel gruppo Telegram entro un minuto.", "success")
+    else:
+        flash("Il collegamento all'impianto è in modalità manuale.", "warning")
+    return redirect(request.referrer or url_for("allevamento.alimentazione"))
 
 
 @bp.route("/immagine/<path:nome>")

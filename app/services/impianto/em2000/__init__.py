@@ -104,6 +104,25 @@ class LettoreEM2000(LettoreImpianto):
         brix = siero.get("PERSECCO")
         return {"brix": round(brix, 2) if brix is not None else None, "siero": perc}
 
+    def durata_miscelazione(self, lettura):
+        """Tempo di miscelazione (Ricette.DB, TIMMIXMIN/TIMMIXSEC) della ricetta i cui componenti sono le
+        righe normali della tabella (es. SIERO + COCLEA 1 = «ricetta 2 siero»). Più ricette con gli stessi
+        componenti: quella con il numero più basso. Nessuna: None (il servizio usa un valore di riserva)."""
+        nomi_tabella = {"SIERO" if r["comp"] == "siero" else f"COCLEA {r['coclea']}"
+                        for r in lettura.righe if not r["sos"] and r["comp"] in ("siero", "farina")}
+        if not nomi_tabella:
+            return None
+        compo = {c["NR"]: (c.get("NOME") or "").strip().upper() for c in paradox.leggi(self._leggi_file(COMPO_DB))}
+        per_ricetta = {}
+        for r in paradox.leggi(self._leggi_file(RICETTECOMPO_DB)):
+            if r.get("NRRICETTA") and r.get("PER"):
+                per_ricetta.setdefault(r["NRRICETTA"], set()).add(compo.get(r["NRCOMPO"]))
+        for r in sorted(paradox.leggi(self._leggi_file(RICETTE_DB)), key=lambda x: x.get("NR") or 0):
+            if r.get("NR") and per_ricetta.get(r["NR"]) == nomi_tabella:
+                secondi = (r.get("TIMMIXMIN") or 0) * 60 + (r.get("TIMMIXSEC") or 0)
+                return secondi or None
+        return None
+
     def controllo(self):
         try:
             img, lettura = self.fotografa()

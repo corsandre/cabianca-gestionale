@@ -1277,7 +1277,7 @@ def alimentazione():
                            ss=ss, capi_linea=capi_linea, capi_totali=capi_totali,
                            perc_ss_mangime=perc_ss_mangime,
                            orari_standard=orari_standard, orari_effettivi=orari_effettivi,
-                           letture_impianto=letture_impianto)
+                           letture_impianto=letture_impianto, impianto_attivo=modalita_impianto() != MANUALE)
 
 
 @bp.route("/alimentazione/orario", methods=["POST"])
@@ -1511,7 +1511,7 @@ def _stato_trattamento(t):
     oggi = date.today()
     da_ripetere = (not completo) and ultima is not None and oggi > ultima.data
     data_fine_sospensione = None
-    if completo and ultima:
+    if completo and ultima and not t.deceduto:   # animale morto: nessuna sospensione prima del macello
         data_fine_sospensione = ultima.data + timedelta(days=t.giorni_sospensione)
     dose_capo_ml = None
     dose_totale_ml = None
@@ -1523,6 +1523,7 @@ def _stato_trattamento(t):
         "totali": t.giorni_somministrazione,
         "completo": completo,
         "chiuso_anticipatamente": t.chiuso_anticipatamente,
+        "deceduto": bool(t.deceduto),
         "da_ripetere": da_ripetere,
         "ultima_data": ultima.data if ultima else None,
         "prossima_data": (ultima.data + timedelta(days=1)) if ultima and not completo else None,
@@ -1730,13 +1731,15 @@ def trattamenti_chiudi(tid):
         return redirect(url_for("allevamento.trattamenti"))
 
     motivo = request.form.get("motivo", "").strip()
-    riga = f"Chiuso anticipatamente il {date.today().strftime('%d/%m/%Y')}"
+    deceduto = request.form.get("deceduto") == "1"
+    riga = f"Chiuso anticipatamente il {date.today().strftime('%d/%m/%Y')}" + (" – animale deceduto" if deceduto else "")
     if motivo:
         riga += f": {motivo}"
     t.note = f"{t.note}\n\n{riga}" if t.note else riga
     t.chiuso_anticipatamente = True
+    t.deceduto = deceduto
     db.session.commit()
-    flash("Trattamento chiuso.", "success")
+    flash("Trattamento chiuso" + (" (animale deceduto, nessuna sospensione)." if deceduto else "."), "success")
     return redirect(url_for("allevamento.trattamenti"))
 
 

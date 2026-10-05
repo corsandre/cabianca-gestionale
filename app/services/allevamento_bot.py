@@ -88,7 +88,8 @@ def start_bot(app):
             [InlineKeyboardButton("🚚 Consegna siero", callback_data="consegna_siero"),
              InlineKeyboardButton("🌾 Consegna mangime", callback_data="consegna_mangime")],
             [InlineKeyboardButton("💊 Trattamenti", callback_data="trattamenti_menu")],
-            [InlineKeyboardButton("📊 Stato ciclo", callback_data="stato")],
+            [InlineKeyboardButton("📊 Stato ciclo", callback_data="stato"),
+             InlineKeyboardButton("🖥️ Aggiorna dal PC", callback_data="aggiorna_pc")],
         ])
 
     def kb_linee():
@@ -169,6 +170,15 @@ def start_bot(app):
         elif data == "stato":
             await _send_stato(q, ctx, app)
             return MAIN_MENU
+        elif data == "aggiorna_pc":
+            # il servizio dell'impianto rilegge subito il PC e risponde nel gruppo dei suoi messaggi
+            with app.app_context():
+                from app.routes.impianto import richiedi_aggiornamento
+                ok = richiedi_aggiornamento(update.effective_user.first_name or str(update.effective_user.id))
+            await q.edit_message_text(
+                "🖥️ Richiesta inviata: il servizio rilegge il PC di alimentazione e risponde nel gruppo entro un minuto."
+                if ok else "Il collegamento al PC di alimentazione è in modalità manuale.\n\nUsa /start per continuare.")
+            return ConversationHandler.END
         elif data == "trattamenti_menu":
             kb = InlineKeyboardMarkup([
                 [InlineKeyboardButton("📋 Da fare oggi", callback_data="trattamenti_lista")],

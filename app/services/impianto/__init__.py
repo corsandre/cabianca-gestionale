@@ -21,7 +21,8 @@ DEFAULTS = {
     "impianto_controllo_min": "60",    # controllo periodico (heartbeat)
     "impianto_foto_s": "60",           # una fotografia ogni N secondi durante il pasto
     "impianto_anticipo_min": "5",      # si comincia a fotografare N minuti prima del pasto
-    "impianto_chat_pasti": "allevamento",   # gruppo Telegram dei messaggi dei pasti: allevamento/sistema/nessuno
+    "impianto_chat_pasti": "allevamento",   # gruppo Telegram dei messaggi dell'impianto: allevamento/sistema/nessuno
+    "impianto_messaggi": "completi",        # completi = anche inizio miscelazione e "tra 1 minuto riempimento tubi"
 }
 
 
