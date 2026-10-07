@@ -3,7 +3,9 @@
 Ogni minuto lo scheduler chiama controlla(): passato l'orario impostato (Impostazioni allevamento,
 allevamento_orario_avvisi, default 07:00) manda gli avvisi del giorno una volta sola (il giorno
 dell'ultimo invio è in allevamento_avvisi_inviati_il, così un riavvio non li ripete).
-Avvisi: trattamenti con una dose da ripetere oggi. Se non c'è niente da dire, nessun messaggio.
+Avvisi: trattamenti con una dose da ripetere oggi, raggruppati per animale (medicinali dati insieme
+allo stesso animale) con il colore del marcatore e la riga da fare sulla schiena. Se non c'è niente da
+dire, nessun messaggio.
 """
 import html
 import logging
@@ -22,20 +24,21 @@ def orario_avvisi():
 
 
 def trattamenti_da_ripetere():
-    """Righe di testo dei trattamenti del ciclo attivo con una dose da fare oggi."""
-    from app.models import Ciclo, Trattamento
-    from app.routes.allevamento import _stato_trattamento
+    """Righe di testo, una per animale (o gruppo di animali), con i medicinali da dare oggi. Con il colore
+    del marcatore si indica anche quale riga fare sulla schiena (una per giorno di trattamento)."""
+    from app.models import Ciclo
+    from app.services.allevamento_trattamenti import da_ripetere_per_animale, riga_ordinale
     ciclo = Ciclo.query.filter_by(attivo=True).first()
     if not ciclo:
         return []
     righe = []
-    for t in Trattamento.query.filter_by(ciclo_id=ciclo.id).order_by(Trattamento.data_inizio).all():
-        s = _stato_trattamento(t)
-        if not s["da_ripetere"]:
-            continue
-        ambito = f"box {t.box_numero}" if t.box_numero else f"CAP {t.capannone_numero} (tutto)"
-        dose = f", {s['dose_totale_ml']:.0f} ml in tutto".replace(".", ",") if s["dose_totale_ml"] else ""
-        righe.append(f"• <b>{html.escape(t.medicinale.nome)}</b> – {ambito}: dose {s['fatte'] + 1} di {s['totali']}{dose}")
+    for g in da_ripetere_per_animale(ciclo.id):
+        dosi = []
+        for t, s in g["trattamenti"]:
+            ml = f", {s['dose_totale_ml']:.0f} ml in tutto".replace(".", ",") if s["dose_totale_ml"] else ""
+            dosi.append(f"<b>{html.escape(t.medicinale.nome)}</b> dose {s['fatte'] + 1} di {s['totali']}{ml}")
+        riga = f" → fai la <b>{riga_ordinale(g['riga'])}</b>" if g["colore"] else ""
+        righe.append(f"• {html.escape(g['animale'])}: " + "; ".join(dosi) + riga)
     return righe
 
 

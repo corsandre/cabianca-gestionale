@@ -19,6 +19,15 @@
 {% set n_sospensione = stati.values() | selectattr("in_sospensione") | list | length %}
 {% set n_in_corso = stati.values() | rejectattr("completo") | list | length %}
 
+<!-- Procedura dei marcatori -->
+<div class="cb-card p-3 mb-3 small">
+    <i class="bi bi-brush me-1" style="color:#c2185b"></i><strong>Marcatori:</strong>
+    se nello stesso box trattate più animali, ognuno ha il suo colore (🔵 blu, ⚫ nero, 🔴 rosso) così si riconoscono.
+    Sulla schiena si fa una riga per ogni giorno di trattamento: 1ª riga il primo giorno, 2ª il secondo e così via
+    (di solito al massimo 3). Il promemoria del mattino dice quale riga fare. Se allo stesso animale date più
+    medicinali, aggiungeteli nello stesso trattamento <i class="bi bi-link-45deg"></i>.
+</div>
+
 <!-- KPI -->
 <div class="row g-2 mb-4">
     <div class="col-4">
@@ -63,8 +72,10 @@
                     {{ t.medicinale.nome }}
                     {% if t.note %}<i class="bi bi-sticky ms-1 text-muted"></i>{% endif %}
                 </td>
-                <td class="text-muted">
+                <td class="text-muted text-nowrap">
                     {% if t.box_numero %}Box {{ t.box_numero }}{% else %}CAP {{ t.capannone_numero }} (tutto){% endif %}
+                    {% if t.colore %}<span title="Marcatore {{ t.colore }}">{{ {'blu': '🔵', 'nero': '⚫', 'rosso': '🔴'}[t.colore] }}</span>{% endif %}
+                    {% if t.gruppo %}<i class="bi bi-link-45deg" title="Stesso animale: {{ gruppi[t.gruppo] | join(' + ') }}"></i>{% endif %}
                 </td>
                 <td class="fw-bold">{{ t.numero_animali }}</td>
                 <td class="text-muted">{{ (t.peso_medio_kg ~ ' kg') if t.peso_medio_kg is not none else '–' }}</td>
@@ -240,6 +251,14 @@
                         <label class="form-label">Operatore</label>
                         <input type="text" name="operatore" class="form-control" value="{{ t.operatore or '' }}">
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">Colore marcatore {% if t.gruppo %}<small class="text-muted">(vale per tutti i medicinali di questo animale)</small>{% endif %}</label>
+                        <select name="colore" class="form-select">
+                            <option value="" {{ 'selected' if not t.colore }}>– nessuno –</option>
+                            {% for c, e in [('blu', '🔵 Blu'), ('nero', '⚫ Nero'), ('rosso', '🔴 Rosso')] %}
+                            <option value="{{ c }}" {{ 'selected' if t.colore == c }}>{{ e }}</option>{% endfor %}
+                        </select>
+                    </div>
                     <div class="mb-2">
                         <label class="form-label">Note</label>
                         <textarea name="note" class="form-control" rows="2">{{ t.note or '' }}</textarea>
@@ -274,11 +293,10 @@
                             <input type="date" name="data_inizio" class="form-control" value="{{ oggi.isoformat() }}" required>
                         </div>
                         <div class="col-6">
-                            <label class="form-label">Medicinale</label>
-                            <select name="medicinale_id" class="form-select" id="selMedicinale" onchange="aggiornaMedicinale()" required>
-                                {% for m in medicinali %}
-                                <option value="{{ m.id }}">{{ m.nome }}</option>
-                                {% endfor %}
+                            <label class="form-label">Colore marcatore <small class="text-muted" id="coloriInUso"></small></label>
+                            <select name="colore" class="form-select" id="selColore">
+                                <option value="">– nessuno –</option>
+                                <option value="blu">🔵 Blu</option><option value="nero">⚫ Nero</option><option value="rosso">🔴 Rosso</option>
                             </select>
                         </div>
                     </div>
@@ -307,34 +325,31 @@
                             <input type="number" name="peso_medio_kg" id="inpPeso" class="form-control" step="0.1" min="0">
                         </div>
                     </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-4">
-                            <label class="form-label small">ml/kg</label>
-                            <input type="number" name="ml_per_kg" id="inpMlKg" class="form-control form-control-sm" step="0.01" min="0">
-                        </div>
-                        <div class="col-4">
-                            <label class="form-label small">Giorni somm.</label>
-                            <input type="number" name="giorni_somministrazione" id="inpGiorniSomm" class="form-control form-control-sm" min="1" required>
-                        </div>
-                        <div class="col-4">
-                            <label class="form-label small">Giorni sosp.</label>
-                            <input type="number" name="giorni_sospensione" id="inpGiorniSosp" class="form-control form-control-sm" min="0" required>
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label">Medicinali <small class="text-muted">(più di uno se allo stesso animale date più farmaci insieme)</small></label>
+                        <div id="righeMedicinali"></div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary mt-1" onclick="aggiungiMedicinale()">
+                            <i class="bi bi-plus-circle me-1"></i>Aggiungi medicinale</button>
                     </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-6">
-                            <div class="cb-card p-2 text-center" style="background:#fce4ec">
-                                <span class="text-muted small">Dose per capo</span>
-                                <div class="fs-5 fw-bold" style="color:#c2185b" id="doseCapo">– ml</div>
+                    <template id="tplMedicinale">
+                        <div class="border rounded p-2 mb-2 riga-medicinale">
+                            <div class="d-flex gap-2 align-items-center mb-1">
+                                <select name="medicinale_id" class="form-select form-select-sm sel-med" required>
+                                    {% for m in medicinali %}<option value="{{ m.id }}">{{ m.nome }}</option>{% endfor %}
+                                </select>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 rimuovi" title="Togli questo medicinale"><i class="bi bi-x"></i></button>
                             </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="cb-card p-2 text-center" style="background:#fce4ec">
-                                <span class="text-muted small">Dose totale</span>
-                                <div class="fs-5 fw-bold" style="color:#c2185b" id="doseTotale">– ml</div>
+                            <div class="row g-1">
+                                <div class="col-4"><label class="form-label small mb-0">ml/kg</label>
+                                    <input type="number" name="ml_per_kg" class="form-control form-control-sm inp-ml" step="0.01" min="0"></div>
+                                <div class="col-4"><label class="form-label small mb-0">Giorni somm.</label>
+                                    <input type="number" name="giorni_somministrazione" class="form-control form-control-sm inp-gs" min="1" required></div>
+                                <div class="col-4"><label class="form-label small mb-0">Giorni sosp.</label>
+                                    <input type="number" name="giorni_sospensione" class="form-control form-control-sm inp-gsp" min="0" required></div>
                             </div>
+                            <div class="small mt-1" style="color:#c2185b">Dose: <span class="dose-capo">–</span> ml/capo · <span class="dose-tot">–</span> ml in totale</div>
                         </div>
-                    </div>
+                    </template>
                     <div class="mb-3">
                         <label class="form-label">Operatore</label>
                         <input type="text" name="operatore" class="form-control" placeholder="Chi ha fatto il trattamento">
@@ -383,35 +398,54 @@ function updateBoxes() {
     }
 }
 
-function aggiornaMedicinale() {
-    const id = document.getElementById('selMedicinale').value;
-    const m = MEDICINALI[id];
-    if (!m) return;
-    document.getElementById('inpMlKg').value = m.ml_per_kg != null ? m.ml_per_kg : '';
-    document.getElementById('inpGiorniSomm').value = m.giorni_somministrazione;
-    document.getElementById('inpGiorniSosp').value = m.giorni_sospensione;
+// righe dei medicinali (uno o più per lo stesso animale)
+function aggiornaRiga(riga) {
+    const m = MEDICINALI[riga.querySelector('.sel-med').value];
+    if (m) {
+        riga.querySelector('.inp-ml').value = m.ml_per_kg != null ? m.ml_per_kg : '';
+        riga.querySelector('.inp-gs').value = m.giorni_somministrazione;
+        riga.querySelector('.inp-gsp').value = m.giorni_sospensione;
+    }
     aggiornaDoseTotale();
 }
-aggiornaMedicinale();
+function aggiungiMedicinale() {
+    const riga = document.getElementById('tplMedicinale').content.firstElementChild.cloneNode(true);
+    riga.querySelector('.sel-med').addEventListener('change', () => aggiornaRiga(riga));
+    riga.querySelector('.inp-ml').addEventListener('input', aggiornaDoseTotale);
+    riga.querySelector('.rimuovi').addEventListener('click', () => {
+        if (document.querySelectorAll('#righeMedicinali .riga-medicinale').length > 1) { riga.remove(); }
+    });
+    document.getElementById('righeMedicinali').appendChild(riga);
+    aggiornaRiga(riga);
+}
+aggiungiMedicinale();
 
 function aggiornaDoseTotale() {
-    const mlKg = parseFloat(document.getElementById('inpMlKg').value);
     const peso = parseFloat(document.getElementById('inpPeso').value);
     const qty = parseFloat(document.getElementById('inpQty').value);
-    const elCapo = document.getElementById('doseCapo');
-    const elTotale = document.getElementById('doseTotale');
-    if (!isNaN(mlKg) && !isNaN(peso) && mlKg > 0 && peso > 0) {
-        const doseCapo = mlKg * peso;
-        elCapo.textContent = doseCapo.toFixed(1) + ' ml';
-        elTotale.textContent = (!isNaN(qty) && qty > 0) ? (doseCapo * qty).toFixed(1) + ' ml' : '– ml';
-    } else {
-        elCapo.textContent = '– ml';
-        elTotale.textContent = '– ml';
-    }
+    document.querySelectorAll('#righeMedicinali .riga-medicinale').forEach(riga => {
+        const mlKg = parseFloat(riga.querySelector('.inp-ml').value);
+        const ok = !isNaN(mlKg) && !isNaN(peso) && mlKg > 0 && peso > 0;
+        riga.querySelector('.dose-capo').textContent = ok ? (mlKg * peso).toFixed(1) : '–';
+        riga.querySelector('.dose-tot').textContent = ok && qty > 0 ? (mlKg * peso * qty).toFixed(1) : '–';
+    });
 }
-['inpMlKg', 'inpPeso', 'inpQty'].forEach(function (id) {
+['inpPeso', 'inpQty'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', aggiornaDoseTotale);
 });
+
+// colore del marcatore: si propone un colore non ancora usato nel box
+async function aggiornaColori() {
+    const box = document.getElementById('selBox').value;
+    const info = document.getElementById('coloriInUso');
+    if (!box) { info.textContent = ''; return; }
+    try {
+        const dati = await (await fetch('/allevamento/trattamenti/colori/' + box)).json();
+        info.textContent = dati.in_uso.length ? '(già in uso nel box: ' + dati.in_uso.join(', ') + ')' : '';
+        if (dati.suggerito) document.getElementById('selColore').value = dati.suggerito;
+    } catch (err) { info.textContent = ''; }
+}
+document.getElementById('selBox').addEventListener('change', aggiornaColori);
 
 // Prova a precompilare il peso medio dall'ultimo censimento di quel box.
 async function aggiornaPesoDaCensimento() {

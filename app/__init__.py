@@ -291,6 +291,8 @@ def _init_db(app):
         ("spostamenti_animali", "pc_alimentazione_operatore", "VARCHAR(100)"),
         ("uso_pasti", "fonte", "VARCHAR(20)"),
         ("trattamenti", "deceduto", "BOOLEAN DEFAULT 0"),
+        ("trattamenti", "gruppo", "VARCHAR(32)"),
+        ("trattamenti", "colore", "VARCHAR(10)"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

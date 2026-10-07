@@ -46,8 +46,8 @@ def start_bot(app):
         CENSIMENTO_FIELD, CENSIMENTO_BOX_NEXT, CENSIMENTO_CAP_NEXT, CENSIMENTO_CONFIRM,
         CENSIMENTO_RECAP_PICK,
         TRATTAMENTO_SOMMINISTRA, TRATTAMENTO_MEDICINALE, TRATTAMENTO_CAP,
-        TRATTAMENTO_BOX, TRATTAMENTO_QTY, TRATTAMENTO_PESO,
-    ) = range(32)
+        TRATTAMENTO_BOX, TRATTAMENTO_QTY, TRATTAMENTO_PESO, TRATTAMENTO_COLORE,
+    ) = range(33)
 
     CAPANNONI = [1, 2, 3, 4, 5, 6, 7]
     BOX_PER_CAP = {
@@ -189,21 +189,19 @@ def start_bot(app):
         elif data == "trattamenti_lista":
             righe = []
             with app.app_context():
-                from app.models import Ciclo, Trattamento
-                from app.routes.allevamento import _stato_trattamento
+                from app.models import Ciclo
+                from app.services.allevamento_trattamenti import da_ripetere_per_animale, riga_ordinale
                 ciclo = Ciclo.query.filter_by(attivo=True).first()
                 if ciclo:
-                    lista = Trattamento.query.filter_by(ciclo_id=ciclo.id).order_by(Trattamento.data_inizio).all()
-                    for t in lista:
-                        s = _stato_trattamento(t)
-                        if s["da_ripetere"]:
-                            ambito = f"Box {t.box_numero}" if t.box_numero else f"CAP {t.capannone_numero} (tutto)"
-                            righe.append((t.id, f"{t.medicinale.nome} — {ambito} ({s['fatte']}/{s['totali']})"))
+                    for g in da_ripetere_per_animale(ciclo.id):
+                        meds = " + ".join(t.medicinale.nome for t, _ in g["trattamenti"])
+                        riga = f" · {riga_ordinale(g['riga'])}" if g["colore"] else ""
+                        righe.append((g["chiave"], f"{g['animale']}: {meds} (dose {g['riga']}){riga}"))
             if not righe:
                 await q.edit_message_text("✅ Nessuna dose da somministrare oggi.\n\nUsa /start per continuare.")
                 return ConversationHandler.END
             kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"💉 {label}", callback_data=f"somm_{tid}")] for tid, label in righe
+                [InlineKeyboardButton(f"💉 {label}", callback_data=f"sommg_{chiave}")] for chiave, label in righe
             ])
             await q.edit_message_text("🔴 *Dosi da somministrare oggi:*", parse_mode="Markdown", reply_markup=kb)
             return TRATTAMENTO_SOMMINISTRA
@@ -211,13 +209,15 @@ def start_bot(app):
             with app.app_context():
                 from app.models import Medicinale
                 meds = Medicinale.query.filter_by(attivo=True).order_by(Medicinale.nome).all()
-                kb_rows = [[InlineKeyboardButton(m.nome, callback_data=str(m.id))] for m in meds]
-            if not kb_rows:
+                nomi = {m.id: m.nome for m in meds}
+            if not nomi:
                 await q.edit_message_text("⚠️ Nessun medicinale configurato (Impostazioni web).\n\nUsa /start per continuare.")
                 return ConversationHandler.END
+            ctx.user_data["tratt_nomi"] = nomi
+            ctx.user_data["tratt_medicinali"] = []
             await q.edit_message_text(
-                "💊 *Nuovo trattamento*\nSeleziona il medicinale:", parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(kb_rows),
+                "💊 *Nuovo trattamento*\nScegli il medicinale (anche più d'uno se allo stesso animale ne date più insieme), poi «Avanti»:",
+                parse_mode="Markdown", reply_markup=kb_medicinali(nomi, []),
             )
             return TRATTAMENTO_MEDICINALE
 
@@ -396,6 +396,28 @@ def start_bot(app):
     async def trattamento_somministra_cb(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         q = update.callback_query
         await q.answer()
+        if q.data.startswith("sommg_"):
+            # dose di oggi per tutti i medicinali dello stesso animale
+            chiave = q.data[len("sommg_"):]
+            with app.app_context():
+                from app import db
+                from app.models import Ciclo, Somministrazione
+                from app.services.allevamento_trattamenti import da_ripetere_per_animale, riga_ordinale
+                ciclo = Ciclo.query.filter_by(attivo=True).first()
+                g = next((x for x in da_ripetere_per_animale(ciclo.id) if x["chiave"] == chiave), None) if ciclo else None
+                if not g:
+                    await q.edit_message_text("Niente da somministrare oggi per questo animale.\n\nUsa /start per continuare.")
+                    return ConversationHandler.END
+                fatte = []
+                for t, s in g["trattamenti"]:
+                    db.session.add(Somministrazione(trattamento_id=t.id, numero_giorno=s["fatte"] + 1, data=date.today()))
+                    fatte.append(f"{t.medicinale.nome} {s['fatte'] + 1}/{s['totali']}")
+                db.session.commit()
+                testo = f"✅ Registrato per {g['animale']}: " + ", ".join(fatte) + "."
+                if g["colore"]:
+                    testo += f"\nRicordati la {riga_ordinale(g['riga'])} con il marcatore {g['colore']}."
+            await q.edit_message_text(testo + "\n\nUsa /start per continuare.")
+            return ConversationHandler.END
         tid = int(q.data.replace("somm_", ""))
         with app.app_context():
             from app import db
@@ -421,12 +443,32 @@ def start_bot(app):
         )
         return ConversationHandler.END
 
+    def kb_medicinali(nomi, scelti):
+        righe = [[InlineKeyboardButton(("✅ " if mid in scelti else "") + nome, callback_data=f"med_{mid}")]
+                 for mid, nome in nomi.items()]
+        if scelti:
+            righe.append([InlineKeyboardButton("➡️ Avanti", callback_data="med_avanti")])
+        return InlineKeyboardMarkup(righe)
+
     async def trattamento_medicinale(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         q = update.callback_query
         await q.answer()
-        ctx.user_data["tratt_medicinale_id"] = int(q.data)
-        await q.edit_message_text("📍 Capannone:", reply_markup=kb_capannoni())
-        return TRATTAMENTO_CAP
+        scelti = ctx.user_data.setdefault("tratt_medicinali", [])
+        if q.data == "med_avanti":
+            if not scelti:
+                return TRATTAMENTO_MEDICINALE
+            await q.edit_message_text("📍 Capannone:", reply_markup=kb_capannoni())
+            return TRATTAMENTO_CAP
+        mid = int(q.data.replace("med_", ""))
+        if mid in scelti:
+            scelti.remove(mid)
+        else:
+            scelti.append(mid)
+        nomi = ctx.user_data.get("tratt_nomi", {})
+        elenco = ", ".join(nomi.get(m, "?") for m in scelti) or "nessuno"
+        await q.edit_message_text(f"💊 Medicinali scelti: {elenco}\nTocca per aggiungere o togliere, poi «Avanti».",
+                                  reply_markup=kb_medicinali(nomi, scelti))
+        return TRATTAMENTO_MEDICINALE
 
     async def trattamento_cap(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         q = update.callback_query
@@ -497,45 +539,56 @@ def start_bot(app):
                 await update.message.reply_text("⚠️ Inserisci un numero positivo, oppure /skip.")
                 return TRATTAMENTO_PESO
 
-        medicinale_id = ctx.user_data.get("tratt_medicinale_id")
+        ctx.user_data["tratt_peso"] = peso
+        box = ctx.user_data.get("tratt_box")
+        suggerito, usati = None, []
+        if box:
+            with app.app_context():
+                from app.models import Ciclo
+                from app.services.allevamento_trattamenti import colori_in_uso, colore_suggerito
+                ciclo = Ciclo.query.filter_by(attivo=True).first()
+                if ciclo:
+                    usati, suggerito = colori_in_uso(ciclo.id, box), colore_suggerito(ciclo.id, box)
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton(("👉 " if c == suggerito else "") + e, callback_data=f"col_{c}")
+            for c, e in (("blu", "🔵 Blu"), ("nero", "⚫ Nero"), ("rosso", "🔴 Rosso"))
+        ], [InlineKeyboardButton("Nessun colore", callback_data="col_")]])
+        nota = f" (già in uso nel box: {', '.join(usati)})" if usati else ""
+        await update.message.reply_text(f"🖍️ Colore del marcatore per riconoscere l'animale{nota}:", reply_markup=kb)
+        return TRATTAMENTO_COLORE
+
+    async def trattamento_colore(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        q = update.callback_query
+        await q.answer()
+        colore = q.data.replace("col_", "") or None
+        ids = ctx.user_data.get("tratt_medicinali") or []
         cap = ctx.user_data.get("tratt_cap")
         box = ctx.user_data.get("tratt_box")
         qty = ctx.user_data.get("tratt_qty")
-
+        peso = ctx.user_data.get("tratt_peso")
         with app.app_context():
             from app import db
-            from app.models import Ciclo, Medicinale, Trattamento, Somministrazione
+            from app.models import Ciclo, Medicinale
+            from app.services.allevamento_trattamenti import crea_trattamenti, animale
             ciclo = Ciclo.query.filter_by(attivo=True).first()
             if not ciclo:
-                await update.message.reply_text("⚠️ Nessun ciclo attivo.")
+                await q.edit_message_text("⚠️ Nessun ciclo attivo.")
                 return ConversationHandler.END
-            medicinale = db.session.get(Medicinale, medicinale_id)
-            oggi = date.today()
-            t = Trattamento(
-                ciclo_id=ciclo.id, medicinale_id=medicinale.id,
-                box_numero=box, capannone_numero=cap,
-                numero_animali=qty, peso_medio_kg=peso, data_inizio=oggi,
-                operatore=f"telegram:{update.effective_user.first_name or update.effective_user.id}",
-                ml_per_kg=medicinale.ml_per_kg,
-                giorni_somministrazione=medicinale.giorni_somministrazione,
-                giorni_sospensione=medicinale.giorni_sospensione,
-                registrato_da="telegram",
-            )
-            db.session.add(t)
-            db.session.flush()
-            db.session.add(Somministrazione(trattamento_id=t.id, numero_giorno=1, data=oggi))
+            meds = [db.session.get(Medicinale, mid) for mid in ids]
+            meds = [(m, m.ml_per_kg, m.giorni_somministrazione, m.giorni_sospensione) for m in meds if m]
+            creati = crea_trattamenti(ciclo.id, meds, box, cap, qty, peso, date.today(),
+                                      f"telegram:{update.effective_user.first_name or update.effective_user.id}",
+                                      None, colore, registrato_da="telegram")
             db.session.commit()
-            nome = medicinale.nome
-            ml_per_kg = medicinale.ml_per_kg
-
-        ambito = f"box {box}" if box else f"CAP {cap} (tutto)"
-        dose_txt = ""
-        if ml_per_kg and peso:
-            dose_capo = ml_per_kg * peso
-            dose_txt = f"\n💉 Dose/capo: {dose_capo:.1f} ml — Dose totale: {dose_capo * qty:.1f} ml"
-        await update.message.reply_text(
-            f"✅ Trattamento registrato: {nome}, {qty} capi, {ambito}.{dose_txt}\n\nUsa /start per continuare."
-        )
+            righe = []
+            for t in creati:
+                dose = f" – {t.ml_per_kg * peso:.1f} ml/capo, {t.ml_per_kg * peso * qty:.1f} ml in tutto" if t.ml_per_kg and peso else ""
+                righe.append(f"💉 {t.medicinale.nome}{dose}")
+            chi = animale(creati[0])
+        testo = f"✅ Trattamento registrato: {chi}, {qty} capi.\n" + "\n".join(righe)
+        if colore:
+            testo += f"\nFai la 1ª riga con il marcatore {colore}."
+        await q.edit_message_text(testo + "\n\nUsa /start per continuare.")
         return ConversationHandler.END
 
     # ── Consegna ──────────────────────────────────────────────────────────
@@ -641,6 +694,8 @@ def start_bot(app):
                 db.session.add(carico)
                 chiudi_consegne_siero_precedenti(adesso.date(), adesso.time())
                 db.session.commit()
+                from app.services.allevamento_pasti import dopo_modifica_carichi_siero
+                dopo_modifica_carichi_siero()
                 avvisi = avvisi_nuovo_carico_siero(carico)
             else:
                 db.session.add(ConsegnaMangime(
@@ -1219,6 +1274,7 @@ def start_bot(app):
                 MessageHandler(filters.TEXT & ~filters.COMMAND, trattamento_peso),
                 CommandHandler("skip", trattamento_peso),
             ],
+            TRATTAMENTO_COLORE: [CallbackQueryHandler(trattamento_colore)],
         },
         fallbacks=[
             CommandHandler("cancel", cancel), CommandHandler("annulla", cancel),

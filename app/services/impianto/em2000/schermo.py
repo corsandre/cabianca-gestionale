@@ -128,9 +128,11 @@ class Campionario:
         d = json.load(open(percorso)) if os.path.exists(percorso) else {}
         self.caratteri = d.get("caratteri", {})
         self.frasi = d.get("frasi", {})
+        self.titoli = d.get("titoli", {})      # titoli delle finestre di EM2000 (inizio del titolo → testo)
 
     def salva(self):
-        json.dump({"caratteri": self.caratteri, "frasi": self.frasi}, open(self.percorso, "w"), sort_keys=True)
+        json.dump({"caratteri": self.caratteri, "frasi": self.frasi, "titoli": self.titoli},
+                  open(self.percorso, "w"), sort_keys=True)
 
     def impara_testo(self, cella, testo):
         """Associa i glifi ai caratteri di un testo noto (spazi esclusi). False se non allineati."""
@@ -194,6 +196,38 @@ def _orario(testo):
         return None
 
 
+# ── titolo della finestra ───────────────────────────────────────────────────
+# testo bianco nella barra del titolo (righe 9-18), dopo l'icona e prima dei pulsanti della finestra
+TITOLO_Y, TITOLO_X = (9, 19), (20, 740)
+TITOLO_SITUAZIONE = "SITUAZIONE IMPIANTO ALIMENTAZIONE"
+STATO_SPOSTATA = "SITUAZIONE IMPIANTO SPOSTATA"
+
+
+def glifi_titolo(img):
+    """Chiavi dei caratteri del titolo della finestra (pixel bianchi, una lettera per glifo)."""
+    y0, y1 = TITOLO_Y
+    out, cur = [], []
+    for x in range(TITOLO_X[0], min(TITOLO_X[1], img.width)):
+        c = tuple(min(img.getpixel((x, y))[:3]) > 200 for y in range(y0, y1))
+        if any(c):
+            cur.append(c)
+        elif cur:
+            out.append(chiave(cur)); cur = []
+    if cur:
+        out.append(chiave(cur))
+    return out
+
+
+def titolo_finestra(img, camp):
+    """Testo del titolo della finestra di EM2000 se è tra quelli insegnati (confronto sull'inizio), o None."""
+    chiavi = glifi_titolo(img)
+    for k, testo in camp.titoli.items():
+        pref = k.split("/")
+        if chiavi[:len(pref)] == pref:
+            return testo
+    return None
+
+
 def leggi(img, camp=None):
     """LetturaSchermo da un'immagine dello schermo di EM2000."""
     camp = camp or Campionario()
@@ -223,6 +257,19 @@ def leggi(img, camp=None):
         titolo = camp.frase(img.crop(ZONE["titolo"]))
         if titolo:      # EM2000 è su un'altra schermata (non "Situazione impianto"): si dice quale
             l.stato = titolo
+            return l
+        finestra = titolo_finestra(img, camp)
+        if finestra == TITOLO_SITUAZIONE:
+            if l.ora_pc is None and l.prossimo_pasto is None:
+                # finestra giusta ma niente si legge: contenuto scorso fuori posizione (07/10 00:04)
+                l.stato = STATO_SPOSTATA
+                return l
+            # finestra giusta e leggibile ma frase di stato mai vista: resta "stato sconosciuto"
+        elif finestra:
+            l.stato = f"PAGINA {finestra}"
+            return l
+        elif len(glifi_titolo(img)) > 3:
+            l.stato = "PAGINA ?"    # una finestra di EM2000 con un titolo non ancora insegnato
             return l
     _leggi_tabella(img, camp, l)
     return l

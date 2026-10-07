@@ -140,6 +140,10 @@ class LettoreImpianto:
     def orari_pasti(self) -> list:
         raise NotImplementedError
 
+    def ricetta_in_uso(self, lettura) -> Optional[dict]:
+        """{"nome", "durata_s", "rapporto"} della ricetta in uso sulla linea letta, None se non si sa."""
+        return None
+
     def durata_miscelazione(self, lettura) -> Optional[int]:
         """Secondi di miscelazione della ricetta in uso sulla linea letta, None se non si sa."""
         return None

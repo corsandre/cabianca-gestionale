@@ -41,6 +41,18 @@ def _entrate(ciclo, censimenti, conteggi, live_count, linea_per_box):
     return sorted(entrate, key=lambda e: e["data"])
 
 
+def _rapporto_impostato():
+    """Rapporto di diluizione impostato sul PC per la ricetta in uso (solo con il collegamento attivo)."""
+    import json
+    from app import db
+    from app.models import Setting
+    from app.services.impianto import modalita, MANUALE
+    if modalita() == MANUALE:
+        return None
+    r = db.session.get(Setting, "impianto_ricetta")
+    return (json.loads(r.value) if r and r.value else {}).get("rapporto")
+
+
 def dati_analisi(ciclo):
     from app.routes.allevamento import _live_count, LINEA_PER_BOX
     from app.services.allevamento_scorte import get_setting_float, peso_da_giorni
@@ -104,6 +116,7 @@ def dati_analisi(ciclo):
         "ciclo": {"nome": ciclo.nome, "inizio": ciclo.data_inizio.isoformat()},
         "oggi": oggi.isoformat(),
         "perc_ss_mangime": get_setting_float("allevamento_perc_ss_mangime") or 100,
+        "rapporto_impostato": _rapporto_impostato(),
         "giorni": giorni,
         "entrate": _entrate(ciclo, censimenti, conteggi, _live_count, LINEA_PER_BOX),
         "uscite": uscite,

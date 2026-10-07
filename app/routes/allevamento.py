@@ -961,6 +961,8 @@ def consegne_siero_new():
         # La cisterna viene sempre svuotata prima del carico: chiude il periodo precedente.
         chiudi_consegne_siero_precedenti(data_consegna, ora)
         db.session.commit()
+        from app.services.allevamento_pasti import dopo_modifica_carichi_siero
+        dopo_modifica_carichi_siero()
         for avviso in avvisi_nuovo_carico_siero(c):
             flash(avviso, "warning")
         if ajax:
@@ -1001,6 +1003,8 @@ def consegne_siero_edit(cid):
         c.trasportatore = request.form.get("trasportatore", "").strip() or None
         c.note = request.form.get("note", "").strip() or None
         db.session.commit()
+        from app.services.allevamento_pasti import dopo_modifica_carichi_siero
+        dopo_modifica_carichi_siero()
         flash("Consegna siero aggiornata.", "success")
     except Exception as e:
         db.session.rollback()
@@ -1035,6 +1039,8 @@ def consegne_siero_delete(cid):
         _elimina_bolla(c.bolla_path)
         db.session.delete(c)
         db.session.commit()
+        from app.services.allevamento_pasti import dopo_modifica_carichi_siero
+        dopo_modifica_carichi_siero()
         flash("Consegna siero eliminata.", "success")
     return redirect(url_for("allevamento.consegne", tab="siero"))
 
@@ -1055,6 +1061,8 @@ def consegne_siero_chiudi(cid):
         c.data_esaurimento = date.fromisoformat(data_str)
         c.ora_esaurimento = dt_time.fromisoformat(ora_str) if ora_str else datetime.now().time().replace(microsecond=0)
         db.session.commit()
+        from app.services.allevamento_pasti import dopo_modifica_carichi_siero
+        dopo_modifica_carichi_siero()
         flash("Cisterna segnata come vuota.", "success")
     except Exception as e:
         db.session.rollback()
@@ -1254,6 +1262,15 @@ def alimentazione():
     def _per_capo(kg, capi):
         return kg / capi if kg is not None and capi else None
 
+    def _liquido_kg(p):
+        """kg di liquido di un pasto/linea: acqua + parte acqua del siero; None se manca il Brix del siero."""
+        if p is None or (p.mangime_qli is None and p.siero_qli is None):
+            return None
+        brix = p.perc_ss_siero_rif if p.perc_ss_siero_rif is not None else perc_ss_siero_attuale
+        if p.siero_qli and brix is None:
+            return None
+        return (p.acqua_qli or 0) * 100 + (p.siero_qli or 0) * 100 * (1 - (brix or 0) / 100)
+
     ss = {}  # chiavi (pasto, linea), (pasto, "tot"), ("giorno", linea), ("giorno", "tot") -> (kg, kg per capo)
     for pasto in [1, 2, 3]:
         for linea in [1, 2, 3]:
@@ -1268,6 +1285,29 @@ def alimentazione():
         kg = sum(valori) if valori else None
         ss[("giorno", chiave)] = (kg, _per_capo(kg, capi_totali if chiave == "tot" else capi_linea[chiave]))
 
+    # rapporto di diluizione: kg di liquido ogni 10 kg di sostanza secca (sul PC "rapporto 10:32"),
+    # stesse chiavi di ss; sulle somme si calcola dai totali di liquido e sostanza secca
+    liq_ss = {}
+    for pasto in [1, 2, 3]:
+        for linea in [1, 2, 3]:
+            p = pasti.get((pasto, linea))
+            liq_ss[(pasto, linea)] = (_liquido_kg(p), _ss_kg(p))
+    def _somma(chiavi):
+        coppie = [liq_ss[k] for k in chiavi if liq_ss[k][0] is not None and liq_ss[k][1]]
+        return (sum(c[0] for c in coppie), sum(c[1] for c in coppie)) if coppie else (None, None)
+    for pasto in [1, 2, 3]:
+        liq_ss[(pasto, "tot")] = _somma([(pasto, l) for l in [1, 2, 3]])
+    for linea in [1, 2, 3]:
+        liq_ss[("giorno", linea)] = _somma([(p, linea) for p in [1, 2, 3]])
+    liq_ss[("giorno", "tot")] = _somma([(p, l) for p in [1, 2, 3] for l in [1, 2, 3]])
+    rapporto = {k: (l / s * 10 if l is not None and s else None) for k, (l, s) in liq_ss.items()}
+    rapporto_impostato = None
+    if modalita_impianto() != MANUALE:
+        import json
+        from app.models import Setting
+        r = db.session.get(Setting, "impianto_ricetta")
+        rapporto_impostato = (json.loads(r.value) if r and r.value else {}).get("rapporto")
+
     return render_template("allevamento/alimentazione.html",
                            ciclo=ciclo, data_sel=data_sel, pasti=pasti, avvenuto=avvenuto,
                            totali=totali, tipo_mangime_attuale=tipo_mangime_attuale,
@@ -1275,9 +1315,21 @@ def alimentazione():
                            perc_sostituzione=perc_sostituzione,
                            totale_per_pasto=totale_per_pasto, totale_giorno=totale_giorno,
                            ss=ss, capi_linea=capi_linea, capi_totali=capi_totali,
+                           rapporto=rapporto, rapporto_impostato=rapporto_impostato,
+                           schede_siero=_schede_siero(ciclo, perc_ss_siero_attuale, perc_ss_mangime),
                            perc_ss_mangime=perc_ss_mangime,
                            orari_standard=orari_standard, orari_effettivi=orari_effettivi,
                            letture_impianto=letture_impianto, impianto_attivo=modalita_impianto() != MANUALE)
+
+
+def _schede_siero(ciclo, brix_carico, perc_ss_mangime):
+    from app.services.allevamento_siero_schede import schede
+    from app.services.impianto import modalita as modalita_impianto, MANUALE
+    try:
+        return schede(ciclo, date.today(), modalita_impianto() != MANUALE, brix_carico, perc_ss_mangime or 100)
+    except Exception:
+        current_app.logger.exception("schede Brix/sostituzione non calcolate")
+        return None
 
 
 @bp.route("/alimentazione/orario", methods=["POST"])
@@ -1569,9 +1621,13 @@ def trattamenti():
 
     stati = {t.id: _stato_trattamento(t) for t in lista}
     medicinali = Medicinale.query.filter_by(attivo=True).order_by(Medicinale.nome).all()
+    gruppi = {}     # gruppo -> nomi dei medicinali dati insieme allo stesso animale
+    for t in lista:
+        if t.gruppo:
+            gruppi.setdefault(t.gruppo, []).append(t.medicinale.nome)
 
     return render_template("allevamento/trattamenti.html",
-                           ciclo=ciclo, lista=lista, stati=stati, medicinali=medicinali,
+                           ciclo=ciclo, lista=lista, stati=stati, medicinali=medicinali, gruppi=gruppi,
                            BOX_PER_CAP=BOX_PER_CAP, CAPANNONI=CAPANNONI,
                            oggi=date.today())
 
@@ -1587,47 +1643,56 @@ def trattamenti_new():
         return redirect(url_for("allevamento.trattamenti"))
 
     try:
-        medicinale_id = int(request.form["medicinale_id"])
-        medicinale = db.session.get(Medicinale, medicinale_id)
-        if not medicinale:
-            raise ValueError("Medicinale non valido.")
-
+        from app.services.allevamento_trattamenti import crea_trattamenti
         box = request.form.get("box_numero", "").strip()
         cap = request.form.get("capannone_numero", "").strip()
         if not box and not cap:
             raise ValueError("Seleziona un box o un capannone.")
-
-        data_str = request.form.get("data_inizio", str(date.today()))
-        data_inizio = date.fromisoformat(data_str)
+        data_inizio = date.fromisoformat(request.form.get("data_inizio", str(date.today())))
         qty = int(request.form["numero_animali"])
-        operatore = request.form.get("operatore", "").strip() or None
-        note = request.form.get("note", "").strip() or None
-
-        ml_val = request.form.get("ml_per_kg", "").strip()
-        ml_per_kg = float(ml_val.replace(",", ".")) if ml_val else medicinale.ml_per_kg
-        giorni_somm = int(request.form.get("giorni_somministrazione") or medicinale.giorni_somministrazione)
-        giorni_sosp = int(request.form.get("giorni_sospensione") or medicinale.giorni_sospensione)
         peso_val = request.form.get("peso_medio_kg", "").strip()
         peso_medio_kg = float(peso_val.replace(",", ".")) if peso_val else None
 
-        t = Trattamento(
-            ciclo_id=ciclo.id, medicinale_id=medicinale.id,
-            box_numero=int(box) if box else None,
-            capannone_numero=int(cap) if cap else None,
-            numero_animali=qty, peso_medio_kg=peso_medio_kg, data_inizio=data_inizio,
-            operatore=operatore, note=note,
-            ml_per_kg=ml_per_kg, giorni_somministrazione=giorni_somm, giorni_sospensione=giorni_sosp,
-        )
-        db.session.add(t)
-        db.session.flush()
-        db.session.add(Somministrazione(trattamento_id=t.id, numero_giorno=1, data=data_inizio))
+        # uno o più medicinali per lo stesso animale (righe del modulo, campi ripetuti)
+        medicinali = []
+        ids, mls = request.form.getlist("medicinale_id"), request.form.getlist("ml_per_kg")
+        gss, gsps = request.form.getlist("giorni_somministrazione"), request.form.getlist("giorni_sospensione")
+        for k, mid in enumerate(ids):
+            if not mid:
+                continue
+            medicinale = db.session.get(Medicinale, int(mid))
+            if not medicinale:
+                raise ValueError("Medicinale non valido.")
+            ml_val = (mls[k] if k < len(mls) else "").strip()
+            medicinali.append((
+                medicinale,
+                float(ml_val.replace(",", ".")) if ml_val else medicinale.ml_per_kg,
+                int((gss[k] if k < len(gss) else "") or medicinale.giorni_somministrazione),
+                int((gsps[k] if k < len(gsps) else "") or medicinale.giorni_sospensione)))
+        creati = crea_trattamenti(ciclo.id, medicinali, int(box) if box else None, int(cap) if cap else None,
+                                  qty, peso_medio_kg, data_inizio, request.form.get("operatore", "").strip() or None,
+                                  request.form.get("note", "").strip() or None,
+                                  request.form.get("colore", "").strip() or None)
         db.session.commit()
-        flash(f"Trattamento registrato: {medicinale.nome}, {qty} capi.", "success")
+        nomi = ", ".join(t.medicinale.nome for t in creati)
+        flash(f"Trattamento registrato: {nomi}, {qty} capi.", "success")
     except Exception as e:
         db.session.rollback()
         flash(f"Errore: {e}", "danger")
 
     return redirect(url_for("allevamento.trattamenti"))
+
+
+@bp.route("/trattamenti/colori/<int:box>")
+@login_required
+def trattamenti_colori(box):
+    """Colori del marcatore già in uso nel box (trattamenti in corso) e quello proposto."""
+    _check_allevamento()
+    from app.services.allevamento_trattamenti import colori_in_uso, colore_suggerito
+    ciclo = _get_ciclo_attivo()
+    if not ciclo:
+        return jsonify(in_uso=[], suggerito=None)
+    return jsonify(in_uso=colori_in_uso(ciclo.id, box), suggerito=colore_suggerito(ciclo.id, box))
 
 
 @bp.route("/trattamenti/<int:tid>/edit", methods=["POST"])
@@ -1676,6 +1741,13 @@ def trattamenti_edit(tid):
         t.ml_per_kg = ml_per_kg
         t.giorni_somministrazione = giorni_somm
         t.giorni_sospensione = giorni_sosp
+        colore = request.form.get("colore", "").strip() or None
+        if colore not in (None, "blu", "nero", "rosso"):
+            raise ValueError("Colore del marcatore non valido.")
+        # il colore è dell'animale: vale per tutti i medicinali dello stesso gruppo
+        compagni = Trattamento.query.filter_by(gruppo=t.gruppo).all() if t.gruppo else [t]
+        for x in compagni:
+            x.colore = colore
 
         if t.data_inizio != data_inizio:
             t.data_inizio = data_inizio
@@ -1993,7 +2065,10 @@ def impostazioni_scorte():
             valore = request.form.get(campo, "").strip()
             if valore:
                 set_setting(campo, float(valore))
+        from app.services.impianto import modalita as modalita_impianto, MANUALE
         for campo in campi_orario:
+            if campo.startswith("allevamento_orario_pasto_") and modalita_impianto() != MANUALE:
+                continue        # con il collegamento attivo gli orari dei pasti arrivano dal PC
             valore = request.form.get(campo, "").strip()
             if valore:
                 set_setting(campo, valore)

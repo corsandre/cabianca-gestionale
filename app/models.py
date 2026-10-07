@@ -584,6 +584,8 @@ class Trattamento(db.Model):
     giorni_sospensione = db.Column(db.Integer, nullable=False)
     chiuso_anticipatamente = db.Column(db.Boolean, default=False)
     deceduto = db.Column(db.Boolean, default=False)   # chiuso perché l'animale è morto: niente sospensione
+    gruppo = db.Column(db.String(32))   # stesso valore per i medicinali dati insieme allo stesso animale
+    colore = db.Column(db.String(10))   # colore del marcatore sull'animale: blu, nero, rosso
     registrato_da = db.Column(db.String(20), default="web")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     ciclo = db.relationship("Ciclo", backref="trattamenti")

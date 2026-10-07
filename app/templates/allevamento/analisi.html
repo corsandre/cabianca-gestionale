@@ -215,6 +215,13 @@
     </section>
   </div>
 
+  <section class="card">
+    <div class="card-head"><div><h2>Rapporto di diluizione</h2><p id="c-rapp-sub"></p></div><button class="tbtn" type="button" data-table="rapp">Tabella</button></div>
+    <div class="legend" data-legend="rapp"></div>
+    <div class="plot short" data-plot="rapp"><canvas aria-label="Rapporto di diluizione per linea" role="img"></canvas></div>
+    <div class="tablewrap" data-tablefor="rapp" hidden></div>
+  </section>
+
   <div class="grid-2e">
     <section class="card">
       <div class="card-head"><div><h2>Come cresce la razione</h2><p id="c-idx-sub"></p></div><button class="tbtn" type="button" data-table="idx">Tabella</button></div>
@@ -286,13 +293,14 @@
     const r = { data: g.data, L: {} };
     for (const l of LINEE) {
       const ps = (g.pasti[l] || []).slice().sort((a, b) => a.pasto - b.pasto);
-      const x = { capi: g.capi[l] || 0, peso: g.peso[l] ?? null, eta: g.eta[l] ?? null, mang: 0, siero: 0, acqua: 0, ssM: 0, ssS: 0, stimati: 0, npasti: ps.length, pasti: {} };
+      const x = { capi: g.capi[l] || 0, peso: g.peso[l] ?? null, eta: g.eta[l] ?? null, mang: 0, siero: 0, acqua: 0, ssM: 0, ssS: 0, liq: 0, stimati: 0, npasti: ps.length, pasti: {} };
       for (const p of ps) {
         if (p.brix != null) ultimoBrix = p.brix;
         const brix = p.brix ?? ultimoBrix ?? 0;
         const m = p.mang || 0, s = p.siero || 0, a = p.acqua || 0;
         x.mang += m; x.siero += s; x.acqua += a;
         x.ssM += m * 100 * PERC_M / 100; x.ssS += s * 100 * brix / 100;
+        x.liq += a * 100 + s * 100 * (1 - brix / 100);   // liquido: acqua + parte acqua del siero
         if (p.stimato) x.stimati++;
         x.pasti[p.pasto] = { mang: m, siero: s, acqua: a, ss: m * 100 * PERC_M / 100 + s * 100 * brix / 100 };
       }
@@ -306,10 +314,10 @@
 
   function agg(g, linea) {
     const ls = linea === "tutte" ? LINEE : [Number(linea)];
-    const o = { capi: 0, mang: 0, siero: 0, acqua: 0, ssM: 0, ssS: 0, stimati: 0, pesoTot: 0, pesoCapi: 0, pasti: {} };
+    const o = { capi: 0, mang: 0, siero: 0, acqua: 0, ssM: 0, ssS: 0, liq: 0, stimati: 0, pesoTot: 0, pesoCapi: 0, pasti: {} };
     for (const l of ls) {
       const x = g.L[l];
-      o.capi += x.capi; o.mang += x.mang; o.siero += x.siero; o.acqua += x.acqua; o.ssM += x.ssM; o.ssS += x.ssS; o.stimati += x.stimati;
+      o.capi += x.capi; o.mang += x.mang; o.siero += x.siero; o.acqua += x.acqua; o.ssM += x.ssM; o.ssS += x.ssS; o.liq += x.liq; o.stimati += x.stimati;
       if (x.peso != null) { o.pesoTot += x.peso * x.capi; o.pesoCapi += x.capi; }
       for (const [p, v] of Object.entries(x.pasti)) {
         const t = o.pasti[p] || (o.pasti[p] = { mang: 0, siero: 0, acqua: 0, ss: 0 });
@@ -319,6 +327,7 @@
     o.ss = o.ssM + o.ssS;
     o.ssCapo = o.capi ? o.ss / o.capi : null;
     o.sost = o.ss ? o.ssS / o.ss * 100 : null;
+    o.rapporto = o.ss ? o.liq / o.ss * 10 : null;   // kg di liquido ogni 10 kg di sostanza secca
     o.peso = o.pesoCapi ? o.pesoTot / o.pesoCapi : null;
     return o;
   }
@@ -823,6 +832,26 @@
           tooltip: Object.assign(baseOptions().plugins.tooltip, { callbacks: { title: it => lungo(P.cur[it[0].dataIndex].data), label: c => ` ${pct(c.parsed.y)}   ${c.dataset.label}` } }),
         }),
         scales: Object.assign(baseOptions().scales, { y: Object.assign(baseOptions().scales.y, { beginAtZero: true, ticks: { color: T.muted, callback: v => v + "%" } }) }),
+      }),
+    });
+
+    // 3b. rapporto di diluizione per linea, con il valore impostato sul PC
+    const IMP = RAW.rapporto_impostato;
+    document.getElementById("c-rapp-sub").textContent = "Chilogrammi di liquido (acqua + acqua del siero) ogni 10 kg di sostanza secca, come il «rapporto 10:» del PC." +
+      (IMP ? ` Tratteggiato il valore impostato (10:${nf(IMP, 0)}): sopra vuol dire che il siero porta più liquido di quanto serve e l'acqua aggiunta è a zero.` : "");
+    fmtTab.rapp = v => v == null ? "–" : "10:" + nf(v, 1);
+    const rappDs = ls.map(l => lineDs(lineaNome(l), P.cur.map(g => agg(g, l).rapporto), T.L[l], SHAPE[l], { pointRadius: P.cur.length > 40 ? 0 : 3, endLabel: v => `${l} · ${nf(v, 1)}` }));
+    if (IMP) rappDs.push({ type: "line", label: "Impostato sul PC", data: P.cur.map(() => IMP), borderColor: T.axis, borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 0 });
+    draw("rapp", {
+      type: "line",
+      data: { labels, datasets: rappDs },
+      options: baseOptions({
+        layout: { padding: { right: 62, top: 6 } },
+        plugins: Object.assign(baseOptions().plugins, {
+          endLabels: { enabled: true },
+          tooltip: Object.assign(baseOptions().plugins.tooltip, { callbacks: { title: it => lungo(P.cur[it[0].dataIndex].data), label: c => ` 10:${nf(c.parsed.y, 1)}   ${c.dataset.label}` } }),
+        }),
+        scales: Object.assign(baseOptions().scales, { y: Object.assign(baseOptions().scales.y, { title: { display: true, text: "kg liquido / 10 kg s.s.", color: T.muted } }) }),
       }),
     });
 

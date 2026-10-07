@@ -18,8 +18,10 @@ Regole
   cisterna o un silos vuoti sono stati ricaricati).
 - Inizio miscelazione: la prima lettura della linea in fase di miscelazione (componenti caricati), con i
   quantitativi letti in quel momento; una volta per linea.
-- Siero o farina insufficiente: a fine linea reale sotto il teorico di oltre SOGLIA_Q senza una
-  sostituzione che lo spieghi.
+- Siero o farina insufficiente: a fine linea reale sotto il teorico di almeno SOGLIA_INSUFFICIENTE_Q
+  senza una riga di sostituzione (SOS). Con la riga SOS il componente è finito davvero (evento
+  siero/silos finito); senza SOS e con poca differenza è solo l'errore di stima del "volo" (quanto
+  cade dopo la chiusura) e non si segnala (07/10: 6 kg su 28 q davano un falso allarme).
 - Stato sconosciuto: una frase di stato mai vista per 2 letture di fila (va mandata la fotografia).
 - Fase bloccata: la stessa fase dura più del suo limite (LIMITI_FASE_MIN).
 """
@@ -33,7 +35,8 @@ from .base import (ATTESA_ORARIO, ATTESA_INIZIO, PREPARAZIONE, STABILIZZAZIONE, 
                    SCONOSCIUTA, FASI_DOSAGGIO_CONCLUSO, LetturaSchermo)
 
 MIN_CONFERME = 2
-SOGLIA_SIERO_Q = SOGLIA_Q = 0.05
+SOGLIA_SIERO_Q = SOGLIA_Q = 0.05        # dose "piena" (ricarica) e componente sostituito
+SOGLIA_INSUFFICIENTE_Q = 0.5            # dosaggio inferiore al previsto senza sostituzione
 LIMITI_FASE_MIN = {ATTESA_INIZIO: 10, PREPARAZIONE: 20, STABILIZZAZIONE: 10, MISCELAZIONE: 12,
                    RIEMPIMENTO: 10, DISTRIBUZIONE: 25, LAVAGGIO: 20, ATTESA_SVUOTAMENTO: 10, SVUOTAMENTO: 10}
 # fasi che aprono una linea nuova. Non "attesa inizio ciclo": lì lo schermo mostra ancora la linea
@@ -137,7 +140,7 @@ class TracciaPasto:
                 "conferme": conferme, "confermato": conferme >= MIN_CONFERME}))
             for comp, tipo in (("siero", SIERO_INSUFFICIENTE), ("farina", FARINA_INSUFFICIENTE)):
                 if (comp not in sostituiti and teorico.get(comp) is not None
-                        and reale[comp] < teorico[comp] - SOGLIA_Q):
+                        and reale[comp] < teorico[comp] - SOGLIA_INSUFFICIENTE_Q):
                     eventi.append(Evento(tipo, istante, self.pasto, self.linea, lettura=lettura,
                                          dati={"reale": reale[comp], "teorico": teorico[comp]}))
         self.linea, self.valori, self.sos_visti, self.ultima, self.miscelazione_vista = None, [], {}, None, False

@@ -50,7 +50,8 @@ from datetime import datetime, timedelta
 
 from . import (crea_lettore, impostazione, modalita, cartella_dati, percorso_chiave,
                MANUALE, AUTOMATICO, NOMI_MODALITA)
-from .base import ATTESA_ORARIO, SCONOSCIUTA, COMPONENTI, PREPARAZIONE, STABILIZZAZIONE, MISCELAZIONE, NOMI_FASI
+from .base import (ATTESA_ORARIO, ATTESA_INIZIO, SCONOSCIUTA, COMPONENTI, PREPARAZIONE, STABILIZZAZIONE, MISCELAZIONE,
+                   NOMI_FASI)
 from .pasto import (TracciaPasto, PASTO_INIZIATO, PASTO_CONCLUSO, LINEA_INIZIATA, LINEA_CONCLUSA,
                     LINEA_NON_LETTA, SIERO_INSUFFICIENTE, STATO_SCONOSCIUTO, FASE_BLOCCATA,
                     SILOS_FINITO, SIERO_FINITO, FARINA_INSUFFICIENTE, MISCELAZIONE_INIZIATA)
@@ -179,6 +180,28 @@ class Servizio:
                 log.info("fotografia del controllo leggero non riuscita: %s", e)
         self._controlla_parametri(adesso)
 
+    def _sincronizza_orari(self, adesso, orari):
+        """Con il collegamento attivo gli orari dei pasti del gestionale sono quelli impostati sul PC
+        (Impostazioni allevamento li mostra in sola lettura). Il gestionale ha 3 pasti: con un numero
+        diverso sul PC non si cambia niente e lo si dice una volta al giorno."""
+        from app import db
+        from app.services.allevamento_scorte import set_setting, orario_pasto_str
+        if not orari:
+            return
+        if len(orari) != 3:
+            if self._da_segnalare(adesso, f"orari:{len(orari)}"):
+                self._manda(f"⚠️ Sul PC di alimentazione ci sono {len(orari)} pasti ({', '.join(_hm(o) for o in orari)}): "
+                            f"il gestionale ne gestisce 3, gli orari del gestionale non sono stati aggiornati.", self._chat_pasti())
+            return
+        cambiati = False
+        for n, o in enumerate(sorted(orari), start=1):
+            if orario_pasto_str(n) != _hm(o):
+                set_setting(f"allevamento_orario_pasto_{n}", _hm(o))
+                cambiati = True
+        if cambiati:
+            db.session.commit()
+            log.info("orari dei pasti del gestionale aggiornati da quelli del PC: %s", ", ".join(_hm(o) for o in orari))
+
     def _controlla_parametri(self, adesso):
         """Brix del siero e % del siero nelle ricette: messaggio se cambiati dall'ultima volta."""
         import json
@@ -191,6 +214,9 @@ class Servizio:
             return
         if not nuovi:
             return
+        from app.services.allevamento_scorte import set_setting
+        set_setting("impianto_parametri_letto", adesso.isoformat(timespec="minutes"))   # per le schede di Alimentazione
+        db.session.commit()
         s = db.session.get(Setting, "impianto_parametri")
         vecchi = json.loads(s.value) if s and s.value else None
         if vecchi == nuovi:
@@ -210,6 +236,13 @@ class Servizio:
         for ricetta in sorted(set(vs) | set(ns)):
             if vs.get(ricetta) != ns.get(ricetta):
                 cambi.append(f"siero nella «{html.escape(ricetta)}» {pct(vs.get(ricetta))} → <b>{pct(ns.get(ricetta))}</b>")
+        if "rapporto" in vecchi:        # (letture salvate prima della 2.2 non hanno il rapporto)
+            vr, nr = vecchi.get("rapporto") or {}, nuovi.get("rapporto") or {}
+            rapp = lambda v: "–" if v is None else f"10:{v:g}"
+            for ricetta in sorted(set(vr) | set(nr)):
+                if vr.get(ricetta) != nr.get(ricetta):
+                    cambi.append(f"rapporto di diluizione della «{html.escape(ricetta)}» {rapp(vr.get(ricetta))} → "
+                                 f"<b>{rapp(nr.get(ricetta))}</b>")
         if cambi:
             testo = "🧪 <b>Impostazioni dell'impianto cambiate</b>: " + "; ".join(cambi) + "."
             self._salva_evento("parametri_cambiati", adesso, testo)
@@ -263,6 +296,7 @@ class Servizio:
 
         atteso, atteso_reale = self.prossimo_pc, self._prossimo_reale(adesso)
         self.orari = esito.orari
+        self._sincronizza_orari(adesso, esito.orari)
         if l.prossimo_pasto:
             self.prossimo_pc = l.prossimo_pasto
         if c.scarto_orologio_s is not None:
@@ -282,18 +316,22 @@ class Servizio:
                     and abs(c.scarto_orologio_s - precedente.scarto_orologio_s) > SECONDI_SCARTO_OROLOGIO):
                 self._manda(f"🕐 L'orologio dell'impianto si è spostato: ora è {self._scarto_testo(c.scarto_orologio_s)}.", self._chat_pasti())
         if l.fase not in (ATTESA_ORARIO, SCONOSCIUTA) and not self.traccia.in_corso:
-            # servizio avviato (o riavviato) a pasto già in corso: lo si segue da qui, ma l'inizio vero
-            # del pasto e della linea in corso non si conosce (niente durata né orario effettivo)
-            self.aggancio = True
+            # pasto trovato già in corso. Se è ancora sulla linea 1 all'inizio (es. orario spostato a ridosso
+            # e visto dal controllo dei 10 minuti) è appena partito: lo si tratta come un inizio vero.
+            # Altrimenti (servizio riavviato a pasto avanzato) lo si segue da qui, ma l'inizio vero non si
+            # conosce: niente "iniziato", durata né orario effettivo.
+            appena_partito = l.linea in (1, None) and l.fase in (ATTESA_INIZIO, PREPARAZIONE, STABILIZZAZIONE)
+            self.aggancio = not appena_partito
             try:
                 for evento in self.traccia.aggiorna(adesso, l):
                     self._evento(evento, None)
             finally:
                 self.aggancio = False
-            self.inizio_pasto, self.inizio_linee = None, {}
+            if not appena_partito:
+                self.inizio_pasto, self.inizio_linee = None, {}
         if l.fase == SCONOSCIUTA:
             self.schermata_errata = l.stato or "?"
-            if self._da_segnalare(adesso, f"stato:{l.stato}"):
+            if self._da_segnalare(adesso, f"stato:{self.schermata_errata}"):   # stessa chiave del reset
                 self._anomalia(STATO_SCONOSCIUTO, adesso, self._testo_sconosciuto(l.stato), esito.immagine_png)
         elif self.schermata_errata:
             self._schermata_tornata(esito.immagine_png)
@@ -304,6 +342,8 @@ class Servizio:
             except Exception as ex:
                 log.info("seconda fotografia non riuscita: %s", ex)
         self._controlla_parametri(adesso)
+        if l.fase != SCONOSCIUTA:
+            self._ricetta_in_uso(l, adesso)
         if (self.riepilogo_del != adesso.date() and adesso.hour >= 6 and l.fase != SCONOSCIUTA
                 and l.prossimo_pasto and l.ora_pc):
             self.riepilogo_del = adesso.date()
@@ -369,6 +409,15 @@ class Servizio:
         if stato == "MENU PRINCIPALE":
             return ("⚠️ <b>EM2000 è sul Menu principale</b>: per seguire i pasti va lasciato sulla schermata "
                     "«6) Situazione impianto».")
+        if stato == "SITUAZIONE IMPIANTO SPOSTATA":
+            return ("⚠️ <b>La schermata «Situazione impianto» è spostata</b>: il contenuto della finestra è scorso "
+                    "fuori posizione e non si legge. Riportalo a posto, per esempio riaprendo «6) Situazione impianto» dal menu.")
+        if stato == "PAGINA ?":
+            return ("⚠️ <b>EM2000 è su un'altra pagina</b> (non ancora insegnata al lettore): per seguire i pasti va "
+                    "lasciato sulla schermata «6) Situazione impianto».")
+        if stato and stato.startswith("PAGINA "):
+            return (f"⚠️ <b>EM2000 è sulla pagina «{html.escape(stato[7:].capitalize())}»</b>: per seguire i pasti "
+                    f"va lasciato sulla schermata «6) Situazione impianto».")
         if stato and stato.startswith("fotografia non leggibile"):
             return f"⚠️ L'impianto risponde ma la {html.escape(stato)}."
         return f"❓ Stato dell'impianto mai visto: «{html.escape(stato or '?')}»."
@@ -377,19 +426,32 @@ class Servizio:
     def _messaggi_completi(self):
         return impostazione("impianto_messaggi") != "essenziali"
 
+    def _ricetta_in_uso(self, lettura, adesso):
+        """Memorizza la ricetta in uso (nome e rapporto impostato) per Alimentazione e Analisi."""
+        import json
+        from app import db
+        from app.services.allevamento_scorte import set_setting
+        try:
+            r = self.lettore.ricetta_in_uso(lettura) if lettura is not None and lettura.righe else None
+        except Exception as ex:
+            log.info("ricetta in uso non letta: %s", ex)
+            return None
+        if r:
+            set_setting("impianto_ricetta", json.dumps({"nome": r["nome"], "rapporto": r["rapporto"],
+                                                        "letto_il": adesso.isoformat(timespec="minutes")}))
+            db.session.commit()
+        return r
+
     def _miscelazione(self, e, chat):
         """Componenti caricati: messaggio e sveglia un minuto prima del riempimento dei tubi."""
         self._salva_evento(e.tipo, e.istante, None, e.pasto, e.linea)
+        ricetta = self._ricetta_in_uso(e.lettura, e.istante)
         if self.aggancio or not self._messaggi_completi():
             return
         r = e.dati["reale"]
         valori = " · ".join(f"{NOMI_COMPONENTI[k]} {_q(r.get(k))}" for k in COMPONENTI)
         self._manda(f"🥣 <b>Linea {e.linea}</b>: componenti caricati ({valori}), inizia la miscelazione.", chat)
-        try:
-            durata = self.lettore.durata_miscelazione(e.lettura) if e.lettura else None
-        except Exception as ex:
-            log.info("durata della miscelazione non letta: %s", ex)
-            durata = None
+        durata = ricetta["durata_s"] if ricetta else None
         self.riempimento = (e.istante + timedelta(seconds=(durata or SECONDI_MISCELAZIONE_RISERVA) - 60), e.linea, e.pasto)
 
     def _avviso_riempimento(self, adesso):
@@ -620,14 +682,16 @@ class Servizio:
                          if self.linee_pasto else ": nessuna linea letta, valori da inserire a mano."), chat)
         elif e.tipo == SIERO_INSUFFICIENTE:
             self._anomalia(e.tipo, e.istante,
-                           f"🥛 <b>Siero insufficiente</b> sulla linea {e.linea}: {_q(e.dati['reale'])} invece di "
-                           f"{_q(e.dati['teorico'])}. Cisterna finita?", self._png(img), e.pasto, e.linea, canale=chat)
+                           f"🥛 <b>Dosaggio di siero inferiore al previsto</b> sulla linea {e.linea}: {_q(e.dati['reale'])} "
+                           f"invece di {_q(e.dati['teorico'])}, senza sostituzione (la cisterna non risulta finita): "
+                           f"controllare la pompa del siero.", self._png(img), e.pasto, e.linea, canale=chat)
         elif e.tipo in (SILOS_FINITO, SIERO_FINITO):
             self._esaurito(e, img, chat)
         elif e.tipo == FARINA_INSUFFICIENTE:
             self._anomalia(e.tipo, e.istante,
-                           f"🌾 <b>Farina insufficiente</b> sulla linea {e.linea}: {_q(e.dati['reale'])} invece di "
-                           f"{_q(e.dati['teorico'])}. Silos finito?", self._png(img), e.pasto, e.linea, canale=chat)
+                           f"🌾 <b>Dosaggio di farina inferiore al previsto</b> sulla linea {e.linea}: {_q(e.dati['reale'])} "
+                           f"invece di {_q(e.dati['teorico'])}, senza sostituzione (il silos non risulta finito): "
+                           f"controllare la coclea.", self._png(img), e.pasto, e.linea, canale=chat)
         elif e.tipo == FASE_BLOCCATA:
             self._anomalia(e.tipo, e.istante,
                            f"⚠️ <b>Fase bloccata</b>: «{e.dati['fase']}» da {e.dati['minuti']} min sulla linea {e.linea}.",

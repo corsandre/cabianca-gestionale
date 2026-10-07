@@ -133,6 +133,10 @@ struttura fisica vanno aggiornate in entrambi i file.
   precedente (la cisterna si svuota sempre prima di ricaricare): per questo l'ora è obbligatoria. Per ogni carico
   chiuso: consumo reale pesato in cucina e scarto rispetto al dichiarato, con evidenza se supera la soglia.
   Si può anche segnare a mano la cisterna vuota.
+- **Brix ricalcolato sui pasti**: ogni volta che un carico di siero viene registrato, modificato, chiuso o eliminato
+  (dal web o dal bot), Brix di riferimento e % di sostituzione di ogni pasto vengono ricalcolati dal carico a cui il
+  suo siero è attribuito (`ricalcola_brix_pasti` in `allevamento_pasti.py`). Così non conta l'ordine in cui si
+  inseriscono le cose: un pasto letto o inserito prima di registrare il carico prendeva il Brix del carico precedente.
 - **Speditori siero** (`SpeditoreSiero`): anagrafica con azienda, indirizzo, tipo di siero e note, gestita
   dall'elenco in fondo alla pagina Consegne (creazione per tutti, modifica/eliminazione per l'admin; uno
   speditore usato in qualche consegna non si può eliminare). Nel modal della consegna lo speditore si **sceglie
@@ -189,6 +193,15 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
   in Impostazioni, default 100%, + siero alla % Brix del suo carico) e kg di s.s. per capo, sui suini presenti
   nei capannoni della linea in quel giorno (ricostruiti da censimento, mortalità e spostamenti fino a quella data).
   Sotto il totale gli stessi valori per l'intera giornata.
+- Nella stessa riga grigia il **rapporto di diluizione** «10:32»: kg di liquido (acqua + parte acqua del siero,
+  cioè siero × (100 − Brix)%) ogni 10 kg di sostanza secca, come il «rapporto 10:» delle ricette di EM2000. Con il
+  collegamento all'impianto accanto c'è il valore impostato sul PC per la ricetta in uso, ed è in rosso quando viene
+  superato: succede quando il siero da solo porta più liquido del necessario e l'acqua aggiunta va a zero (es. siero
+  a Brix basso). Validato sui pasti letti dal PC: con acqua aggiunta i pasti stanno a 32,1–32,6 con 32 impostato.
+- In cima, due schede **«Brix del siero»** e **«Sostituzione con siero»**: valore attuale (letto dal PC con l'ora
+  dell'ultima lettura e dell'ultimo cambio, oppure in manuale dal carico in uso e dai consumi) e grafico degli ultimi
+  15 giorni con i valori applicati davvero, dai consumi registrati (`app/services/allevamento_siero_schede.py`).
+- Con il collegamento attivo, pulsante **«Aggiorna dal PC»** e pannello delle letture dell'impianto (vedi sotto).
 
 #### Razione box (`/allevamento/razione`)
 - Percentuale di razione per box, in una griglia settimanale.
@@ -202,6 +215,18 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
   sospensione prima del macello.
 - Modifica, chiusura anticipata con motivazione (accodata alle note) e casella «Deceduto» (animale morto: nessun
   periodo di sospensione), eliminazione.
+- **Più medicinali per lo stesso animale**: nel nuovo trattamento si aggiungono più righe medicinale, ognuna con la
+  sua dose (ml/kg), i suoi giorni di somministrazione e di sospensione. Ogni medicinale resta un `Trattamento` a sé,
+  quelli dati insieme hanno lo stesso `gruppo` (icona 🔗 nell'elenco); la sospensione prima del macello che conta è la
+  più lunga. Il bot permette di scegliere più medicinali nello stesso percorso.
+- **Colore del marcatore** (🔵 blu, ⚫ nero, 🔴 rosso): se nello stesso box si trattano più animali, ognuno ha il suo
+  colore; sulla schiena si fa una riga per ogni giorno di trattamento (1ª riga il primo giorno, 2ª il secondo…, di
+  solito al massimo 3). Per un nuovo trattamento viene proposto un colore non ancora usato nel box; il colore vale per
+  tutti i medicinali dello stesso animale. La procedura è spiegata in cima alla pagina.
+- **Promemoria del mattino** (all'orario di Impostazioni → Avvisi giornalieri, default 07:00) nel gruppo
+  dell'allevamento, una riga per animale: «box 30, maiale ⚫ nero: Cloxacillina dose 2 di 3; Micospectone dose 2 di 5
+  → fai la 2ª riga». Nel bot, «Da fare oggi» elenca gli animali e registra in un colpo la dose di tutti i loro
+  medicinali (`app/services/allevamento_trattamenti.py`).
 
 #### Analisi (`/allevamento/analisi`)
 - Pagina di grafici interattivi sul ciclo attivo, con una riga di filtri che vale per tutta la pagina: periodo
@@ -211,6 +236,7 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
   e si vedono gli entrati), mortalità in % dei capi a inizio periodo più gli entrati, uscite per tipo con i kg,
   farina al giorno e per capo nel periodo, siero e sostanza secca al giorno, % di sostituzione con siero. Il filtro
   "per capo / totali" decide quale dei due valori mostrano.
+- Rapporto di diluizione per linea giorno per giorno, con il valore impostato sul PC tratteggiato.
 - Andamento dei capi (a gradini, punti nei giorni con consegne, morti o uscite) con il bilancio del periodo:
   inizio + entrati − morti − usciti = fine (le "rettifiche" sono le differenze trovate ai censimenti o, per una
   linea, gli spostamenti tra linee). Gli entrati sono i censimenti che aumentano i capi (consegne di suinetti)
@@ -252,7 +278,7 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
 | `UsoPasto` | `uso_pasti` | Consumo per pasto/linea, reale o stimato; `fonte` = `impianto` se letto dal PC di alimentazione |
 | `RazioneBox` | `razioni_box_v2` | % razione per box e giorno, reale o stimata |
 | `Medicinale` | `medicinali` | Farmaci disponibili |
-| `Trattamento` / `Somministrazione` | `trattamenti` / `somministrazioni` | Corso di cura e singole dosi |
+| `Trattamento` / `Somministrazione` | `trattamenti` / `somministrazioni` | Corso di cura (un medicinale; `gruppo` = medicinali dati insieme allo stesso animale, `colore` = marcatore, `deceduto`) e singole dosi |
 | `ImpiantoControllo` | `impianto_controlli` | Controlli periodici dell'impianto (raggiungibile, stato, orologio, orari) |
 | `ImpiantoLinea` | `impianto_letture_linee` | Quantitativi letti per pasto e linea: proposta → approvata/scartata, o registrata |
 | `ImpiantoEvento` | `impianto_eventi` | Eventi dei pasti e anomalie, con la fotografia dello schermo |
@@ -265,6 +291,9 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
 | `allevamento_pasti.py` | Registrazione pasti, stime dei pasti mancanti, calcolo % siero |
 | `allevamento_bot.py` | Bot Telegram dell'allevamento |
 | `allevamento_analisi.py` | Dati giornalieri per la pagina Analisi (capi, età, pasti, entrate, uscite, morti) |
+| `allevamento_siero_schede.py` | Schede Brix e sostituzione di Alimentazione (valore attuale e 15 giorni) |
+| `allevamento_trattamenti.py` | Più medicinali per animale, colore del marcatore, dosi da ripetere per animale |
+| `allevamento_avvisi.py` | Avviso del mattino con i trattamenti da ripetere |
 | `impianto/` | Collegamento all'impianto di alimentazione (vedi sotto) |
 
 ---
@@ -292,8 +321,17 @@ scritto niente e non resta nessun file (la fotografia viaggia compressa sulla co
 - *Aggiorna dal PC*: pulsante in Alimentazione e nelle impostazioni dell'impianto, e nel bot Telegram: il servizio
   rilegge subito schermata, orari, Brix e ricette e risponde nel gruppo entro un minuto. Se il servizio riparte a
   pasto in corso lo segue senza mandare di nuovo «iniziato» né gli avvisi già inviati.
-- *Schermata*: EM2000 va lasciato su «Situazione impianto» (controllata anche dal controllo leggero ogni 10 minuti). Se è su un'altra schermata (es. Menu principale) arriva
-  un avviso con la fotografia, i controlli diventano ogni 5 minuti e, appena torna giusta, una conferma con la foto.
+- *Schermata*: EM2000 va lasciato su «Situazione impianto» (controllata anche dal controllo leggero ogni 10 minuti).
+  Se è altrove arriva un avviso con la fotografia che dice dove: Menu principale (dal titolo grande), una pagina di
+  gestione riconosciuta dal **titolo della finestra** («Modifica orari distribuzione», «Visualizza dati box»,
+  «Modifica dati ricette»…; per un titolo nuovo «un'altra pagina»), oppure la schermata «Situazione impianto» con il
+  contenuto **scorso fuori posizione** (titolo giusto ma niente leggibile). I controlli diventano ogni 5 minuti e,
+  appena torna giusta, arriva una conferma con la foto; se ricapita lo stesso giorno si riavvisa.
+- *Orari dei pasti*: con il collegamento attivo quelli del gestionale sono gli orari impostati sul PC (il servizio li
+  copia a ogni controllo; in Impostazioni allevamento sono in sola lettura; con un numero di pasti diverso da 3 non si
+  cambia niente e lo si dice). Un pasto spostato a ridosso e trovato dal controllo dei 10 minuti ancora sulla linea 1
+  in preparazione vale come inizio vero («Pasto iniziato» e orario effettivo); un pasto avanzato trovato dopo un
+  riavvio viene seguito senza «iniziato».
 - *Pasto*: da qualche minuto prima dell'orario (convertito in ora reale con lo scarto dell'orologio del PC) una
   fotografia ogni 60 secondi finché l'impianto torna in attesa. Fine di ogni linea: i quantitativi letti più volte
   uguali (dalla miscelazione in poi, solo se acqua + siero + farina = totale) diventano la lettura della linea.
@@ -307,10 +345,16 @@ scritto niente e non resta nessun file (la fotografia viaggia compressa sulla co
   (con orario e quantità: solo se hanno dato una parte vera della dose, non i pochi kg che pompa e coclea tirano
   quando sono già vuote), **di nuovo in uso** quando tornano a dare la dose piena; finché restano vuoti **ancora
   vuoto** una volta al giorno; silos **saltato da EM2000** (coclea a 0) (EM2000 ricorda la sostituzione e non riprova
-  la coclea finché non finiscono gli altri silos, quindi una coclea a 0 non vuol dire silos vuoto), siero o farina insufficienti, fase bloccata, stato mai visto, **lettura incompleta** (una schermata
-  riconosciuta in cui qualcosa non si legge: va insegnata al lettore). Le anomalie arrivano con la fotografia.
-- Se il pasto parte più di 15 minuti dopo l'orario del gestionale, viene registrato anche l'orario effettivo
-  (serve ad attribuire il siero al carico giusto).
+  la coclea finché non finiscono gli altri silos, quindi una coclea a 0 non vuol dire silos vuoto); **dosaggio di siero o
+  farina inferiore al previsto** solo se mancano almeno 0,5 q e non c'è una riga SOS (con la riga SOS il componente è
+  finito davvero; senza SOS e con poca differenza è solo l'errore di stima del «volo», cioè di quanto cade dopo la
+  chiusura); fase bloccata, stato mai visto, **lettura incompleta** (una schermata riconosciuta in cui qualcosa non si
+  legge: va insegnata al lettore); cambi di Brix, di % del siero e del **rapporto di diluizione** delle ricette. Le
+  anomalie arrivano con la fotografia.
+- *Orario effettivo*: per ogni pasto letto viene registrato l'orario effettivo (inizio della linea 1). Serve ad
+  attribuire il siero al carico giusto anche quando gli orari standard cambiano dopo (seguono quelli del PC).
+- *Ricetta in uso*: riconosciuta dai componenti della tabella (es. SIERO + COCLEA 1 = «ricetta 2 siero»); da Ricette.DB
+  si leggono durata della miscelazione e rapporto di diluizione impostato (setting `impianto_ricetta`).
 
 **Come si legge lo schermo** (`app/services/impianto/em2000/schermo.py`): il carattere di EM2000 è una bitmap
 fissa, quindi ogni carattere si riconosce per confronto esatto con un campionario (`em2000/campionario.json`); le

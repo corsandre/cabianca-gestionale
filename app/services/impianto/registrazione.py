@@ -6,8 +6,8 @@
   - in automatico (sovrascrivi_manuali=False) un pasto già inserito a mano non viene toccato: vale
     la correzione dell'utente, la lettura resta proposta con una nota;
   - con l'approvazione esplicita (modalità con verifica) la lettura sostituisce quanto c'è.
-- Se il pasto è partito più di 15 minuti dopo l'orario standard del gestionale, si registra anche
-  l'orario effettivo (serve a scalare il siero dal carico giusto). Inizio del pasto = inizio della linea 1
+- Si registra sempre l'orario effettivo del pasto (inizio della linea 1): serve a scalare il siero dal
+  carico giusto anche quando gli orari standard cambiano dopo (seguono quelli del PC). Inizio del pasto = inizio della linea 1
   (le linee successive partono normalmente 20-40 minuti dopo); sconosciuto se il servizio ha
   agganciato il pasto già in corso.
 - Quantitativi arrotondati a 2 decimali di quintale, come nell'inserimento a mano. Siero sotto 0,15 q
@@ -19,7 +19,6 @@ from datetime import datetime, timedelta
 
 from app import db
 
-MINUTI_ORARIO_EFFETTIVO = 15
 
 
 def normalizza_siero(reale):
@@ -63,7 +62,7 @@ def registra(lettura, operatore="impianto", sovrascrivi_manuali=False):
     from app.models import UsoPasto, OrarioPastoEffettivo, ImpiantoLinea
     from app.routes.allevamento import _get_ciclo_attivo
     from app.services.allevamento_pasti import registra_pasto
-    from app.services.allevamento_scorte import orario_pasto, invalida_orari_effettivi
+    from app.services.allevamento_scorte import invalida_orari_effettivi
 
     ciclo = _get_ciclo_attivo()
     if not ciclo or not lettura.pasto:
@@ -87,15 +86,14 @@ def registra(lettura, operatore="impianto", sovrascrivi_manuali=False):
     lettura.decisa_da = operatore
     lettura.decisa_il = datetime.utcnow()
 
-    # pasto partito molto dopo l'orario standard → orario effettivo (una volta per pasto)
-    standard = orario_pasto(lettura.pasto)
+    # orario effettivo del pasto (inizio della linea 1), una volta per pasto. Con il collegamento attivo
+    # si registra sempre: gli orari standard seguono quelli del PC e cambiano quando un pasto viene spostato,
+    # quindi solo l'orario effettivo conserva l'ora vera dei pasti già fatti (serve all'attribuzione del siero).
     inizio = db.session.query(ImpiantoLinea.inizio).filter(
         ImpiantoLinea.data == lettura.data, ImpiantoLinea.orario_pasto == lettura.orario_pasto,
         ImpiantoLinea.linea == 1).scalar()
-    if inizio and standard:
-        scarto = abs((inizio - datetime.combine(lettura.data, standard)).total_seconds()) / 60
-        if scarto > MINUTI_ORARIO_EFFETTIVO and not OrarioPastoEffettivo.query.filter_by(
-                data=lettura.data, pasto=lettura.pasto).first():
+    if inizio:
+        if not OrarioPastoEffettivo.query.filter_by(data=lettura.data, pasto=lettura.pasto).first():
             db.session.add(OrarioPastoEffettivo(data=lettura.data, pasto=lettura.pasto,
                                                 ora=inizio.replace(second=0, microsecond=0).time(),
                                                 operatore="impianto"))

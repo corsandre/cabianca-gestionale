@@ -125,7 +125,15 @@
             </div>
         </div>
         <hr class="my-3">
+        {% set orari_dal_pc = impianto.impianto_modalita != 'manuale' %}
         <h6 class="mb-2"><i class="bi bi-clock me-1" style="color:#c2185b"></i>Orari pasti</h6>
+        {% if orari_dal_pc %}
+        <div class="alert alert-light border small py-1 px-2 mb-2">
+            <i class="bi bi-pc-display me-1" style="color:#c2185b"></i>Letti dal PC di alimentazione: si cambiano sul PC
+            (pagina degli orari di EM2000) e il gestionale si aggiorna da solo. Ogni pasto fatto ha comunque il suo
+            orario effettivo, registrato dal servizio.
+        </div>
+        {% endif %}
         <div class="form-text mb-2">
             Usati per capire se un pasto di oggi è già avvenuto oppure è ancora "programmato" (anche se ha già
             un valore stimato copiato dal pasto precedente): finché l'orario non è passato non viene conteggiato
@@ -135,17 +143,17 @@
             <div class="col-4">
                 <label class="form-label small">Pasto 1</label>
                 <input type="time" name="allevamento_orario_pasto_1" class="form-control form-control-sm"
-                       value="{{ scorte_settings.orario_pasto_1 }}">
+                       value="{{ scorte_settings.orario_pasto_1 }}" {{ 'readonly disabled' if orari_dal_pc }}>
             </div>
             <div class="col-4">
                 <label class="form-label small">Pasto 2</label>
                 <input type="time" name="allevamento_orario_pasto_2" class="form-control form-control-sm"
-                       value="{{ scorte_settings.orario_pasto_2 }}">
+                       value="{{ scorte_settings.orario_pasto_2 }}" {{ 'readonly disabled' if orari_dal_pc }}>
             </div>
             <div class="col-4">
                 <label class="form-label small">Pasto 3</label>
                 <input type="time" name="allevamento_orario_pasto_3" class="form-control form-control-sm"
-                       value="{{ scorte_settings.orario_pasto_3 }}">
+                       value="{{ scorte_settings.orario_pasto_3 }}" {{ 'readonly disabled' if orari_dal_pc }}>
             </div>
         </div>
         <hr class="my-3">

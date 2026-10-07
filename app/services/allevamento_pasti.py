@@ -103,3 +103,41 @@ def _rifornisci_stime(ciclo_id, data, linea, pasto_inserito, riferimento):
         altro.perc_siero = riferimento.perc_siero
         altro.perc_ss_siero_rif = riferimento.perc_ss_siero_rif
         altro.stimato = True
+
+
+def ricalcola_brix_pasti():
+    """Brix di riferimento e % di sostituzione di ogni pasto dal carico di siero a cui attribuzione_siero
+    lo assegna. Da chiamare dopo aver registrato, modificato, chiuso o eliminato una consegna di siero:
+    un pasto inserito (o letto dall'impianto) prima che il suo carico fosse registrato ha preso il Brix
+    del carico precedente (07/10: 24,4% invece di 17,0%). Restituisce quante righe ha corretto."""
+    from app.models import ConsegnaSiero, UsoPasto
+    from app.services.allevamento_scorte import attribuzione_siero, invalida_attribuzione_siero
+    invalida_attribuzione_siero()
+    brix = {c.id: c.perc_sostanza_secca for c in ConsegnaSiero.query.all()}
+    corrette = 0
+    for cid, d in attribuzione_siero()["carichi"].items():
+        b = brix.get(cid)
+        if b is None:
+            continue
+        for p in d["pasti"]:
+            for u in UsoPasto.query.filter_by(data=p["data"], pasto=p["pasto"]).all():
+                if u.siero_qli and u.perc_ss_siero_rif != b:
+                    u.perc_ss_siero_rif = b
+                    u.perc_siero = calcola_perc_siero(u.mangime_qli, u.siero_qli, b)
+                    corrette += 1
+    invalida_attribuzione_siero()
+    return corrette
+
+
+def dopo_modifica_carichi_siero():
+    """Ricalcolo dopo una modifica ai carichi di siero, senza mai bloccare il salvataggio dell'utente."""
+    import logging
+    from app import db
+    try:
+        n = ricalcola_brix_pasti()
+        if n:
+            db.session.commit()
+            logging.getLogger(__name__).info("Brix ricalcolato su %s righe di consumo", n)
+    except Exception:
+        db.session.rollback()
+        logging.getLogger(__name__).exception("ricalcolo del Brix dei pasti non riuscito")

@@ -20,7 +20,7 @@ from app.services.impianto.em2000 import schermo as S  # noqa: E402
 # schermata: {zona: testo}. Zone tabella: (componente, colonna) per le righe della ricetta standard,
 # oppure ("riga", n, colonna) con n = riga della tabella; stato1/stato2 sono frasi intere.
 NOTE = {
-    "f-065809.png": {"ora_pc": "06.53.53", "pasto_attuale": "18:00", "prossimo_pasto": "07:00", "linea": "L3 G1",
+    "f-065809.png": {"titolo_finestra": "SITUAZIONE IMPIANTO ALIMENTAZIONE", "ora_pc": "06.53.53", "pasto_attuale": "18:00", "prossimo_pasto": "07:00", "linea": "L3 G1",
                      "stato1": "ATTESA ORARIO", "stato2": "ATTESA",
                      ("acqua", "teorico"): "4,58 Qli", ("acqua", "reale"): "4,72 Qli",
                      ("siero", "teorico"): "16,66 Qli", ("siero", "reale"): "16,65 Qli",
@@ -59,6 +59,10 @@ NOTE = {
                      ("siero", "teorico"): "16,70 Qli", ("siero", "reale"): "16,67 Qli",
                      ("farina", "teorico"): "5,01 Qli", ("farina", "reale"): "5,00 Qli",
                      ("totale", "teorico"): "26,30 Qli", ("totale", "reale"): "26,42 Qli"},
+    # titoli delle finestre di EM2000 (06-07/10/2026): la schermata giusta e due pagine di gestione
+    "titolo-box.png": {"titolo_finestra": "VISUALIZZA DATI BOX"},
+    "titolo-orari.png": {"titolo_finestra": "MODIFICA ORARI DISTRIBUZIONE"},
+    "titolo-ricette.png": {"titolo_finestra": "MODIFICA DATI RICETTE"},
     # 02/10/2026: EM2000 lasciato sul menu principale (il servizio deve dirlo, non "stato mai visto")
     "menu-103657.png": {"titolo": "MENU PRINCIPALE"},
     # sera del 01/10/2026: silos della coclea 1 finito, dosaggio completato dalla coclea 3 (riga SOS)
@@ -98,6 +102,11 @@ def main(cartella):
                     camp.frasi["/".join(S.chiave(g) for _, g in gs[:-cifre])] = prefisso
                 else:
                     camp.impara_frase(zona(img, z), testo)
+            elif z == "titolo_finestra":
+                # si impara l'inizio del titolo (lettere separate: una per glifo, spazi esclusi); il resto
+                # può cambiare (es. "VISUALIZZA DATI BOX ORARIO: <13:00> ...")
+                lettere = len(testo.replace(" ", ""))
+                camp.titoli["/".join(S.glifi_titolo(img)[:lettere])] = testo
             elif isinstance(z, tuple) and z[-1] in ("nr", "nome"):
                 # nel carattere della tabella "I" e "l" sono lo stesso glifo: resta "l" (vedi schermo._nome)
                 if not camp.impara_testo(zona(img, z), testo.replace("I", "l")):
