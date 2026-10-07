@@ -198,9 +198,10 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
   collegamento all'impianto accanto c'è il valore impostato sul PC per la ricetta in uso, ed è in rosso quando viene
   superato: succede quando il siero da solo porta più liquido del necessario e l'acqua aggiunta va a zero (es. siero
   a Brix basso). Validato sui pasti letti dal PC: con acqua aggiunta i pasti stanno a 32,1–32,6 con 32 impostato.
-- In cima, due schede **«Brix del siero»** e **«Sostituzione con siero»**: valore attuale (letto dal PC con l'ora
-  dell'ultima lettura e dell'ultimo cambio, oppure in manuale dal carico in uso e dai consumi) e grafico degli ultimi
-  15 giorni con i valori applicati davvero, dai consumi registrati (`app/services/allevamento_siero_schede.py`).
+- In cima, due schede **«Brix del siero»** e **«Sostituzione con siero»** che seguono il giorno scelto: grafico della
+  sua settimana (da lunedì a domenica, giorno scelto evidenziato) con i valori applicati davvero, dai consumi
+  registrati, e il valore del giorno; per oggi quello letto dal PC, con l'ora dell'ultima lettura e dell'ultimo cambio
+  (`app/services/allevamento_siero_schede.py`).
 - Con il collegamento attivo, pulsante **«Aggiorna dal PC»** e pannello delle letture dell'impianto (vedi sotto).
 
 #### Razione box (`/allevamento/razione`)

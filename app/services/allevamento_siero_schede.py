@@ -1,10 +1,12 @@
 """Schede «Brix del siero» e «Sostituzione con siero» della pagina Alimentazione.
 
-- Valore attuale: con il collegamento all'impianto attivo, quello impostato sul PC (impianto_parametri,
-  % del siero della ricetta in uso da impianto_ricetta), con l'ora dell'ultima lettura e dell'ultimo
-  cambio; in manuale, il Brix del carico in uso e la sostituzione dell'ultimo giorno con consumi.
-- Grafico degli ultimi 15 giorni: i valori applicati davvero, dai consumi registrati (Brix di
-  riferimento pesato sul siero di ogni pasto; sostituzione = s.s. del siero sulla s.s. totale).
+Seguono il giorno scelto in cima alla pagina:
+- Grafico della settimana (da lunedì a domenica) del giorno scelto, con i valori applicati davvero, dai
+  consumi registrati (Brix di riferimento pesato sul siero di ogni pasto; sostituzione = s.s. del siero
+  sulla s.s. totale). Il giorno scelto è evidenziato.
+- Valore grande: quello del giorno scelto. Per oggi, con il collegamento all'impianto attivo, quello
+  impostato sul PC (impianto_parametri, % del siero della ricetta in uso da impianto_ricetta) con l'ora
+  dell'ultima lettura e dell'ultimo cambio; in manuale il Brix del carico in uso.
 """
 import json
 from datetime import timedelta
@@ -21,9 +23,9 @@ def _json(chiave):
         return s.value if s else None
 
 
-def serie_giornaliere(ciclo, oggi, giorni=15, perc_ss_mangime=100):
+def serie_giornaliere(ciclo, dal, giorni=7, perc_ss_mangime=100):
     from app.models import UsoPasto
-    dal = oggi - timedelta(days=giorni - 1)
+    oggi = dal + timedelta(days=giorni - 1)
     per_giorno = {}
     for p in UsoPasto.query.filter(UsoPasto.ciclo_id == ciclo.id, UsoPasto.data >= dal, UsoPasto.data <= oggi).all():
         d = per_giorno.setdefault(p.data, {"siero": 0.0, "siero_brix": 0.0, "ss_siero": 0.0, "ss_farina": 0.0})
@@ -44,13 +46,17 @@ def serie_giornaliere(ciclo, oggi, giorni=15, perc_ss_mangime=100):
     return serie
 
 
-def schede(ciclo, oggi, collegato, brix_carico, perc_ss_mangime=100):
-    """Dati per le due schede: valori attuali, provenienza, orari e serie dei 15 giorni."""
+def schede(ciclo, giorno, collegato, brix_carico, perc_ss_mangime=100, oggi=None):
+    """Dati per le due schede del giorno scelto: valori, provenienza, orari e serie della sua settimana."""
+    from datetime import date
     from app.models import ImpiantoEvento
-    serie = serie_giornaliere(ciclo, oggi, perc_ss_mangime=perc_ss_mangime) if ciclo else []
-    out = {"serie": serie, "collegato": collegato, "brix": None, "sost": None, "ricetta": None,
-           "letto_il": None, "cambiato_il": None}
-    par = _json("impianto_parametri") if collegato else None
+    oggi = oggi or date.today()
+    lunedi = giorno - timedelta(days=giorno.weekday())
+    serie = serie_giornaliere(ciclo, lunedi, perc_ss_mangime=perc_ss_mangime) if ciclo else []
+    del_giorno = next((v for v in serie if v["data"] == giorno.isoformat()), {})
+    out = {"serie": serie, "giorno": giorno.isoformat(), "collegato": collegato, "oggi": giorno == oggi,
+           "brix": None, "sost": None, "ricetta": None, "letto_il": None, "cambiato_il": None}
+    par = _json("impianto_parametri") if collegato and giorno == oggi else None
     if par:
         ricetta = (_json("impianto_ricetta") or {}).get("nome")
         siero = par.get("siero") or {}
@@ -60,7 +66,7 @@ def schede(ciclo, oggi, collegato, brix_carico, perc_ss_mangime=100):
         ultimo = ImpiantoEvento.query.filter_by(tipo="parametri_cambiati").order_by(ImpiantoEvento.istante.desc()).first()
         out["cambiato_il"] = ultimo.istante.isoformat(timespec="minutes") if ultimo else None
     else:
-        out["brix"] = brix_carico
-        ultimi = [v["sost"] for v in serie if v["sost"] is not None]
-        out["sost"] = ultimi[-1] if ultimi else None
+        # giorno passato (o manuale): i valori applicati quel giorno; oggi senza consumi, il carico in uso
+        out["brix"] = del_giorno.get("brix") if del_giorno.get("brix") is not None or giorno != oggi else brix_carico
+        out["sost"] = del_giorno.get("sost")
     return out

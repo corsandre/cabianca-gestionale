@@ -1316,17 +1316,17 @@ def alimentazione():
                            totale_per_pasto=totale_per_pasto, totale_giorno=totale_giorno,
                            ss=ss, capi_linea=capi_linea, capi_totali=capi_totali,
                            rapporto=rapporto, rapporto_impostato=rapporto_impostato,
-                           schede_siero=_schede_siero(ciclo, perc_ss_siero_attuale, perc_ss_mangime),
+                           schede_siero=_schede_siero(ciclo, data_sel, perc_ss_siero_attuale, perc_ss_mangime),
                            perc_ss_mangime=perc_ss_mangime,
                            orari_standard=orari_standard, orari_effettivi=orari_effettivi,
                            letture_impianto=letture_impianto, impianto_attivo=modalita_impianto() != MANUALE)
 
 
-def _schede_siero(ciclo, brix_carico, perc_ss_mangime):
+def _schede_siero(ciclo, giorno, brix_carico, perc_ss_mangime):
     from app.services.allevamento_siero_schede import schede
     from app.services.impianto import modalita as modalita_impianto, MANUALE
     try:
-        return schede(ciclo, date.today(), modalita_impianto() != MANUALE, brix_carico, perc_ss_mangime or 100)
+        return schede(ciclo, giorno, modalita_impianto() != MANUALE, brix_carico, perc_ss_mangime or 100)
     except Exception:
         current_app.logger.exception("schede Brix/sostituzione non calcolate")
         return None
