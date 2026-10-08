@@ -75,13 +75,13 @@
             </div>
         </div>
         <div class="col-md-4">
-            {% if saldo_banca is not none and saldo_contabile is not none %}
-            {% set differenza = saldo_banca - saldo_contabile %}
-            <div class="text-center p-3 rounded {% if differenza|abs < 0.01 %}bg-success bg-opacity-10{% else %}bg-danger bg-opacity-10{% endif %}">
+            {% if quadratura %}
+            {% set differenza = quadratura.saldo_banca - quadratura.saldo_contabile %}
+            <div class="text-center p-3 rounded {% if differenza|abs < 0.01 %}bg-success bg-opacity-10{% else %}bg-warning bg-opacity-10{% endif %}">
                 <small class="text-muted text-uppercase d-block">Differenza</small>
-                <h4 class="mb-0 {% if differenza|abs < 0.01 %}text-success{% else %}text-danger{% endif %}">&euro;{{ "{:,.2f}".format(differenza) }}</h4>
-                <small class="{% if differenza|abs < 0.01 %}text-success{% else %}text-danger{% endif %}">
-                    {% if differenza|abs < 0.01 %}<i class="bi bi-check-circle"></i> Tutto riconciliato{% else %}<i class="bi bi-exclamation-triangle"></i> {{ sospesi }} mov. da processare{% endif %}
+                <h4 class="mb-0 {% if differenza|abs < 0.01 %}text-success{% else %}text-cb-gold{% endif %}">&euro;{{ "{:,.2f}".format(differenza) }}</h4>
+                <small class="{% if differenza|abs < 0.01 %}text-success{% else %}text-muted{% endif %}">
+                    {% if differenza|abs < 0.01 %}<i class="bi bi-check-circle"></i> Tutto riconciliato{% else %}vedi sotto da cosa dipende{% endif %}
                 </small>
             </div>
             {% else %}
@@ -93,6 +93,25 @@
             {% endif %}
         </div>
     </div>
+
+    {% if quadratura and (quadratura.saldo_banca - quadratura.saldo_contabile)|abs >= 0.01 %}
+    <table class="table table-sm mb-3">
+        <tr>
+            <td><i class="bi bi-hourglass-split text-cb-gold"></i> Movimenti ancora da riconciliare
+                <small class="text-muted d-block">Non sono errori: diventano parte del saldo contabile quando li riconcili o li ignori.</small></td>
+            <td class="text-end text-nowrap"><a href="{{ url_for('banca.sospesi') }}">{{ sospesi }} sospesi</a></td>
+            <td class="text-end fw-bold text-nowrap">&euro;{{ "{:,.2f}".format(quadratura.sospesi) }}</td>
+        </tr>
+        <tr class="{% if not quadratura.quadra %}table-danger{% endif %}">
+            <td>{% if quadratura.quadra %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-exclamation-triangle text-danger"></i>{% endif %}
+                Differenza non spiegata
+                <small class="text-muted d-block">Saldo della banca meno (apertura del {{ quadratura.apertura_data.strftime('%d/%m/%Y') }} + tutti i movimenti importati).
+                {% if not quadratura.quadra %}Mancano movimenti o ce ne sono in più: ricarica l'estratto conto CBI del periodo, i doppioni vengono scartati.{% endif %}</small></td>
+            <td></td>
+            <td class="text-end fw-bold text-nowrap {% if not quadratura.quadra %}text-danger{% endif %}">&euro;{{ "{:,.2f}".format(quadratura.non_spiegata) }}</td>
+        </tr>
+    </table>
+    {% endif %}
 
     {% if storico_saldi %}
     <details>

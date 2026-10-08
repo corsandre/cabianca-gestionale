@@ -18,8 +18,8 @@ Posizioni record 62 (dopo strip spazio iniziale, 0-based):
     [24:25] = Segno (C=credito, D=debito)
     [25:40] = Importo (15 char, formato 000000004377,96)
     [40:43] = Causale ABI (3 char)
-    [43:60] = Riferimento banca (17 char)
-    [60:]   = Descrizione
+    [43:60] = Riferimento banca (17 char, quasi sempre vuoto)
+    [60:]   = Descrizione: il primo elemento è il codice univoco dell'operazione (es. MB0B73745958)
 
 Posizioni record 63 (dopo strip spazio iniziale, 0-based):
     [0:2]   = "63" tipo record
@@ -65,6 +65,7 @@ def parse_cbi_file(content):
     current_62 = None
     current_63_lines = []
     header_date = None
+    blocco = 0          # ogni giornata del file: saldo apertura (61), movimenti, saldo chiusura (64)
 
     for raw_line in lines:
         # Rimuovi spazio iniziale presente in tutti i record CBI YouBusiness
@@ -83,8 +84,10 @@ def parse_cbi_file(content):
 
         elif record_type == "61":
             # Saldo apertura giornata
+            blocco += 1
             bal = _parse_balance_record(line, "apertura", header_date)
             if bal:
+                bal["_blocco"] = blocco
                 balances.append(bal)
 
         elif record_type == "62":
@@ -92,6 +95,7 @@ def parse_cbi_file(content):
             if current_62 is not None:
                 tx = _build_transaction(current_62, current_63_lines, header_date)
                 if tx:
+                    tx["_blocco"] = blocco
                     transactions.append(tx)
 
             current_62 = line
@@ -105,12 +109,14 @@ def parse_cbi_file(content):
             if current_62 is not None:
                 tx = _build_transaction(current_62, current_63_lines, header_date)
                 if tx:
+                    tx["_blocco"] = blocco
                     transactions.append(tx)
                 current_62 = None
                 current_63_lines = []
 
             bal = _parse_balance_record(line, "chiusura", header_date)
             if bal:
+                bal["_blocco"] = blocco
                 balances.append(bal)
 
         elif record_type in ("65", "EF"):
@@ -118,6 +124,7 @@ def parse_cbi_file(content):
             if current_62 is not None:
                 tx = _build_transaction(current_62, current_63_lines, header_date)
                 if tx:
+                    tx["_blocco"] = blocco
                     transactions.append(tx)
                 current_62 = None
                 current_63_lines = []
@@ -126,9 +133,67 @@ def parse_cbi_file(content):
     if current_62 is not None:
         tx = _build_transaction(current_62, current_63_lines, header_date)
         if tx:
+            tx["_blocco"] = blocco
             transactions.append(tx)
 
-    return {"transactions": transactions, "balances": balances}
+    # Lo stesso movimento non compare mai due volte nello stesso file: se due movimenti
+    # hanno la stessa impronta sono due operazioni vere (es. due incassi POS uguali nello
+    # stesso giorno) e vanno tenute entrambe.
+    visti = {}
+    for tx in transactions:
+        n = visti.get(tx["dedup_hash"], 0)
+        visti[tx["dedup_hash"]] = n + 1
+        if n:
+            tx["dedup_hash"] = hashlib.sha256(f"{tx['dedup_hash']}#{n}".encode()).hexdigest()[:16]
+
+    return {"transactions": transactions, "balances": balances,
+            "verifica_giorni": _verifica_giorni(transactions, balances)}
+
+
+def _verifica_giorni(transactions, balances):
+    """Per ogni giornata del file: saldo apertura + movimenti = saldo chiusura?
+
+    Ritorna la lista delle giornate che non quadrano: [{"date", "apertura", "movimenti",
+    "chiusura", "differenza"}]. Vuota se il file è integro.
+    """
+    aperture = {b["_blocco"]: b for b in balances if b["type"] == "apertura"}
+    chiusure = {b["_blocco"]: b for b in balances if b["type"] == "chiusura"}
+    somme = {}
+    for tx in transactions:
+        somme[tx["_blocco"]] = somme.get(tx["_blocco"], 0) + (tx["amount"] if tx["direction"] == "C" else -tx["amount"])
+    errori = []
+    for k, ch in chiusure.items():
+        ap = aperture.get(k)
+        if not ap:
+            continue
+        mov = round(somme.get(k, 0), 2)
+        diff = round(ch["balance"] - ap["balance"] - mov, 2)
+        if abs(diff) > 0.005:
+            errori.append({"date": ch["date"], "apertura": ap["balance"], "movimenti": mov,
+                           "chiusura": ch["balance"], "differenza": diff})
+    return errori
+
+
+def codice_banca(line_62):
+    """Codice univoco dell'operazione assegnato dalla banca: primo elemento della
+    descrizione del record 62 (es. 'MB0B73745958', 'PVV6002018TV')."""
+    parti = line_62[60:].split() if len(line_62) > 60 else []
+    return parti[0] if parti else ""
+
+
+def impronta(line_62, operation_date, direction, amount, causale_abi, reference_code, counterpart_name):
+    """Impronta anti-doppione di un movimento.
+
+    Con il codice della banca: codice + data + verso + importo + causale (lo stesso codice
+    può valere per un pagamento e la sua commissione, che però hanno importo e causale diversi).
+    Senza codice: come prima (data, importo, riferimento, causale, controparte).
+    """
+    codice = codice_banca(line_62)
+    if codice:
+        chiave = f"v2|{codice}|{operation_date}|{direction}|{round(amount, 2):.2f}|{causale_abi}"
+    else:
+        chiave = f"{operation_date}|{amount}|{reference_code}|{causale_abi}|{counterpart_name}"
+    return hashlib.sha256(chiave.encode()).hexdigest()[:16]
 
 
 def _parse_balance_record(line, balance_type, header_date):
@@ -378,9 +443,9 @@ def _build_transaction(line_62, lines_63, header_date):
         # Descrizione causale ABI
         causale_description = _get_causale_abi_description(causale_abi)
 
-        # Hash per deduplicazione
-        dedup_str = f"{operation_date}|{amount}|{reference_code}|{causale_abi}|{counterpart_name}"
-        dedup_hash = hashlib.sha256(dedup_str.encode()).hexdigest()[:16]
+        # Impronta per deduplicazione
+        dedup_hash = impronta(line_62, operation_date, direction, amount, causale_abi,
+                              reference_code, counterpart_name)
 
         # Raw data
         raw_lines = [line_62] + lines_63

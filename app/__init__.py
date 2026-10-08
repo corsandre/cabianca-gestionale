@@ -323,6 +323,14 @@ def _init_db(app):
     except sqlalchemy.exc.OperationalError:
         db.session.rollback()
 
+    # Impronte anti-doppione dei movimenti bancari ricalcolate con il codice della banca (2.3.1)
+    try:
+        from app.services.saldo_banca import migra_impronte
+        migra_impronte()
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Migrazione impronte movimenti bancari non riuscita: {e}")
+
     # Backfill: ensure existing users have sections set
     try:
         db.session.execute(sqlalchemy.text("UPDATE users SET sections = '[\"finanza\"]' WHERE sections IS NULL"))

@@ -85,6 +85,19 @@ utente (vedi [Utenti](#utenti-ruoli-e-accesso-alle-sezioni)).
 | Scadenzario | `/scadenzario` | Scadenze pagamenti, segna come pagato |
 | Impostazioni finanza | `/finanza/impostazioni` | Flussi di ricavo |
 
+**Import CBI e quadratura** (`app/services/cbi_parser.py`, `app/services/saldo_banca.py`):
+- ogni movimento ha un'impronta anti-doppione fatta con il **codice univoco della banca** (primo elemento della
+  descrizione del record 62, es. `MB0B73745958`) + data + verso + importo + causale: ricaricare un estratto conto
+  già importato non crea doppioni, e due operazioni vere identiche nello stesso giorno (es. due incassi POS
+  uguali) entrano entrambe. Fino alla 2.3.0 l'impronta usava data/importo/causale/controparte e la seconda
+  veniva scartata: alla 2.3.1 le impronte esistenti sono state ricalcolate una volta dal record originale;
+- ogni file caricato viene conservato in `data/cbi/`;
+- all'import il file viene verificato giorno per giorno (saldo apertura + movimenti = saldo chiusura);
+- la pagina Banca divide la differenza tra saldo della banca e saldo contabile in **movimenti da riconciliare**
+  (sospesi: lavoro da fare) e **differenza non spiegata** (saldo banca − apertura − tutti i movimenti
+  importati: movimenti mancanti o in più, da sistemare ricaricando il CBI del periodo). L'import avvisa se
+  dopo il caricamento la differenza non spiegata non è zero.
+
 **Regole automatiche banca** (`AutoRule`, `app/services/rules_engine.py`): condizioni su descrizione/importo/fonte
 che assegnano categoria, contatto, metodo di pagamento, aliquota IVA, note, spostamento data, oppure ignorano il
 movimento con un motivo. Possono essere riapplicate in blocco ai movimenti esistenti.

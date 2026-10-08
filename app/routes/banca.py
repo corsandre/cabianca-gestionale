@@ -40,39 +40,14 @@ def index():
 
     rules_count = AutoRule.query.filter_by(active=True).count()
 
-    # Saldo banca: ultimo saldo chiusura da CBI (saldo reale estratto conto)
-    ultimo_saldo = BankBalance.query.filter_by(
-        balance_type="chiusura"
-    ).order_by(BankBalance.date.desc()).first()
-
-    saldo_banca = ultimo_saldo.balance if ultimo_saldo else None
-    saldo_banca_data = ultimo_saldo.date if ultimo_saldo else None
-
-    # Saldo contabile: primo saldo apertura + tutti i movimenti bancari processati
-    # (riconciliati + ignorati). Se tutto e' riconciliato correttamente,
-    # saldo_contabile == saldo_banca. La differenza aiuta a trovare errori.
-    primo_saldo = BankBalance.query.filter_by(
-        balance_type="apertura"
-    ).order_by(BankBalance.date.asc()).first()
-
-    saldo_contabile = None
-    if primo_saldo:
-        # Movimenti processati (riconciliati o ignorati) dal primo saldo in poi
-        crediti = db.session.query(
-            func.coalesce(func.sum(BankTransaction.amount), 0)
-        ).filter(
-            BankTransaction.operation_date >= primo_saldo.date,
-            BankTransaction.direction == "C",
-            BankTransaction.status.in_(["riconciliato", "ignorato"]),
-        ).scalar()
-        debiti = db.session.query(
-            func.coalesce(func.sum(BankTransaction.amount), 0)
-        ).filter(
-            BankTransaction.operation_date >= primo_saldo.date,
-            BankTransaction.direction == "D",
-            BankTransaction.status.in_(["riconciliato", "ignorato"]),
-        ).scalar()
-        saldo_contabile = primo_saldo.balance + float(crediti) - float(debiti)
+    # Saldo banca (ultimo saldo CBI) e saldo contabile (apertura + movimenti chiusi):
+    # la differenza si divide in sospesi (da riconciliare) e "non spiegata" (movimenti
+    # mancanti o in più nell'import). Vedi services/saldo_banca.py.
+    from app.services.saldo_banca import verifica_saldo
+    quadratura = verifica_saldo()
+    saldo_banca = quadratura["saldo_banca"] if quadratura else None
+    saldo_banca_data = quadratura["saldo_banca_data"] if quadratura else None
+    saldo_contabile = quadratura["saldo_contabile"] if quadratura else None
 
     # Storico saldi CBI (solo chiusura, piu' leggibile)
     storico_saldi = BankBalance.query.filter_by(
@@ -90,6 +65,7 @@ def index():
         saldo_banca=saldo_banca,
         saldo_banca_data=saldo_banca_data,
         saldo_contabile=saldo_contabile,
+        quadratura=quadratura,
         storico_saldi=storico_saldi,
     )
 
@@ -117,6 +93,13 @@ def upload():
         batch_id = str(uuid.uuid4())[:8]
         imported = 0
         duplicates = 0
+
+        # Conserva il file caricato (data/cbi/), per poterlo rileggere in futuro
+        try:
+            from app.services.saldo_banca import salva_file_cbi
+            salva_file_cbi(content, file.filename, batch_id)
+        except Exception as e:
+            logger.warning(f"File CBI non salvato: {e}")
 
         for tx_data in transactions:
             # Deduplicazione
@@ -208,6 +191,21 @@ def upload():
             parts.append(f"{abbinate_fe} fatture emesse abbinate")
 
         flash(", ".join(parts) + ".", "success")
+
+        # Controlli di quadratura: il file stesso (giorno per giorno) e il saldo complessivo
+        giorni_ko = result.get("verifica_giorni") or []
+        if giorni_ko:
+            g = giorni_ko[0]
+            flash(f"Il file non quadra in {len(giorni_ko)} giornate (es. {g['date'].strftime('%d/%m/%Y')}: "
+                  f"apertura + movimenti differisce dalla chiusura di €{g['differenza']:,.2f}). "
+                  "Controlla di aver scaricato il file completo.", "danger")
+        from app.services.saldo_banca import verifica_saldo
+        v = verifica_saldo()
+        if v and not v["quadra"]:
+            flash(f"Il saldo della banca al {v['saldo_banca_data'].strftime('%d/%m/%Y')} (€{v['saldo_banca']:,.2f}) "
+                  f"e la somma dei movimenti importati differiscono di €{v['non_spiegata']:,.2f}: "
+                  "mancano movimenti o ce ne sono in più. Ricarica l'estratto conto del periodo mancante.",
+                  "warning")
 
     except Exception as e:
         db.session.rollback()
