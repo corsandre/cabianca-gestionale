@@ -11,7 +11,8 @@ from datetime import timedelta
 from difflib import SequenceMatcher
 
 from app import db
-from app.models import BankTransaction, Transaction, Contact
+from app.models import BankTransaction, Transaction, Contact, SdiInvoice
+from app.services.sdi_importer import NOTE_DI_CREDITO
 from app.services.rules_engine import apply_rules
 
 logger = logging.getLogger(__name__)
@@ -127,10 +128,15 @@ def _find_best_match(bt, source):
     return best
 
 
+# Le fatture dei fornitori si pagano anche a 60-90 giorni: per le SDI si cerca fino a 90 giorni prima.
+# Oltre i 30 giorni il punteggio arriva alla soglia solo se coincidono importo e nome.
+GIORNI_SDI_PRIMA = 90
+
+
 def _get_candidates(bt, source):
     """Recupera transazioni candidate per il matching."""
-    # Finestra temporale: +-30 giorni dalla data operazione
-    date_from = bt.operation_date - timedelta(days=30)
+    # Finestra temporale: +-30 giorni dalla data operazione (SDI: da 90 giorni prima)
+    date_from = bt.operation_date - timedelta(days=GIORNI_SDI_PRIMA if source == "sdi" else 30)
     date_to = bt.operation_date + timedelta(days=30)
 
     # Tipo: credito = entrata, debito = uscita
@@ -143,9 +149,17 @@ def _get_candidates(bt, source):
     )
 
     if source == "sdi":
-        query = query.filter(
-            Transaction.payment_status.in_(["da_pagare", "parziale"])
-        )
+        # le note di credito non pagano e non incassano niente
+        note_credito = db.select(SdiInvoice.id).where(SdiInvoice.invoice_type.in_(NOTE_DI_CREDITO))
+        query = query.filter(Transaction.amount > 0, ~Transaction.invoice_id.in_(note_credito))
+        # da pagare, oppure segnate "pagato" a mano senza il bonifico collegato
+        # (quelle pagate in contanti o non applicabili restano fuori)
+        query = query.filter(db.or_(
+            Transaction.payment_status.in_(["da_pagare", "parziale"]),
+            db.and_(Transaction.payment_status == "pagato",
+                    db.or_(Transaction.payment_method.is_(None),
+                           Transaction.payment_method.notin_(["contanti", "non_applicabile"]))),
+        ))
 
     # Escludi transazioni gia riconciliate con altri movimenti bancari
     already_matched = db.select(BankTransaction.matched_transaction_id).where(
@@ -226,6 +240,8 @@ def _link_transaction(bt, tx, matched_by):
     # Aggiorna stato pagamento
     if tx.payment_status in ("da_pagare", "parziale"):
         tx.payment_status = "pagato"
+        tx.payment_date = bt.operation_date
+    elif tx.payment_status == "pagato" and not tx.payment_date:
         tx.payment_date = bt.operation_date
 
 

@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}Fattura emessa {{ f.numero }} - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+{% set BADGE = {'incassata': 'bg-success', 'altro': 'bg-secondary', 'da_abbinare': 'bg-warning text-dark',
+                'nota_credito': 'bg-info text-dark', 'stornata': 'bg-light text-muted border', 'interna': 'bg-light text-dark border'} %}
+{% set pdf_url = url_for('static', filename='uploads/' + f.pdf_filename) if f.pdf_filename else None %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-receipt text-cb-green"></i> {{ 'Nota di credito' if f.tipo == 'nota_credito' else 'Fattura' }} {{ f.numero }}
+        <span class="badge {{ BADGE[stato] }} fs-6 align-middle">{{ STATI[stato] }}</span></h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('fatture_emesse.index', anno=f.anno) }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Indietro</a>
+        {% if pdf_url %}
+        <a href="{{ pdf_url }}" download="Fattura {{ f.numero|replace('/', '-') }} {{ f.data.strftime('%Y-%m-%d') }}.pdf" class="btn btn-cb"><i class="bi bi-download"></i> Scarica PDF</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if f.da_verificare %}
+<div class="alert alert-warning py-2">
+    <i class="bi bi-eye"></i> Lettura incerta{% if f.note %}: {{ f.note }}{% endif %}. Controlla i dati sul PDF, correggili qui sotto e togli la spunta "da controllare".
+</div>
+{% endif %}
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="cb-card p-3 mb-3">
+            <h5 class="mb-3">Dati letti dal PDF</h5>
+            <table class="table table-sm mb-0">
+                <tr><th>Numero</th><td>{{ f.numero }}{% if f.sezionale %} <small class="text-muted">(sezionale /{{ f.sezionale }})</small>{% endif %}</td></tr>
+                <tr><th>Data</th><td>{{ f.data.strftime('%d/%m/%Y') }}</td></tr>
+                <tr><th>Cliente</th><td>{{ f.cliente or '—' }}</td></tr>
+                {% if f.cliente_partita_iva %}<tr><th>P.IVA</th><td>{{ f.cliente_partita_iva }}</td></tr>{% endif %}
+                {% if f.cliente_codice_fiscale %}<tr><th>Cod. fiscale</th><td>{{ f.cliente_codice_fiscale }}</td></tr>{% endif %}
+                <tr><th>Descrizione</th><td class="small">{{ f.descrizione or '—' }}</td></tr>
+                <tr><th>Imponibile</th><td>{% if f.imponibile is not none %}&euro;{{ "{:,.2f}".format(f.imponibile) }}{% else %}—{% endif %}</td></tr>
+                <tr><th>IVA</th><td>{% if f.iva is not none %}&euro;{{ "{:,.2f}".format(f.iva) }}{% else %}—{% endif %}</td></tr>
+                <tr><th>Totale</th><td class="fw-bold">&euro;{{ "{:,.2f}".format(f.totale) }}</td></tr>
+                {% if f.email_data %}<tr><th>Email</th><td class="small">{{ f.email_data.strftime('%d/%m/%Y %H:%M') }}</td></tr>{% endif %}
+            </table>
+        </div>
+
+        {# --- Storni --- #}
+        {% if f.tipo == 'nota_credito' %}
+        <div class="cb-card p-3 mb-3">
+            <h5 class="mb-2">Storno</h5>
+            {% if stornata_fattura %}
+            Annulla la fattura <a href="{{ url_for('fatture_emesse.detail', id=stornata_fattura.id) }}">{{ stornata_fattura.numero }} del {{ stornata_fattura.data.strftime('%d/%m/%Y') }}</a>.
+            {% elif f.storna_numero %}
+            Cita la fattura {{ f.storna_numero }}{% if f.storna_data %} del {{ f.storna_data.strftime('%d/%m/%Y') }}{% endif %}, che non è tra le fatture arrivate.
+            {% else %}
+            Fattura stornata non letta dal PDF.
+            {% endif %}
+        </div>
+        {% elif f.stornata_da %}
+        <div class="cb-card p-3 mb-3">
+            <h5 class="mb-2">Stornata</h5>
+            Annullata dalla nota di credito <a href="{{ url_for('fatture_emesse.detail', id=f.stornata_da.id) }}">{{ f.stornata_da.numero }} del {{ f.stornata_da.data.strftime('%d/%m/%Y') }}</a>:
+            non va incassata.
+        </div>
+        {% endif %}
+
+        {# --- Incasso --- #}
+        {% if f.tipo == 'fattura' and not f.stornata and not f.interna %}
+        <div class="cb-card p-3 mb-3">
+            <h5 class="mb-3">Incasso</h5>
+            {% if f.transaction %}
+                {% set bt = f.bank_match %}
+                {% if bt %}
+                <div class="mb-2"><i class="bi bi-bank text-success"></i>
+                    Bonifico del <strong>{{ bt.operation_date.strftime('%d/%m/%Y') }}</strong> &middot; &euro;{{ "{:,.2f}".format(bt.amount) }}<br>
+                    <small class="text-muted">{{ bt.counterpart_name }}{% if bt.remittance_info %} &middot; {{ bt.remittance_info[:90] }}{% endif %}</small>
+                </div>
+                {% endif %}
+                <div class="small mb-2">Movimento: {{ f.transaction.description }}
+                    <a href="{{ url_for('movimenti.edit', id=f.transaction.id, next=url_for('fatture_emesse.detail', id=f.id)) }}" class="ms-1"><i class="bi bi-pencil"></i> modifica</a></div>
+                <div class="small text-muted mb-2">Abbinata {{ 'in automatico' if f.abbinata_da == 'auto' else 'a mano' }}.</div>
+                <form method="POST" action="{{ url_for('fatture_emesse.scollega', id=f.id) }}"
+                      onsubmit="return confirm('Scollegare la fattura dal bonifico? Se il movimento era stato creato dall\'abbinamento verrà eliminato e il bonifico tornerà tra i sospesi.')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle"></i> Scollega</button>
+                </form>
+            {% elif f.incasso == 'altro' %}
+                <p class="mb-2"><i class="bi bi-cash-coin"></i> Incassata in contanti o con POS (già registrata in cassa).</p>
+                <form method="POST" action="{{ url_for('fatture_emesse.scollega', id=f.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-secondary">Annulla</button>
+                </form>
+            {% else %}
+                {% if candidati %}
+                <p class="small text-muted mb-2">Bonifici in entrata di &euro;{{ "{:,.2f}".format(f.totale) }} tra 60 giorni prima e 60 giorni dopo la fattura.
+                    In verde quelli con il cognome del cliente nella causale, in giallo quelli con solo un nome in comune.</p>
+                <div class="list-group mb-3">
+                    {% for c in candidati %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center gap-2 {% if c.sicuro %}list-group-item-success{% elif c.nome %}list-group-item-warning{% endif %}">
+                        <div class="small">
+                            <strong>{{ c.bt.operation_date.strftime('%d/%m/%Y') }}</strong>
+                            <span class="text-muted">({{ '%+d'|format(c.giorni) }} gg)</span>
+                            &middot; {{ c.bt.counterpart_name or '—' }}<br>
+                            <span class="text-muted">{{ (c.bt.remittance_info or c.bt.description or '')[:80] }}</span>
+                            <span class="badge bg-light text-dark border ms-1">{{ c.bt.status|replace('_', ' ') }}</span>
+                        </div>
+                        <form method="POST" action="{{ url_for('fatture_emesse.collega', id=f.id, bt_id=c.bt.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn btn-sm btn-cb">Collega</button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted small">Nessun bonifico dello stesso importo trovato. Se un bonifico paga più fatture insieme, o se la fattura è stata pagata in contanti o con POS, segnala qui sotto.</p>
+                {% endif %}
+                <form method="POST" action="{{ url_for('fatture_emesse.incasso_altro', id=f.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-cash-coin"></i> Incassata in contanti / POS / altro</button>
+                </form>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {# --- Correzione --- #}
+        <div class="cb-card p-3 mb-3">
+            <a class="text-decoration-none" data-bs-toggle="collapse" href="#correggi"><h5 class="mb-0"><i class="bi bi-pencil-square"></i> Correggi i dati</h5></a>
+            <div class="collapse {% if f.da_verificare %}show{% endif %} mt-3" id="correggi">
+                <form method="POST" action="{{ url_for('fatture_emesse.modifica', id=f.id) }}" class="row g-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="col-6"><label class="form-label small">Numero</label>
+                        <input name="numero" class="form-control form-control-sm" value="{{ f.numero }}" required></div>
+                    <div class="col-6"><label class="form-label small">Data</label>
+                        <input type="date" name="data" class="form-control form-control-sm" value="{{ f.data.isoformat() }}" required></div>
+                    <div class="col-12"><label class="form-label small">Cliente</label>
+                        <input name="cliente" class="form-control form-control-sm" value="{{ f.cliente or '' }}"></div>
+                    <div class="col-4"><label class="form-label small">Imponibile</label>
+                        <input type="number" step="0.01" name="imponibile" class="form-control form-control-sm" value="{{ f.imponibile if f.imponibile is not none else '' }}"></div>
+                    <div class="col-4"><label class="form-label small">IVA</label>
+                        <input type="number" step="0.01" name="iva" class="form-control form-control-sm" value="{{ f.iva if f.iva is not none else '' }}"></div>
+                    <div class="col-4"><label class="form-label small">Totale</label>
+                        <input type="number" step="0.01" name="totale" class="form-control form-control-sm" value="{{ f.totale }}" required></div>
+                    <div class="col-12"><label class="form-label small">Note</label>
+                        <input name="note" class="form-control form-control-sm" value="{{ f.note or '' }}"></div>
+                    <div class="col-12 form-check ms-2">
+                        <input class="form-check-input" type="checkbox" name="da_verificare" value="1" id="dv" {% if f.da_verificare %}checked{% endif %}>
+                        <label class="form-check-label small" for="dv">Da controllare</label>
+                    </div>
+                    <div class="col-12"><button class="btn btn-sm btn-cb">Salva</button></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="cb-card p-2">
+            {% if pdf_url %}
+            <object data="{{ pdf_url }}" type="application/pdf" style="width:100%; height:80vh">
+                <p class="p-3">Anteprima non disponibile. <a href="{{ pdf_url }}" download>Scarica il PDF</a>.</p>
+            </object>
+            {% else %}
+            <p class="p-3 text-muted mb-0">PDF non disponibile.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

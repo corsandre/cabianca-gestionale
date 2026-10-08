@@ -3,9 +3,17 @@
 {% block content %}
 <div class="cb-page-header">
     <h1><i class="bi bi-exclamation-triangle text-cb-gold"></i> Movimenti Sospesi</h1>
-    <a href="{{ url_for('banca.index') }}" class="btn btn-cb-outline btn-sm">
-        <i class="bi bi-arrow-left"></i> Banca
-    </a>
+    <div class="d-flex gap-2">
+        {% if current_user.role in ('admin', 'operatore') %}
+        <form method="POST" action="{{ url_for('banca.riprova_abbinamento') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-cb btn-sm" title="Rilancia regole e abbinamento automatico su tutti i sospesi"><i class="bi bi-magic"></i> Riprova abbinamento automatico</button>
+        </form>
+        {% endif %}
+        <a href="{{ url_for('banca.index') }}" class="btn btn-cb-outline btn-sm">
+            <i class="bi bi-arrow-left"></i> Banca
+        </a>
+    </div>
 </div>
 
 {% if not items %}

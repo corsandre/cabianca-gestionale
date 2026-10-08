@@ -12,6 +12,10 @@ from app.config import Config
 logger = logging.getLogger(__name__)
 
 
+# Tipi documento SDI delle note di credito: non sono da pagare
+NOTE_DI_CREDITO = ("TD04", "TD08")
+
+
 def import_sdi_file(content: bytes, filename: str, uploaded_by: int = None) -> dict:
     """Importa una fattura SDI da XML o PDF.
 
@@ -185,6 +189,11 @@ def import_sdi_file(content: bytes, filename: str, uploaded_by: int = None) -> d
                 due_date=data.get("due_date"),
                 created_by=uploaded_by,
             )
+            if (data["total_amount"] or 0) <= 0 or data.get("invoice_type") in NOTE_DI_CREDITO:
+                # nota di credito o fattura a zero: non c'è niente da pagare
+                tx.payment_status = "pagato"
+                tx.payment_method = "non_applicabile"
+                tx.notes = "Nota di credito o importo zero: nessun pagamento"
 
             # Applica regole automatiche per categorizzazione
             try:

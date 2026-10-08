@@ -63,6 +63,7 @@ def create_app():
     from app.routes.dashboard import bp as dashboard_bp
     from app.routes.prima_nota import bp as prima_nota_bp
     from app.routes.fatture import bp as fatture_bp
+    from app.routes.fatture_emesse import bp as fatture_emesse_bp
     from app.routes.cassa import bp as cassa_bp
     from app.routes.movimenti import bp as movimenti_bp
     from app.routes.anagrafica import bp as anagrafica_bp
@@ -81,6 +82,7 @@ def create_app():
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(prima_nota_bp)
     app.register_blueprint(fatture_bp)
+    app.register_blueprint(fatture_emesse_bp)
     app.register_blueprint(cassa_bp)
     app.register_blueprint(movimenti_bp)
     app.register_blueprint(anagrafica_bp)
@@ -476,6 +478,14 @@ def _init_scheduler(app):
                 from app.services.email_fetcher import fetch_sdi_emails
                 fetch_sdi_emails(app)
 
+        def fetch_fatture_emesse():
+            with app.app_context():
+                try:
+                    from app.services.fatture_emesse import controlla_email
+                    controlla_email(app)
+                except Exception as e:
+                    app.logger.error(f"Errore fatture emesse: {e}")
+
         def sync_cassa():
             with app.app_context():
                 try:
@@ -503,6 +513,8 @@ def _init_scheduler(app):
         scheduler.add_job(avvisi_allevamento, "interval", minutes=1)   # invia una volta al giorno, all'orario impostato
         if app.config.get("IMAP_HOST") and app.config.get("IMAP_USER"):
             scheduler.add_job(fetch_emails, "cron", hour="8,14,20", minute=30)
+            if app.config.get("FATTURE_EMESSE_MITTENTE"):
+                scheduler.add_job(fetch_fatture_emesse, "cron", hour="8,14,20", minute=35)
         scheduler.start()
         app.scheduler = scheduler
 

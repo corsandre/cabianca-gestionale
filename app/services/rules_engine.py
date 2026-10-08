@@ -7,6 +7,8 @@ Applica regole AutoRule a transazioni da qualsiasi fonte:
 """
 
 import logging
+import re
+
 from app import db
 from app.models import AutoRule
 
@@ -98,20 +100,33 @@ def apply_rules_bulk(transactions_data, source):
     return results
 
 
+def _normalizza(testo):
+    """Maiuscolo, solo lettere e cifre separate da uno spazio: 'AGOS-DUCATO S.P.A.' -> 'AGOS DUCATO S P A'."""
+    return " ".join(re.sub(r"[^0-9A-Z]+", " ", (testo or "").upper()).split())
+
+
+def _contiene(testo, cercato):
+    """Il testo contiene quello cercato, ignorando maiuscole, punteggiatura e ordine delle parole
+    ('BOCCHIERI AGNESE' trova 'AGNESE BOCCHIERI', 'AGOS DUCATO' trova 'AGOS-DUCATO S.P.A.')."""
+    t, c = _normalizza(testo), _normalizza(cercato)
+    if not c:
+        return True
+    if c in t:
+        return True
+    return set(c.split()) <= set(t.split())
+
+
 def _matches(rule, data, source):
     """Verifica se una regola matcha i dati della transazione (AND di tutte le condizioni)."""
-    # Match descrizione (case-insensitive, substring)
+    # Match descrizione (parole, senza badare a maiuscole, punteggiatura e ordine)
     if rule.match_description:
-        desc = (data.get("description") or "").upper()
-        remittance = (data.get("remittance_info") or "").upper()
-        target = rule.match_description.upper()
-        if target not in desc and target not in remittance:
+        if not (_contiene(data.get("description"), rule.match_description)
+                or _contiene(data.get("remittance_info"), rule.match_description)):
             return False
 
-    # Match controparte (case-insensitive, substring)
+    # Match controparte (come la descrizione)
     if rule.match_counterpart:
-        counterpart = (data.get("counterpart") or "").upper()
-        if rule.match_counterpart.upper() not in counterpart:
+        if not _contiene(data.get("counterpart"), rule.match_counterpart):
             return False
 
     # Match P.IVA (esatta)
@@ -120,10 +135,11 @@ def _matches(rule, data, source):
         if piva != rule.match_partita_iva:
             return False
 
-    # Match causale ABI (per CBI)
+    # Match causale ABI (per CBI): una o più causali separate da virgola ("194, 19D")
     if rule.match_causale_abi:
-        causale = data.get("causale_abi") or ""
-        if causale != rule.match_causale_abi:
+        causale = (data.get("causale_abi") or "").strip().upper()
+        ammesse = {c.strip().upper() for c in rule.match_causale_abi.split(",") if c.strip()}
+        if causale not in ammesse:
             return False
 
     # Match importo min

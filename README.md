@@ -73,6 +73,7 @@ utente (vedi [Utenti](#utenti-ruoli-e-accesso-alle-sezioni)).
 | Cruscotto | `/` | Panoramica entrate/uscite, grafici, scadenze imminenti |
 | Prima Nota | `/prima-nota` | Registro cronologico di tutti i movimenti, filtri avanzati |
 | Fatture SDI | `/fatture` | Upload e parsing automatico di fatture elettroniche XML (FatturaPA, anche `.p7m`) e PDF (formato TeamSystem); recupero automatico dalla casella email via IMAP |
+| Fatture emesse | `/fatture-emesse` | Copie PDF delle fatture emesse inviate per email dalla Coldiretti, lette con OCR e abbinate ai bonifici (vedi sotto) |
 | Registratore di cassa | `/cassa` | Sincronizzazione corrispettivi giornalieri da 4CloudOffice (manuale o notturna) |
 | Movimenti manuali | `/movimenti` | Entrate/uscite extra-contabili con allegati |
 | Spese ricorrenti | `/ricorrenti` | Modelli di spesa periodica, generazione automatica delle transazioni |
@@ -87,6 +88,43 @@ utente (vedi [Utenti](#utenti-ruoli-e-accesso-alle-sezioni)).
 **Regole automatiche banca** (`AutoRule`, `app/services/rules_engine.py`): condizioni su descrizione/importo/fonte
 che assegnano categoria, contatto, metodo di pagamento, aliquota IVA, note, spostamento data, oppure ignorano il
 movimento con un motivo. Possono essere riapplicate in blocco ai movimenti esistenti.
+
+#### Fatture emesse (`/fatture-emesse`)
+
+Le fatture emesse non arrivano come XML: chi tiene la contabilità (Coldiretti, programma GAMMA) manda per email
+una **copia PDF** di ogni fattura, e quel PDF non contiene testo vero (i caratteri sono disegni). Il gestionale:
+
+1. **legge le email** del mittente `FATTURE_EMESSE_MITTENTE` in tutte le cartelle della casella IMAP (escluse
+   cestino, spam, bozze e inviate), **in sola lettura**: le email non vengono spostate né segnate come lette,
+   perché le archivia una persona. Ogni email viene elaborata una volta sola (tabella `email_elaborate`).
+   Controllo automatico alle 8:35, 14:35 e 20:35, oppure con il pulsante "Controlla email";
+2. **legge il PDF con OCR** (`app/services/fatture_emesse_ocr.py`: `pdftoppm` a 200 dpi + `tesseract` in
+   italiano, installati nell'immagine Docker). Si leggono solo i PDF fino a 3 pagine e solo le pagine con
+   l'intestazione di Fattoria Ca' Bianca (nelle stesse email arrivano anche fatture di altre aziende seguite
+   dalla Coldiretti). Dal modulo si ricavano numero, data, cliente, P.IVA/codice fiscale, prima riga degli
+   articoli, imponibile, IVA e totale. Se un controllo non torna (es. imponibile + IVA ≠ totale, cliente non
+   letto) la fattura resta **da controllare** (riga gialla) e si corregge dalla pagina di dettaglio;
+3. **conserva il PDF** in `static/uploads/fatture_emesse/` (`<anno>_<sezionale>_<numero>.pdf`), scaricabile
+   dall'elenco e visibile nel dettaglio, come per le fatture ricevute;
+4. **note di credito**: dalla causale ("nota di credito relativa alla fattura 42/01 del 19.05.2026") si
+   collega la fattura stornata, che non va più incassata;
+5. **abbina gli incassi**: per ogni fattura cerca i bonifici in entrata dello **stesso importo** da 60 giorni
+   prima a 60 giorni dopo la data della fattura (di solito la fattura si emette dopo il pagamento). Si abbina
+   in automatico solo se nel bonifico c'è anche il **cognome** del cliente (la prima parola in fattura) o almeno
+   due parole del suo nome; un solo nome di battesimo in comune non basta. Altrimenti i bonifici
+   compatibili vengono proposti nel dettaglio e si collegano a mano. Con l'abbinamento:
+   - bonifico già riconciliato a mano → la fattura si collega a quella transazione (niente doppioni);
+   - bonifico sospeso **o ignorato** → si crea l'entrata (categoria dalla descrizione: fattoria didattica,
+     ristorazione, vendita animali/prodotti) e il bonifico diventa riconciliato. Gli ignorati sono solo
+     incassi già registrati in altro modo (es. con scontrino, sincronizzati dalla cassa): se c'è una fattura,
+     non lo sono;
+   - "Scollega" elimina l'entrata creata dall'abbinamento e rimette il bonifico tra i sospesi;
+   - "Incassata in contanti / POS / altro" per le fatture già incassate in cassa o pagate con un unico
+     bonifico insieme ad altre.
+   L'abbinamento gira anche dopo ogni import dell'estratto conto;
+6. **numeri mancanti**: per ogni anno e sezionale (`/01` fattoria didattica e ristorazione, senza suffisso
+   attività agricola, `/09` con bolla, `/50` e `/60` note di credito) segnala i numeri che non sono arrivati
+   per email, in pagina e su Telegram (una volta per numero).
 
 ### Allevamento Suini (tema rosa)
 
@@ -479,6 +517,7 @@ APScheduler gira nel processo dell'app (fuso `Europe/Rome`):
 | 08:00 | Notifica scadenze su Telegram | |
 | configurabile (default 07:00) | Trattamenti da ripetere nel giorno (gruppo allevamento) | Controllato ogni minuto, inviato una volta al giorno |
 | 08:30, 14:30, 20:30 | Recupero fatture SDI da email (IMAP) | Solo se configurato IMAP |
+| 08:35, 14:35, 20:35 | Fatture emesse da email (OCR) e abbinamento ai bonifici | Solo se configurati IMAP e `FATTURE_EMESSE_MITTENTE` |
 
 ---
 
@@ -548,6 +587,7 @@ Il file `.env` (creato da `setup.sh`, mai committato) contiene:
 | `CLOUD_OFFICE_URL`, `CLOUD_OFFICE_USER`, `CLOUD_OFFICE_PASSWORD` | Registratore di cassa 4CloudOffice |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Invio backup via email |
 | `IMAP_HOST`, `IMAP_PORT`, `IMAP_USER`, `IMAP_PASSWORD`, `IMAP_FOLDER`, `IMAP_SEARCH_FROM` | Recupero fatture SDI dalla casella email |
+| `FATTURE_EMESSE_MITTENTE` | Indirizzo da cui arrivano le copie PDF delle fatture emesse (vuoto = funzione spenta) |
 | `APP_PORT` | Porta del container (default 8080) |
 | `APP_BIND` | Interfaccia su cui pubblicare la porta: `127.0.0.1` dietro reverse proxy (produzione), `0.0.0.0` (default) in LAN |
 | `COOKIE_SECURE` | `1` (default): cookie solo su HTTPS. `0` solo se l'app è usata in http (LAN senza proxy), altrimenti il login non funziona |

@@ -173,6 +173,16 @@ def upload():
         stats = reconcile_batch(new_transactions)
         db.session.commit()
 
+        # Bonifici nuovi che pagano fatture emesse ancora da abbinare
+        try:
+            from app.services.fatture_emesse import abbina_tutte
+            abbinate_fe = abbina_tutte()
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            abbinate_fe = 0
+            logger.warning(f"Abbinamento fatture emesse non riuscito: {e}")
+
         # Notifica Telegram
         try:
             from app.services.telegram_bot import send_telegram_message
@@ -194,6 +204,8 @@ def upload():
             parts.append(f"{stats['matched']} riconciliati")
         if stats["pending"]:
             parts.append(f"{stats['pending']} da riconciliare")
+        if abbinate_fe:
+            parts.append(f"{abbinate_fe} fatture emesse abbinate")
 
         flash(", ".join(parts) + ".", "success")
 
@@ -300,6 +312,32 @@ def movimenti():
         causale_filter=causale_filter,
         causali_abi=causali_abi,
     )
+
+
+@bp.route("/sospesi/riprova", methods=["POST"])
+@login_required
+@write_required
+def riprova_abbinamento():
+    """Rilancia regole e abbinamento automatico su tutti i movimenti sospesi
+    (utile dopo aver creato regole nuove o importato fatture)."""
+    sospesi = BankTransaction.query.filter_by(status="non_riconciliato").all()
+    stats = reconcile_batch(sospesi)
+    db.session.commit()
+    try:
+        from app.services.fatture_emesse import abbina_tutte
+        fe = abbina_tutte()
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        fe = 0
+        logger.warning(f"Abbinamento fatture emesse non riuscito: {e}")
+    totale = stats["matched"] + fe
+    if totale:
+        flash(f"{totale} movimenti sistemati in automatico "
+              f"({stats['matched']} con regole o fatture ricevute, {fe} con fatture emesse).", "success")
+    else:
+        flash("Nessun nuovo abbinamento automatico trovato.", "info")
+    return redirect(url_for("banca.sospesi"))
 
 
 @bp.route("/sospesi")

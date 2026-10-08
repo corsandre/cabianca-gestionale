@@ -3,7 +3,8 @@ FROM python:3.11-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc libffi-dev openssl tzdata && \
+    gcc libffi-dev openssl tzdata \
+    tesseract-ocr tesseract-ocr-ita poppler-utils && \
     rm -rf /var/lib/apt/lists/*
 
 ENV TZ=Europe/Rome

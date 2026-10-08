@@ -8,7 +8,7 @@
 
     <li class="cb-nav-divider"></li>
 
-    {% set finanza_blueprints = ['prima_nota','fatture','cassa','movimenti','ricorrenti','banca','anagrafica','inventario','categorie','analisi','scadenzario','finanza_impostazioni'] %}
+    {% set finanza_blueprints = ['prima_nota','fatture','fatture_emesse','cassa','movimenti','ricorrenti','banca','anagrafica','inventario','categorie','analisi','scadenzario','finanza_impostazioni'] %}
     {% set finanza_active = request.blueprint in finanza_blueprints %}
     {% if current_user.has_section('finanza') %}
     <!-- FINANZA GROUP -->
@@ -32,6 +32,11 @@
             <li class="nav-item">
                 <a class="nav-link {% if request.blueprint == 'fatture' %}active{% endif %}" href="{{ url_for('fatture.index') }}">
                     <i class="bi bi-file-earmark-text"></i> Fatture SDI
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'fatture_emesse' %}active{% endif %}" href="{{ url_for('fatture_emesse.index') }}">
+                    <i class="bi bi-receipt"></i> Fatture emesse
                 </a>
             </li>
             <li class="nav-item">

@@ -50,6 +50,8 @@ class Config:
     IMAP_PASSWORD = os.getenv("IMAP_PASSWORD", "")
     IMAP_FOLDER = os.getenv("IMAP_FOLDER", "INBOX")
     IMAP_SEARCH_FROM = os.getenv("IMAP_SEARCH_FROM", "")
+    # Copie PDF delle fatture emesse (inviate dalla Coldiretti), lette con OCR
+    FATTURE_EMESSE_MITTENTE = os.getenv("FATTURE_EMESSE_MITTENTE", "")
 
     # Admin
     ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")

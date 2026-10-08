@@ -166,6 +166,71 @@ class SdiInvoice(db.Model):
     uploader = db.relationship("User")
 
 
+# === FATTURE EMESSE (copie PDF inviate dalla Coldiretti, lette con OCR) ===
+
+class FatturaEmessa(db.Model):
+    """Fattura emessa da Ca Bianca, letta dalla copia PDF che arriva per email.
+
+    Non è un XML SDI: i dati vengono dall'OCR del PDF (vedi services/fatture_emesse_ocr.py).
+    L'incasso è la transazione `transaction_id` (di solito quella creata dal bonifico).
+    """
+    __tablename__ = "fatture_emesse"
+    id = db.Column(db.Integer, primary_key=True)
+    numero = db.Column(db.String(30), nullable=False)        # come stampato: "43/01", "8", "1/60"
+    sezionale = db.Column(db.String(10), default="")          # "01", "09", "60"... "" = senza suffisso
+    progressivo = db.Column(db.Integer)
+    anno = db.Column(db.Integer)
+    data = db.Column(db.Date, nullable=False)
+    tipo = db.Column(db.String(20), default="fattura")        # fattura, nota_credito
+    cliente = db.Column(db.String(200))
+    cliente_partita_iva = db.Column(db.String(20))
+    cliente_codice_fiscale = db.Column(db.String(20))
+    descrizione = db.Column(db.String(300))                   # prima riga articoli
+    imponibile = db.Column(db.Float)
+    iva = db.Column(db.Float)
+    totale = db.Column(db.Float, nullable=False)
+    storna_numero = db.Column(db.String(30))                  # per le note di credito: fattura stornata
+    storna_data = db.Column(db.Date)
+    stornata_da_id = db.Column(db.Integer, db.ForeignKey("fatture_emesse.id"))
+    interna = db.Column(db.Boolean, default=False)            # autoconsumo (cliente = Ca Bianca)
+    pdf_filename = db.Column(db.String(200))                  # in static/uploads/fatture_emesse/
+    email_message_id = db.Column(db.String(300))
+    email_data = db.Column(db.DateTime)
+    ocr_testo = db.Column(db.Text)
+    da_verificare = db.Column(db.Boolean, default=False)      # controlli OCR non passati
+    incasso = db.Column(db.String(20), default="")            # "", banca, altro (contanti/POS già in cassa)
+    transaction_id = db.Column(db.Integer, db.ForeignKey("transactions.id"))
+    abbinata_da = db.Column(db.String(20))                    # auto, manuale
+    note = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    transaction = db.relationship("Transaction")
+    stornata_da = db.relationship("FatturaEmessa", remote_side=[id])
+
+    __table_args__ = (db.UniqueConstraint("numero", "data", name="uq_fattura_emessa_numero_data"),)
+
+    @property
+    def stornata(self):
+        return self.stornata_da_id is not None
+
+    @property
+    def bank_match(self):
+        return self.transaction.bank_match if self.transaction else None
+
+
+class EmailElaborata(db.Model):
+    """Email già lette per le fatture emesse (per non rifare l'OCR a ogni controllo)."""
+    __tablename__ = "email_elaborate"
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(db.String(300), unique=True, nullable=False)
+    cartella = db.Column(db.String(200))
+    oggetto = db.Column(db.String(300))
+    data = db.Column(db.DateTime)
+    esito = db.Column(db.String(200))                         # "2 fatture", "nessuna fattura", "errore: ..."
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 # === INVENTORY ===
 
 class Product(db.Model):

@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Fatture emesse - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+{% set BADGE = {'incassata': 'bg-success', 'altro': 'bg-secondary', 'da_abbinare': 'bg-warning text-dark',
+                'nota_credito': 'bg-info text-dark', 'stornata': 'bg-light text-muted border', 'interna': 'bg-light text-dark border'} %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-receipt text-cb-green"></i> Fatture emesse</h1>
+    <div class="d-flex gap-2 align-items-center">
+        <form method="POST" action="{{ url_for('fatture_emesse.controlla_email') }}" class="d-inline"
+              onsubmit="this.querySelector('button').disabled=true; this.querySelector('button').innerHTML='<span class=\'spinner-border spinner-border-sm\'></span> Lettura in corso...'">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-cb-outline" {% if not configurato %}disabled title="Manca FATTURE_EMESSE_MITTENTE nel file .env"{% endif %}>
+                <i class="bi bi-envelope"></i> Controlla email
+            </button>
+        </form>
+    </div>
+</div>
+
+<p class="text-muted small mb-3">
+    Copie PDF delle fatture che arrivano per email dalla Coldiretti, lette in automatico alle 8:35, 14:35 e 20:35.
+    Ogni fattura viene abbinata al bonifico dello stesso importo con il cognome del cliente nella causale;
+    le altre si collegano a mano dal dettaglio. Le righe in
+    <span class="px-1 bg-warning-subtle">giallo</span> hanno dati letti in modo incerto: controllali sul PDF.
+</p>
+
+{% if mancanti %}
+<div class="alert alert-warning py-2">
+    <i class="bi bi-exclamation-triangle"></i> <strong>Numeri mancanti</strong> (fatture non arrivate per email):
+    {% for a, s, nums in mancanti %}
+        {% for n in nums %}<span class="badge bg-warning text-dark ms-1">{{ n }}{% if s %}/{{ s }}{% endif %} &middot; {{ a }}</span>{% endfor %}
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="row g-3 mb-3">
+    <div class="col-6 col-lg-3">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-icon text-cb-dark-green"><i class="bi bi-receipt"></i></div>
+            <div class="cb-stat-value text-cb-dark-green">&euro;{{ "{:,.0f}".format(riepilogo.fatturato) }}</div>
+            <div class="cb-stat-label">Fatturato &middot; {{ riepilogo.n_fatture }} fatture</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <a href="?anno={{ anno or '' }}&stato=incassata" class="text-decoration-none">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-icon text-success"><i class="bi bi-bank"></i></div>
+            <div class="cb-stat-value text-success">&euro;{{ "{:,.0f}".format(riepilogo.incassato) }}</div>
+            <div class="cb-stat-label">Incassato con bonifico &middot; {{ riepilogo.n_incassate }}</div>
+        </div>
+        </a>
+    </div>
+    <div class="col-6 col-lg-3">
+        <a href="?anno={{ anno or '' }}&stato=da_abbinare" class="text-decoration-none">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-icon text-cb-gold"><i class="bi bi-link-45deg"></i></div>
+            <div class="cb-stat-value text-cb-gold">&euro;{{ "{:,.0f}".format(riepilogo.da_abbinare) }}</div>
+            <div class="cb-stat-label">Da abbinare &middot; {{ riepilogo.n_da_abbinare }}</div>
+        </div>
+        </a>
+    </div>
+    <div class="col-6 col-lg-3">
+        <a href="?anno={{ anno or '' }}&verificare=1" class="text-decoration-none">
+        <div class="cb-card cb-stat-card">
+            <div class="cb-stat-icon {% if riepilogo.n_verificare %}text-danger{% else %}text-cb-green{% endif %}"><i class="bi bi-eye"></i></div>
+            <div class="cb-stat-value {% if riepilogo.n_verificare %}text-danger{% else %}text-cb-green{% endif %}">{{ riepilogo.n_verificare }}</div>
+            <div class="cb-stat-label">Da controllare (lettura incerta)</div>
+        </div>
+        </a>
+    </div>
+</div>
+
+<div class="cb-filters">
+    <form method="GET" class="row g-2 align-items-end">
+        <div class="col-6 col-md-2">
+            <label class="form-label small">Anno</label>
+            <select name="anno" class="form-select form-select-sm">
+                <option value="" {% if not anno %}selected{% endif %}>Tutti</option>
+                {% for a in anni %}<option value="{{ a }}" {% if anno == a %}selected{% endif %}>{{ a }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small">Sezionale</label>
+            <select name="sez" class="form-select form-select-sm">
+                <option value="tutti">Tutti</option>
+                {% for s in sezionali %}<option value="{{ s }}" {% if sez == s %}selected{% endif %}>{{ '/' ~ s if s else 'senza suffisso' }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label small">Stato</label>
+            <select name="stato" class="form-select form-select-sm">
+                <option value="">Tutti</option>
+                {% for k, v in STATI.items() %}<option value="{{ k }}" {% if filtro_stato == k %}selected{% endif %}>{{ v }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small">Cerca</label>
+            <input type="text" name="q" class="form-control form-control-sm" placeholder="Cliente, numero, descrizione..." value="{{ q }}">
+        </div>
+        <div class="col-auto">
+            {% if verificare %}<input type="hidden" name="verificare" value="1">{% endif %}
+            <button class="btn btn-cb btn-sm">Filtra</button>
+            <a href="{{ url_for('fatture_emesse.index') }}" class="btn btn-sm btn-outline-secondary">Reset</a>
+        </div>
+    </form>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-2 px-1">
+    <small class="text-muted">{{ fatture|length }} document{{ 'o' if fatture|length == 1 else 'i' }}{% if verificare %} da controllare{% endif %}</small>
+</div>
+
+<div class="cb-table">
+    {% if fatture %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr>
+                <th>Data</th><th>Numero</th><th>Cliente</th><th class="d-none d-lg-table-cell">Descrizione</th>
+                <th>Stato</th><th class="text-end">Totale</th><th class="text-center">PDF</th>
+            </tr></thead>
+            <tbody>
+                {% for f in fatture %}
+                {% set st = stati[f.id] %}
+                <tr style="cursor:pointer" class="{% if f.da_verificare %}table-warning{% endif %} {% if st in ('stornata', 'interna') %}text-muted{% endif %}"
+                    onclick="location.href='{{ url_for('fatture_emesse.detail', id=f.id) }}'">
+                    <td class="small text-nowrap">{{ f.data.strftime('%d/%m/%Y') }}</td>
+                    <td class="text-nowrap">{{ f.numero }}</td>
+                    <td>{{ (f.cliente or '—')[:40] }}</td>
+                    <td class="small d-none d-lg-table-cell">{{ (f.descrizione or '')[:45] }}</td>
+                    <td><span class="badge {{ BADGE[st] }}">{{ STATI[st] }}</span>
+                        {% if st == 'incassata' and f.bank_match %}<small class="text-muted ms-1">{{ f.bank_match.operation_date.strftime('%d/%m') }}</small>{% endif %}
+                    </td>
+                    <td class="text-end fw-bold text-nowrap {% if st == 'stornata' %}text-decoration-line-through{% endif %}">
+                        {% if f.tipo == 'nota_credito' %}&minus;{% endif %}&euro;{{ "{:,.2f}".format(f.totale) }}
+                    </td>
+                    <td class="text-center" onclick="event.stopPropagation()">
+                        {% if f.pdf_filename %}
+                        <a href="{{ url_for('static', filename='uploads/' + f.pdf_filename) }}" download="Fattura {{ f.numero|replace('/', '-') }} {{ f.data.strftime('%Y-%m-%d') }}.pdf" title="Scarica PDF"><i class="bi bi-download"></i></a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="cb-empty">
+        <i class="bi bi-receipt d-block"></i>
+        <p>Nessuna fattura emessa trovata.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
