@@ -102,6 +102,10 @@ def migra_impronte() -> int:
             bt.dedup_hash = nuove[bt.id]
             cambiate += 1
     db.session.add(Setting(key=CHIAVE_MIGRAZIONE, value=datetime.now().isoformat(timespec="seconds")))
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:            # l'altro container (impianto) l'ha appena fatta: stesso risultato
+        db.session.rollback()
+        return 0
     logger.info(f"Migrazione impronte movimenti bancari: {cambiate} aggiornate.")
     return cambiate

@@ -1180,6 +1180,10 @@ def start_bot(app):
                            f"aggiornare TELEGRAM_GROUP_ID nel .env")
 
         if in_gruppo and chat.id in gruppi_notifiche:
+            # nel gruppo della finanza passano solo pulsanti e risposte delle spese da descrivere
+            from app.services.spese_bot import ammesso_nel_gruppo_finanza
+            if ammesso_nel_gruppo_finanza(update):
+                return
             raise ApplicationHandlerStop
 
         if gruppo["id"] is None:
@@ -1284,6 +1288,8 @@ def start_bot(app):
     )
 
     tg_app.add_handler(conv)
+    from app.services.spese_bot import registra_gestori
+    registra_gestori(tg_app, app)
 
     import threading
     import asyncio

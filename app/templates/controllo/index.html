@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Controllo di fine mese - Ca Bianca Gestionale{% endblock %}
+{% macro euro(v) %}&euro;{{ "{:,.2f}".format(v) }}{% endmacro %}
+{% macro esito(ok) %}{% if ok %}<i class="bi bi-check-circle-fill text-success"></i>{% else %}<i class="bi bi-exclamation-circle-fill text-warning"></i>{% endif %}{% endmacro %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-clipboard-check text-cb-green"></i> Controllo di fine mese</h1>
+    <span class="badge {% if da_fare == 0 %}bg-success{% else %}bg-warning text-dark{% endif %} fs-6">
+        {% if da_fare == 0 %}Tutto in ordine{% else %}{{ da_fare }} cose da sistemare{% endif %}
+    </span>
+</div>
+
+<p class="text-muted small mb-3">
+    I conti sono in ordine quando ogni movimento della banca è abbinato o ignorato, il saldo del conto quadra con i
+    movimenti importati, ogni fattura ricevuta è collegata al suo pagamento (o è davvero ancora da pagare) e ogni
+    fattura emessa ha il suo incasso. Ordine consigliato: carica l'estratto conto, premi "Riprova abbinamento
+    automatico" nei sospesi, poi sistema le liste qui sotto dall'alto in basso.
+</p>
+
+<div class="row g-3 mb-3">
+    {# 1. Banca #}
+    <div class="col-lg-4">
+        <div class="cb-card p-3 h-100">
+            <h5 class="mb-2">{{ esito(not sospesi and quadratura and quadratura.quadra and not estratto_vecchio) }} 1. Banca</h5>
+            <table class="table table-sm mb-2">
+                <tr><td>Movimenti da riconciliare</td><td class="text-end fw-bold">{{ sospesi|length }}</td></tr>
+                <tr><td class="small text-muted">valore netto</td><td class="text-end small">{{ euro(sospesi_netto) }}</td></tr>
+                {% if quadratura %}
+                <tr class="{% if not quadratura.quadra %}table-danger{% endif %}"><td>Differenza non spiegata<br><span class="small text-muted">movimenti mancanti o in più</span></td><td class="text-end fw-bold">{{ euro(quadratura.non_spiegata) }}</td></tr>
+                <tr class="{% if estratto_vecchio %}table-warning{% endif %}"><td>Ultimo estratto conto</td><td class="text-end">{{ quadratura.saldo_banca_data.strftime('%d/%m/%Y') }}</td></tr>
+                {% endif %}
+                {% if amazon %}<tr><td>di cui spese Amazon da descrivere</td><td class="text-end">{{ amazon|length }}</td></tr>{% endif %}
+            </table>
+            {% if amazon_senza_domanda %}
+            <form method="POST" action="{{ url_for('controllo.amazon_sul_bot') }}" class="mb-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-telegram"></i> Chiedi sul bot le spese Amazon arretrate ({{ amazon_senza_domanda }}, 10 alla volta)</button>
+            </form>
+            {% endif %}
+            {% if estratto_vecchio %}<p class="small text-warning mb-2"><i class="bi bi-exclamation-triangle"></i> L'estratto conto ha più di un mese: scarica e carica quello nuovo.</p>{% endif %}
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="{{ url_for('banca.sospesi') }}" class="btn btn-sm btn-cb">Sospesi</a>
+                <a href="{{ url_for('banca.index') }}" class="btn btn-sm btn-cb-outline">Saldo e import</a>
+            </div>
+        </div>
+    </div>
+
+    {# 2. Fatture ricevute #}
+    <div class="col-lg-4">
+        <div class="cb-card p-3 h-100">
+            <h5 class="mb-2">{{ esito(not sdi_pagate and not sdi_scadute) }} 2. Fatture ricevute</h5>
+            <table class="table table-sm mb-2">
+                <tr class="{% if sdi_pagate %}table-warning{% endif %}"><td>Segnate pagate senza bonifico collegato<br><span class="small text-muted">collegale al bonifico o segnale pagate in contanti</span></td><td class="text-end fw-bold">{{ sdi_pagate|length }}</td></tr>
+                <tr class="{% if sdi_scadute %}table-warning{% endif %}"><td>Da pagare e già scadute<br><span class="small text-muted">pagale, o collegale se sono già pagate</span></td><td class="text-end fw-bold">{{ sdi_scadute|length }} <span class="small fw-normal">· {{ euro(sdi_scadute|sum(attribute='amount')) }}</span></td></tr>
+                <tr><td>Da pagare, non ancora scadute<br><span class="small text-muted">normale: sono debiti verso fornitori</span></td><td class="text-end">{{ sdi_da_pagare|length }} <span class="small">· {{ euro(sdi_da_pagare|sum(attribute='amount')) }}</span></td></tr>
+            </table>
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="{{ url_for('fatture.index', banca='in_attesa') }}" class="btn btn-sm btn-cb">Fatture in attesa</a>
+                <a href="{{ url_for('scadenzario.index') }}" class="btn btn-sm btn-cb-outline">Scadenzario</a>
+            </div>
+        </div>
+    </div>
+
+    {# 3. Fatture emesse #}
+    <div class="col-lg-4">
+        <div class="cb-card p-3 h-100">
+            <h5 class="mb-2">{{ esito(not fe_aperte and not mancanti) }} 3. Fatture emesse</h5>
+            <table class="table table-sm mb-2">
+                <tr class="{% if fe_aperte %}table-warning{% endif %}"><td>Senza incasso collegato<br><span class="small text-muted">collega il bonifico o segna "contanti / POS"</span></td><td class="text-end fw-bold">{{ fe_aperte|length }} <span class="small fw-normal">· {{ euro(fe_aperte|sum(attribute='totale')) }}</span></td></tr>
+                <tr class="{% if mancanti %}table-warning{% endif %}"><td>Numeri mancanti<br><span class="small text-muted">fatture non arrivate per email</span></td><td class="text-end">{% for a, s, n in mancanti %}<span class="badge bg-warning text-dark">{{ n }}{% if s %}/{{ s }}{% endif %}</span> {% else %}0{% endfor %}</td></tr>
+            </table>
+            {% if fe_vecchie %}<p class="small text-muted mb-2">Non conteggiate: {{ fe_vecchie }} fatture di prima del {{ inizio.strftime('%d/%m/%Y') }}, incassate sul vecchio conto.</p>{% endif %}
+            <a href="{{ url_for('fatture_emesse.index', stato='da_abbinare', anno='') }}" class="btn btn-sm btn-cb">Fatture da abbinare</a>
+        </div>
+    </div>
+</div>
+
+<div class="cb-card p-3">
+    <h5 class="mb-2">Mese per mese</h5>
+    <p class="small text-muted mb-2">Cose ancora aperte per mese (data del movimento o della fattura). Un mese è chiuso quando le tre colonne sono a zero.</p>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead><tr><th>Mese</th><th class="text-end">Banca da riconciliare</th><th class="text-end">Fatture ricevute da collegare</th><th class="text-end">Fatture emesse senza incasso</th><th class="text-center">Chiuso</th></tr></thead>
+            <tbody>
+            {% for m in mesi %}
+                {% set c = per_mese[m] %}
+                {% set chiuso = not c.banca and not c.ricevute and not c.emesse %}
+                <tr class="{% if chiuso %}text-muted{% endif %}">
+                    <td>{{ m[5:] }}/{{ m[:4] }}</td>
+                    <td class="text-end">{{ c.banca or '—' }}</td>
+                    <td class="text-end">{{ c.ricevute or '—' }}</td>
+                    <td class="text-end">{{ c.emesse or '—' }}</td>
+                    <td class="text-center">{{ esito(chiuso) }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

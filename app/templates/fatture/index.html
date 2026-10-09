@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Fatture SDI - Ca Bianca Gestionale{% endblock %}
+{% block title %}Fatture ricevute - Ca Bianca Gestionale{% endblock %}
 {% block content %}
 <div class="cb-page-header">
-    <h1><i class="bi bi-file-earmark-text text-cb-green"></i> Fatture SDI</h1>
+    <h1><i class="bi bi-file-earmark-text text-cb-green"></i> Fatture ricevute <small class="text-muted fs-6">(SDI)</small></h1>
     <div class="d-flex gap-2">
         <form method="POST" action="{{ url_for('fatture.check_email') }}" class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

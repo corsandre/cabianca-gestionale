@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Probabili scontrini - Ca Bianca Gestionale{% endblock %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-receipt text-cb-green"></i> Probabili scontrini</h1>
+    <a href="{{ url_for('banca.sospesi') }}" class="btn btn-cb-outline btn-sm"><i class="bi bi-arrow-left"></i> Sospesi</a>
+</div>
+<p class="text-muted small mb-3">Bonifici ricevuti da privati che dopo {{ giorni }} giorni non hanno una fattura emessa: di solito sono pagamenti con scontrino, già contati nei corrispettivi di cassa. Ignorarli evita di contarli due volte. Togli la spunta a quelli che invece vanno registrati (o che aspettano ancora la fattura). Gli acconti dei camp (estate, settimane, Kids&amp;Us) non sono in questa lista: la loro fattura arriva più avanti.</p>
+
+{% if movimenti %}
+<form method="POST" action="{{ url_for('banca.ignora_scontrini') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="cb-table mb-3">
+        <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr><th><input type="checkbox" class="form-check-input" id="tutti" checked onclick="document.querySelectorAll('.sel').forEach(c => c.checked = this.checked)"></th>
+                <th>Data</th><th>Da</th><th>Causale</th><th class="text-end">Importo</th></tr></thead>
+            <tbody>
+            {% for bt in movimenti %}
+            <tr>
+                <td><input type="checkbox" class="form-check-input sel" name="bt_id" value="{{ bt.id }}" id="bt{{ bt.id }}" checked></td>
+                <td class="small text-nowrap">{{ bt.operation_date.strftime('%d/%m/%Y') }}</td>
+                <td><label for="bt{{ bt.id }}">{{ bt.counterpart_name or '—' }}</label></td>
+                <td class="small text-muted">{{ (bt.remittance_info or bt.description or '')[:70] }}</td>
+                <td class="text-end fw-bold text-nowrap">&euro;{{ "{:,.2f}".format(bt.amount) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        <label class="small" for="motivo">Motivo</label>
+        <select name="ignore_reason_id" id="motivo" class="form-select form-select-sm" style="max-width: 360px">
+            {% for r in reasons %}<option value="{{ r.id }}" {% if r.id == predefinito %}selected{% endif %}>{{ r.name }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-cb btn-sm"><i class="bi bi-check2-all"></i> Ignora i selezionati (già in cassa)</button>
+    </div>
+</form>
+{% else %}
+<div class="cb-card cb-empty"><i class="bi bi-check-circle d-block"></i><p>Nessun probabile scontrino.</p></div>
+{% endif %}
+{% endblock %}

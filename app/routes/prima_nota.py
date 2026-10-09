@@ -2,7 +2,7 @@ from datetime import date, timedelta
 from flask import Blueprint, render_template, request
 from flask_login import login_required
 from app import db
-from app.models import Transaction, Category, RevenueStream, Tag, BankTransaction
+from app.models import Transaction, Category, RevenueStream, BankTransaction
 from app.utils.decorators import section_required
 
 bp = Blueprint("prima_nota", __name__, url_prefix="/prima-nota")
@@ -51,11 +51,8 @@ def index():
     banca_filter = request.args.getlist("banca")
     if banca_filter:
         # Subquery: transaction IDs riconciliati
-        riconciliato_sq = db.session.query(
-            BankTransaction.matched_transaction_id
-        ).filter(
-            BankTransaction.matched_transaction_id.isnot(None)
-        ).subquery()
+        from app.services.reconciliation import transazioni_collegate
+        riconciliato_sq = transazioni_collegate().subquery()
 
         conditions = []
         if "riconciliato" in banca_filter:

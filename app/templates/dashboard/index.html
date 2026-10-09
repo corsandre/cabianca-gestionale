@@ -30,15 +30,18 @@
         </div>
     </div>
     <div class="col-6 col-lg-3">
-        <a href="{{ url_for('scadenzario.index') }}" class="text-decoration-none">
+        <a href="{{ url_for('controllo.index') }}" class="text-decoration-none">
         <div class="cb-card cb-stat-card">
-            <div class="cb-stat-icon {% if overdue > 0 %}text-danger{% else %}text-cb-green{% endif %}"><i class="bi bi-exclamation-triangle"></i></div>
-            <div class="cb-stat-value {% if overdue > 0 %}text-danger{% else %}text-cb-green{% endif %}">{{ overdue }}</div>
-            <div class="cb-stat-label">Scadenze arretrate</div>
+            {% set ok = controllo_da_fare == 0 %}
+            <div class="cb-stat-icon {% if ok %}text-cb-green{% else %}text-cb-gold{% endif %}"><i class="bi bi-clipboard-check"></i></div>
+            <div class="cb-stat-value {% if ok %}text-cb-green{% else %}text-cb-gold{% endif %}">{{ controllo_da_fare if controllo_da_fare is not none else '—' }}</div>
+            <div class="cb-stat-label">{% if ok %}Conti in ordine{% else %}Cose da sistemare{% endif %}</div>
         </div>
         </a>
     </div>
 </div>
+
+<p class="small text-muted mb-3">Entrate e uscite senza trasferimenti interni (autoconsumo) e finanziamenti.{% if overdue %} Scadenze arretrate: <a href="{{ url_for('scadenzario.index') }}">{{ overdue }}</a>.{% endif %}</p>
 
 <!-- YEARLY SUMMARY -->
 <div class="row g-3 mb-4">

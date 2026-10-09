@@ -46,9 +46,10 @@ def index():
     # Filtro stato banca (multi-select)
     if banca_filter:
         # Subquery: fatture riconciliate (hanno Transaction con BankTransaction match)
-        riconciliato_sq = db.session.query(Transaction.invoice_id).join(
-            BankTransaction, BankTransaction.matched_transaction_id == Transaction.id
-        ).filter(Transaction.invoice_id.isnot(None)).subquery()
+        from app.services.reconciliation import transazioni_collegate
+        riconciliato_sq = db.session.query(Transaction.invoice_id).filter(
+            Transaction.id.in_(transazioni_collegate()), Transaction.invoice_id.isnot(None)
+        ).subquery()
         # Subquery: fatture pagate in contanti
         contanti_sq = db.session.query(Transaction.invoice_id).filter(
             Transaction.payment_method == "contanti",
@@ -89,6 +90,11 @@ def index():
     invoice_ids = [inv.id for inv in pagination.items]
     # Trova le transazioni associate e il loro stato di riconciliazione bancaria
     bank_status = {}
+    from app.services.reconciliation import transazioni_collegate
+    if invoice_ids:
+        for (inv_id,) in db.session.query(Transaction.invoice_id).filter(
+                Transaction.invoice_id.in_(invoice_ids), Transaction.id.in_(transazioni_collegate())).all():
+            bank_status[inv_id] = "riconciliato"
     if invoice_ids:
         results = db.session.query(
             Transaction.invoice_id,

@@ -103,14 +103,6 @@
                 </select>
             </div>
             <div class="col-md-6">
-                <label class="form-label">Tag</label>
-                <select name="tags" class="form-select" multiple size="3">
-                    {% for tag in tags %}
-                    <option value="{{ tag.id }}" {% if t and tag in t.tags %}selected{% endif %}>{{ tag.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-6">
                 <label class="form-label">Allegato</label>
                 <input type="file" name="attachment" class="form-control" accept=".pdf,.jpg,.jpeg,.png,.webp">
                 {% if t and t.attachment_path %}

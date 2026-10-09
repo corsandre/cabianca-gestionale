@@ -16,6 +16,13 @@
     </div>
 </div>
 
+{% if n_scontrini %}
+<div class="alert alert-info py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span><i class="bi bi-receipt"></i> <strong>{{ n_scontrini }} probabili scontrini</strong>: bonifici di privati senza fattura da più di 15 giorni, quasi sempre già registrati in cassa.</span>
+    <a href="{{ url_for('banca.scontrini') }}" class="btn btn-sm btn-cb">Controlla e ignora</a>
+</div>
+{% endif %}
+
 {% if not items %}
 <div class="cb-card cb-empty">
     <i class="bi bi-check-circle d-block" style="color:#28a745"></i>
@@ -58,6 +65,19 @@
         {# Colonna sinistra: Proposte automatiche #}
         <div class="col-lg-6 p-3 border-end">
             <h6 class="text-muted mb-2"><i class="bi bi-lightning"></i> Proposte automatiche</h6>
+            {% for c in item.combinazioni %}
+            <div class="border border-success rounded p-2 mb-2" style="background:#f1faf4">
+                <div class="small fw-bold mb-1"><i class="bi bi-collection"></i> {{ c.n }} fatture dello stesso fornitore: il totale è identico al movimento</div>
+                {% for t in c.transazioni %}
+                <div class="small text-muted">{{ t.date.strftime('%d/%m/%Y') }} · {{ t.description[:50] }} · &euro;{{ "{:,.2f}".format(t.invoice.importo_da_pagare if t.invoice and t.invoice.importo_da_pagare else t.amount) }}</div>
+                {% endfor %}
+                <form method="POST" action="{{ url_for('banca.riconcilia_multipla', id=bt.id) }}" class="mt-1">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {% for t in c.transazioni %}<input type="hidden" name="transaction_id" value="{{ t.id }}">{% endfor %}
+                    <button class="btn btn-sm btn-cb"><i class="bi bi-check2-all"></i> Collega tutte</button>
+                </form>
+            </div>
+            {% endfor %}
             {% if proposals %}
             {% for p in proposals %}
             <div class="d-flex align-items-center justify-content-between bg-light rounded p-2 mb-1">

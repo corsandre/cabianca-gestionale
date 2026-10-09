@@ -491,6 +491,48 @@ def _save_day(rec_date, reparti_data, reparto_ids):
     return day_total
 
 
+def _salva_pagamenti(rec_date, day):
+    """Contanti, bancomat e carta del giorno (dallo Z-report): servono al confronto cassa/banca."""
+    from app.models import CashRegisterDaily
+    daily = CashRegisterDaily.query.filter_by(date=rec_date).first()
+    if daily is None:
+        return
+    daily.contanti = round(day.get("cash", 0), 2)
+    daily.bancomat = round(day.get("bancomat", 0), 2)
+    daily.carta = round(day.get("carta", 0), 2)
+
+
+def completa_pagamenti_storici():
+    """Una tantum (2.4.0): legge dallo Z-report contanti/bancomat/carta dei giorni già importati.
+    Solo lettura su 4CloudOffice; aggiorna i tre campi dei giorni che non li hanno."""
+    from app import db
+    from app.models import CashRegisterDaily, Setting
+    if Setting.query.get("cassa_pagamenti_storici"):
+        return 0
+    base_url = current_app.config.get("CLOUD_OFFICE_URL", "https://www.4cloudoffice.com/v2").rstrip("/")
+    username = current_app.config.get("CLOUD_OFFICE_USER", "")
+    password = current_app.config.get("CLOUD_OFFICE_PASSWORD", "")
+    if not username or not password:
+        return 0
+    primo = CashRegisterDaily.query.order_by(CashRegisterDaily.date).first()
+    if primo is None:
+        return 0
+    session = requests.Session()
+    session.headers.update({"User-Agent": "CaBiancaGestionale/1.0"})
+    _login(session, base_url, username, password)
+    by_date = _aggregate_by_date(_fetch_zreport_data(session, primo.date, date.today()))
+    n = 0
+    for d, day in by_date.items():
+        daily = CashRegisterDaily.query.filter_by(date=d).first()
+        if daily is not None and daily.contanti is None:
+            _salva_pagamenti(d, day)
+            n += 1
+    db.session.add(Setting(key="cassa_pagamenti_storici", value=str(n)))
+    db.session.commit()
+    logger.info(f"Pagamenti di cassa letti per {n} giorni.")
+    return n
+
+
 def sync_cash_register():
     """Sync daily cash register data from 4CloudOffice Z-reports.
 
@@ -551,6 +593,7 @@ def sync_cash_register():
         if reparti_data:
             _save_day(rec_date, reparti_data, reparto_ids)
             count += 1
+        _salva_pagamenti(rec_date, by_date[rec_date])
 
     db.session.commit()
 

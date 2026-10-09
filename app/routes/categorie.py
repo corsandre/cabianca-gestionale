@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from app import db
-from app.models import Category, Tag
+from app.models import Category, RevenueStream
 from app.utils.decorators import write_required, admin_required, section_required
 
 bp = Blueprint("categorie", __name__, url_prefix="/categorie")
@@ -12,8 +12,9 @@ bp.before_request(section_required("finanza"))
 @login_required
 def index():
     categories = Category.query.filter_by(active=True).order_by(Category.type, Category.name).all()
-    tags = Tag.query.order_by(Tag.name).all()
-    return render_template("categorie/index.html", categories=categories, tags=tags)
+    streams = RevenueStream.query.order_by(RevenueStream.name).all()
+    uso = dict(db.session.query(Category.id, db.func.count()).join(Category.transactions).group_by(Category.id).all())
+    return render_template("categorie/index.html", categories=categories, streams=streams, uso=uso)
 
 
 @bp.route("/categoria/nuova", methods=["POST"])
@@ -54,25 +55,15 @@ def delete_category(id):
     return redirect(url_for("categorie.index"))
 
 
-@bp.route("/tag/nuovo", methods=["POST"])
-@login_required
-@write_required
-def new_tag():
-    name = request.form.get("name", "").strip()
-    color = request.form.get("color", "#7f8c8d")
-    if name:
-        db.session.add(Tag(name=name, color=color))
-        db.session.commit()
-        flash("Tag creato.", "success")
-    return redirect(url_for("categorie.index"))
-
-
-@bp.route("/tag/<int:id>/elimina", methods=["POST"])
+@bp.route("/linea/nuova", methods=["POST"])
 @login_required
 @admin_required
-def delete_tag(id):
-    tag = Tag.query.get_or_404(id)
-    db.session.delete(tag)
-    db.session.commit()
-    flash("Tag eliminato.", "success")
+def new_stream():
+    """Linee di ricavo (prima in Impostazioni Finanza): servono ad analizzare entrate e uscite per attività."""
+    name = request.form.get("name", "").strip()
+    color = request.form.get("color", "#009d5a")
+    if name:
+        db.session.add(RevenueStream(name=name, color=color))
+        db.session.commit()
+        flash("Linea di ricavo creata.", "success")
     return redirect(url_for("categorie.index"))

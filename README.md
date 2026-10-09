@@ -68,22 +68,44 @@ utente (vedi [Utenti](#utenti-ruoli-e-accesso-alle-sezioni)).
 
 ### Finanza (tema verde)
 
+Il menu segue l'ordine in cui si lavora: controllo, fonti dei movimenti, registro e analisi, impostazioni.
+
 | Pagina | URL | Descrizione |
 |---|---|---|
-| Cruscotto | `/` | Panoramica entrate/uscite, grafici, scadenze imminenti |
-| Prima Nota | `/prima-nota` | Registro cronologico di tutti i movimenti, filtri avanzati |
-| Fatture SDI | `/fatture` | Upload e parsing automatico di fatture elettroniche XML (FatturaPA, anche `.p7m`) e PDF (formato TeamSystem); recupero automatico dalla casella email via IMAP |
+| Cruscotto | `/` | Entrate e uscite del mese e dell'anno (senza trasferimenti interni e finanziamenti), stato del controllo di fine mese, andamento 6 mesi, prossime scadenze |
+| Controllo di fine mese | `/controllo` | Cosa manca perché i conti siano in ordine: sospesi della banca e differenza non spiegata, fatture ricevute senza pagamento collegato (segnate pagate o scadute), fatture emesse senza incasso, spese Amazon da descrivere; tabella mese per mese con i mesi chiusi. Non conta ciò che è precedente all'inizio dell'estratto conto |
+| Banca | `/banca` | Import estratti conto CBI, quadratura del saldo, riconciliazione automatica e manuale, sospesi (con probabili scontrini e pagamenti di più fatture), ignorati con motivo, regole automatiche |
+| Fatture ricevute | `/fatture` | Fatture elettroniche dei fornitori (XML FatturaPA, `.p7m`, PDF TeamSystem), recupero automatico dalla casella email via IMAP |
 | Fatture emesse | `/fatture-emesse` | Copie PDF delle fatture emesse inviate per email dalla Coldiretti, lette con OCR e abbinate ai bonifici (vedi sotto) |
-| Registratore di cassa | `/cassa` | Sincronizzazione corrispettivi giornalieri da 4CloudOffice (manuale o notturna) |
-| Movimenti manuali | `/movimenti` | Entrate/uscite extra-contabili con allegati |
+| Cassa | `/cassa` | Corrispettivi giornalieri da 4CloudOffice (manuale o notturna) per reparto, con il confronto mese per mese tra cassa e banca |
+| Contanti e movimenti manuali | `/movimenti` | Entrate/uscite in contanti o extra-contabili, con allegati |
 | Spese ricorrenti | `/ricorrenti` | Modelli di spesa periodica, generazione automatica delle transazioni |
-| Banca | `/banca` | Import estratti conto CBI, riconciliazione automatica (punteggio su importo/data/nome) e manuale, movimenti sospesi e ignorati con motivazione, regole automatiche, saldo banca vs contabile |
-| Anagrafica | `/anagrafica` | Clienti (privati, B2B, scuole) e fornitori |
-| Inventario | `/inventario` | Prodotti, giacenze, movimenti di magazzino, alert scorte basse |
-| Categorie & Tag | `/categorie` | Categorizzazione flessibile dei movimenti |
-| Analisi | `/analisi` | Report con filtro ufficiali / extra-contabili / tutti, grafici per categoria e flusso di ricavo, esportazione CSV |
+| Libro mastro | `/prima-nota` | Registro cronologico di tutti i movimenti, filtri avanzati |
 | Scadenzario | `/scadenzario` | Scadenze pagamenti, segna come pagato |
-| Impostazioni finanza | `/finanza/impostazioni` | Flussi di ricavo |
+| Analisi | `/analisi` | Report con filtro ufficiali / extra-contabili / tutti, grafici per categoria e linea di ricavo, esportazione CSV |
+| Anagrafica | `/anagrafica` | Clienti (privati, B2B, scuole) e fornitori |
+| Categorie | `/categorie` | Categorie dei movimenti e linee di ricavo (attività) |
+
+Tolte nella 2.4.0 perché mai usate: Inventario (nessun prodotto né movimento di magazzino) e Tag (nessun tag
+creato). Le tabelle vuote restano nel database. La pagina Impostazioni Finanza, che conteneva solo le linee di
+ricavo, è confluita in Categorie.
+
+**Cassa e banca** (`app/services/cassa_banca.py`): dalla 2.4.0 la sincronizzazione salva anche i pagamenti dello
+Z-report (contanti, bancomat, carta; per i giorni già importati letti una volta da 4CloudOffice). Bancomat e carta
+battuti in cassa devono ritrovarsi come accrediti POS sul conto (causali 090 e 092, ignorati in banca perché già
+nei corrispettivi): uno scarto oltre il 10% evidenzia il mese. Lo Z-report non ha una voce "bonifico", quindi i
+bonifici a fronte di scontrino si mostrano solo per informazione. Prima del primo accredito POS sul conto
+(23/02/2026) il terminale accreditava su un altro conto.
+
+**Probabili scontrini** (Banca › Sospesi): bonifici ricevuti da privati (causale 480, fino a € 1.500) senza
+fattura emessa dopo 15 giorni; esclusi enti e società e gli acconti dei camp (estate, settimane, Kids&Us, date
+di giugno-settembre), che avranno la fattura più avanti. Si ignorano in blocco come "già registrati in cassa".
+
+**Un bonifico per più fatture**: per le fatture ricevute il motore cerca 2-5 fatture aperte dello stesso fornitore
+(nome simile o già abbinato) la cui somma è uguale al pagamento: se la combinazione è una sola la collega da solo,
+altrimenti la propone nei sospesi ("Collega tutte"). Il movimento resta collegato alla prima fattura, le altre
+stanno in `collegamenti_banca`. Per le fatture emesse, 2-5 fatture dello stesso cliente pagate con un solo
+bonifico diventano una sola entrata collegata a tutte.
 
 **Import CBI e quadratura** (`app/services/cbi_parser.py`, `app/services/saldo_banca.py`):
 - ogni movimento ha un'impronta anti-doppione fatta con il **codice univoco della banca** (primo elemento della
@@ -106,6 +128,18 @@ controparte bancaria è già stata **abbinata in passato** a quel fornitore (es.
 "TELECOMITALIA" → "TIM"), così gli abbinamenti fatti a mano insegnano al motore; a parità di punteggio vince la
 data più vicina. Le fatture segnate "pagato" ma senza bonifico collegato restano tra quelle abbinabili (anche
 nella ricerca manuale dei sospesi), tranne quelle pagate in contanti.
+
+**Spese Amazon** (`app/services/spese_carta.py`, `app/services/spese_bot.py`): in banca un acquisto Amazon
+dice solo "AMAZON* NH8CN5OR4". Le mail di conferma d'ordine di Amazon vengono inoltrate (filtro Gmail
+dell'account Amazon) ad amministrazione@; ogni mezz'ora dalle 7 alle 22 il gestionale le legge in sola lettura
+(numero d'ordine, totale, articoli) e collega ogni addebito Amazon in sospeso all'ordine con lo stesso totale
+(da 15 giorni prima a 2 dopo l'addebito). Per ogni addebito Amazon nuovo il bot manda nel gruppo Telegram della
+finanza un messaggio con importo, data, articoli dell'ordine e i pulsanti delle categorie: il pulsante crea
+l'uscita (pagata con carta, linea di ricavo dalla categoria) e riconcilia il movimento; rispondendo al messaggio
+si scrive cos'era (serve quando l'ordine non è stato trovato). "Lo faccio dal gestionale" lascia il movimento
+nei sospesi. Il bot chiede solo per i movimenti importati dopo l'attivazione; gli arretrati si mandano dalla
+pagina Controllo di fine mese, 10 alla volta. Nel gruppo della finanza il bot accetta solo questi pulsanti e
+le risposte ai propri messaggi.
 
 **Regole automatiche banca** (`AutoRule`, `app/services/rules_engine.py`): condizioni su descrizione/importo/fonte
 che assegnano categoria, contatto, metodo di pagamento, aliquota IVA, note, spostamento data, oppure ignorano il
@@ -468,14 +502,16 @@ Stato che il servizio ricorda nelle impostazioni (`settings`): `impianto_vuoto_s
 Due usi dello stesso bot (`TELEGRAM_BOT_TOKEN`), su tre gruppi Telegram (allevamento, finanza, notifiche di sistema):
 
 1. **Notifiche** (`app/services/telegram_bot.py`, `send_telegram_message(testo, canale=...)`), inviate a gruppi dedicati:
-   - canale `finanza` → `TELEGRAM_CHAT_ID` (gruppo *Finanza*): scadenze arretrate e dei prossimi 7 giorni, avvisi banca
-     (import CBI mancante, movimenti da riconciliare, esito import), scorte basse dell'inventario, sincronizzazione
-     cassa, fatture SDI importate da email;
+   - canale `finanza` → `TELEGRAM_CHAT_ID` (gruppo *Finanza*): ogni mattina un solo messaggio con scadenze dei
+     prossimi 7 giorni, fatture scadute, movimenti da riconciliare ed estratto conto vecchio (rimanda al Controllo di
+     fine mese); esito degli import, sincronizzazione cassa, fatture importate da email; le domande sulle spese
+     Amazon da descrivere (pulsanti delle categorie: sono gli unici pulsanti a cui il bot risponde in questo gruppo,
+     insieme alle risposte ai suoi messaggi);
    - canale `sistema` → `TELEGRAM_SISTEMA_CHAT_ID` (gruppo *Notifiche sistema*): backup e notifiche tecniche del server;
    - canale `allevamento` → `TELEGRAM_GROUP_ID` (gruppo dell'allevamento): tutti i messaggi dell'impianto di
      alimentazione (pasti, silos, siero, stato, anomalie con la fotografia dello schermo, `send_telegram_foto`) e
      ogni mattina i trattamenti da ripetere.
-   Nei gruppi delle notifiche il bot non risponde ai comandi e ignora i messaggi.
+   Nei gruppi delle notifiche il bot non risponde ai comandi e ignora i messaggi (tranne le spese da descrivere).
 2. **Bot allevamento** (`app/services/allevamento_bot.py`), avviato in un thread all'avvio dell'app. Menu a
    pulsanti con percorsi guidati:
    - 📋 Censimento, 🍽️ Registra consumo (linea → pasto → mangime → siero → acqua), 💀 Registra morte,
@@ -539,6 +575,7 @@ APScheduler gira nel processo dell'app (fuso `Europe/Rome`):
 | 08:00 | Notifica scadenze su Telegram | |
 | configurabile (default 07:00) | Trattamenti da ripetere nel giorno (gruppo allevamento) | Controllato ogni minuto, inviato una volta al giorno |
 | 08:30, 14:30, 20:30 | Recupero fatture SDI da email (IMAP) | Solo se configurato IMAP |
+| 7:10–22:40, ogni 30 minuti | Ordini Amazon dalle mail, abbinamento agli addebiti, domande sul bot Telegram | Solo se configurato IMAP |
 | 08:35, 14:35, 20:35 | Fatture emesse da email (OCR) e abbinamento ai bonifici | Solo se configurati IMAP e `FATTURE_EMESSE_MITTENTE` |
 
 ---
@@ -718,13 +755,15 @@ app/
   models.py            # tutti i modelli SQLAlchemy
   routes/              # un blueprint per area
     auth.py dashboard.py prima_nota.py fatture.py cassa.py movimenti.py ricorrenti.py
-    banca.py anagrafica.py inventario.py categorie.py analisi.py scadenzario.py
-    finanza_impostazioni.py impostazioni.py
+    banca.py anagrafica.py categorie.py analisi.py scadenzario.py controllo.py
+    fatture_emesse.py impostazioni.py
     allevamento.py     # tutta la sezione Allevamento
     impianto.py        # impostazioni e letture dell'impianto di alimentazione
   services/
     sdi_parser.py sdi_importer.py email_fetcher.py pdf_parser.py   # fatture elettroniche
-    cbi_parser.py reconciliation.py rules_engine.py                # banca
+    cbi_parser.py reconciliation.py rules_engine.py saldo_banca.py # banca
+    fatture_emesse.py fatture_emesse_ocr.py                        # fatture emesse (OCR)
+    spese_carta.py spese_bot.py cassa_banca.py                     # Amazon, bot spese, cassa/banca
     cloud_office.py recurring_generator.py export.py               # cassa, ricorrenti, CSV
     backup.py telegram_bot.py                                      # backup e notifiche
     allevamento_scorte.py allevamento_pasti.py allevamento_bot.py  # allevamento

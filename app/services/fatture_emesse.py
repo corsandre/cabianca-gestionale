@@ -117,7 +117,7 @@ def controlla_email(app=None) -> dict:
             pass
 
     collega_note_di_credito()
-    stats["abbinate"] = abbina_tutte()
+    stats["abbinate"] = abbina_tutte() + abbina_gruppi()
     db.session.commit()
     _notifica(stats)
     logger.info(f"Fatture emesse: {stats}")
@@ -342,6 +342,81 @@ def abbina_tutte() -> int:
     return n
 
 
+def abbina_gruppi() -> int:
+    """Un bonifico che paga più fatture dello stesso cliente (es. tre settimane di camp):
+    si cercano 2-5 fatture aperte dello stesso cliente, nella finestra del bonifico, la cui somma
+    è uguale al bonifico. Si collega solo se la combinazione è una sola."""
+    from itertools import combinations
+    aperte = [f for f in FatturaEmessa.query.all() if da_abbinare(f) and f.totale and f.totale > 0]
+    per_cognome = {}
+    for f in aperte:
+        parole = [w for w in re.sub(r"[^A-Z ]", " ", (f.cliente or "").upper()).split() if w in _parole(f.cliente)]
+        if parole:
+            per_cognome.setdefault(parole[0], []).append(f)
+    gruppi = 0
+    gia = {r[0] for r in _transazioni_gia_fatturate() if r[0]}
+    for bt in BankTransaction.query.filter(BankTransaction.direction == "C",
+                                           BankTransaction.status.in_(["non_riconciliato", "ignorato", "riconciliato"])).all():
+        if bt.matched_transaction_id in gia:
+            continue
+        if bt.status == "riconciliato":
+            tx = db.session.get(Transaction, bt.matched_transaction_id)
+            if not tx or tx.invoice_id or tx.source not in ("banca", "manuale"):
+                continue
+        parole_bt = _parole(_testo_bonifico(bt))
+        for cognome, fatture in per_cognome.items():
+            if cognome not in parole_bt:
+                continue
+            vicine = [f for f in fatture if da_abbinare(f) and
+                      -GIORNI_DOPO <= (f.data - bt.operation_date).days <= GIORNI_PRIMA]
+            if len(vicine) < 2:
+                continue
+            centesimi = round(bt.amount * 100)
+            trovate = []
+            for k in range(2, min(5, len(vicine)) + 1):
+                trovate = [g for g in combinations(vicine, k) if round(sum(f.totale for f in g) * 100) == centesimi]
+                if trovate:
+                    break
+            if len(trovate) == 1:
+                collega_gruppo(list(trovate[0]), bt, "auto")
+                gia.add(bt.matched_transaction_id)
+                db.session.flush()
+                gruppi += 1
+                break
+    return gruppi
+
+
+def collega_gruppo(fatture, bt, da="manuale"):
+    """Collega più fatture allo stesso bonifico (una sola entrata con tutte le fatture)."""
+    fatture = sorted(fatture, key=lambda f: (f.data, f.numero))
+    if bt.status == "riconciliato" and bt.matched_transaction_id:
+        tx = db.session.get(Transaction, bt.matched_transaction_id)
+    else:
+        primo = fatture[0]
+        cat_id, linea_id = _categoria(primo)
+        iva = sum(f.iva or 0 for f in fatture) if all(f.iva is not None and not f.da_verificare for f in fatture) else 0
+        netto = round(bt.amount - iva, 2)
+        numeri = ", ".join(f.numero for f in fatture)
+        tx = Transaction(
+            type="entrata", source="banca", official=True, amount=bt.amount, iva_amount=iva, net_amount=netto,
+            iva_rate=round(iva / netto * 100) if iva and netto else 0, date=bt.operation_date,
+            description=f"Fatture {numeri} - {primo.cliente}"[:500], category_id=cat_id, revenue_stream_id=linea_id,
+            payment_status="pagato", payment_method="bonifico", payment_date=bt.operation_date, due_date=bt.operation_date,
+            notes=f"{NOTA_CREATA} {numeri}" + (" (il bonifico era tra gli ignorati)" if bt.status == "ignorato" else ""),
+        )
+        db.session.add(tx)
+        db.session.flush()
+        bt.status = "riconciliato"
+        bt.matched_transaction_id = tx.id
+        bt.matched_by = "manuale" if da == "manuale" else "auto"
+        bt.ignore_reason_id = None
+    for f in fatture:
+        f.transaction_id = tx.id
+        f.incasso = "banca"
+        f.abbinata_da = da
+    return tx
+
+
 def _categoria(f):
     testo = f"{f.descrizione or ''} {f.cliente or ''}".upper()
     nomi = CATEGORIA_DEFAULT
@@ -393,6 +468,8 @@ def _scollega(f: FatturaEmessa):
     f.transaction_id = None
     f.incasso = ""
     f.abbinata_da = None
+    if tx and FatturaEmessa.query.filter(FatturaEmessa.transaction_id == tx.id, FatturaEmessa.id != f.id).count():
+        return                       # l'entrata serve ancora alle altre fatture pagate con lo stesso bonifico
     if tx and (tx.notes or "").startswith(NOTA_CREATA):
         for bt in BankTransaction.query.filter_by(matched_transaction_id=tx.id).all():
             bt.status = "non_riconciliato"

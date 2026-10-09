@@ -256,6 +256,10 @@ def completa_importi_da_pagare() -> int:
             inv.importo_da_pagare = v
             n += 1
     db.session.add(Setting(key="sdi_importo_da_pagare", value=str(n)))
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:            # l'altro container (impianto) l'ha appena fatta: stesso risultato
+        db.session.rollback()
+        return 0
     logger.info(f"Importo da pagare letto da {n} fatture SDI.")
     return n

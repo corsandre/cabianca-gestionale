@@ -71,21 +71,6 @@ class Category(db.Model):
     transactions = db.relationship("Transaction", backref="category", lazy="dynamic")
 
 
-class Tag(db.Model):
-    __tablename__ = "tags"
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), unique=True, nullable=False)
-    color = db.Column(db.String(10), default="#7f8c8d")
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-
-transaction_tags = db.Table(
-    "transaction_tags",
-    db.Column("transaction_id", db.Integer, db.ForeignKey("transactions.id"), primary_key=True),
-    db.Column("tag_id", db.Integer, db.ForeignKey("tags.id"), primary_key=True),
-)
-
-
 # === REVENUE STREAMS ===
 
 class RevenueStream(db.Model):
@@ -129,14 +114,16 @@ class Transaction(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    tags = db.relationship("Tag", secondary=transaction_tags, backref="transactions")
     creator = db.relationship("User", backref="transactions")
     recurring_template = db.relationship("RecurringExpense", backref="generated_transactions")
 
     @property
     def bank_match(self):
-        """Ritorna il primo BankTransaction collegato, se esiste."""
-        return self.bank_matches[0] if self.bank_matches else None
+        """Ritorna il BankTransaction collegato (anche come parte di un pagamento multiplo), se esiste."""
+        if self.bank_matches:
+            return self.bank_matches[0]
+        link = CollegamentoBanca.query.filter_by(transaction_id=self.id).first() if self.id else None
+        return db.session.get(BankTransaction, link.bank_transaction_id) if link else None
 
 
 # === SDI INVOICES ===
@@ -232,42 +219,33 @@ class EmailElaborata(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
-# === INVENTORY ===
+# === SPESE CON CARTA: ordini Amazon e domande sul bot ===
 
-class Product(db.Model):
-    __tablename__ = "products"
+class OrdineAmazon(db.Model):
+    """Ordine Amazon letto dalla mail di conferma (inoltrata ad amministrazione@)."""
+    __tablename__ = "ordini_amazon"
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(200), nullable=False)
-    product_category = db.Column(db.String(100))
-    unit = db.Column(db.String(20), default="pz")  # pz, kg, lt, etc.
-    current_quantity = db.Column(db.Float, default=0)
-    min_quantity = db.Column(db.Float, default=0)
-    price = db.Column(db.Float, default=0)
-    notes = db.Column(db.Text)
-    active = db.Column(db.Boolean, default=True)
+    numero = db.Column(db.String(30), unique=True, nullable=False)     # 405-1234567-1234567
+    data = db.Column(db.Date)
+    totale = db.Column(db.Float)
+    articoli = db.Column(db.String(500))
+    email_message_id = db.Column(db.String(300))
+    bank_transaction_id = db.Column(db.Integer, db.ForeignKey("bank_transactions.id"))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    movements = db.relationship("StockMovement", backref="product", lazy="dynamic")
 
 
-class StockMovement(db.Model):
-    __tablename__ = "stock_movements"
+class RichiestaSpesa(db.Model):
+    """Domanda fatta sul bot Telegram per un pagamento con carta da descrivere (es. Amazon)."""
+    __tablename__ = "richieste_spesa"
     id = db.Column(db.Integer, primary_key=True)
-    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=False)
-    type = db.Column(db.String(10), nullable=False)  # carico, scarico
-    quantity = db.Column(db.Float, nullable=False)
+    bank_transaction_id = db.Column(db.Integer, db.ForeignKey("bank_transactions.id"), unique=True, nullable=False)
+    chat_id = db.Column(db.String(30))
+    message_id = db.Column(db.Integer)
+    stato = db.Column(db.String(20), default="inviata")     # inviata, registrata, ignorata
     transaction_id = db.Column(db.Integer, db.ForeignKey("transactions.id"))
-    notes = db.Column(db.String(300))
-    date = db.Column(db.Date, default=date.today)
-    created_by = db.Column(db.Integer, db.ForeignKey("users.id"))
+    risposto_da = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    transaction = db.relationship("Transaction")
-    creator = db.relationship("User")
-
-
-# === CASH REGISTER ===
 
 class CashRegisterDaily(db.Model):
     __tablename__ = "cash_register_daily"
@@ -275,6 +253,9 @@ class CashRegisterDaily(db.Model):
     date = db.Column(db.Date, unique=True, nullable=False)
     total_amount = db.Column(db.Float, default=0)
     details = db.Column(db.Text)  # JSON
+    contanti = db.Column(db.Float)   # pagamenti dallo Z-report (None = giorno importato prima della 2.4.0)
+    bancomat = db.Column(db.Float)
+    carta = db.Column(db.Float)
     synced_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -362,6 +343,16 @@ class AutoRule(db.Model):
     action_ignore_reason = db.relationship("IgnoreReason", foreign_keys=[action_ignore_reason_id])
 
     bank_transactions = db.relationship("BankTransaction", backref="matched_rule", lazy="dynamic")
+
+
+class CollegamentoBanca(db.Model):
+    """Fatture/transazioni in più pagate dallo stesso movimento bancario (un bonifico per più fatture).
+    La prima resta in BankTransaction.matched_transaction_id, le altre stanno qui."""
+    __tablename__ = "collegamenti_banca"
+    id = db.Column(db.Integer, primary_key=True)
+    bank_transaction_id = db.Column(db.Integer, db.ForeignKey("bank_transactions.id"), nullable=False, index=True)
+    transaction_id = db.Column(db.Integer, db.ForeignKey("transactions.id"), nullable=False, unique=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class IgnoreReason(db.Model):

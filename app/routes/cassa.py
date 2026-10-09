@@ -71,8 +71,10 @@ def index():
         if name not in reparto_order:
             sorted_reparto_totals.append({"name": name, **vals})
 
+    from app.services.cassa_banca import confronto
     return render_template(
         "cassa/index.html",
+        confronto=confronto(),
         records=records_with_details,
         month=month,
         total=total,

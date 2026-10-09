@@ -1,8 +1,9 @@
 """Routes per la riconciliazione bancaria."""
 
+import re
 import uuid
 import logging
-from datetime import date
+from datetime import date, timedelta
 from flask import Blueprint, render_template, request, flash, redirect, url_for
 from flask_login import login_required
 from sqlalchemy import func
@@ -158,13 +159,22 @@ def upload():
 
         # Bonifici nuovi che pagano fatture emesse ancora da abbinare
         try:
-            from app.services.fatture_emesse import abbina_tutte
-            abbinate_fe = abbina_tutte()
+            from app.services.fatture_emesse import abbina_gruppi, abbina_tutte
+            abbinate_fe = abbina_tutte() + abbina_gruppi()
             db.session.commit()
         except Exception as e:
             db.session.rollback()
             abbinate_fe = 0
             logger.warning(f"Abbinamento fatture emesse non riuscito: {e}")
+
+        # Addebiti Amazon: ordine dalle mail e domanda sul bot Telegram
+        try:
+            from app.services.spese_carta import abbina_ordini, chiedi_spese
+            abbina_ordini()
+            chiedi_spese()
+        except Exception as e:
+            db.session.rollback()
+            logger.warning(f"Spese Amazon dopo l'import non gestite: {e}")
 
         # Notifica Telegram
         try:
@@ -322,8 +332,8 @@ def riprova_abbinamento():
     stats = reconcile_batch(sospesi)
     db.session.commit()
     try:
-        from app.services.fatture_emesse import abbina_tutte
-        fe = abbina_tutte()
+        from app.services.fatture_emesse import abbina_gruppi, abbina_tutte
+        fe = abbina_tutte() + abbina_gruppi()
         db.session.commit()
     except Exception as e:
         db.session.rollback()
@@ -335,6 +345,58 @@ def riprova_abbinamento():
               f"({stats['matched']} con regole o fatture ricevute, {fe} con fatture emesse).", "success")
     else:
         flash("Nessun nuovo abbinamento automatico trovato.", "info")
+    return redirect(url_for("banca.sospesi"))
+
+
+GIORNI_ATTESA_FATTURA = 15        # la fattura emessa arriva di solito entro due settimane dal pagamento
+NON_PRIVATI = re.compile(r"ISTITUTO|I\.C\.|COMUNE|REGIONE|FEDERAZIONE|SOCIETA|S\.?R\.?L|S\.?P\.?A|S\.?N\.?C|"
+                         r"S\.?A\.?S|ASSOCIAZIONE|COOP|CONSORZIO|PAGLIOLI|CORSINI|PELLEGRIN|FONDAZIONE|PARROCCHIA|"
+                         r"C\.U\.A\.M\.M|\bENTE\b|SCUOLA|AZIENDA|\bAVIS\b|SEZIONE|BONIF\. VS", re.IGNORECASE)
+
+
+# acconti dei camp: si pagano mesi prima e la fattura (per tutta la settimana) arriva dopo
+ACCONTI_CAMP = re.compile(r"ESTATE|ESTIV|SUMMER|CAMP|KIDS|SETTIMAN|\bSETT\b|GREST|LABORATORI|RIMBORSO|"
+                          r"\d{1,2}\s*(?:-|AL)\s*\d{1,2}\s*(?:GIUGNO|LUGLIO|AGOSTO|SETTEMBRE)|\d{2}/0[6-9]/\d{2,4}\s*-",
+                          re.IGNORECASE)
+
+
+def probabili_scontrini():
+    """Bonifici in entrata da privati, senza fattura dopo 15 giorni: quasi sempre pagamenti con
+    scontrino, già contati nei corrispettivi di cassa (da ignorare, non da registrare di nuovo).
+    Esclusi gli acconti dei camp, che avranno una fattura più avanti."""
+    limite = date.today() - timedelta(days=GIORNI_ATTESA_FATTURA)
+    q = BankTransaction.query.filter(
+        BankTransaction.status == "non_riconciliato", BankTransaction.direction == "C",
+        BankTransaction.causale_abi == "480", BankTransaction.operation_date <= limite,
+        BankTransaction.amount <= 1500,
+    ).order_by(BankTransaction.operation_date)
+    return [bt for bt in q.all() if not NON_PRIVATI.search(bt.counterpart_name or "")
+            and not ACCONTI_CAMP.search(f"{bt.remittance_info or ''} {bt.description or ''}")]
+
+
+@bp.route("/sospesi/scontrini")
+@login_required
+def scontrini():
+    reasons = IgnoreReason.query.order_by(IgnoreReason.name).all()
+    predefinito = next((r.id for r in reasons if "registrati" in r.name.lower() or "chiusure" in r.name.lower()), None)
+    return render_template("banca/scontrini.html", movimenti=probabili_scontrini(), reasons=reasons,
+                           predefinito=predefinito, giorni=GIORNI_ATTESA_FATTURA)
+
+
+@bp.route("/sospesi/scontrini/ignora", methods=["POST"])
+@login_required
+@write_required
+def ignora_scontrini():
+    ids = [int(x) for x in request.form.getlist("bt_id") if x.isdigit()]
+    motivo = request.form.get("ignore_reason_id", type=int) or None
+    n = 0
+    for bt in BankTransaction.query.filter(BankTransaction.id.in_(ids), BankTransaction.status == "non_riconciliato").all():
+        bt.status = "ignorato"
+        bt.ignore_reason_id = motivo
+        bt.matched_by = "manuale"
+        n += 1
+    db.session.commit()
+    flash(f"{n} bonifici ignorati come già registrati in cassa.", "success")
     return redirect(url_for("banca.sospesi"))
 
 
@@ -357,7 +419,8 @@ def sospesi():
     items = []
     for bt in pagination.items:
         proposals = get_match_proposals(bt)
-        items.append({"bt": bt, "proposals": proposals})
+        from app.services.reconciliation import combinazioni
+        items.append({"bt": bt, "proposals": proposals, "combinazioni": combinazioni(bt)})
 
     categories = Category.query.filter_by(active=True).order_by(Category.name).all()
     contacts = Contact.query.filter_by(active=True).order_by(Contact.name).all()
@@ -373,6 +436,7 @@ def sospesi():
         contacts=contacts,
         revenue_streams=revenue_streams,
         reasons=reasons,
+        n_scontrini=len(probabili_scontrini()),
     )
 
 
@@ -391,15 +455,11 @@ def cerca_transazioni(bt_id):
 
     tx_type = "entrata" if bt.direction == "C" else "uscita"
 
-    # Transazioni gia' abbinate ad altri movimenti
-    already_matched = db.select(BankTransaction.matched_transaction_id).where(
-        BankTransaction.matched_transaction_id.isnot(None),
-        BankTransaction.id != bt.id,
-    ).scalar_subquery()
-
+    # Transazioni gia' abbinate ad altri movimenti (anche come parte di un pagamento multiplo)
+    from app.services.reconciliation import transazioni_collegate
     query = Transaction.query.filter(
         Transaction.type == tx_type,
-        ~Transaction.id.in_(already_matched),
+        ~Transaction.id.in_(transazioni_collegate(bt.id)),
     )
 
     # Filtro date (nessun limite di default - cerca tutto)
@@ -483,6 +543,24 @@ def riconcilia(id):
 
     db.session.commit()
     flash(f"Movimento riconciliato con '{tx.description[:50]}'.", "success")
+    return redirect(url_for("banca.sospesi"))
+
+
+@bp.route("/riconcilia-multipla/<int:id>", methods=["POST"])
+@login_required
+@write_required
+def riconcilia_multipla(id):
+    """Un bonifico che paga più fatture: collega tutte quelle della combinazione proposta."""
+    from app.services.reconciliation import collega_multipla, combinazioni
+    bt = BankTransaction.query.get_or_404(id)
+    ids = sorted(int(x) for x in request.form.getlist("transaction_id") if x.isdigit())
+    valide = [c for c in combinazioni(bt, massimo=10) if sorted(t.id for t in c["transazioni"]) == ids]
+    if bt.status != "non_riconciliato" or not valide:
+        flash("Combinazione non più valida: ricarica la pagina.", "warning")
+        return redirect(url_for("banca.sospesi"))
+    collega_multipla(bt, valide[0]["transazioni"], "manuale")
+    db.session.commit()
+    flash(f"Movimento collegato a {len(ids)} fatture.", "success")
     return redirect(url_for("banca.sospesi"))
 
 

@@ -64,17 +64,16 @@ def create_app():
     from app.routes.prima_nota import bp as prima_nota_bp
     from app.routes.fatture import bp as fatture_bp
     from app.routes.fatture_emesse import bp as fatture_emesse_bp
+    from app.routes.controllo import bp as controllo_bp
     from app.routes.cassa import bp as cassa_bp
     from app.routes.movimenti import bp as movimenti_bp
     from app.routes.anagrafica import bp as anagrafica_bp
-    from app.routes.inventario import bp as inventario_bp
     from app.routes.categorie import bp as categorie_bp
     from app.routes.analisi import bp as analisi_bp
     from app.routes.scadenzario import bp as scadenzario_bp
     from app.routes.impostazioni import bp as impostazioni_bp
     from app.routes.banca import bp as banca_bp
     from app.routes.ricorrenti import bp as ricorrenti_bp
-    from app.routes.finanza_impostazioni import bp as finanza_impostazioni_bp
     from app.routes.allevamento import bp as allevamento_bp
     from app.routes.impianto import bp as impianto_bp
 
@@ -83,17 +82,16 @@ def create_app():
     app.register_blueprint(prima_nota_bp)
     app.register_blueprint(fatture_bp)
     app.register_blueprint(fatture_emesse_bp)
+    app.register_blueprint(controllo_bp)
     app.register_blueprint(cassa_bp)
     app.register_blueprint(movimenti_bp)
     app.register_blueprint(anagrafica_bp)
-    app.register_blueprint(inventario_bp)
     app.register_blueprint(categorie_bp)
     app.register_blueprint(analisi_bp)
     app.register_blueprint(scadenzario_bp)
     app.register_blueprint(impostazioni_bp)
     app.register_blueprint(banca_bp)
     app.register_blueprint(ricorrenti_bp)
-    app.register_blueprint(finanza_impostazioni_bp)
     app.register_blueprint(allevamento_bp)
     app.register_blueprint(impianto_bp)
 
@@ -175,9 +173,9 @@ def create_app():
     # Template context
     BLUEPRINT_SECTION_MAP = {
         'prima_nota': 'finanza', 'fatture': 'finanza', 'cassa': 'finanza',
-        'movimenti': 'finanza', 'anagrafica': 'finanza', 'inventario': 'finanza',
+        'movimenti': 'finanza', 'anagrafica': 'finanza', 'fatture_emesse': 'finanza', 'controllo': 'finanza',
         'categorie': 'finanza', 'analisi': 'finanza', 'scadenzario': 'finanza',
-        'banca': 'finanza', 'ricorrenti': 'finanza', 'finanza_impostazioni': 'finanza',
+        'banca': 'finanza', 'ricorrenti': 'finanza',
         'allevamento': 'allevamento',
     }
 
@@ -296,6 +294,9 @@ def _init_db(app):
         ("trattamenti", "gruppo", "VARCHAR(32)"),
         ("trattamenti", "colore", "VARCHAR(10)"),
         ("sdi_invoices", "importo_da_pagare", "FLOAT"),
+        ("cash_register_daily", "contanti", "FLOAT"),
+        ("cash_register_daily", "bancomat", "FLOAT"),
+        ("cash_register_daily", "carta", "FLOAT"),
     ]
     for table, col, col_type in _migrate_columns:
         try:
@@ -503,12 +504,22 @@ def _init_scheduler(app):
                 except Exception as e:
                     app.logger.error(f"Errore fatture emesse: {e}")
 
+        def spese_amazon():
+            with app.app_context():
+                try:
+                    from app.services.spese_carta import giro
+                    giro(app)
+                except Exception as e:
+                    app.logger.error(f"Errore spese Amazon: {e}")
+
         def sync_cassa():
             with app.app_context():
                 try:
                     from app.services.cloud_office import sync_cash_register
                     count = sync_cash_register()
                     app.logger.info(f"Sync cassa automatica: {count} giorni aggiornati")
+                    from app.services.cloud_office import completa_pagamenti_storici
+                    completa_pagamenti_storici()       # una volta sola: pagamenti dei giorni già importati
                 except Exception as e:
                     app.logger.error(f"Errore sync cassa automatica: {e}")
 
@@ -530,6 +541,7 @@ def _init_scheduler(app):
         scheduler.add_job(avvisi_allevamento, "interval", minutes=1)   # invia una volta al giorno, all'orario impostato
         if app.config.get("IMAP_HOST") and app.config.get("IMAP_USER"):
             scheduler.add_job(fetch_emails, "cron", hour="8,14,20", minute=30)
+            scheduler.add_job(spese_amazon, "cron", hour="7-22", minute="10,40")
             if app.config.get("FATTURE_EMESSE_MITTENTE"):
                 scheduler.add_job(fetch_fatture_emesse, "cron", hour="8,14,20", minute=35)
         scheduler.start()

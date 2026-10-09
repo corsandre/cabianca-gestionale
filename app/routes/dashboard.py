@@ -3,7 +3,10 @@ from flask import Blueprint, render_template
 from flask_login import login_required
 from sqlalchemy import func, extract
 from app import db
-from app.models import Transaction, CashRegisterDaily
+from app.models import Transaction, CashRegisterDaily, Category
+
+# Non sono ricavi né costi: si escludono da entrate e uscite del cruscotto
+CATEGORIE_NON_OPERATIVE = ("Trasferimento interno", "Prestiti e mutui")
 
 bp = Blueprint("dashboard", __name__)
 
@@ -12,23 +15,25 @@ bp = Blueprint("dashboard", __name__)
 @login_required
 def index():
     today = date.today()
+    non_oper = db.select(Category.id).where(Category.name.in_(CATEGORIE_NON_OPERATIVE))
+    operativa = db.or_(Transaction.category_id.is_(None), ~Transaction.category_id.in_(non_oper))
     first_of_month = today.replace(day=1)
     first_of_year = today.replace(month=1, day=1)
 
     # Monthly totals (only up to today, exclude future)
     month_income = db.session.query(func.coalesce(func.sum(Transaction.amount), 0)).filter(
-        Transaction.type == "entrata", Transaction.date >= first_of_month, Transaction.date <= today
+        Transaction.type == "entrata", operativa, Transaction.date >= first_of_month, Transaction.date <= today
     ).scalar()
     month_expense = db.session.query(func.coalesce(func.sum(Transaction.amount), 0)).filter(
-        Transaction.type == "uscita", Transaction.date >= first_of_month, Transaction.date <= today
+        Transaction.type == "uscita", operativa, Transaction.date >= first_of_month, Transaction.date <= today
     ).scalar()
 
     # Yearly totals (only up to today, exclude future)
     year_income = db.session.query(func.coalesce(func.sum(Transaction.amount), 0)).filter(
-        Transaction.type == "entrata", Transaction.date >= first_of_year, Transaction.date <= today
+        Transaction.type == "entrata", operativa, Transaction.date >= first_of_year, Transaction.date <= today
     ).scalar()
     year_expense = db.session.query(func.coalesce(func.sum(Transaction.amount), 0)).filter(
-        Transaction.type == "uscita", Transaction.date >= first_of_year, Transaction.date <= today
+        Transaction.type == "uscita", operativa, Transaction.date >= first_of_year, Transaction.date <= today
     ).scalar()
 
     # Overdue payments
@@ -53,12 +58,12 @@ def index():
             m += 12
             y -= 1
         m_income = db.session.query(func.coalesce(func.sum(Transaction.amount), 0)).filter(
-            Transaction.type == "entrata",
+            Transaction.type == "entrata", operativa,
             extract("month", Transaction.date) == m,
             extract("year", Transaction.date) == y,
         ).scalar()
         m_expense = db.session.query(func.coalesce(func.sum(Transaction.amount), 0)).filter(
-            Transaction.type == "uscita",
+            Transaction.type == "uscita", operativa,
             extract("month", Transaction.date) == m,
             extract("year", Transaction.date) == y,
         ).scalar()
@@ -71,7 +76,14 @@ def index():
         Transaction.date <= horizon
     ).order_by(Transaction.date.desc(), Transaction.id.desc()).limit(10).all()
 
+    from app.routes.controllo import stato
+    try:
+        controllo_da_fare = stato()["da_fare"]
+    except Exception:
+        controllo_da_fare = None
+
     return render_template("dashboard/index.html",
+        controllo_da_fare=controllo_da_fare,
         month_income=month_income, month_expense=month_expense,
         year_income=year_income, year_expense=year_expense,
         overdue=overdue, upcoming=upcoming,

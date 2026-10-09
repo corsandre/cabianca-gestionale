@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 import uuid
 from app import db
-from app.models import Transaction, Category, RevenueStream, Contact, Tag
+from app.models import Transaction, Category, RevenueStream, Contact
 from app.utils.decorators import write_required, section_required
 
 ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "webp"}
@@ -34,9 +34,8 @@ def new():
     categories = Category.query.filter_by(active=True).order_by(Category.name).all()
     streams = RevenueStream.query.filter_by(active=True).order_by(RevenueStream.name).all()
     contacts = Contact.query.filter_by(active=True).order_by(Contact.name).all()
-    tags = Tag.query.order_by(Tag.name).all()
     return render_template("movimenti/form.html", t=None,
-        categories=categories, streams=streams, contacts=contacts, tags=tags)
+        categories=categories, streams=streams, contacts=contacts)
 
 
 @bp.route("/<int:id>/modifica", methods=["GET", "POST"])
@@ -50,10 +49,9 @@ def edit(id):
     categories = Category.query.filter_by(active=True).order_by(Category.name).all()
     streams = RevenueStream.query.filter_by(active=True).order_by(RevenueStream.name).all()
     contacts = Contact.query.filter_by(active=True).order_by(Contact.name).all()
-    tags = Tag.query.order_by(Tag.name).all()
     next_url = request.args.get("next")
     return render_template("movimenti/form.html", t=t,
-        categories=categories, streams=streams, contacts=contacts, tags=tags, next_url=next_url)
+        categories=categories, streams=streams, contacts=contacts, next_url=next_url)
 
 
 @bp.route("/<int:id>/elimina", methods=["POST"])
@@ -131,9 +129,6 @@ def _save_transaction(t):
                 f.save(os.path.join(upload_dir, filename))
                 t.attachment_path = f"movimenti/{filename}"
 
-        # Tags
-        tag_ids = request.form.getlist("tags")
-        t.tags = Tag.query.filter(Tag.id.in_(tag_ids)).all() if tag_ids else []
 
         if is_new:
             db.session.add(t)

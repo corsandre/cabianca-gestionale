@@ -8,7 +8,7 @@
 
     <li class="cb-nav-divider"></li>
 
-    {% set finanza_blueprints = ['prima_nota','fatture','fatture_emesse','cassa','movimenti','ricorrenti','banca','anagrafica','inventario','categorie','analisi','scadenzario','finanza_impostazioni'] %}
+    {% set finanza_blueprints = ['controllo','prima_nota','fatture','fatture_emesse','cassa','movimenti','ricorrenti','banca','anagrafica','categorie','analisi','scadenzario'] %}
     {% set finanza_active = request.blueprint in finanza_blueprints %}
     {% if current_user.has_section('finanza') %}
     <!-- FINANZA GROUP -->
@@ -25,13 +25,19 @@
     <div class="collapse {% if finanza_active %}show{% endif %}" id="nav-finanza">
         <ul class="nav flex-column cb-nav" style="padding-top:0">
             <li class="nav-item">
-                <a class="nav-link {% if request.blueprint == 'prima_nota' %}active{% endif %}" href="{{ url_for('prima_nota.index') }}">
-                    <i class="bi bi-journal-text"></i> Libro Mastro
+                <a class="nav-link {% if request.blueprint == 'controllo' %}active{% endif %}" href="{{ url_for('controllo.index') }}">
+                    <i class="bi bi-clipboard-check"></i> Controllo di fine mese
+                </a>
+            </li>
+            <li class="cb-nav-divider"></li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'banca' %}active{% endif %}" href="{{ url_for('banca.index') }}">
+                    <i class="bi bi-bank"></i> Banca
                 </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link {% if request.blueprint == 'fatture' %}active{% endif %}" href="{{ url_for('fatture.index') }}">
-                    <i class="bi bi-file-earmark-text"></i> Fatture SDI
+                    <i class="bi bi-file-earmark-text"></i> Fatture ricevute
                 </a>
             </li>
             <li class="nav-item">
@@ -46,17 +52,28 @@
             </li>
             <li class="nav-item">
                 <a class="nav-link {% if request.blueprint == 'movimenti' %}active{% endif %}" href="{{ url_for('movimenti.index') }}">
-                    <i class="bi bi-pencil-square"></i> Movimenti Manuali
+                    <i class="bi bi-pencil-square"></i> Contanti e movimenti manuali
                 </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link {% if request.blueprint == 'ricorrenti' %}active{% endif %}" href="{{ url_for('ricorrenti.index') }}">
-                    <i class="bi bi-arrow-repeat"></i> Spese Ricorrenti
+                    <i class="bi bi-arrow-repeat"></i> Spese ricorrenti
+                </a>
+            </li>
+            <li class="cb-nav-divider"></li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'prima_nota' %}active{% endif %}" href="{{ url_for('prima_nota.index') }}">
+                    <i class="bi bi-journal-text"></i> Libro mastro
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {% if request.blueprint == 'banca' %}active{% endif %}" href="{{ url_for('banca.index') }}">
-                    <i class="bi bi-bank"></i> Banca
+                <a class="nav-link {% if request.blueprint == 'scadenzario' %}active{% endif %}" href="{{ url_for('scadenzario.index') }}">
+                    <i class="bi bi-calendar-check"></i> Scadenzario
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'analisi' %}active{% endif %}" href="{{ url_for('analisi.index') }}">
+                    <i class="bi bi-graph-up"></i> Analisi
                 </a>
             </li>
             <li class="cb-nav-divider"></li>
@@ -66,34 +83,10 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {% if request.blueprint == 'inventario' %}active{% endif %}" href="{{ url_for('inventario.index') }}">
-                    <i class="bi bi-box-seam"></i> Inventario
-                </a>
-            </li>
-            <li class="nav-item">
                 <a class="nav-link {% if request.blueprint == 'categorie' %}active{% endif %}" href="{{ url_for('categorie.index') }}">
-                    <i class="bi bi-tags"></i> Categorie & Tag
+                    <i class="bi bi-tags"></i> Categorie
                 </a>
             </li>
-            <li class="cb-nav-divider"></li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.blueprint == 'analisi' %}active{% endif %}" href="{{ url_for('analisi.index') }}">
-                    <i class="bi bi-graph-up"></i> Analisi
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.blueprint == 'scadenzario' %}active{% endif %}" href="{{ url_for('scadenzario.index') }}">
-                    <i class="bi bi-calendar-check"></i> Scadenzario
-                </a>
-            </li>
-            {% if current_user.role == 'admin' %}
-            <li class="cb-nav-divider"></li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.blueprint == 'finanza_impostazioni' %}active{% endif %}" href="{{ url_for('finanza_impostazioni.index') }}">
-                    <i class="bi bi-sliders"></i> Impostazioni Finanza
-                </a>
-            </li>
-            {% endif %}
         </ul>
     </div>
     {% endif %}

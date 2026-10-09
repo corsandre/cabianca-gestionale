@@ -204,4 +204,30 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+<div class="cb-card p-3 mt-3">
+    <h5 class="mb-1">Cassa e banca, mese per mese</h5>
+    <p class="small text-muted mb-2">Bancomat e carte battuti in cassa devono arrivare sul conto come accrediti POS (che in banca sono ignorati perché già nei corrispettivi). Piccole differenze sono normali: commissioni e accrediti che slittano al mese dopo. Una differenza grande va guardata: una carta battuta in cassa ma non accreditata, o un bonifico battuto come "carta".</p>
+    <div class="table-responsive">
+    <table class="table table-sm mb-0" style="font-variant-numeric: tabular-nums">
+        <thead><tr><th>Mese</th><th class="text-end">Cassa totale</th><th class="text-end">di cui contanti</th><th class="text-end">bancomat + carta in cassa</th><th class="text-end">POS accreditati in banca</th><th class="text-end">Differenza</th><th class="text-end">Bonifici ignorati come già in cassa</th></tr></thead>
+        <tbody>
+        {% for r in confronto %}
+        <tr class="{% if r.da_guardare %}table-warning{% endif %}">
+            <td>{{ r.mese[5:] }}/{{ r.mese[:4] }}</td>
+            <td class="text-end">&euro;{{ "{:,.2f}".format(r.cassa) }}</td>
+            {% if r.completo or r.pos_altro_conto %}
+            <td class="text-end">&euro;{{ "{:,.2f}".format(r.contanti) }}</td>
+            <td class="text-end">&euro;{{ "{:,.2f}".format(r.pos_cassa) }}</td>
+            {% else %}
+            <td class="text-end text-muted" colspan="2">pagamenti non letti</td>
+            {% endif %}
+            <td class="text-end">&euro;{{ "{:,.2f}".format(r.pos_banca) }}</td>
+            <td class="text-end {% if r.da_guardare %}fw-bold{% endif %}">{% if r.completo %}&euro;{{ "{:,.2f}".format(r.diff) }}{% elif r.pos_altro_conto %}<span class="small text-muted">POS su altro conto</span>{% else %}—{% endif %}</td>
+            <td class="text-end text-muted">&euro;{{ "{:,.2f}".format(r.bonifici_cassa) }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
 {% endblock %}

@@ -12,7 +12,7 @@ from datetime import timedelta
 from difflib import SequenceMatcher
 
 from app import db
-from app.models import BankTransaction, Transaction, Contact, SdiInvoice
+from app.models import BankTransaction, Transaction, Contact, SdiInvoice, CollegamentoBanca
 from app.services.sdi_importer import NOTE_DI_CREDITO
 from app.services.rules_engine import apply_rules
 
@@ -70,6 +70,13 @@ def reconcile_batch(bank_transactions):
         match = _find_best_match(bt, source="sdi")
         if match and match["score"] >= AUTO_MATCH_THRESHOLD:
             _link_transaction(bt, match["transaction"], "auto")
+            stats["matched"] += 1
+            continue
+
+        # Fase 2b: un bonifico che paga più fatture dello stesso fornitore
+        combo = combinazioni(bt)
+        if len(combo) == 1:
+            collega_multipla(bt, combo[0]["transazioni"], "auto")
             stats["matched"] += 1
             continue
 
@@ -183,6 +190,17 @@ def _appresi():
 GIORNI_SDI_PRIMA = 180
 
 
+def transazioni_collegate(escludi_bt_id=None):
+    """Select degli id di transazione già collegati a un movimento bancario
+    (collegamento principale o aggiuntivo di un pagamento multiplo)."""
+    principali = db.select(BankTransaction.matched_transaction_id).where(BankTransaction.matched_transaction_id.isnot(None))
+    aggiuntive = db.select(CollegamentoBanca.transaction_id)
+    if escludi_bt_id is not None:
+        principali = principali.where(BankTransaction.id != escludi_bt_id)
+        aggiuntive = aggiuntive.where(CollegamentoBanca.bank_transaction_id != escludi_bt_id)
+    return db.union(principali, aggiuntive)
+
+
 def _get_candidates(bt, source):
     """Recupera transazioni candidate per il matching."""
     # Finestra temporale: +-30 giorni dalla data operazione (SDI: da 90 giorni prima)
@@ -212,12 +230,7 @@ def _get_candidates(bt, source):
         ))
 
     # Escludi transazioni gia riconciliate con altri movimenti bancari
-    already_matched = db.select(BankTransaction.matched_transaction_id).where(
-        BankTransaction.matched_transaction_id.isnot(None),
-        BankTransaction.id != bt.id,
-    ).scalar_subquery()
-
-    query = query.filter(~Transaction.id.in_(already_matched))
+    query = query.filter(~Transaction.id.in_(transazioni_collegate(bt.id)))
 
     return query.all()
 
@@ -409,16 +422,10 @@ def get_available_transactions(bt):
     date_to = bt.operation_date + timedelta(days=30)
     tx_type = "entrata" if bt.direction == "C" else "uscita"
 
-    # Transazioni gia abbinate ad altri movimenti bancari
-    already_matched = db.select(BankTransaction.matched_transaction_id).where(
-        BankTransaction.matched_transaction_id.isnot(None),
-        BankTransaction.id != bt.id,
-    ).scalar_subquery()
-
     base_query = Transaction.query.filter(
         Transaction.type == tx_type,
         Transaction.date.between(date_from, date_to),
-        ~Transaction.id.in_(already_matched),
+        ~Transaction.id.in_(transazioni_collegate(bt.id)),
     )
 
     # SDI: non pagate, o segnate pagate senza bonifico collegato (non in contanti)
@@ -459,3 +466,68 @@ def _sdi_aperta():
                 db.or_(Transaction.payment_method.is_(None),
                        Transaction.payment_method.notin_(["contanti", "non_applicabile"]))),
     )
+
+
+# --------------------------------------------------------------------------- pagamenti multipli
+
+MAX_FATTURE_COMBINAZIONE = 5
+MAX_CANDIDATE_FORNITORE = 14
+
+
+def _importo_fattura(tx):
+    if tx.invoice is not None and tx.invoice.importo_da_pagare:
+        return tx.invoice.importo_da_pagare
+    return tx.amount
+
+
+def _stesso_soggetto(bt, tx):
+    nomi = [n for n in ((tx.contact.name if tx.contact else None),
+                        (tx.invoice.sender_name if tx.invoice is not None else None)) if n]
+    if not bt.counterpart_name or not nomi:
+        return False
+    if max(_name_similarity(bt.counterpart_name, n) for n in nomi) > 0.7:
+        return True
+    appresi = _appresi()
+    return any((_chiave_nome(bt.counterpart_name), _chiave_nome(n)) in appresi for n in nomi)
+
+
+def combinazioni(bt, massimo=3) -> list[dict]:
+    """Gruppi di 2-5 fatture SDI aperte dello stesso fornitore la cui somma è uguale al movimento.
+
+    Ritorna al massimo `massimo` combinazioni, dalla più piccola e più vicina nel tempo.
+    """
+    from itertools import combinations
+    if bt.direction != "D":
+        return []
+    cand = [tx for tx in _get_candidates(bt, "sdi") if tx.amount and tx.amount > 0 and _stesso_soggetto(bt, tx)]
+    if len(cand) < 2:
+        return []
+    cand.sort(key=lambda t: abs((bt.operation_date - t.date).days))
+    cand = cand[:MAX_CANDIDATE_FORNITORE]
+    centesimi = round(bt.amount * 100)
+    trovate = []
+    for k in range(2, min(MAX_FATTURE_COMBINAZIONE, len(cand)) + 1):
+        for gruppo in combinations(cand, k):
+            if round(sum(_importo_fattura(t) for t in gruppo) * 100) == centesimi:
+                giorni = sum(abs((bt.operation_date - t.date).days) for t in gruppo)
+                trovate.append({"transazioni": list(gruppo), "giorni": giorni, "n": k})
+        if trovate:
+            break                                   # bastano le combinazioni più piccole
+    trovate.sort(key=lambda c: c["giorni"])
+    return trovate[:massimo]
+
+
+def collega_multipla(bt, transazioni, matched_by="manuale"):
+    """Collega un movimento a più transazioni (la prima come principale, le altre aggiuntive)."""
+    transazioni = sorted(transazioni, key=lambda t: t.date or bt.operation_date)
+    bt.status = "riconciliato"
+    bt.matched_transaction_id = transazioni[0].id
+    bt.matched_by = matched_by
+    for tx in transazioni[1:]:
+        db.session.add(CollegamentoBanca(bank_transaction_id=bt.id, transaction_id=tx.id))
+    for tx in transazioni:
+        if tx.payment_status in ("da_pagare", "parziale"):
+            tx.payment_status = "pagato"
+        if not tx.payment_date:
+            tx.payment_date = bt.operation_date
+    db.session.flush()

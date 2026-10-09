@@ -60,78 +60,44 @@ def send_telegram_foto(png: bytes, didascalia: str, canale: str = "sistema"):
 
 
 def check_and_notify_deadlines():
-    """Check for overdue and upcoming deadlines and send Telegram alerts."""
-    from app.models import Transaction
+    """Messaggio del mattino nel gruppo della finanza: scadenze, banca e controllo di fine mese
+    in un unico messaggio (niente messaggio se non c'è niente da dire)."""
+    from app.models import BankTransaction, Transaction
 
     today = date.today()
     week_ahead = today + timedelta(days=7)
+    eur = lambda v: f"\u20AC{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    righe = []
 
-    # Overdue
+    upcoming = Transaction.query.filter(
+        Transaction.due_date.between(today, week_ahead),
+        Transaction.payment_status.in_(["da_pagare", "parziale"]),
+    ).order_by(Transaction.due_date).all()
+    if upcoming:
+        righe.append(f"<b>Scadenze nei prossimi 7 giorni: {len(upcoming)}</b> ({eur(sum(t.amount for t in upcoming))})")
+        for t in upcoming[:5]:
+            nome = t.contact.name if t.contact else (t.description or "")[:30]
+            righe.append(f"  · {t.due_date.strftime('%d/%m')} {nome[:30]} {eur(t.amount)}")
+
     overdue = Transaction.query.filter(
         Transaction.due_date < today,
         Transaction.payment_status.in_(["da_pagare", "parziale"]),
     ).all()
-
     if overdue:
-        lines = [f"<b>Scadenze arretrate: {len(overdue)}</b>"]
-        for t in overdue[:10]:
-            days = (today - t.due_date).days
-            contact_name = t.contact.name if t.contact else "N/D"
-            lines.append(
-                f"  - {t.description[:40]} | {contact_name} | "
-                f"\u20AC{t.amount:,.2f} | scaduta da {days}gg"
-            )
-        send_telegram_message("\n".join(lines))
+        righe.append(f"<b>Da pagare già scadute: {len(overdue)}</b> ({eur(sum(t.amount for t in overdue))}): "
+                     "pagale o, se sono già pagate, collegale al bonifico.")
 
-    # Upcoming (next 7 days)
-    upcoming = Transaction.query.filter(
-        Transaction.due_date.between(today, week_ahead),
-        Transaction.payment_status.in_(["da_pagare", "parziale"]),
-    ).all()
+    sospesi = BankTransaction.query.filter_by(status="non_riconciliato").count()
+    last_import = BankTransaction.query.order_by(BankTransaction.created_at.desc()).first()
+    giorni = (today - last_import.created_at.date()).days if last_import else None
+    banca = []
+    if sospesi:
+        banca.append(f"{sospesi} movimenti da riconciliare")
+    if giorni is not None and giorni > 7:
+        banca.append(f"estratto conto caricato {giorni} giorni fa")
+    if banca:
+        righe.append("<b>Banca:</b> " + ", ".join(banca) + ".")
 
-    if upcoming:
-        lines = [f"<b>Scadenze prossimi 7 giorni: {len(upcoming)}</b>"]
-        for t in upcoming[:10]:
-            days = (t.due_date - today).days
-            contact_name = t.contact.name if t.contact else "N/D"
-            lines.append(
-                f"  - {t.due_date.strftime('%d/%m')} | {t.description[:40]} | "
-                f"{contact_name} | \u20AC{t.amount:,.2f} ({days}gg)"
-            )
-        send_telegram_message("\n".join(lines))
-
-    # Avviso se nessun import CBI da >3 giorni
-    from app.models import BankTransaction
-    last_import = BankTransaction.query.order_by(
-        BankTransaction.created_at.desc()
-    ).first()
-    if last_import:
-        days_since = (today - last_import.created_at.date()).days
-        if days_since > 3:
-            send_telegram_message(
-                f"<b>Banca:</b> nessun import CBI da {days_since} giorni. "
-                "Ricordati di caricare l'estratto conto."
-            )
-
-    # Movimenti bancari sospesi
-    sospesi_count = BankTransaction.query.filter_by(
-        status="non_riconciliato"
-    ).count()
-    if sospesi_count > 0:
-        send_telegram_message(
-            f"<b>Banca:</b> {sospesi_count} movimenti da riconciliare."
-        )
-
-    # Low stock alerts
-    from app.models import Product
-    low_stock = Product.query.filter(
-        Product.active == True,
-        Product.current_quantity <= Product.min_quantity,
-        Product.min_quantity > 0,
-    ).all()
-
-    if low_stock:
-        lines = [f"<b>Scorte basse: {len(low_stock)} prodotti</b>"]
-        for p in low_stock:
-            lines.append(f"  - {p.name}: {p.current_quantity} {p.unit} (min: {p.min_quantity})")
-        send_telegram_message("\n".join(lines))
+    if righe:
+        send_telegram_message("📋 <b>Finanza</b>\n" + "\n".join(righe) +
+                              "\nDettagli in Finanza › Controllo di fine mese.")
