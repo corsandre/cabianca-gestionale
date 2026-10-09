@@ -98,6 +98,15 @@ utente (vedi [Utenti](#utenti-ruoli-e-accesso-alle-sezioni)).
   importati: movimenti mancanti o in più, da sistemare ricaricando il CBI del periodo). L'import avvisa se
   dopo il caricamento la differenza non spiegata non è zero.
 
+**Abbinamento automatico alle fatture** (`app/services/reconciliation.py`): punteggio su importo, nome e data
+(soglia 80). Dalla 2.3.2: le fatture SDI si cercano fino a 180 giorni prima del pagamento (oltre i 30 giorni
+l'importo deve essere identico al centesimo); l'importo vale anche al **netto da pagare** (rate della sezione
+pagamento o totale meno ritenuta d'acconto, letto dal PDF TeamSystem o dall'XML); il nome vale anche se quella
+controparte bancaria è già stata **abbinata in passato** a quel fornitore (es. "CPIUC CREMONA" → "MAXI DI SRL",
+"TELECOMITALIA" → "TIM"), così gli abbinamenti fatti a mano insegnano al motore; a parità di punteggio vince la
+data più vicina. Le fatture segnate "pagato" ma senza bonifico collegato restano tra quelle abbinabili (anche
+nella ricerca manuale dei sospesi), tranne quelle pagate in contanti.
+
 **Regole automatiche banca** (`AutoRule`, `app/services/rules_engine.py`): condizioni su descrizione/importo/fonte
 che assegnano categoria, contatto, metodo di pagamento, aliquota IVA, note, spostamento data, oppure ignorano il
 movimento con un motivo. Possono essere riapplicate in blocco ai movimenti esistenti.

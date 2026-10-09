@@ -146,6 +146,16 @@ def parse_fattura_xml(xml_content: bytes) -> dict:
             except (ValueError, TypeError):
                 due_date = None
 
+    # Importo effettivamente da pagare: somma degli ImportoPagamento di tutte le rate.
+    # Per i professionisti è il netto della ritenuta d'acconto (il bonifico è di questo importo).
+    importo_da_pagare = None
+    rate = [el.text for el in body.iter() if el.tag.rsplit("}", 1)[-1] == "ImportoPagamento" and el.text]
+    if rate:
+        try:
+            importo_da_pagare = round(sum(float(x) for x in rate), 2)
+        except ValueError:
+            importo_da_pagare = None
+
     # Determine direction based on P.IVA
     company_piva = Config.COMPANY_PIVA
     if sender_piva == company_piva and receiver_piva == company_piva:
@@ -170,4 +180,5 @@ def parse_fattura_xml(xml_content: bytes) -> dict:
         "direction": direction,
         "tipo_documento": tipo_doc or "",
         "due_date": due_date,
+        "importo_da_pagare": importo_da_pagare,
     }

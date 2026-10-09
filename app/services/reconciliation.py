@@ -7,6 +7,7 @@ Abbina movimenti CBI a fatture e transazioni esistenti in 3 fasi:
 """
 
 import logging
+import re
 from datetime import timedelta
 from difflib import SequenceMatcher
 
@@ -31,6 +32,7 @@ def reconcile_batch(bank_transactions):
         dict con statistiche: {"matched": N, "pending": N, "auto_created": N}
     """
     stats = {"matched": 0, "pending": 0, "auto_created": 0}
+    _cache_appresi["coppie"] = None          # abbinamenti fatti da poco compresi
 
     for bt in bank_transactions:
         if bt.status != "non_riconciliato":
@@ -114,23 +116,71 @@ def get_match_proposals(bank_transaction):
 
 
 def _find_best_match(bt, source):
-    """Trova il miglior match per un movimento bancario."""
+    """Trova il miglior match per un movimento bancario.
+
+    A parità di punteggio vince la transazione con la data più vicina al movimento
+    (es. fatture mensili dello stesso fornitore con lo stesso importo).
+    """
     candidates = _get_candidates(bt, source)
     best = None
-    best_score = 0
+    best_key = None
 
     for tx in candidates:
         score, reasons = _compute_score(bt, tx)
-        if score > best_score:
-            best_score = score
+        if score <= 0:
+            continue
+        key = (score, -abs((bt.operation_date - tx.date).days) if tx.date else -9999)
+        if best_key is None or key > best_key:
+            best_key = key
             best = {"transaction": tx, "score": score, "reasons": reasons}
 
     return best
 
 
-# Le fatture dei fornitori si pagano anche a 60-90 giorni: per le SDI si cerca fino a 90 giorni prima.
-# Oltre i 30 giorni il punteggio arriva alla soglia solo se coincidono importo e nome.
-GIORNI_SDI_PRIMA = 90
+def _chiave_nome(nome):
+    """Prime due parole significative del nome, per confrontare controparti e fornitori."""
+    parole = [w for w in re.sub(r"[^A-Z0-9 ]", " ", (nome or "").upper()).split()
+              if len(w) > 2 and w not in ("SPA", "SRL", "SNC", "SAS", "SOC", "SOCIETA", "COOP", "DEL", "DELLA")]
+    return " ".join(parole[:2])
+
+
+def _nomi_appresi():
+    """Coppie (controparte in banca, fornitore/cliente) già abbinate in passato.
+
+    Insegnano al motore che, per esempio, 'CPIUC CREMONA' in banca è 'MAXI DI SRL' in fattura,
+    o 'TELECOMITALIA SPA' è 'TIM S.p.A.'. Si ricalcolano a ogni richiesta (pochi millisecondi).
+    """
+    coppie = set()
+    righe = db.session.query(BankTransaction.counterpart_name, SdiInvoice.sender_name, Contact.name).join(
+        Transaction, Transaction.id == BankTransaction.matched_transaction_id
+    ).outerjoin(SdiInvoice, SdiInvoice.id == Transaction.invoice_id
+    ).outerjoin(Contact, Contact.id == Transaction.contact_id
+    ).filter(BankTransaction.status == "riconciliato").all()
+    for cp, fornitore, contatto in righe:
+        a = _chiave_nome(cp)
+        if not a:
+            continue
+        for b in (fornitore, contatto):
+            if _chiave_nome(b):
+                coppie.add((a, _chiave_nome(b)))
+    return coppie
+
+
+_cache_appresi = {"coppie": None, "quando": 0.0}
+
+
+def _appresi():
+    """Nomi appresi, ricalcolati al massimo una volta al minuto (servono a ogni confronto)."""
+    import time
+    if _cache_appresi["coppie"] is None or time.monotonic() - _cache_appresi["quando"] > 60:
+        _cache_appresi["coppie"] = _nomi_appresi()
+        _cache_appresi["quando"] = time.monotonic()
+    return _cache_appresi["coppie"]
+
+
+# Le fatture dei fornitori si pagano anche a 90-150 giorni: per le SDI si cerca fino a 180 giorni prima.
+# Oltre i 15 giorni il punteggio arriva alla soglia solo se coincidono importo e nome.
+GIORNI_SDI_PRIMA = 180
 
 
 def _get_candidates(bt, source):
@@ -183,25 +233,42 @@ def _compute_score(bt, tx):
     score = 0
     reasons = []
 
-    # Match importo (tolleranza +-2%)
+    # Match importo (tolleranza +-2%): per le fatture SDI vale anche l'importo da pagare
+    # (netto della ritenuta d'acconto, somma delle rate)
+    importi = [tx.amount]
+    if tx.invoice is not None and tx.invoice.importo_da_pagare:
+        importi.append(tx.invoice.importo_da_pagare)
+    importo = min(importi, key=lambda v: abs(bt.amount - v)) if tx.amount and tx.amount > 0 else tx.amount
+    lontana = tx.date is not None and abs((bt.operation_date - tx.date).days) > 30
     if tx.amount > 0:
-        diff_pct = abs(bt.amount - tx.amount) / tx.amount
+        diff_pct = abs(bt.amount - importo) / importo
+        if lontana and abs(bt.amount - importo) > 0.01:
+            # oltre 30 giorni solo l'importo identico conta: i fornitori che fatturano ogni mese
+            # importi quasi uguali (telefono, energia) altrimenti finiscono sulla fattura sbagliata
+            diff_pct = 1
         if diff_pct <= 0.02:
             score += 50
             if diff_pct == 0:
-                reasons.append("Importo identico")
+                reasons.append("Importo identico" if importo == tx.amount else "Importo identico al netto da pagare")
             else:
                 reasons.append(f"Importo simile ({diff_pct:.1%})")
         elif diff_pct <= 0.10:
             score += 20
             reasons.append(f"Importo vicino ({diff_pct:.1%})")
 
-    # Match nome controparte
-    if bt.counterpart_name and tx.contact:
-        similarity = _name_similarity(bt.counterpart_name, tx.contact.name)
+    # Match nome controparte: contatto, fornitore della fattura, o coppia già abbinata in passato
+    nomi = [n for n in ((tx.contact.name if tx.contact else None),
+                        (tx.invoice.sender_name if tx.invoice is not None else None)) if n]
+    if bt.counterpart_name and nomi:
+        similarity = max(_name_similarity(bt.counterpart_name, n) for n in nomi)
+        appresi = _appresi()
+        gia_visto = any((_chiave_nome(bt.counterpart_name), _chiave_nome(n)) in appresi for n in nomi)
         if similarity > 0.7:
             score += 30
             reasons.append(f"Nome controparte simile ({similarity:.0%})")
+        elif gia_visto:
+            score += 30
+            reasons.append("Stessa controparte già abbinata in passato")
         elif similarity > 0.4:
             score += 15
             reasons.append(f"Nome controparte parziale ({similarity:.0%})")
@@ -354,10 +421,10 @@ def get_available_transactions(bt):
         ~Transaction.id.in_(already_matched),
     )
 
-    # SDI: non pagate come default iniziale
+    # SDI: non pagate, o segnate pagate senza bonifico collegato (non in contanti)
     sdi = base_query.filter(
         Transaction.source == "sdi",
-        Transaction.payment_status.in_(["da_pagare", "parziale"]),
+        _sdi_aperta(),
     ).order_by(Transaction.date.desc()).limit(20).all()
 
     # Manuali + banca: non pagate come default iniziale
@@ -381,3 +448,14 @@ def _build_description(bt):
     elif bt.remittance_info:
         parts.append(bt.remittance_info[:100])
     return " - ".join(parts) if parts else f"Movimento bancario {bt.operation_date}"
+
+
+def _sdi_aperta():
+    """Filtro: fattura SDI ancora da abbinare a un pagamento (da pagare, parziale, oppure
+    segnata pagata a mano ma non in contanti). Le già collegate a un bonifico si escludono a parte."""
+    return db.or_(
+        Transaction.payment_status.in_(["da_pagare", "parziale"]),
+        db.and_(Transaction.payment_status == "pagato",
+                db.or_(Transaction.payment_method.is_(None),
+                       Transaction.payment_method.notin_(["contanti", "non_applicabile"]))),
+    )

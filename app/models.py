@@ -158,6 +158,7 @@ class SdiInvoice(db.Model):
     iva_amount = db.Column(db.Float)
     invoice_type = db.Column(db.String(20))  # fattura, nota_credito
     direction = db.Column(db.String(10))  # ricevuta, emessa
+    importo_da_pagare = db.Column(db.Float)  # somma ImportoPagamento (netto ritenuta, rate); None se assente
     parsed_data = db.Column(db.Text)  # JSON with full parsed data
     uploaded_by = db.Column(db.Integer, db.ForeignKey("users.id"))
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)

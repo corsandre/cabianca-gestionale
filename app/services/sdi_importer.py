@@ -70,6 +70,7 @@ def import_sdi_file(content: bytes, filename: str, uploaded_by: int = None) -> d
             iva_amount=data["iva_amount"],
             invoice_type=data["invoice_type"],
             direction=data["direction"],
+            importo_da_pagare=data.get("importo_da_pagare"),
             parsed_data=str(data),
             uploaded_by=uploaded_by,
         )
@@ -229,3 +230,32 @@ def import_sdi_file(content: bytes, filename: str, uploaded_by: int = None) -> d
 
 # Alias per retrocompatibilita'
 import_sdi_xml = import_sdi_file
+
+
+def completa_importi_da_pagare() -> int:
+    """Una tantum (2.3.2): legge l'importo da pagare dai file (PDF TeamSystem o XML) delle fatture già importate."""
+    from app.models import Setting
+    if Setting.query.get("sdi_importo_da_pagare"):
+        return 0
+    n = 0
+    for inv in SdiInvoice.query.filter(SdiInvoice.importo_da_pagare.is_(None)).all():
+        path = inv.xml_path or ""
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, "rb") as f:
+                contenuto = f.read()
+            if path.lower().endswith(".pdf") or contenuto[:5] == b"%PDF-":
+                from app.services.pdf_parser import parse_fattura_pdf
+                v = parse_fattura_pdf(contenuto).get("importo_da_pagare")
+            else:
+                v = parse_fattura_xml(contenuto).get("importo_da_pagare")
+        except Exception:
+            continue
+        if v is not None:
+            inv.importo_da_pagare = v
+            n += 1
+    db.session.add(Setting(key="sdi_importo_da_pagare", value=str(n)))
+    db.session.commit()
+    logger.info(f"Importo da pagare letto da {n} fatture SDI.")
+    return n

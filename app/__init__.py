@@ -295,6 +295,7 @@ def _init_db(app):
         ("trattamenti", "deceduto", "BOOLEAN DEFAULT 0"),
         ("trattamenti", "gruppo", "VARCHAR(32)"),
         ("trattamenti", "colore", "VARCHAR(10)"),
+        ("sdi_invoices", "importo_da_pagare", "FLOAT"),
     ]
     for table, col, col_type in _migrate_columns:
         try:
@@ -330,6 +331,14 @@ def _init_db(app):
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Migrazione impronte movimenti bancari non riuscita: {e}")
+
+    # Importo da pagare (netto ritenuta) delle fatture SDI già importate (2.3.2)
+    try:
+        from app.services.sdi_importer import completa_importi_da_pagare
+        completa_importi_da_pagare()
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Lettura importi da pagare SDI non riuscita: {e}")
 
     # Backfill: ensure existing users have sections set
     try:

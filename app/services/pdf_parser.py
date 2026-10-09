@@ -167,6 +167,23 @@ def parse_fattura_pdf(pdf_content: bytes) -> dict:
         except ValueError:
             due_date = None
 
+    # Importo da pagare: somma delle rate nella sezione pagamento ("MP05 Bonifico ... 1.830,00");
+    # in mancanza, totale meno la ritenuta d'acconto ("RT02 (Ritenuta ...) 20,00 ... 460,00").
+    importo_da_pagare = None
+    rate = []
+    for line in text.split("\n"):
+        if re.match(r"\s*MP\d{2}\b", line):
+            nums = re.findall(_IT_AMOUNT, line)
+            if nums:
+                rate.append(_parse_it(nums[-1]))
+    if rate:
+        importo_da_pagare = round(sum(rate), 2)
+    else:
+        ritenute = [_parse_it(re.findall(_IT_AMOUNT, l)[-1]) for l in text.split("\n")
+                    if re.match(r"\s*RT0\d\b", l) and re.findall(_IT_AMOUNT, l)]
+        if ritenute and total:
+            importo_da_pagare = round(total - sum(ritenute), 2)
+
     # Direction based on P.IVA
     if sender_piva == CA_BIANCA_PIVA and receiver_piva == CA_BIANCA_PIVA:
         direction = "interna"
@@ -192,4 +209,5 @@ def parse_fattura_pdf(pdf_content: bytes) -> dict:
         "iva_amount": round(iva, 2),
         "direction": direction,
         "due_date": due_date,
+        "importo_da_pagare": importo_da_pagare,
     }

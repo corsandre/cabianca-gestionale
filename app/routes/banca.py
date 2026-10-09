@@ -415,18 +415,22 @@ def cerca_transazioni(bt_id):
             pass
 
     # Filtro fonte
+    # Le fatture SDI segnate "pagato" ma senza bonifico collegato restano cercabili anche
+    # senza "includi pagate" (quelle già collegate a un bonifico sono escluse sopra).
+    from app.services.reconciliation import _sdi_aperta
+    sdi_aperte = db.and_(Transaction.source == "sdi", _sdi_aperta())
     if source_filter == "sdi":
         query = query.filter(Transaction.source == "sdi")
         if not include_paid:
-            query = query.filter(Transaction.payment_status.in_(["da_pagare", "parziale"]))
+            query = query.filter(_sdi_aperta())
     elif source_filter == "altre":
         query = query.filter(Transaction.source.in_(["manuale", "banca"]))
         if not include_paid:
             query = query.filter(Transaction.payment_status != "pagato")
 
-    # Escludi pagate (per default, se non filtro per fonte)
+    # Escludi pagate (per default, se non filtro per fonte), tranne le SDI senza bonifico
     if not source_filter and not include_paid:
-        query = query.filter(Transaction.payment_status != "pagato")
+        query = query.filter(db.or_(Transaction.payment_status != "pagato", sdi_aperte))
 
     # Ricerca testo
     if search:
