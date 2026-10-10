@@ -207,8 +207,8 @@ struttura fisica vanno aggiornate in entrambi i file.
 
 #### Mortalità (`/allevamento/mortalita`)
 - Griglia settimanale per capannone + storico completo del ciclo (paginato).
-- Per ogni evento tre azioni da spuntare: rimozione dal PC di alimentazione, registrazione su Webfarm,
-  registrazione su RIFT. Ogni spunta salva data/ora e operatore; si può annullare.
+- Per ogni evento quattro azioni da spuntare: rimozione dal PC di alimentazione, registrazione su Webfarm,
+  registrazione su RIFT, invio all'ARAL. Ogni spunta salva data/ora e operatore; si può annullare.
 
 #### Spostamenti (`/allevamento/spostamenti`)
 - **Entrata** (da esterno), **Uscita** (macello, con categoria: fine ciclo 165-180 kg / scarto-sottopeso /

@@ -480,6 +480,8 @@ class EventoMortalita(db.Model):
     webfarm_operatore = db.Column(db.String(100))
     rift_data = db.Column(db.DateTime)
     rift_operatore = db.Column(db.String(100))
+    aral_data = db.Column(db.DateTime)          # inviato all'ARAL (Associazione Regionale Allevatori)
+    aral_operatore = db.Column(db.String(100))
     ciclo = db.relationship("Ciclo", backref="morti")
 
 

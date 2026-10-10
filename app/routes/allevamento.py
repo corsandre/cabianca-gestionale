@@ -318,6 +318,7 @@ AZIONI_MORTALITA = {
     "pc": ("pc_alimentazione_data", "pc_alimentazione_operatore"),
     "webfarm": ("webfarm_data", "webfarm_operatore"),
     "rift": ("rift_data", "rift_operatore"),
+    "aral": ("aral_data", "aral_operatore"),
 }
 
 

@@ -81,13 +81,13 @@
         <thead class="table-light">
             <tr>
                 <th>Data</th><th>CAP</th><th>Box</th><th>Capi</th><th>Causa</th><th>Note</th>
-                <th>PC alimentazione</th><th>Webfarm</th><th>RIFT</th><th>Fatto</th>
+                <th>PC alimentazione</th><th>Webfarm</th><th>RIFT</th><th>Inviato ARAL</th><th>Fatto</th>
                 {% if current_user.role == 'admin' %}<th></th>{% endif %}
             </tr>
         </thead>
         <tbody>
             {% for ev in pagination.items %}
-            {% set completate = (ev.pc_alimentazione_data is not none) + (ev.webfarm_data is not none) + (ev.rift_data is not none) %}
+            {% set completate = (ev.pc_alimentazione_data is not none) + (ev.webfarm_data is not none) + (ev.rift_data is not none) + (ev.aral_data is not none) %}
             <tr>
                 <td>{{ ev.data.strftime('%d/%m/%Y') }}</td>
                 <td>{{ ev.capannone_numero }}</td>
@@ -99,6 +99,7 @@
                     ('pc', ev.pc_alimentazione_data, ev.pc_alimentazione_operatore, 'PC alim.'),
                     ('webfarm', ev.webfarm_data, ev.webfarm_operatore, 'Webfarm'),
                     ('rift', ev.rift_data, ev.rift_operatore, 'RIFT'),
+                    ('aral', ev.aral_data, ev.aral_operatore, 'ARAL'),
                 ] %}
                 <td>
                     {% if campo_data %}
@@ -113,7 +114,7 @@
                 </td>
                 {% endfor %}
                 <td class="text-center">
-                    <span class="badge {{ 'bg-success' if completate == 3 else ('bg-warning text-dark' if completate > 0 else 'bg-secondary') }}">{{ completate }}/3</span>
+                    <span class="badge {{ 'bg-success' if completate == 4 else ('bg-warning text-dark' if completate > 0 else 'bg-secondary') }}">{{ completate }}/4</span>
                 </td>
                 {% if current_user.role == 'admin' %}
                 <td>

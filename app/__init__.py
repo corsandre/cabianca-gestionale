@@ -284,6 +284,8 @@ def _init_db(app):
         ("eventi_mortalita", "webfarm_operatore", "VARCHAR(100)"),
         ("eventi_mortalita", "rift_data", "DATETIME"),
         ("eventi_mortalita", "rift_operatore", "VARCHAR(100)"),
+        ("eventi_mortalita", "aral_data", "DATETIME"),
+        ("eventi_mortalita", "aral_operatore", "VARCHAR(100)"),
         ("trattamenti", "chiuso_anticipatamente", "BOOLEAN DEFAULT 0"),
         ("razioni_box_v2", "stimato", "BOOLEAN DEFAULT 0"),
         ("consegne_siero", "speditore_id", "INTEGER REFERENCES speditori_siero(id)"),
