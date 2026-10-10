@@ -153,5 +153,9 @@ class LettoreImpianto:
         {"brix": float o None, "siero": {nome ricetta: %}}; {} se il tipo di impianto non lo prevede."""
         return {}
 
+    def capi_per_box(self) -> dict:
+        """Capi presenti in ogni box secondo l'impianto {numero box: capi}; {} se non lo sa."""
+        return {}
+
     def chiudi(self):
         pass

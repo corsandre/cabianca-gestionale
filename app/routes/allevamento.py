@@ -564,6 +564,15 @@ def spostamenti():
                            oggi=date.today())
 
 
+@bp.route("/spostamenti/confronto")
+@login_required
+def spostamenti_confronto():
+    """Capi per box: gestionale contro PC di alimentazione, con i movimenti dei box diversi."""
+    _check_allevamento()
+    from app.services.allevamento_confronto_box import confronta
+    return render_template("allevamento/confronto_box.html", esito=confronta(), CAP_PER_BOX=CAP_PER_BOX)
+
+
 @bp.route("/spostamenti/new", methods=["POST"])
 @login_required
 def spostamenti_new():

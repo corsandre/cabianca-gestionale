@@ -8,7 +8,8 @@ Comportamento
 - Modalità manuale: nessuna connessione all'impianto; il servizio resta in attesa e ricontrolla
   le impostazioni ogni minuto.
 - Controllo periodico (ogni `impianto_controllo_min`, 5 minuti se l'impianto non risponde):
-  fotografia dello schermo + orari dei pasti. Salvato in impianto_controlli. Su Telegram SOLO: un riepilogo al giorno, impianto non raggiungibile (dopo 3 tentativi) o di nuovo
+  fotografia dello schermo + orari dei pasti. Salvato in impianto_controlli. Su Telegram SOLO: un riepilogo al giorno (alle 6:50, con il confronto dei capi per box
+  tra gestionale e PC: messaggio solo se ci sono differenze), impianto non raggiungibile (dopo 3 tentativi) o di nuovo
   raggiungibile, orologio dell'impianto spostato di oltre 2 minuti, stato sconosciuto.
 - Orari dei pasti cambiati sull'impianto: tra un controllo e l'altro si rileggono solo gli orari
   (file di pochi byte, niente fotografia) ogni 10 minuti, così anche un pasto anticipato viene seguito
@@ -46,7 +47,7 @@ import io
 import logging
 import os
 import time as orologio
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 from . import (crea_lettore, impostazione, modalita, cartella_dati, percorso_chiave,
                MANUALE, AUTOMATICO, NOMI_MODALITA)
@@ -63,6 +64,7 @@ MINUTI_CONTROLLO_ORARI = 10
 SECONDI_FOTO_CARICO = 20           # durante il carico dei componenti, per cogliere l'inizio della miscelazione
 SECONDI_MISCELAZIONE_RISERVA = 360  # se la durata della ricetta non si legge
 SECONDI_SCARTO_OROLOGIO = 120
+ORA_RIEPILOGO = time(6, 50)         # riepilogo "Impianto OK" e confronto dei capi per box, una volta al giorno
 NOMI_COMPONENTI = {"acqua": "acqua", "siero": "siero", "farina": "farina"}
 
 
@@ -93,7 +95,6 @@ class Servizio:
         self.orari = []
         self.guasti = 0
         self.avvisato_guasto = False
-        self.riepilogo_del = None
         self.pasto_mancato_avvisato = None
         self.inizio_pasto = None
         self.inizio_linee = {}
@@ -103,6 +104,34 @@ class Servizio:
         self.schermata_errata = None     # stato della schermata non riconosciuta, finché non torna giusta
         self.aggancio = False            # True mentre si aggancia un pasto già in corso (niente doppioni)
         self.riempimento = None          # (istante, linea, pasto): avviso "tra 1 minuto riempimento tubi"
+
+    # ── riepilogo del mattino ──────────────────────────────────────────────
+    @staticmethod
+    def _riepilogo_del():
+        """Giorno dell'ultimo riepilogo (salvato: un riavvio del servizio non lo rimanda)."""
+        v = impostazione("impianto_riepilogo_del")
+        try:
+            return date.fromisoformat(v) if v else None
+        except ValueError:
+            return None
+
+    def _riepilogo_da_fare(self, adesso):
+        return adesso.time() >= ORA_RIEPILOGO and self._riepilogo_del() != adesso.date()
+
+    def _riepilogo(self, adesso, c, l):
+        from app import db
+        from app.services.allevamento_scorte import set_setting
+        set_setting("impianto_riepilogo_del", adesso.date().isoformat())
+        db.session.commit()
+        self._manda(f"🟢 Impianto OK – pasti {c.orari.replace(',', ' · ')} – prossimo alle {_hm(l.prossimo_pasto)}"
+                    f" – orologio dell'impianto {self._scarto_testo(c.scarto_orologio_s)}", self._chat_pasti())
+        try:
+            from app.services.allevamento_confronto_box import confronta, testo_telegram
+            testo = testo_telegram(confronta(self.lettore))
+            if testo:
+                self._manda(testo, self._chat_pasti())
+        except Exception as e:
+            log.warning("confronto capi per box non riuscito: %s", e)
 
     # ── Telegram ───────────────────────────────────────────────────────────
     def _manda(self, testo, canale, png=None):
@@ -153,6 +182,10 @@ class Servizio:
                 return attesa
             intervallo = timedelta(minutes=5 if self.guasti or self.schermata_errata
                                    else int(impostazione("impianto_controllo_min") or 60))
+            if self._riepilogo_da_fare(adesso):
+                # alle 6:50 un controllo completo subito, per il riepilogo (al massimo ogni 5 minuti
+                # se il PC non risponde o la schermata non è quella giusta)
+                intervallo = min(intervallo, timedelta(minutes=5))
             if not self.ultimo_controllo or adesso - self.ultimo_controllo >= intervallo:
                 self._controllo(adesso)
             elif not self.guasti and (not self.ultimi_orari
@@ -344,11 +377,8 @@ class Servizio:
         self._controlla_parametri(adesso)
         if l.fase != SCONOSCIUTA:
             self._ricetta_in_uso(l, adesso)
-        if (self.riepilogo_del != adesso.date() and adesso.hour >= 6 and l.fase != SCONOSCIUTA
-                and l.prossimo_pasto and l.ora_pc):
-            self.riepilogo_del = adesso.date()
-            self._manda(f"🟢 Impianto OK – pasti {c.orari.replace(',', ' · ')} – prossimo alle {_hm(l.prossimo_pasto)}"
-                        f" – orologio dell'impianto {self._scarto_testo(c.scarto_orologio_s)}", self._chat_pasti())
+        if self._riepilogo_da_fare(adesso) and l.fase != SCONOSCIUTA and l.prossimo_pasto and l.ora_pc:
+            self._riepilogo(adesso, c, l)
 
     def _avvisa_orari(self, adesso, prima, dopo, prossimo):
         testo = (f"🕐 <b>Orari dei pasti cambiati</b> sull'impianto: {prima.replace(',', ' · ')} → "

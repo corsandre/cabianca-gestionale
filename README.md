@@ -217,6 +217,11 @@ struttura fisica vanno aggiornate in entrambi i file.
 - Pulsante **PC alim.** per segnare che lo spostamento è stato riportato sul PC di alimentazione: salva data/ora
   e operatore (badge verde, un clic per annullare), come per la mortalità.
 - Modificabili ed eliminabili dall'admin.
+- **Confronta con il PC**: capi di ogni box nel gestionale (ultimo censimento ± decessi e spostamenti) contro
+  quelli del PC di alimentazione (BOX.DB, `NRSUINI`, letto in sola lettura); per i box diversi mostra i
+  movimenti dall'ultimo censimento e se sono stati segnati sul PC
+  (`app/services/allevamento_confronto_box.py`). Lo stesso controllo gira ogni mattina alle 6:50 insieme al
+  riepilogo "Impianto OK" e manda un messaggio nel gruppo dell'allevamento solo se trova differenze.
 
 #### Consegne mangime e siero (`/allevamento/consegne`)
 - Registro consegne con data/ora, quantità (quintali), foto bolla, note; modifica ed eliminazione riservate

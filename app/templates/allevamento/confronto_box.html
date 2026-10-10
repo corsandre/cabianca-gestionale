@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Allevamento – Confronto con il PC{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-pc-display me-2" style="color:#c2185b"></i>Capi per box: gestionale e PC</h4>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('allevamento.spostamenti_confronto') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-clockwise me-1"></i>Rileggi</a>
+        <a href="{{ url_for('allevamento.spostamenti') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Spostamenti</a>
+    </div>
+</div>
+<p class="text-muted small">Il gestionale calcola i capi di ogni box dall'ultimo censimento{% if esito.censimento %} ({{ esito.censimento.strftime('%d/%m/%Y') }}){% endif %}, meno i decessi e più/meno gli spostamenti; il PC di alimentazione li ha nei dati dei box. Se un box non coincide, di solito manca uno spostamento o un decesso da una delle due parti: sotto ci sono i movimenti di quel box per capire quale. Letto il {{ esito.letto_il.strftime('%d/%m/%Y alle %H:%M') }}. Ogni mattina alle 6:50 lo stesso controllo manda un messaggio nel gruppo dell'allevamento solo se trova differenze.</p>
+
+{% if not esito.ok %}
+<div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> {{ esito.errore }}</div>
+{% else %}
+<div class="row g-2 mb-3">
+    <div class="col-4"><div class="cb-card p-3 text-center"><div class="fs-4 fw-bold">{{ esito.tot_gestionale }}</div><small class="text-muted">capi nel gestionale</small></div></div>
+    <div class="col-4"><div class="cb-card p-3 text-center"><div class="fs-4 fw-bold">{{ esito.tot_pc }}</div><small class="text-muted">capi sul PC</small></div></div>
+    <div class="col-4"><div class="cb-card p-3 text-center"><div class="fs-4 fw-bold {% if esito.differenze %}text-danger{% else %}text-success{% endif %}">{{ esito.box - esito.differenze|length }} / {{ esito.box }}</div><small class="text-muted">box uguali</small></div></div>
+</div>
+
+{% if not esito.differenze %}
+<div class="cb-card p-4 text-center text-success"><i class="bi bi-check-circle fs-3 d-block mb-1"></i>Tutti i box coincidono tra gestionale e PC.</div>
+{% else %}
+{% for d in esito.differenze %}
+<div class="cb-card p-3 mb-3">
+    <div class="d-flex justify-content-between flex-wrap gap-2 mb-2">
+        <h5 class="mb-0">Box {{ d.box }} <small class="text-muted">· capannone {{ d.capannone }}</small></h5>
+        <div>gestionale <b>{{ d.gestionale }}</b> · PC <b>{{ d.pc if d.pc is not none else '–' }}</b>
+            {% if d.diff is not none %}<span class="badge bg-danger ms-1">{{ '%+d'|format(d.diff) }} nel gestionale</span>{% endif %}</div>
+    </div>
+    {% if d.movimenti %}
+    <div class="table-responsive">
+    <table class="table table-sm mb-0">
+        <thead><tr><th>Data</th><th>Movimento</th><th class="text-end">Capi</th><th>Nota</th><th>Segnato sul PC</th></tr></thead>
+        <tbody>
+        {% for m in d.movimenti %}
+        <tr>
+            <td class="small text-nowrap">{{ m.data.strftime('%d/%m/%Y') }}</td>
+            <td>{{ m.testo }}</td>
+            <td class="text-end fw-bold {% if m.segno > 0 %}text-success{% else %}text-danger{% endif %}">{{ '%+d'|format(m.segno) }}</td>
+            <td class="small text-muted">{{ m.nota[:60] }}</td>
+            <td class="small">{% if m.sul_pc %}<i class="bi bi-check-circle text-success"></i> {{ m.sul_pc.strftime('%d/%m') }}{% else %}<span class="text-warning"><i class="bi bi-exclamation-circle"></i> non segnato</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="small text-muted mb-0">Nessun movimento dall'ultimo censimento: la differenza viene dal censimento o da un movimento non registrato.</p>
+    {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endblock %}
