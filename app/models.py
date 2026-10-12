@@ -507,6 +507,8 @@ class Spostamento(db.Model):
     registrato_da = db.Column(db.String(20), default="web")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     ciclo = db.relationship("Ciclo", backref="spostamenti")
+    pagine_modello4 = db.relationship("PaginaModello4", order_by="PaginaModello4.ordine",
+                                      cascade="all, delete-orphan", lazy="select")
 
 
 class SpeditoreSiero(db.Model):
@@ -594,6 +596,17 @@ class OrarioPastoEffettivo(db.Model):
     pasto = db.Column(db.Integer, nullable=False)
     ora = db.Column(db.Time, nullable=False)
     operatore = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class PaginaModello4(db.Model):
+    """Pagina (foto o PDF) del Modello 4 di un'entrata o un'uscita di animali: documento di più pagine."""
+    __tablename__ = "modello4_pagine"
+    id = db.Column(db.Integer, primary_key=True)
+    spostamento_id = db.Column(db.Integer, db.ForeignKey("spostamenti_animali.id"), nullable=False, index=True)
+    path = db.Column(db.String(300), nullable=False)        # relativo a UPLOAD_FOLDER
+    ordine = db.Column(db.Integer, default=0)
+    caricato_da = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 

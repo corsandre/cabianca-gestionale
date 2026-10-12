@@ -629,6 +629,8 @@ def spostamenti_new():
             bolla_path=_salva_bolla(request.files.get("bolla")) if tipo in ("entrata", "uscita") else None,
         )
         db.session.add(s)
+        if tipo in ("entrata", "uscita"):
+            _aggiungi_pagine_modello4(s, request.files.getlist("modello4"))
         db.session.commit()
         flash(f"Spostamento registrato: {qty} capi ({tipo}).", "success")
     except Exception as e:
@@ -714,6 +716,102 @@ def spostamenti_bolla(sp_id):
     return jsonify(ok=True, path=path)
 
 
+# ── Modello 4 (documento di più pagine delle entrate e uscite) ────────────
+
+def _aggiungi_pagine_modello4(s, files):
+    """Aggiunge in coda le pagine caricate (foto o PDF). Ritorna (aggiunte, scartate)."""
+    from app.models import PaginaModello4
+    ultimo = max((p.ordine for p in s.pagine_modello4), default=0)
+    aggiunte = scartate = 0
+    chi = current_user.display_name or current_user.username
+    for f in files:
+        if not f or not f.filename:
+            continue
+        path = _salva_bolla(f)
+        if not path:
+            scartate += 1
+            continue
+        ultimo += 1
+        s.pagine_modello4.append(PaginaModello4(path=path, ordine=ultimo, caricato_da=chi))
+        aggiunte += 1
+    return aggiunte, scartate
+
+
+@bp.route("/spostamenti/<int:sp_id>/modello4")
+@login_required
+def spostamenti_modello4(sp_id):
+    _check_allevamento()
+    from app.models import Spostamento
+    s = db.session.get(Spostamento, sp_id) or abort(404)
+    return render_template("allevamento/modello4.html", s=s)
+
+
+@bp.route("/spostamenti/<int:sp_id>/modello4", methods=["POST"])
+@login_required
+def spostamenti_modello4_carica(sp_id):
+    _check_allevamento()
+    from app.models import Spostamento
+    s = db.session.get(Spostamento, sp_id)
+    if not s:
+        return jsonify(error="Spostamento non trovato."), 404
+    aggiunte, scartate = _aggiungi_pagine_modello4(s, request.files.getlist("pagine"))
+    db.session.commit()
+    if not aggiunte:
+        return jsonify(error="Nessun file valido (usa foto jpg, png, webp o pdf)."), 400
+    return jsonify(ok=True, aggiunte=aggiunte, scartate=scartate, pagine=len(s.pagine_modello4))
+
+
+@bp.route("/spostamenti/<int:sp_id>/modello4/<int:pid>/elimina", methods=["POST"])
+@login_required
+def spostamenti_modello4_elimina(sp_id, pid):
+    _check_allevamento()
+    from app.models import PaginaModello4
+    p = db.session.get(PaginaModello4, pid)
+    if not p or p.spostamento_id != sp_id:
+        abort(404)
+    _elimina_bolla(p.path)
+    db.session.delete(p)
+    db.session.commit()
+    flash("Pagina eliminata.", "success")
+    return redirect(url_for("allevamento.spostamenti_modello4", sp_id=sp_id))
+
+
+@bp.route("/spostamenti/<int:sp_id>/modello4/pdf")
+@login_required
+def spostamenti_modello4_pdf(sp_id):
+    """Tutte le pagine del Modello 4 in un unico PDF, nell'ordine di caricamento."""
+    _check_allevamento()
+    import io
+    from flask import send_file
+    from PIL import Image, ImageOps
+    from pypdf import PdfReader, PdfWriter
+    from app.models import Spostamento
+    s = db.session.get(Spostamento, sp_id) or abort(404)
+    if not s.pagine_modello4:
+        abort(404)
+    out = PdfWriter()
+    for p in s.pagine_modello4:
+        percorso = os.path.join(current_app.config["UPLOAD_FOLDER"], p.path)
+        try:
+            if percorso.lower().endswith(".pdf"):
+                for pagina in PdfReader(percorso).pages:
+                    out.add_page(pagina)
+            else:
+                img = ImageOps.exif_transpose(Image.open(percorso)).convert("RGB")
+                buf = io.BytesIO()
+                img.save(buf, format="PDF", resolution=150)
+                buf.seek(0)
+                for pagina in PdfReader(buf).pages:
+                    out.add_page(pagina)
+        except (OSError, ValueError) as e:
+            current_app.logger.warning(f"Modello 4: pagina {p.id} non leggibile ({e})")
+    risultato = io.BytesIO()
+    out.write(risultato)
+    risultato.seek(0)
+    nome = f"Modello4_{s.data.strftime('%Y-%m-%d')}_{s.tipo}_{s.quantita}capi.pdf"
+    return send_file(risultato, mimetype="application/pdf", as_attachment=True, download_name=nome)
+
+
 @bp.route("/spostamenti/<int:sp_id>/delete", methods=["POST"])
 @login_required
 def spostamenti_delete(sp_id):
@@ -722,6 +820,8 @@ def spostamenti_delete(sp_id):
     s = db.session.get(Spostamento, sp_id)
     if s:
         _elimina_bolla(s.bolla_path)
+        for p in s.pagine_modello4:
+            _elimina_bolla(p.path)
         db.session.delete(s)
         db.session.commit()
         flash("Spostamento eliminato.", "success")

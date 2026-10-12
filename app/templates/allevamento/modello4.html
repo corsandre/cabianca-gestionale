@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Allevamento – Modello 4{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h4 class="mb-0"><i class="bi bi-files me-2" style="color:#c2185b"></i>Modello 4</h4>
+    <div class="d-flex gap-2">
+        {% if s.pagine_modello4 %}
+        <a href="{{ url_for('allevamento.spostamenti_modello4_pdf', sp_id=s.id) }}" class="btn btn-sm" style="background:#c2185b;color:#fff"><i class="bi bi-file-earmark-pdf me-1"></i>Scarica tutto in PDF</a>
+        {% endif %}
+        <a href="{{ url_for('allevamento.spostamenti') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Spostamenti</a>
+    </div>
+</div>
+
+<div class="cb-card p-3 mb-3">
+    <div class="d-flex flex-wrap gap-3 align-items-center">
+        <span class="badge {{ 'bg-success' if s.tipo == 'entrata' else 'bg-danger' }}">{{ 'Entrata' if s.tipo == 'entrata' else 'Uscita' }}</span>
+        <span>{{ s.data.strftime('%d/%m/%Y') }}</span>
+        <span><b>{{ s.quantita }}</b> capi{% if s.peso_medio_kg %} · {{ s.peso_medio_kg }} kg di media{% endif %}</span>
+        {% if s.box_origine %}<span class="text-muted">da box {{ s.box_origine }}</span>{% endif %}
+        {% if s.box_destinazione %}<span class="text-muted">a box {{ s.box_destinazione }}</span>{% endif %}
+        {% if s.motivo %}<span class="text-muted">{{ s.motivo }}</span>{% endif %}
+    </div>
+</div>
+
+<div class="cb-card p-3 mb-3">
+    <form id="formPagine" class="d-flex flex-wrap gap-2 align-items-center">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="form-label mb-0 small" for="nuovePagine">Aggiungi pagine (foto o PDF, anche più file insieme)</label>
+        <input type="file" id="nuovePagine" class="form-control form-control-sm" style="max-width:360px" accept="image/*,.pdf" multiple>
+        <button type="submit" class="btn btn-sm" style="background:#c2185b;color:#fff" id="btnCarica"><i class="bi bi-upload me-1"></i>Carica</button>
+    </form>
+</div>
+
+{% if s.pagine_modello4 %}
+<div class="row g-3">
+    {% for p in s.pagine_modello4 %}
+    {% set url = url_for('static', filename='uploads/' + p.path) %}
+    <div class="col-12 col-md-6 col-lg-4">
+        <div class="cb-card p-2 h-100 d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong>Pagina {{ loop.index }}</strong>
+                <form method="post" action="{{ url_for('allevamento.spostamenti_modello4_elimina', sp_id=s.id, pid=p.id) }}" onsubmit="return confirm('Eliminare questa pagina?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-danger py-0"><i class="bi bi-trash"></i></button>
+                </form>
+            </div>
+            {% if p.path.lower().endswith('.pdf') %}
+            <a href="{{ url }}" target="_blank" class="d-block text-center p-4 border rounded flex-grow-1"><i class="bi bi-file-earmark-pdf fs-1 d-block"></i>Apri il PDF</a>
+            {% else %}
+            <a href="{{ url }}" target="_blank"><img src="{{ url }}" alt="Modello 4, pagina {{ loop.index }}" class="img-fluid rounded border"></a>
+            {% endif %}
+            <small class="text-muted mt-1">{{ p.caricato_da or '' }}{% if p.created_at %} · {{ p.created_at.strftime('%d/%m/%Y') }}{% endif %}</small>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="cb-card p-4 text-center text-muted">Nessuna pagina caricata.</div>
+{% endif %}
+
+<script>
+function cbComprimiImmagine(file, maxDim, qualita) {
+    return new Promise(function (resolve) {
+        if (!file.type.startsWith('image/')) { resolve(file); return; }
+        const img = new Image(); const url = URL.createObjectURL(file);
+        img.onload = function () {
+            URL.revokeObjectURL(url);
+            let w = img.width, h = img.height;
+            if (w > maxDim || h > maxDim) { if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; } else { w = Math.round(w * maxDim / h); h = maxDim; } }
+            const c = document.createElement('canvas'); c.width = w; c.height = h;
+            c.getContext('2d').drawImage(img, 0, 0, w, h);
+            c.toBlob(function (blob) {
+                if (!blob || blob.size >= file.size) { resolve(file); return; }
+                resolve(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }));
+            }, 'image/jpeg', qualita);
+        };
+        img.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
+        img.src = url;
+    });
+}
+document.getElementById('formPagine').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const input = document.getElementById('nuovePagine');
+    if (!input.files.length) return;
+    const btn = document.getElementById('btnCarica');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Caricamento…';
+    const fd = new FormData();
+    for (const f of input.files) fd.append('pagine', await cbComprimiImmagine(f, 2000, 0.8));
+    fd.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
+    try {
+        const resp = await fetch('{{ url_for('allevamento.spostamenti_modello4_carica', sp_id=s.id) }}', { method: 'POST', body: fd, credentials: 'same-origin' });
+        const json = await resp.json();
+        if (!resp.ok || !json.ok) throw new Error(json.error || 'errore');
+    } catch (err) { alert('Caricamento non riuscito: ' + err.message); }
+    window.location.reload();
+});
+</script>
+{% endblock %}

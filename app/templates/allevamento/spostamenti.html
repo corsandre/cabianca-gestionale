@@ -91,7 +91,7 @@
         <thead class="table-light">
             <tr>
                 <th>Data</th><th>Tipo</th><th>Da</th><th>A</th><th>Capi</th>
-                <th>Peso medio</th><th>Bolla</th><th>Motivo</th><th>PC alimentazione</th>
+                <th>Peso medio</th><th>Bolla</th><th>Modello 4</th><th>Motivo</th><th>PC alimentazione</th>
                 {% if current_user.role == 'admin' %}<th></th>{% endif %}
             </tr>
         </thead>
@@ -133,6 +133,21 @@
                     <label class="btn btn-sm btn-outline-secondary py-0 px-1 mb-0" title="Aggiungi foto bolla">
                         <i class="bi bi-camera"></i>
                         <input type="file" class="cb-bolla-input-later d-none" data-id="{{ s.id }}" accept="image/*,.pdf" capture="environment">
+                    </label>
+                    {% endif %}
+                    {% else %}–{% endif %}
+                </td>
+                <td class="text-nowrap">
+                    {% if s.tipo in ('entrata', 'uscita') %}
+                    {% set npag = s.pagine_modello4|length %}
+                    {% if npag %}
+                    <a href="{{ url_for('allevamento.spostamenti_modello4', sp_id=s.id) }}" title="Modello 4: {{ npag }} pagin{{ 'a' if npag == 1 else 'e' }}">
+                        <i class="bi bi-files"></i> {{ npag }}
+                    </a>
+                    {% else %}
+                    <label class="btn btn-sm btn-outline-secondary py-0 px-1 mb-0" title="Carica le pagine del Modello 4 (foto o PDF, anche più di una)">
+                        <i class="bi bi-camera"></i><span class="small ms-1">M4</span>
+                        <input type="file" class="cb-m4-input-later d-none" data-id="{{ s.id }}" accept="image/*,.pdf" multiple>
                     </label>
                     {% endif %}
                     {% else %}–{% endif %}
@@ -349,6 +364,10 @@
                             <label class="form-label">Foto bolla</label>
                             <input type="file" name="bolla" class="form-control cb-bolla-input" accept="image/*,.pdf" capture="environment">
                         </div>
+                        <div class="col-12">
+                            <label class="form-label">Modello 4 <small class="text-muted">(tutte le pagine: foto o PDF, si possono scegliere più file)</small></label>
+                            <input type="file" name="modello4" class="form-control cb-m4-input" accept="image/*,.pdf" multiple>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Motivo</label>
@@ -502,6 +521,38 @@ async function cbFetchConRetry(url, body, tentativiMax, onTentativo) {
         }
     }
 }
+
+// Modello 4: più pagine; le foto vengono compresse come quelle della bolla.
+async function cbComprimiTutte(fileList) {
+    const out = [];
+    for (const f of fileList) out.push(await cbComprimiImmagine(f, 2000, 0.8));
+    return out;
+}
+document.querySelectorAll('.cb-m4-input').forEach(function (input) {
+    input.addEventListener('change', async function () {
+        if (!input.files || !input.files.length) return;
+        const dt = new DataTransfer();
+        for (const f of await cbComprimiTutte(input.files)) dt.items.add(f);
+        input.files = dt.files;
+    });
+});
+document.querySelectorAll('.cb-m4-input-later').forEach(function (input) {
+    input.addEventListener('change', async function () {
+        if (!input.files || !input.files.length) return;
+        const label = input.closest('label');
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        label.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        try {
+            const fd = new FormData();
+            for (const f of await cbComprimiTutte(input.files)) fd.append('pagine', f);
+            fd.append('csrf_token', csrfToken);
+            await cbFetchConRetry('/allevamento/spostamenti/' + input.dataset.id + '/modello4', fd, 3, function () {});
+        } catch (err) {
+            alert('Caricamento del Modello 4 non riuscito: ' + err.message);
+        }
+        window.location.reload();
+    });
+});
 
 // Upload posticipato della bolla dalla tabella (icona 📷 sulle righe senza foto),
 // stesso meccanismo delle Consegne.

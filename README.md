@@ -214,6 +214,10 @@ struttura fisica vanno aggiornate in entrambi i file.
 - **Entrata** (da esterno), **Uscita** (macello, con categoria: fine ciclo 165-180 kg / scarto-sottopeso /
   Macellati Ca Bianca Agriturismo / Venduti Ca Bianca Agriturismo), **Interno** (box → box). Il box è sempre obbligatorio.
 - Peso medio e foto della bolla per entrate/uscite; contatori capi/kg per categoria di uscita, filtrabili.
+- **Modello 4** per entrate/uscite: documento di più pagine (foto o PDF, anche più file insieme), caricabile
+  alla registrazione o dopo dalla tabella (colonna "Modello 4"); la pagina del documento mostra le pagine in
+  ordine, permette di aggiungerne o toglierne e di scaricarle tutte in un unico PDF (tabella `modello4_pagine`,
+  file in `static/uploads/allevamento_consegne/`).
 - Pulsante **PC alim.** per segnare che lo spostamento è stato riportato sul PC di alimentazione: salva data/ora
   e operatore (badge verde, un clic per annullare), come per la mortalità.
 - Modificabili ed eliminabili dall'admin.
