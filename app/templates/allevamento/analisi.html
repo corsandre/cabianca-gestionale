@@ -95,6 +95,7 @@
 .cb-analisi table.data tr.tot td { font-weight: 600; border-bottom: 0; }
 .cb-analisi #t-tot th { white-space: normal; }
 .cb-analisi table.data td.nota { text-align: left; white-space: normal; color: var(--muted); font-size: 12px; }
+.cb-analisi table.data small.nota { white-space: normal; color: var(--muted); font-size: 12px; }
 
 /* rispetto al peso vivo */
 .cb-analisi .pv { display: grid; gap: 12px; }
@@ -357,11 +358,12 @@
   const entrateFiltrate = () => RAW.entrate.map(e => Object.assign({}, e, { n: state.linea === "tutte" ? e.n : (e.L[state.linea] || 0) })).filter(e => e.n > 0);
   const usciteFiltrate = () => RAW.uscite.filter(u => state.linea === "tutte" || u.linea === Number(state.linea));
   const tra = (arr, da, a) => arr.filter(x => x.data >= da && x.data <= a);
-  // date del periodo per capi e movimenti: fino a ieri come l'alimentazione; "tutto il ciclo" dal primo giorno
+  // date del periodo: i consumi fino a ieri (la giornata di oggi è in corso); morti, entrate e uscite
+  // fino a oggi compreso (aMov), perché sono già registrati e "Capi presenti" li conta. "Tutto il ciclo" dal primo giorno
   function intervallo() {
-    if (state.periodo === "ciclo") return { da: RAW.ciclo.inizio, a: IERI, daPrev: null, aPrev: null };
+    if (state.periodo === "ciclo") return { da: RAW.ciclo.inizio, a: IERI, aMov: OGGI, daPrev: null, aPrev: null };
     const n = Number(state.periodo), da = addDays(IERI, -(n - 1));
-    return { da, a: IERI, daPrev: addDays(da, -n), aPrev: addDays(da, -1) };
+    return { da, a: IERI, aMov: OGGI, daPrev: addDays(da, -n), aPrev: addDays(da, -1) };
   }
 
   // ── tema per i grafici ─────────────────────────────────────────
@@ -530,8 +532,8 @@
     // capi: a inizio periodo (0 per tutto il ciclo), entrati e usciti nel periodo
     const I = intervallo();
     const capiInizio = capiAl(addDays(I.da, -1), L);
-    const entrati = sum(tra(entrateFiltrate(), I.da, I.a).map(e => e.n));
-    const usc = tra(usciteFiltrate(), I.da, I.a), uscPrev = I.daPrev ? tra(usciteFiltrate(), I.daPrev, I.aPrev) : [];
+    const entrati = sum(tra(entrateFiltrate(), I.da, I.aMov).map(e => e.n));
+    const usc = tra(usciteFiltrate(), I.da, I.aMov), uscPrev = I.daPrev ? tra(usciteFiltrate(), I.daPrev, I.aPrev) : [];
     const usciti = sum(usc.map(u => u.n));
     const perCat = {};
     for (const u of usc) perCat[u.categoria] = (perCat[u.categoria] || 0) + u.n;
@@ -583,7 +585,7 @@
   function mortiFiltrati() { return RAW.morti.filter(m => state.linea === "tutte" || CAP_LINEA[m.cap] === Number(state.linea)); }
   function mortalitaPeriodo() {
     const ms = mortiFiltrati();
-    const { da, a, daPrev, aPrev } = intervallo();
+    const { da, aMov: a, daPrev, aPrev } = intervallo();
     const cur = tra(ms, da, a);
     const prev = daPrev ? tra(ms, daPrev, aPrev) : [];
     // base per la %: capi a inizio periodo più quelli entrati nel periodo (per tutto il ciclo: tutti gli entrati)
@@ -649,16 +651,19 @@
 
     // bilancio del periodo: inizio + entrati − morti − usciti = fine
     const tm = document.getElementById("t-mov"); tm.replaceChildren();
-    document.getElementById("c-mov-sub").textContent = `Dal ${lungo(I.da)} a ieri${state.linea === "tutte" ? "" : " · " + lineaNome(state.linea)}.`;
+    document.getElementById("c-mov-sub").textContent = `Dal ${lungo(I.da)} a oggi${state.linea === "tutte" ? "" : " · " + lineaNome(state.linea)}.`;
     const tb = el("tbody");
     const riga = (lab, v, cls, nota) => {
+      // la nota va sotto il nome della riga: in una terza colonna faceva scorrere il riquadro
       const tr = el("tr", cls ? { class: cls } : {});
-      tr.appendChild(el("td", {}, lab)); tr.appendChild(el("td", {}, v)); tr.appendChild(el("td", { class: "nota" }, nota || ""));
+      const td = el("td", {}, lab);
+      if (nota) { td.appendChild(el("br")); td.appendChild(el("small", { class: "nota" }, nota)); }
+      tr.appendChild(td); tr.appendChild(el("td", {}, v));
       tb.appendChild(tr);
     };
     const inizio = capiAl(addDays(I.da, -1), L);
     riga(state.periodo === "ciclo" ? "Capi a inizio ciclo" : `Capi al ${ggmm(addDays(I.da, -1))}`, nf(inizio));
-    const entP = tra(ent, I.da, I.a), morP = sum(tra(mor, I.da, I.a).map(x => x.n)), uscP = tra(usc, I.da, I.a);
+    const entP = tra(ent, I.da, I.aMov), morP = sum(tra(mor, I.da, I.aMov).map(x => x.n)), uscP = tra(usc, I.da, I.aMov);
     for (const e of entP) riga(`+ Entrati il ${ggmm(e.data)}`, nf(e.n), "", e.origine === "censimento" ? "consegna di suinetti" : "");
     riga("− Morti", nf(morP));
     const cats = {};
@@ -666,14 +671,14 @@
     for (const [c, v] of Object.entries(cats)) riga(`− Usciti: ${nomeUscita(c)}`, nf(v.n), "", v.kg ? `${nf(v.kg)} kg, ${nf(v.kg / v.n, 1)} kg/capo` : "");
     if (!uscP.length) riga("− Usciti", "0");
     const calcolati = inizio + sum(entP.map(e => e.n)) - morP - sum(uscP.map(u => u.n));
-    const contati = capiAl(I.a, L);
+    const contati = capiAl(I.aMov, L);
     if (calcolati !== contati) {
       riga("= Capi dal conto", nf(calcolati));
       riga("Rettifiche dei censimenti", (contati > calcolati ? "+" : "−") + nf(Math.abs(contati - calcolati)), "",
         state.linea === "tutte" ? "differenza trovata contando i capi a un censimento"
                                 : "spostamenti da o verso altre linee e differenze trovate ai censimenti");
     }
-    riga(`= Capi al ${ggmm(I.a)}`, nf(contati), "tot");
+    riga(`= Capi oggi, ${ggmm(I.aMov)}`, nf(contati), "tot");
     tm.appendChild(tb);
     document.getElementById("mov-foot").textContent = "I morti e le uscite sono quelli registrati; le entrate sono le consegne di suinetti registrate con un censimento.";
   }
@@ -683,7 +688,7 @@
     const P = periodo(), labels = P.cur.map(g => ggmm(g.data)), perCapo = state.vista === "capo";
     const unit = perCapo ? "kg/capo" : "kg";
     document.getElementById("fnote").textContent = P.cur.length
-      ? `${lungo(P.cur[0].data)} – ${lungo(P.cur[P.cur.length - 1].data)} · la giornata di oggi è in corso ed è esclusa`
+      ? `${lungo(P.cur[0].data)} – ${lungo(P.cur[P.cur.length - 1].data)} · consumi fino a ieri (oggi è in corso), morti e uscite fino a oggi`
       : "";
     const primo = giorni.find(g => sum(LINEE.map(l => g.L[l].capi)) > 0);
     const giornoCiclo = Math.round((dt(OGGI) - dt(RAW.ciclo.inizio)) / 864e5) + 1;
@@ -927,7 +932,7 @@
     // 6. mortalità nel tempo
     const M = mortalitaPeriodo();
     const mortiTot = sum(M.cur.map(m => m.n));
-    document.getElementById("c-mort-sub").textContent = `${nf(mortiTot)} ${mortiTot === 1 ? "capo" : "capi"} dal ${lungo(M.da)} a ieri` +
+    document.getElementById("c-mort-sub").textContent = `${nf(mortiTot)} ${mortiTot === 1 ? "capo" : "capi"} dal ${lungo(M.da)} a oggi` +
       (M.baseCapi ? `, ${pct(mortiTot / M.baseCapi * 100, 2)} dei ${nf(M.baseCapi)} capi` : "") + `. ${M.giornaliero ? "Un giorno per colonna." : "Una settimana per colonna, a partire dal lunedì."}`;
     fmtTab.mort = v => nf(v);
     draw("mort", {
@@ -968,7 +973,7 @@
     // 7. mortalità per capannone (colore = linea del capannone)
     const caps = [1, 2, 3, 4, 5, 6, 7].filter(c => state.linea === "tutte" || CAP_LINEA[c] === Number(state.linea));
     const perCap = caps.map(c => sum(M.cur.filter(m => m.cap === c).map(m => m.n)));
-    document.getElementById("c-cap-sub").textContent = `Capi morti dal ${lungo(M.da)} a ieri. Il colore indica la linea del capannone.`;
+    document.getElementById("c-cap-sub").textContent = `Capi morti dal ${lungo(M.da)} a oggi. Il colore indica la linea del capannone.`;
     fmtTab.cap = v => nf(v);
     draw("cap", {
       type: "bar",
