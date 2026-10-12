@@ -98,6 +98,10 @@ def _live_count(ciclo, al_giorno=None):
     for cb in ultimo.conteggi.all():
         count[cb.box_numero] = cb.quantita
 
+    # Decessi e spostamenti si sommano senza fermarsi a zero a metà strada: l'ordine in cui si
+    # applicano non deve contare (prima si applicavano tutti i decessi e poi gli spostamenti, e un
+    # box che scendeva sotto zero perdeva il decesso: 12/10 box 16 contato 3 invece di 2).
+    # Lo zero si applica solo al risultato finale.
     morti = EventoMortalita.query.filter(
         EventoMortalita.ciclo_id == ciclo.id,
         EventoMortalita.data >= ultimo.data,
@@ -105,7 +109,7 @@ def _live_count(ciclo, al_giorno=None):
     ).all()
     for m in morti:
         if m.box_numero:
-            count[m.box_numero] = max(0, count.get(m.box_numero, 0) - m.quantita)
+            count[m.box_numero] = count.get(m.box_numero, 0) - m.quantita
         else:
             boxes_cap = BOX_PER_CAP.get(m.capannone_numero, [])
             if boxes_cap:
@@ -113,7 +117,7 @@ def _live_count(ciclo, al_giorno=None):
                 resto = m.quantita % len(boxes_cap)
                 for i, b in enumerate(boxes_cap):
                     sottrai = per_box + (1 if i < resto else 0)
-                    count[b] = max(0, count.get(b, 0) - sottrai)
+                    count[b] = count.get(b, 0) - sottrai
 
     spostamenti = Spostamento.query.filter(
         Spostamento.ciclo_id == ciclo.id,
@@ -123,7 +127,7 @@ def _live_count(ciclo, al_giorno=None):
     for s in spostamenti:
         if s.tipo == "interno":
             if s.box_origine:
-                count[s.box_origine] = max(0, count.get(s.box_origine, 0) - s.quantita)
+                count[s.box_origine] = count.get(s.box_origine, 0) - s.quantita
             if s.box_destinazione:
                 count[s.box_destinazione] = count.get(s.box_destinazione, 0) + s.quantita
         elif s.tipo == "entrata":
@@ -131,9 +135,9 @@ def _live_count(ciclo, al_giorno=None):
                 count[s.box_destinazione] = count.get(s.box_destinazione, 0) + s.quantita
         elif s.tipo == "uscita":
             if s.box_origine:
-                count[s.box_origine] = max(0, count.get(s.box_origine, 0) - s.quantita)
+                count[s.box_origine] = count.get(s.box_origine, 0) - s.quantita
 
-    return count
+    return {b: max(0, n) for b, n in count.items()}
 
 
 # ── Dashboard ──────────────────────────────────────────────────────────────
