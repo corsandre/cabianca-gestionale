@@ -60,6 +60,8 @@ POSTI_PER_BOX_STANDARD = {
     50: 47, 51: 47, 52: 46, 53: 45, 54: 45,
 }
 CAPANNONI = [1, 2, 3, 4, 5, 6, 7]
+# categorie delle uscite al macello (Spostamento.categoria_uscita)
+CATEGORIE_USCITA = ("fine_ciclo", "scarto_sottopeso", "agriturismo", "venduti_agriturismo")
 BOX_PER_CAP = {
     1: list(range(1, 10)), 2: list(range(10, 16)), 3: list(range(16, 22)),
     4: list(range(22, 37)), 5: list(range(37, 43)), 7: list(range(43, 50)),
@@ -150,7 +152,7 @@ def index():
                                scorta_mangime=stato_mangime(), scorta_siero=stato_siero(),
                                apertura_mangime=None,
                                stat_fine_ciclo={"capi": 0, "kg": 0}, stat_scarti={"capi": 0, "kg": 0},
-                               stat_agriturismo={"capi": 0, "kg": 0},
+                               stat_agriturismo={"capi": 0, "kg": 0}, stat_venduti={"capi": 0, "kg": 0},
                                CAP_PER_BOX=CAP_PER_BOX, BOX_PER_CAP=BOX_PER_CAP,
                                POSTI_PER_CAP=POSTI_PER_CAP, CAPANNONI=CAPANNONI)
 
@@ -174,6 +176,7 @@ def index():
     stat_fine_ciclo = _statistiche_uscita(ciclo.id, "fine_ciclo")
     stat_scarti = _statistiche_uscita(ciclo.id, "scarto_sottopeso")
     stat_agriturismo = _statistiche_uscita(ciclo.id, "agriturismo")
+    stat_venduti = _statistiche_uscita(ciclo.id, "venduti_agriturismo")
 
     totali_alimentazione_ciclo = {
         "mangime": db.session.query(db.func.sum(UsoPasto.mangime_qli)).filter(
@@ -213,7 +216,7 @@ def index():
                            scorta_mangime=stato_mangime(), scorta_siero=stato_siero(),
                            apertura_mangime=giacenza_mangime_a_data(ciclo.data_inizio),
                            stat_fine_ciclo=stat_fine_ciclo, stat_scarti=stat_scarti,
-                           stat_agriturismo=stat_agriturismo,
+                           stat_agriturismo=stat_agriturismo, stat_venduti=stat_venduti,
                            CAP_PER_BOX=CAP_PER_BOX, BOX_PER_CAP=BOX_PER_CAP,
                            POSTI_PER_CAP=POSTI_PER_CAP, CAPANNONI=CAPANNONI)
 
@@ -515,7 +518,7 @@ def censimento_new():
 
 def _statistiche_uscita(ciclo_id, categoria):
     """Capi e kg totali (quantità × peso medio) per una categoria di uscita
-    ('fine_ciclo', 'scarto_sottopeso' o 'agriturismo') di questo ciclo."""
+    (una delle CATEGORIE_USCITA) di questo ciclo."""
     from app.models import Spostamento
     capi = db.session.query(db.func.sum(Spostamento.quantita)).filter(
         Spostamento.ciclo_id == ciclo_id, Spostamento.tipo == "uscita",
@@ -555,11 +558,12 @@ def spostamenti():
     stat_fine_ciclo = _statistiche_uscita(ciclo.id, "fine_ciclo") if ciclo else {"capi": 0, "kg": 0}
     stat_scarti = _statistiche_uscita(ciclo.id, "scarto_sottopeso") if ciclo else {"capi": 0, "kg": 0}
     stat_agriturismo = _statistiche_uscita(ciclo.id, "agriturismo") if ciclo else {"capi": 0, "kg": 0}
+    stat_venduti = _statistiche_uscita(ciclo.id, "venduti_agriturismo") if ciclo else {"capi": 0, "kg": 0}
 
     return render_template("allevamento/spostamenti.html",
                            ciclo=ciclo, lista=lista, totali=totali,
                            stat_fine_ciclo=stat_fine_ciclo, stat_scarti=stat_scarti,
-                           stat_agriturismo=stat_agriturismo,
+                           stat_agriturismo=stat_agriturismo, stat_venduti=stat_venduti,
                            tipo_filter=tipo_filter, categoria_filter=categoria_filter,
                            BOX_PER_CAP=BOX_PER_CAP, CAPANNONI=CAPANNONI,
                            oggi=date.today())
@@ -606,7 +610,7 @@ def spostamenti_new():
         peso_medio = None
         if tipo == "uscita":
             categoria_uscita = request.form.get("categoria_uscita", "").strip()
-            if categoria_uscita not in ("fine_ciclo", "scarto_sottopeso", "agriturismo"):
+            if categoria_uscita not in CATEGORIE_USCITA:
                 raise ValueError("Seleziona la categoria dell'uscita.")
         if tipo in ("entrata", "uscita"):
             peso_val = request.form.get("peso_medio_kg", "").strip()
@@ -667,7 +671,7 @@ def spostamenti_edit(sp_id):
         peso_medio = None
         if tipo == "uscita":
             categoria_uscita = request.form.get("categoria_uscita", "").strip()
-            if categoria_uscita not in ("fine_ciclo", "scarto_sottopeso", "agriturismo"):
+            if categoria_uscita not in CATEGORIE_USCITA:
                 raise ValueError("Seleziona la categoria dell'uscita.")
         if tipo in ("entrata", "uscita"):
             peso_val = request.form.get("peso_medio_kg", "").strip()

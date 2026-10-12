@@ -349,7 +349,7 @@
   const perCapoKg = (o, k) => o.capi ? (k === "ss" ? o.ss : o[k] * 100) / o.capi : null;
 
   // ── capi, entrate e uscite ─────────────────────────────────────
-  const NOMI_USCITA = { fine_ciclo: "fine ciclo", scarto_sottopeso: "scarti/sottopeso", agriturismo: "Ca Bianca agriturismo" };
+  const NOMI_USCITA = { fine_ciclo: "fine ciclo", scarto_sottopeso: "scarti/sottopeso", agriturismo: "macellati Ca Bianca agriturismo", venduti_agriturismo: "venduti Ca Bianca agriturismo" };
   const nomeUscita = c => NOMI_USCITA[c] || "altre uscite";
   const perData = Object.fromEntries(giorni.map(g => [g.data, g]));
   // capi alla fine del giorno d (0 prima del primo censimento)

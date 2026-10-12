@@ -498,7 +498,7 @@ class Spostamento(db.Model):
     quantita = db.Column(db.Integer, nullable=False)
     motivo = db.Column(db.String(100))
     note = db.Column(db.Text)
-    categoria_uscita = db.Column(db.String(20))  # 'fine_ciclo', 'scarto_sottopeso' o 'agriturismo', solo per tipo='uscita'
+    categoria_uscita = db.Column(db.String(20))  # 'fine_ciclo', 'scarto_sottopeso', 'agriturismo' (macellati) o 'venduti_agriturismo', solo per tipo='uscita'
     peso_medio_kg = db.Column(db.Float)  # per entrata/uscita
     bolla_path = db.Column(db.String(300))
     # Spostamento registrato anche sul PC di alimentazione (come per la mortalità)

@@ -32,7 +32,7 @@
     {% endfor %}
 </div>
 <div class="row g-2 mb-4">
-    <div class="col-4">
+    <div class="col-6 col-md-3">
         <a href="{{ url_for('allevamento.spostamenti') if categoria_filter=='fine_ciclo' else url_for('allevamento.spostamenti', categoria='fine_ciclo') }}"
            class="text-decoration-none">
             <div class="cb-card p-3 text-center {{ 'border border-2' if categoria_filter=='fine_ciclo' }}" style="{{ 'border-color:#c2185b !important' if categoria_filter=='fine_ciclo' }}">
@@ -41,7 +41,7 @@
             </div>
         </a>
     </div>
-    <div class="col-4">
+    <div class="col-6 col-md-3">
         <a href="{{ url_for('allevamento.spostamenti') if categoria_filter=='scarto_sottopeso' else url_for('allevamento.spostamenti', categoria='scarto_sottopeso') }}"
            class="text-decoration-none">
             <div class="cb-card p-3 text-center {{ 'border border-2 border-warning' if categoria_filter=='scarto_sottopeso' }}">
@@ -50,12 +50,21 @@
             </div>
         </a>
     </div>
-    <div class="col-4">
+    <div class="col-6 col-md-3">
         <a href="{{ url_for('allevamento.spostamenti') if categoria_filter=='agriturismo' else url_for('allevamento.spostamenti', categoria='agriturismo') }}"
            class="text-decoration-none">
             <div class="cb-card p-3 text-center {{ 'border border-2 border-info' if categoria_filter=='agriturismo' }}">
                 <div class="fs-4 fw-bold text-info-emphasis">{{ stat_agriturismo.capi }}</div>
                 <small class="text-muted">Macellati Ca Bianca Agriturismo{% if stat_agriturismo.kg %} · {{ stat_agriturismo.kg | round(0) | int }} kg{% endif %}</small>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <a href="{{ url_for('allevamento.spostamenti') if categoria_filter=='venduti_agriturismo' else url_for('allevamento.spostamenti', categoria='venduti_agriturismo') }}"
+           class="text-decoration-none">
+            <div class="cb-card p-3 text-center {{ 'border border-2 border-success' if categoria_filter=='venduti_agriturismo' }}">
+                <div class="fs-4 fw-bold text-success-emphasis">{{ stat_venduti.capi }}</div>
+                <small class="text-muted">Venduti Ca Bianca Agriturismo{% if stat_venduti.kg %} · {{ stat_venduti.kg | round(0) | int }} kg{% endif %}</small>
             </div>
         </a>
     </div>
@@ -69,7 +78,7 @@
     <a href="{{ url_for('allevamento.spostamenti', tipo='interno') }}" class="btn btn-sm {{ 'btn-secondary' if tipo_filter=='interno' else 'btn-outline-secondary' }}">Interni</a>
     {% if categoria_filter %}
     <span class="badge bg-light text-dark border align-self-center">
-        Filtrato: {{ {'fine_ciclo':'Fine ciclo','scarto_sottopeso':'Scarto/sottopeso','agriturismo':'Ca Bianca Agriturismo'}[categoria_filter] }}
+        Filtrato: {{ {'fine_ciclo':'Fine ciclo','scarto_sottopeso':'Scarto/sottopeso','agriturismo':'Macellati Ca Bianca Agriturismo','venduti_agriturismo':'Venduti Ca Bianca Agriturismo'}.get(categoria_filter, categoria_filter) }}
         <a href="{{ url_for('allevamento.spostamenti') }}" class="text-danger text-decoration-none ms-1" title="Rimuovi filtro"><i class="bi bi-x-circle"></i></a>
     </span>
     {% endif %}
@@ -96,7 +105,8 @@
                         <span class="badge bg-danger">Uscita</span>
                         {% if s.categoria_uscita == 'fine_ciclo' %}<span class="badge bg-secondary">Fine ciclo</span>
                         {% elif s.categoria_uscita == 'scarto_sottopeso' %}<span class="badge text-dark" style="background:#ffc107">Scarto/sottopeso</span>
-                        {% elif s.categoria_uscita == 'agriturismo' %}<span class="badge bg-info text-dark">Ca Bianca Agriturismo</span>{% endif %}
+                        {% elif s.categoria_uscita == 'agriturismo' %}<span class="badge bg-info text-dark">Macellati Ca Bianca Agriturismo</span>
+                        {% elif s.categoria_uscita == 'venduti_agriturismo' %}<span class="badge bg-success">Venduti Ca Bianca Agriturismo</span>{% endif %}
                     {% else %}<span class="badge bg-secondary">Interno</span>{% endif %}
                 </td>
                 <td class="text-muted">
@@ -228,6 +238,7 @@
                             <option value="fine_ciclo" {{ 'selected' if s.categoria_uscita=='fine_ciclo' }}>Fine ciclo (165-180 kg)</option>
                             <option value="scarto_sottopeso" {{ 'selected' if s.categoria_uscita=='scarto_sottopeso' }}>Scarto/sottopeso (macellazione anticipata)</option>
                             <option value="agriturismo" {{ 'selected' if s.categoria_uscita=='agriturismo' }}>Macellati Ca Bianca Agriturismo</option>
+                            <option value="venduti_agriturismo" {{ 'selected' if s.categoria_uscita=='venduti_agriturismo' }}>Venduti Ca Bianca Agriturismo</option>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -321,6 +332,7 @@
                                 <option value="fine_ciclo">Fine ciclo (165-180 kg)</option>
                                 <option value="scarto_sottopeso">Scarto/sottopeso (macellazione anticipata)</option>
                                 <option value="agriturismo">Macellati Ca Bianca Agriturismo</option>
+                                <option value="venduti_agriturismo">Venduti Ca Bianca Agriturismo</option>
                             </select>
                         </div>
                     </div>

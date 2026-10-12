@@ -212,7 +212,7 @@ struttura fisica vanno aggiornate in entrambi i file.
 
 #### Spostamenti (`/allevamento/spostamenti`)
 - **Entrata** (da esterno), **Uscita** (macello, con categoria: fine ciclo 165-180 kg / scarto-sottopeso /
-  Macellati Ca Bianca Agriturismo), **Interno** (box → box). Il box è sempre obbligatorio.
+  Macellati Ca Bianca Agriturismo / Venduti Ca Bianca Agriturismo), **Interno** (box → box). Il box è sempre obbligatorio.
 - Peso medio e foto della bolla per entrate/uscite; contatori capi/kg per categoria di uscita, filtrabili.
 - Pulsante **PC alim.** per segnare che lo spostamento è stato riportato sul PC di alimentazione: salva data/ora
   e operatore (badge verde, un clic per annullare), come per la mortalità.
