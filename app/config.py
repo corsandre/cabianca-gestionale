@@ -20,6 +20,9 @@ class Config:
     REMEMBER_COOKIE_HTTPONLY = True
     REMEMBER_COOKIE_SAMESITE = "Lax"
     REMEMBER_COOKIE_DURATION = timedelta(days=30)
+    # Token dei moduli valido per tutta la sessione (non 1 ora): una pagina lasciata aperta sul
+    # telefono resta utilizzabile; se la sessione cambia, le pagine chiedono un token nuovo (/csrf-token)
+    WTF_CSRF_TIME_LIMIT = None
 
     # Azienda
     COMPANY_PIVA = "01846180196"

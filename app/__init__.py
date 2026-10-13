@@ -132,6 +132,10 @@ def create_app():
         try:
             is_auth = current_user.is_authenticated
             print(f"[CSRF] {e.description} | URL={request.url} | auth={is_auth} | referrer={request.referrer}", file=sys.stderr, flush=True)
+            if request.headers.get("X-Requested-With") == "fetch":
+                # invio in background: la pagina chiede un token nuovo e riprova da sola
+                from flask import jsonify
+                return jsonify(error="Sessione scaduta: ricarica la pagina e riprova.", csrf_scaduto=True), 400
             if is_auth:
                 flash("Sessione scaduta: ricarica la pagina e riprova.", "warning")
                 return redirect(request.referrer or request.url)

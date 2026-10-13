@@ -99,6 +99,15 @@ def login():
     return render_template("auth/login.html")
 
 
+@bp.route("/csrf-token")
+@login_required
+def csrf_token_nuovo():
+    """Token nuovo per le pagine che inviano i moduli in background (se il vecchio è scaduto)."""
+    from flask import jsonify
+    from flask_wtf.csrf import generate_csrf
+    return jsonify(csrf_token=generate_csrf())
+
+
 @bp.route("/logout")
 @login_required
 def logout():

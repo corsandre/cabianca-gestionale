@@ -501,7 +501,17 @@ document.querySelectorAll('.cb-bolla-input').forEach(function (input) {
     });
 });
 
+// Token del modulo scaduto (pagina aperta da molto o sessione cambiata): se ne chiede uno nuovo,
+// lo si mette in tutti i moduli della pagina e si riprova subito, senza perdere i dati inseriti.
+async function cbNuovoTokenCsrf() {
+    const resp = await fetch('/csrf-token', { credentials: 'same-origin' });
+    const json = await resp.json();
+    document.querySelectorAll('input[name="csrf_token"]').forEach(function (i) { i.value = json.csrf_token; });
+    return json.csrf_token;
+}
+
 async function cbFetchConRetry(url, body, tentativiMax, onTentativo) {
+    let tokenRinnovato = false;
     for (let tentativo = 1; tentativo <= tentativiMax; tentativo++) {
         if (onTentativo) onTentativo(tentativo, tentativiMax);
         try {
@@ -514,6 +524,13 @@ async function cbFetchConRetry(url, body, tentativiMax, onTentativo) {
             let json = null;
             try { json = await resp.json(); } catch (e) {}
             if (resp.ok && json) return json;
+            if (json && json.csrf_scaduto && !tokenRinnovato) {
+                tokenRinnovato = true;
+                body.set('csrf_token', await cbNuovoTokenCsrf());
+                tentativo--;                // non conta come tentativo
+                continue;
+            }
+            if (json && json.csrf_scaduto) throw new Error(json.error);
             throw new Error((json && json.error) || 'risposta non valida dal server');
         } catch (err) {
             if (tentativo === tentativiMax) throw err;
