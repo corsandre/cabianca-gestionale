@@ -308,7 +308,10 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
 - Con il collegamento attivo, pulsante **«Aggiorna dal PC»** e pannello delle letture dell'impianto (vedi sotto).
 
 #### Razione box (`/allevamento/razione`)
-- Percentuale di razione per box, in una griglia settimanale.
+- Percentuale di razione per box, in una griglia settimanale (anche oltre 100%, fino a 200%).
+- **Leggi dal PC** (con il collegamento all'impianto attivo): legge la % di ogni box da `BOX.DB` (`PERRAZIONE`)
+  e la salva per oggi, come inserita a mano, solo nei box dove è diversa da quella in vigore. Si preme quando si
+  cambia la razione sul PC; dal giorno dopo vale la solita copia.
 - Oggi resta modificabile; appena un giorno passa senza inserimento, per ogni box viene salvata una riga reale
   con l'ultimo valore noto (`stimato=True`, celle evidenziate in giallo). Correggere un giorno passato non
   ricalcola i giorni successivi.

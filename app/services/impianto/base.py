@@ -157,5 +157,9 @@ class LettoreImpianto:
         """Capi presenti in ogni box secondo l'impianto {numero box: capi}; {} se non lo sa."""
         return {}
 
+    def razione_per_box(self) -> dict:
+        """% della razione impostata per ogni box sull'impianto {numero box: %}; {} se non la sa."""
+        return {}
+
     def chiudi(self):
         pass

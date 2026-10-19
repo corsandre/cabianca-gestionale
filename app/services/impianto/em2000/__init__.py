@@ -21,7 +21,7 @@ ORARI_DB = f"{EM2000}/pc/db/new/ORARI.DB"
 COMPO_DB = f"{EM2000}/pc/db/new/COMPO.DB"                 # componenti: SIERO.PERSECCO = Brix impostato
 RICETTECOMPO_DB = f"{EM2000}/pc/db/new/RICETTECOMPO.DB"   # % di ogni componente in ogni ricetta
 RICETTE_DB = f"{EM2000}/pc/db/new/Ricette.DB"             # nomi delle ricette
-BOX_DB = f"{EM2000}/pc/db/new/BOX.DB"                     # box: NRSUINI = capi presenti
+BOX_DB = f"{EM2000}/pc/db/new/BOX.DB"                     # box: NRSUINI = capi presenti, PERRAZIONE = % razione
 CMD_FOTOGRAFIA = "XAUTHORITY=/root/.Xauthority nice -n 19 xwd -root -display :0 -silent | nice -n 19 gzip -1"
 
 
@@ -111,6 +111,11 @@ class LettoreEM2000(LettoreImpianto):
         reali: le filtra chi confronta, che conosce i box dell'allevamento."""
         return {int(r["NR"]): int(r.get("NRSUINI") or 0)
                 for r in paradox.leggi(self._leggi_file(BOX_DB)) if r.get("NR")}
+
+    def razione_per_box(self):
+        """% della razione per box da BOX.DB (NR, PERRAZIONE), come per i capi anche righe di box non reali."""
+        return {int(r["NR"]): int(r["PERRAZIONE"])
+                for r in paradox.leggi(self._leggi_file(BOX_DB)) if r.get("NR") and r.get("PERRAZIONE") is not None}
 
     def _ricette(self):
         """{nr: (nome, componenti, secondi di miscelazione, rapporto)} dalle tabelle del PC. Il rapporto

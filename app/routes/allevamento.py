@@ -1668,6 +1668,53 @@ def razione_save():
     return redirect(url_for("allevamento.razione", settimana=settimana_offset))
 
 
+@bp.route("/razione/da-pc", methods=["POST"])
+@login_required
+def razione_da_pc():
+    """Legge la % di razione di ogni box dal PC di alimentazione e la salva per oggi (bianco, come
+    inserita a mano) nei box dove è diversa da quella in vigore. Dal giorno dopo vale la solita copia."""
+    _check_allevamento()
+    from app.models import RazioneBox
+    from app.services.impianto import crea_lettore
+    ciclo = _get_ciclo_attivo()
+    if not ciclo:
+        flash("Nessun ciclo attivo.", "danger")
+        return redirect(url_for("allevamento.razione"))
+    lettore = crea_lettore()
+    if lettore is None:
+        flash("Collegamento al PC di alimentazione non attivo (modalità manuale).", "warning")
+        return redirect(url_for("allevamento.razione"))
+    try:
+        pc = lettore.razione_per_box()
+    except Exception as e:
+        flash(f"Lettura dal PC non riuscita: {e}", "danger")
+        return redirect(url_for("allevamento.razione"))
+    finally:
+        lettore.chiudi()
+
+    oggi = date.today()
+    cambiati = []
+    for b in sorted(b for boxes in BOX_PER_CAP.values() for b in boxes):
+        if b not in pc:
+            continue
+        perc = float(pc[b])
+        ultima = RazioneBox.query.filter(RazioneBox.ciclo_id == ciclo.id, RazioneBox.box_numero == b,
+                                         RazioneBox.data <= oggi).order_by(RazioneBox.data.desc()).first()
+        if ultima and ultima.percentuale == perc:
+            continue
+        if ultima and ultima.data == oggi:
+            ultima.percentuale, ultima.stimato = perc, False
+        else:
+            db.session.add(RazioneBox(ciclo_id=ciclo.id, data=oggi, box_numero=b, percentuale=perc, stimato=False))
+        cambiati.append(f"{b}: {ultima.percentuale:g} → {perc:g}" if ultima else f"{b}: {perc:g}")
+    db.session.commit()
+    if cambiati:
+        flash(f"Razione letta dal PC e salvata per oggi in {len(cambiati)} box ({', '.join(cambiati)}).", "success")
+    else:
+        flash("Razione letta dal PC: è già uguale a quella del gestionale, nessuna modifica.", "info")
+    return redirect(url_for("allevamento.razione"))
+
+
 # ── Trattamenti ────────────────────────────────────────────────────────────
 
 def _stato_trattamento(t):
