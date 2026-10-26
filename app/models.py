@@ -730,6 +730,8 @@ class ImpiantoLinea(db.Model):
     farina_teorica_qli = db.Column(db.Float)
     conferme = db.Column(db.Integer)                    # letture identiche che confermano i valori
     confermato = db.Column(db.Boolean, default=False)
+    ricetta = db.Column(db.String(100))                 # ricetta in uso sulla linea (nome scritto sullo schermo)
+    rapporto = db.Column(db.Float)                      # rapporto di diluizione impostato per quella ricetta
     inizio = db.Column(db.DateTime)                     # ora reale di inizio e fine della linea
     fine = db.Column(db.DateTime)
     stato = db.Column(db.String(20), nullable=False, default="proposta")

@@ -31,12 +31,14 @@ LAVAGGIO = "lavaggio"
 ATTESA_SVUOTAMENTO = "attesa_svuotamento"
 SVUOTAMENTO = "svuotamento"
 SCONOSCIUTA = "sconosciuta"              # stato mai visto: va segnalato con la fotografia
+TRANSIZIONE = "transizione"              # stato vuoto per un istante tra due fasi: la lettura non dice niente
 FASI_DOSAGGIO_CONCLUSO = {MISCELAZIONE, RIEMPIMENTO, DISTRIBUZIONE, LAVAGGIO, ATTESA_SVUOTAMENTO, SVUOTAMENTO}
 NOMI_FASI = {
     ATTESA_ORARIO: "in attesa del prossimo pasto", ATTESA_INIZIO: "pasto in partenza",
     PREPARAZIONE: "preparazione della ricetta", STABILIZZAZIONE: "stabilizzazione", MISCELAZIONE: "miscelazione",
     RIEMPIMENTO: "riempimento del tubo", DISTRIBUZIONE: "distribuzione ai box", LAVAGGIO: "lavaggio",
     ATTESA_SVUOTAMENTO: "attesa svuotamento", SVUOTAMENTO: "svuotamento", SCONOSCIUTA: "stato sconosciuto",
+    TRANSIZIONE: "passaggio tra due fasi",
 }
 
 COMPONENTI = ("acqua", "siero", "farina")
@@ -49,6 +51,7 @@ class LetturaSchermo:
     pasto_attuale: Optional[time] = None     # orario del pasto in corso o dell'ultimo fatto
     prossimo_pasto: Optional[time] = None
     linea: Optional[int] = None              # linea in preparazione/distribuzione
+    ricetta: Optional[str] = None            # nome della ricetta in uso scritto sullo schermo (None se illeggibile)
     stato: Optional[str] = None              # frase di stato così come scritta dall'impianto
     fase: str = SCONOSCIUTA
     box_in_distribuzione: Optional[int] = None
@@ -80,8 +83,8 @@ class LetturaSchermo:
     def problemi(self):
         """Cosa non si è riuscito a leggere in una schermata riconosciuta (stato noto): serve a
         segnalare con la fotografia schermate nuove o cambiate, da insegnare al lettore."""
-        if self.fase == SCONOSCIUTA:
-            return []          # schermata non riconosciuta: la segnala già "stato sconosciuto"
+        if self.fase in (SCONOSCIUTA, TRANSIZIONE):
+            return []          # schermata non riconosciuta (la segnala già "stato sconosciuto") o di passaggio
         p = []
         if self.ora_pc is None:
             p.append("ora del PC illeggibile")
@@ -92,6 +95,10 @@ class LetturaSchermo:
                 p.append("orario del pasto in corso illeggibile")
             if self.linea is None:
                 p.append("linea illeggibile")
+        if self.fase == ATTESA_ORARIO:
+            # a impianto fermo la tabella mostra l'ultimo pasto, a volte scorsa o disegnata a metà (24/10 di
+            # notte): non è un problema del lettore, durante il pasto la si legge di nuovo
+            return list(dict.fromkeys(p))
         for nome in self.righe_sconosciute:
             p.append(f"riga della ricetta mai vista: «{nome}»")
         if not self.righe:
@@ -156,6 +163,11 @@ class LettoreImpianto:
     def capi_per_box(self) -> dict:
         """Capi presenti in ogni box secondo l'impianto {numero box: capi}; {} se non lo sa."""
         return {}
+
+    def consumi_per_box(self, dal) -> list:
+        """Consumi per box registrati dall'impianto dal giorno `dal`: [(istante sul PC, box, componente, kg)],
+        componente 1 = acqua, 2-4 = farina, 5 = siero. [] se l'impianto non li registra."""
+        return []
 
     def razione_per_box(self) -> dict:
         """% della razione impostata per ogni box sull'impianto {numero box: %}; {} se non la sa."""

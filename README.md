@@ -235,7 +235,10 @@ struttura fisica vanno aggiornate in entrambi i file.
 - **Siero**: quantità, % sostanza secca (Brix), lotto, **speditore**, trasportatore. Ogni nuovo carico chiude il
   precedente (la cisterna si svuota sempre prima di ricaricare): per questo l'ora è obbligatoria. Per ogni carico
   chiuso: consumo reale pesato in cucina e scarto rispetto al dichiarato, con evidenza se supera la soglia.
-  Si può anche segnare a mano la cisterna vuota.
+  Si può anche segnare a mano la cisterna vuota. Di un carico chiuso si può **modificare l'orario di chiusura**
+  (*Modifica chiusura*) e l'ultimo carico arrivato si può **riaprire** se è stato chiuso per sbaglio (es. a pasto in
+  corso): torna in corso, si toglie anche il «cisterna vuota» del servizio dell'impianto e si ricalcolano siero e Brix
+  dei pasti.
 - **Brix ricalcolato sui pasti**: ogni volta che un carico di siero viene registrato, modificato, chiuso o eliminato
   (dal web o dal bot), Brix di riferimento e % di sostituzione di ogni pasto vengono ricalcolati dal carico a cui il
   suo siero è attribuito (`ricalcola_brix_pasti` in `allevamento_pasti.py`). Così non conta l'ordine in cui si
@@ -298,8 +301,9 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
   Sotto il totale gli stessi valori per l'intera giornata.
 - Nella stessa riga grigia il **rapporto di diluizione** «10:32»: kg di liquido (acqua + parte acqua del siero,
   cioè siero × (100 − Brix)%) ogni 10 kg di sostanza secca, come il «rapporto 10:» delle ricette di EM2000. Con il
-  collegamento all'impianto accanto c'è il valore impostato sul PC per la ricetta in uso, ed è in rosso quando viene
-  superato: succede quando il siero da solo porta più liquido del necessario e l'acqua aggiunta va a zero (es. siero
+  collegamento all'impianto accanto c'è il valore impostato sul PC per la ricetta di quel pasto e di quella linea
+  (salvato con ogni lettura, quindi giusto anche nei giorni passati; per le linee inserite a mano o recuperate vale
+  quello delle altre linee dello stesso pasto), ed è in rosso quando viene superato: succede quando il siero da solo porta più liquido del necessario e l'acqua aggiunta va a zero (es. siero
   a Brix basso). Validato sui pasti letti dal PC: con acqua aggiunta i pasti stanno a 32,1–32,6 con 32 impostato.
 - In cima, due schede **«Brix del siero»** e **«Sostituzione con siero»** che seguono il giorno scelto: grafico della
   sua settimana (da lunedì a domenica, giorno scelto evidenziato) con i valori applicati davvero, dai consumi
@@ -429,6 +433,8 @@ scritto niente e non resta nessun file (la fotografia viaggia compressa sulla co
   rilegge subito schermata, orari, Brix e ricette e risponde nel gruppo entro un minuto. Se il servizio riparte a
   pasto in corso lo segue senza mandare di nuovo «iniziato» né gli avvisi già inviati.
 - *Schermata*: EM2000 va lasciato su «Situazione impianto» (controllata anche dal controllo leggero ogni 10 minuti).
+  Se non c'è e manca meno di un'ora a un pasto: **promemoria ogni 10 minuti** («il pasto delle X NON verrà
+  registrato»), un avviso all'ora del pasto e, a pasto in corso, ogni 10 minuti finché non torna.
   Se è altrove arriva un avviso con la fotografia che dice dove: Menu principale (dal titolo grande), una pagina di
   gestione riconosciuta dal **titolo della finestra** («Modifica orari distribuzione», «Visualizza dati box»,
   «Modifica dati ricette»…; per un titolo nuovo «un'altra pagina»), oppure la schermata «Situazione impianto» con il
@@ -458,15 +464,37 @@ scritto niente e non resta nessun file (la fotografia viaggia compressa sulla co
   chiusura); fase bloccata, stato mai visto, **lettura incompleta** (una schermata riconosciuta in cui qualcosa non si
   legge: va insegnata al lettore); cambi di Brix, di % del siero e del **rapporto di diluizione** delle ricette. Le
   anomalie arrivano con la fotografia.
-- *Orario effettivo*: per ogni pasto letto viene registrato l'orario effettivo (inizio della linea 1). Serve ad
-  attribuire il siero al carico giusto anche quando gli orari standard cambiano dopo (seguono quelli del PC).
-- *Ricetta in uso*: riconosciuta dai componenti della tabella (es. SIERO + COCLEA 1 = «ricetta 2 siero»); da Ricette.DB
-  si leggono durata della miscelazione e rapporto di diluizione impostato (setting `impianto_ricetta`).
+- *Orario effettivo*: per ogni pasto letto viene registrato l'orario effettivo (inizio della linea 1, o l'inizio del
+  pasto se la linea 1 non si è letta). Serve ad attribuire il siero al carico giusto anche quando gli orari standard
+  cambiano dopo (seguono quelli del PC). Se l'orario del pasto in corso non si legge sullo schermo si usa l'orario
+  del PC appena passato (ORARI.DB), invece di scartare le letture.
+- *Ricetta in uso*: letta dal **nome scritto sullo schermo** sotto la linea (es. «ricetta 2 siero»), non dalle righe
+  della tabella (con il siero finito la riga SIERO scorre fuori e le righe rimaste sembrano un'altra ricetta); da
+  Ricette.DB durata della miscelazione e rapporto di diluizione, salvati anche con ogni linea letta
+  (`impianto_letture_linee.ricetta/rapporto`). Nome illeggibile = non si cambia l'ultimo valore.
+- *Linee non lette e recupero* (`services/impianto/recupero.py`): una linea non letta (schermata sbagliata, tabella
+  illeggibile, linea **saltata**, cioè mai vista perché lo schermo è passato per esempio dalla linea 1 alla 3) resta
+  gialla e viene **recuperata dai consumi per box** che EM2000 salva in `STORICI/CONSUM/CONS-GIO.CSV` (a mezzanotte e
+  quando l'operatore apre le giacenze; ogni fotografia è il consumo dalla precedente): consumo dei box della linea
+  meno gli altri pasti della linea nello stesso intervallo, corretto con il rapporto consumo/dosato misurato sulle
+  altre linee (~0,99: residui in vasca e tubi). Solo in automatico, ultimi 3 giorni, un solo pasto mancante per linea
+  e intervallo, nessun pasto a cavallo di una fotografia e un risultato simile a un pasto vero; messaggio ♻️ nel gruppo.
+- *Sostituto del siero* (`COMPOSOST.DB`, finestra «Sostituzione mangimi» di EM2000): quando il siero manca il PC lo
+  sostituisce con acqua + una % di farina in peso (es. 95% + 5%). Se quella farina è più di mezzo punto lontana dal
+  Brix del siero, avviso al cambio (e nel riepilogo del mattino), perché senza siero i suini ricevono meno (o più)
+  secco; nel messaggio «cisterna ancora vuota» dal secondo pasto senza siero il consiglio di passare alla RICETTA 1 o
+  correggere il sostituto.
 
 **Come si legge lo schermo** (`app/services/impianto/em2000/schermo.py`): il carattere di EM2000 è una bitmap
 fissa, quindi ogni carattere si riconosce per confronto esatto con un campionario (`em2000/campionario.json`); le
-frasi di stato in grassetto, dove le lettere si toccano, si riconoscono intere. La tabella della ricetta si legge
-riga per riga dal nome (ACQUA, SIERO, COCLEA n, TOTALI RICETTA). Quando un componente finisce durante il dosaggio,
+frasi di stato in grassetto, dove le lettere si toccano, si riconoscono intere (anche quelle brevi tra una fase e
+l'altra: «PREPARA BOX», «PREPARA SOSTITUTO», «RITARDO DISTRIBUZIONE ACQUA», «CHIUSURA VALVOLA FINALE»…; una seconda
+riga di stato vuota per un istante è un passaggio, non uno stato sconosciuto). I titoli delle pagine di EM2000 mai
+insegnate si leggono lettera per lettera con le lettere imparate dagli altri titoli. La tabella della ricetta si legge
+riga per riga dal nome (ACQUA, SIERO, COCLEA n, TOTALI RICETTA). Con molte righe gli arrotondamenti si sommano: lo
+scarto ammesso tra righe e totale cresce con il numero di righe (13/10: 7 righe, 0,012 q). Se la tabella è scorsa e
+la prima riga «1 ACQUA PRE» non si vede, la si ricostruisce dal totale (con più righe nascoste no: la linea si recupera
+dai consumi per box). Quando un componente finisce durante il dosaggio,
 EM2000 aggiunge righe **SOS** che lo sostituiscono: siero finito → acqua (la parte acqua del siero) + farina (la sua
 sostanza secca); silos finito → un'altra coclea (coclea 1 = silos A, 2 = B, 3 = C). Ogni riga SOS sostituisce la
 riga più vicina sopra di lei che non ha dato tutta la dose, anche se è a sua volta una SOS (catena coclea 1 →
@@ -504,6 +532,7 @@ Stato che il servizio ricorda nelle impostazioni (`settings`): `impianto_vuoto_s
 | `services/impianto/em2000/` | Lettore EM2000: SSH (paramiko), fotografia, lettura dello schermo, tabelle Paradox (orari) |
 | `services/impianto/pasto.py` | `TracciaPasto`: segue il pasto lettura per lettura ed emette gli eventi |
 | `services/impianto/registrazione.py` | Dalle letture ai consumi del gestionale (proposte, registrazione, orario effettivo) |
+| `services/impianto/recupero.py` | Recupero delle linee non lette dai consumi per box del PC (CONS-GIO.CSV) |
 | `services/impianto/servizio.py` | Il servizio: controlli, pasti, messaggi, anomalie |
 | `routes/impianto.py` | Impostazioni, chiave, prova, fotografie, approvazione/scarto delle letture |
 
@@ -519,7 +548,9 @@ Due usi dello stesso bot (`TELEGRAM_BOT_TOKEN`), su tre gruppi Telegram (allevam
      fine mese); esito degli import, sincronizzazione cassa, fatture importate da email; le domande sulle spese
      Amazon da descrivere (pulsanti delle categorie: sono gli unici pulsanti a cui il bot risponde in questo gruppo,
      insieme alle risposte ai suoi messaggi);
-   - canale `sistema` → `TELEGRAM_SISTEMA_CHAT_ID` (gruppo *Notifiche sistema*): backup e notifiche tecniche del server;
+   - canale `sistema` → `TELEGRAM_SISTEMA_CHAT_ID` (gruppo *Notifiche sistema*): backup e notifiche tecniche del server,
+     compreso il messaggio **a ogni avvio** del gestionale (`services/avvio.py`): versione, modalità dell'impianto e
+     perché è ripartito (aggiornamento, server riacceso da pochi minuti, oppure servizio riavviato);
    - canale `allevamento` → `TELEGRAM_GROUP_ID` (gruppo dell'allevamento): tutti i messaggi dell'impianto di
      alimentazione (pasti, silos, siero, stato, anomalie con la fotografia dello schermo, `send_telegram_foto`) e
      ogni mattina i trattamenti da ripetere.
@@ -696,7 +727,9 @@ Per esporla su Internet dietro Caddy:
 
 ## Deploy di un aggiornamento
 
-Il codice arriva in produzione passando da GitHub.
+Il codice arriva in produzione passando da GitHub. Prima del commit si aggiorna il numero in `app/version.py`
+(piccole modifiche → terzo numero, gruppi di funzioni → secondo): compare in fondo al menu e nel messaggio di avvio
+su Telegram, che dice «aggiornato dalla versione …».
 
 ```bash
 # 1. in sviluppo

@@ -857,6 +857,8 @@ def consegne():
     tot_siero = round(sum(c.quantita_qli for c in siero_list), 2)
     tot_mangime = round(sum(c.quantita_qli for c in mangime_list), 2)
 
+    from datetime import time as dt_time
+    time_min = dt_time(0, 0)
     soglia_scarto_siero_q = get_setting_float("allevamento_soglia_scarto_siero_q")
     scarti_siero = {
         c.id: scarto_consegna_siero(c, soglia_scarto_siero_q)
@@ -871,6 +873,8 @@ def consegne():
                            scarti_siero=scarti_siero,
                            speditori=SpeditoreSiero.query.order_by(SpeditoreSiero.azienda, SpeditoreSiero.indirizzo).all(),
                            attribuzione_siero=attribuzione_siero()["carichi"],
+                           ultima_consegna_siero_id=next((c.id for c in sorted(
+                               siero_list, key=lambda c: (c.data, c.ora or time_min, c.id), reverse=True)), None),
                            oggi=date.today())
 
 
@@ -1188,6 +1192,30 @@ def consegne_siero_chiudi(cid):
     return redirect(url_for("allevamento.consegne", tab="siero"))
 
 
+@bp.route("/consegne/siero/<int:cid>/riapri", methods=["POST"])
+@login_required
+def consegne_siero_riapri(cid):
+    """Carico chiuso per sbaglio (es. 23/10, chiuso a pasto in corso): torna in corso. Solo l'ultimo carico
+    arrivato. Si toglie anche il "cisterna vuota" del servizio dell'impianto, altrimenti al pasto dopo
+    direbbe "ancora vuota" invece di accorgersi che il siero c'è, e si ricalcolano siero e Brix dei pasti."""
+    _check_allevamento()
+    from app.models import ConsegnaSiero, Setting
+    c = db.session.get(ConsegnaSiero, cid)
+    ultima = ConsegnaSiero.query.order_by(ConsegnaSiero.data.desc(), ConsegnaSiero.ora.desc(), ConsegnaSiero.id.desc()).first()
+    if not c or not ultima or c.id != ultima.id:
+        flash("Si può riaprire solo l'ultimo carico arrivato.", "warning")
+        return redirect(url_for("allevamento.consegne", tab="siero"))
+    c.data_esaurimento = c.ora_esaurimento = None
+    vuoto = db.session.get(Setting, "impianto_vuoto_siero")
+    if vuoto:
+        db.session.delete(vuoto)
+    db.session.commit()
+    from app.services.allevamento_pasti import dopo_modifica_carichi_siero
+    dopo_modifica_carichi_siero()
+    flash("Carico riaperto: il siero dei prossimi pasti viene contato su questo carico.", "success")
+    return redirect(url_for("allevamento.consegne", tab="siero"))
+
+
 @bp.route("/consegne/mangime/new", methods=["POST"])
 @login_required
 def consegne_mangime_new():
@@ -1419,12 +1447,37 @@ def alimentazione():
         liq_ss[("giorno", linea)] = _somma([(p, linea) for p in [1, 2, 3]])
     liq_ss[("giorno", "tot")] = _somma([(p, l) for p in [1, 2, 3] for l in [1, 2, 3]])
     rapporto = {k: (l / s * 10 if l is not None and s else None) for k, (l, s) in liq_ss.items()}
-    rapporto_impostato = None
+    # rapporto impostato sul PC: quello della ricetta letta con ogni linea (giorno per giorno); per le linee
+    # di oggi non ancora lette, quello della ricetta in uso adesso. Sulle somme solo se è uguale per tutte.
+    imp = {}
     if modalita_impianto() != MANUALE:
         import json
-        from app.models import Setting
-        r = db.session.get(Setting, "impianto_ricetta")
-        rapporto_impostato = (json.loads(r.value) if r and r.value else {}).get("rapporto")
+        from app.models import Setting, ImpiantoLinea
+        for l in ImpiantoLinea.query.filter(ImpiantoLinea.data == data_sel, ImpiantoLinea.pasto.isnot(None),
+                                            ImpiantoLinea.rapporto.isnot(None)).all():
+            imp[(l.pasto, l.linea)] = l.rapporto
+        # linee senza lettura (inserite a mano o recuperate dai consumi del PC): la ricetta vale per tutto il
+        # pasto, quindi quella delle altre linee dello stesso pasto, o del giorno se è stata sempre la stessa
+        del_giorno = set(imp.values())
+        for pasto in [1, 2, 3]:
+            del_pasto = {v for (p, _), v in imp.items() if p == pasto}
+            for linea in [1, 2, 3]:
+                if (pasto, linea) not in imp and (len(del_pasto) == 1 or (not del_pasto and len(del_giorno) == 1)):
+                    imp[(pasto, linea)] = next(iter(del_pasto or del_giorno))
+        if data_sel == date.today():
+            r = db.session.get(Setting, "impianto_ricetta")
+            attuale = (json.loads(r.value) if r and r.value else {}).get("rapporto")
+            for pasto in [1, 2, 3]:
+                for linea in [1, 2, 3]:
+                    imp.setdefault((pasto, linea), attuale)
+    def _comune(chiavi):
+        v = {imp.get(k) for k in chiavi}
+        return v.pop() if len(v) == 1 else None
+    for pasto in [1, 2, 3]:
+        imp[(pasto, "tot")] = _comune([(pasto, l) for l in [1, 2, 3]])
+    for linea in [1, 2, 3]:
+        imp[("giorno", linea)] = _comune([(p, linea) for p in [1, 2, 3]])
+    imp[("giorno", "tot")] = _comune([(p, l) for p in [1, 2, 3] for l in [1, 2, 3]])
 
     return render_template("allevamento/alimentazione.html",
                            ciclo=ciclo, data_sel=data_sel, pasti=pasti, avvenuto=avvenuto,
@@ -1433,7 +1486,7 @@ def alimentazione():
                            perc_sostituzione=perc_sostituzione,
                            totale_per_pasto=totale_per_pasto, totale_giorno=totale_giorno,
                            ss=ss, capi_linea=capi_linea, capi_totali=capi_totali,
-                           rapporto=rapporto, rapporto_impostato=rapporto_impostato,
+                           rapporto=rapporto, rapporto_imp=imp,
                            schede_siero=_schede_siero(ciclo, data_sel, perc_ss_siero_attuale, perc_ss_mangime),
                            perc_ss_mangime=perc_ss_mangime,
                            orari_standard=orari_standard, orari_effettivi=orari_effettivi,

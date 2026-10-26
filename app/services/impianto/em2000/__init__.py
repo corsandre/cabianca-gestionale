@@ -22,6 +22,8 @@ COMPO_DB = f"{EM2000}/pc/db/new/COMPO.DB"                 # componenti: SIERO.PE
 RICETTECOMPO_DB = f"{EM2000}/pc/db/new/RICETTECOMPO.DB"   # % di ogni componente in ogni ricetta
 RICETTE_DB = f"{EM2000}/pc/db/new/Ricette.DB"             # nomi delle ricette
 BOX_DB = f"{EM2000}/pc/db/new/BOX.DB"                     # box: NRSUINI = capi presenti, PERRAZIONE = % razione
+COMPOSOST_DB = f"{EM2000}/pc/db/new/COMPOSOST.DB"         # sostituti di ogni componente quando finisce
+CONS_GIO_CSV = f"{EM2000}/STORICI/CONSUM/CONS-GIO.CSV"    # consumi per box tra una fotografia e l'altra
 CMD_FOTOGRAFIA = "XAUTHORITY=/root/.Xauthority nice -n 19 xwd -root -display :0 -silent | nice -n 19 gzip -1"
 
 
@@ -104,7 +106,32 @@ class LettoreEM2000(LettoreImpianto):
                 perc[nomi.get(r["NRRICETTA"], f"ricetta {r['NRRICETTA']}")] = round(r["PER"], 2)
         brix = siero.get("PERSECCO")
         rapporto = {nome: r for nome, _, _, r in self._ricette().values() if r}
-        return {"brix": round(brix, 2) if brix is not None else None, "siero": perc, "rapporto": rapporto}
+        out = {"brix": round(brix, 2) if brix is not None else None, "siero": perc, "rapporto": rapporto}
+        try:
+            out["sostituto_siero"] = self._sostituto(siero["NR"])
+        except Exception:          # tabella assente o illeggibile: si sorveglia il resto
+            pass
+        return out
+
+    def _sostituto(self, nr_componente):
+        """Primo sostituto di un componente (COMPOSOST.DB, finestra «Sostituzione mangimi»): fino a due
+        componenti in % di peso. Per il siero es. 95% ACQUA PRE + 5% COCLEA 3: la farina che entra al
+        posto del siero mancante è il 5% del suo peso. {"acqua": %, "farina": %, "coclea": n} o None."""
+        riga = next((r for r in paradox.leggi(self._leggi_file(COMPOSOST_DB)) if r.get("NR") == nr_componente), None)
+        if not riga:
+            return None
+        compo = {c["NR"]: (c.get("NOME") or "").strip().upper() for c in paradox.leggi(self._leggi_file(COMPO_DB))}
+        out = {"acqua": 0.0, "farina": 0.0, "coclea": None}
+        for nr, per in ((riga.get("NRSOST1_1"), riga.get("PERSOST1_1")), (riga.get("NRSOST1_2"), riga.get("PERSOST1_2"))):
+            nome = compo.get(nr) or ""
+            if not nr or not per:
+                continue
+            if nome.startswith("ACQUA"):
+                out["acqua"] += per
+            elif nome.startswith("COCLEA ") and nome[7:].isdigit():
+                out["farina"] += per
+                out["coclea"] = int(nome[7:])
+        return out if out["acqua"] or out["farina"] else None
 
     def capi_per_box(self):
         """Capi per box da BOX.DB (NR, NRSUINI). Ci sono anche righe vecchie con numeri oltre i box
@@ -133,17 +160,39 @@ class LettoreEM2000(LettoreImpianto):
         return out
 
     def ricetta_in_uso(self, lettura):
-        """Ricetta i cui componenti sono le righe normali della tabella (es. SIERO + COCLEA 1 = «ricetta 2
-        siero»); più ricette con gli stessi componenti: quella con il numero più basso. None se non si sa.
+        """Ricetta scritta sullo schermo sotto la linea (es. «ricetta 2 siero»), con tempo di miscelazione e
+        rapporto di diluizione da Ricette.DB. Dal nome e non dalle righe della tabella: con il siero finito
+        la riga SIERO scorre fuori dalla tabella e le righe rimaste sembrano un'altra ricetta (24/10: «RICETTA
+        1» a 10:32 invece di «ricetta 2 siero» a 10:36). None se il nome non si legge o non è tra le ricette.
         {"nome", "durata_s", "rapporto"}"""
-        nomi_tabella = {"SIERO" if r["comp"] == "siero" else f"COCLEA {r['coclea']}"
-                        for r in lettura.righe if not r["sos"] and r["comp"] in ("siero", "farina")}
-        if not nomi_tabella:
+        nome_schermo = (lettura.ricetta or "").strip().upper()
+        if not nome_schermo:
             return None
         for nr, (nome, comp, durata, rapporto) in sorted(self._ricette().items()):
-            if comp == nomi_tabella:
+            if nome.strip().upper() == nome_schermo:
                 return {"nome": nome, "durata_s": durata or None, "rapporto": rapporto}
         return None
+
+    def consumi_per_box(self, dal):
+        """Righe di CONS-GIO.CSV dal giorno `dal` in poi: [(istante sul PC, box, componente, kg)].
+        Ogni fotografia (data+ora) è il consumo dalla fotografia precedente; componenti 1 = acqua,
+        2-4 = farina, 5 = siero (0 = sostanza secca calcolata dal PC). Il file è grande (anni di dati):
+        se ne legge solo la coda."""
+        from datetime import datetime
+        coda = self._esegui(f"tail -c 400000 '{CONS_GIO_CSV}'").decode("latin-1", errors="replace")
+        out = []
+        for riga in coda.splitlines()[1:]:          # la prima riga può essere tagliata a metà
+            f = [x.strip() for x in riga.split(";")]
+            if len(f) < 7:
+                continue
+            try:
+                istante = datetime.strptime(f"{f[0]} {f[1]}", "%d-%m-%Y %H.%M.%S")
+                box, comp, kg = int(f[2]), int(f[4]), float(f[6])
+            except ValueError:
+                continue
+            if istante.date() >= dal:
+                out.append((istante, box, comp, kg))
+        return out
 
     def durata_miscelazione(self, lettura):
         """Tempo di miscelazione (Ricette.DB, TIMMIXMIN/TIMMIXSEC) della ricetta in uso, None se non si sa."""

@@ -53,6 +53,19 @@ def _rapporto_impostato():
     return (json.loads(r.value) if r and r.value else {}).get("rapporto")
 
 
+def _rapporto_per_giorno(ciclo):
+    """{giorno iso: rapporto impostato} dalle ricette lette con ogni linea, solo i giorni in cui è stato
+    uguale per tutte le linee lette (per la linea tratteggiata di Analisi, che cambia nel tempo)."""
+    from app.models import ImpiantoLinea
+    from app.services.impianto import modalita, MANUALE
+    if modalita() == MANUALE:
+        return {}
+    per_giorno = {}
+    for l in ImpiantoLinea.query.filter(ImpiantoLinea.data >= ciclo.data_inizio, ImpiantoLinea.rapporto.isnot(None)).all():
+        per_giorno.setdefault(l.data.isoformat(), set()).add(l.rapporto)
+    return {d: v.pop() for d, v in per_giorno.items() if len(v) == 1}
+
+
 def dati_analisi(ciclo):
     from app.routes.allevamento import _live_count, LINEA_PER_BOX
     from app.services.allevamento_scorte import get_setting_float, peso_da_giorni
@@ -117,6 +130,7 @@ def dati_analisi(ciclo):
         "oggi": oggi.isoformat(),
         "perc_ss_mangime": get_setting_float("allevamento_perc_ss_mangime") or 100,
         "rapporto_impostato": _rapporto_impostato(),
+        "rapporto_impostato_giorni": _rapporto_per_giorno(ciclo),
         "giorni": giorni,
         "entrate": _entrate(ciclo, censimenti, conteggi, _live_count, LINEA_PER_BOX),
         "uscite": uscite,

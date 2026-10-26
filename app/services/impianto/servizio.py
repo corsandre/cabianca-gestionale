@@ -36,6 +36,15 @@ Comportamento
   cambiano, messaggio nel gruppo dei pasti. L'ultimo valore visto è in impianto_parametri.
 - EM2000 su un'altra schermata (es. Menu principale): avviso, controlli ogni 5 minuti finché non torna
   su Situazione impianto, poi conferma. Il riepilogo giornaliero parte solo con dati leggibili.
+- Schermata sbagliata vicino a un pasto: se EM2000 non è su «Situazione impianto» e manca meno di
+  un'ora a un pasto, promemoria ogni 10 minuti ("il pasto delle X NON verrà registrato"), un avviso
+  all'ora del pasto e, a pasto in corso, ogni 10 minuti finché non torna (13/10: due soli avvisi, persi).
+- Orario del pasto illeggibile (17/10, 25/10): si usa l'orario del PC appena passato (ORARI.DB) invece
+  di scartare le letture.
+- Linee non lette (schermata sbagliata durante la linea, tabella illeggibile, linea saltata):
+  recuperate dai consumi per box del PC appena c'è la fotografia che le contiene (recupero.py).
+- Sostituto del siero (COMPOSOST): avviso quando la farina del sostituto non corrisponde al Brix, e nel
+  messaggio "cisterna ancora vuota" il consiglio quando si va avanti per più pasti senza siero.
 - Lettura incompleta: in una schermata riconosciuta qualcosa non si legge (riga della ricetta mai
   vista, ora o linea illeggibili...; vedi LetturaSchermo.problemi). Durante il pasto deve ripetersi in
   due fotografie di fila, al controllo periodico si conferma con una seconda fotografia. Fotografia
@@ -51,7 +60,7 @@ from datetime import date, datetime, time, timedelta
 
 from . import (crea_lettore, impostazione, modalita, cartella_dati, percorso_chiave,
                MANUALE, AUTOMATICO, NOMI_MODALITA)
-from .base import (ATTESA_ORARIO, ATTESA_INIZIO, SCONOSCIUTA, COMPONENTI, PREPARAZIONE, STABILIZZAZIONE, MISCELAZIONE,
+from .base import (ATTESA_ORARIO, ATTESA_INIZIO, SCONOSCIUTA, TRANSIZIONE, COMPONENTI, PREPARAZIONE, STABILIZZAZIONE, MISCELAZIONE,
                    NOMI_FASI)
 from .pasto import (TracciaPasto, PASTO_INIZIATO, PASTO_CONCLUSO, LINEA_INIZIATA, LINEA_CONCLUSA,
                     LINEA_NON_LETTA, SIERO_INSUFFICIENTE, STATO_SCONOSCIUTO, FASE_BLOCCATA,
@@ -61,6 +70,9 @@ log = logging.getLogger("impianto")
 TENTATIVI_PRIMA_DI_AVVISARE = 3
 MINUTI_PASTO_NON_PARTITO = 20
 MINUTI_CONTROLLO_ORARI = 10
+MINUTI_PROMEMORIA = 10              # promemoria della schermata sbagliata vicino a un pasto
+MINUTI_RECUPERO = 60                # ogni quanto si prova a recuperare le linee non lette
+SCARTO_SOSTITUTO = 0.5              # punti % di farina del sostituto del siero oltre cui avvisare
 SECONDI_FOTO_CARICO = 20           # durante il carico dei componenti, per cogliere l'inizio della miscelazione
 SECONDI_MISCELAZIONE_RISERVA = 360  # se la durata della ricetta non si legge
 SECONDI_SCARTO_OROLOGIO = 120
@@ -79,6 +91,11 @@ def _silos(n):
 
 def _hm(t):
     return t.strftime("%H:%M") if t else "?"
+
+
+def _n(v):
+    """Numero all'italiana senza zeri inutili: 7.5 → "7,5", 94.0 → "94"."""
+    return f"{v:g}".replace(".", ",")
 
 
 class Servizio:
@@ -104,6 +121,9 @@ class Servizio:
         self.schermata_errata = None     # stato della schermata non riconosciuta, finché non torna giusta
         self.aggancio = False            # True mentre si aggancia un pasto già in corso (niente doppioni)
         self.riempimento = None          # (istante, linea, pasto): avviso "tra 1 minuto riempimento tubi"
+        self.promemoria_ultimo = None    # ultimo promemoria della schermata sbagliata
+        self.promemoria_pasto = None     # pasto per cui è già partito l'avviso "è l'ora del pasto"
+        self.ultimo_recupero = None      # ultimo tentativo di recupero delle linee non lette
 
     # ── riepilogo del mattino ──────────────────────────────────────────────
     @staticmethod
@@ -123,8 +143,13 @@ class Servizio:
         from app.services.allevamento_scorte import set_setting
         set_setting("impianto_riepilogo_del", adesso.date().isoformat())
         db.session.commit()
+        import json
+        from app.models import Setting
+        p = db.session.get(Setting, "impianto_parametri")
+        avviso = self._avviso_sostituto(json.loads(p.value) if p and p.value else {})
         self._manda(f"🟢 Impianto OK – pasti {c.orari.replace(',', ' · ')} – prossimo alle {_hm(l.prossimo_pasto)}"
-                    f" – orologio dell'impianto {self._scarto_testo(c.scarto_orologio_s)}", self._chat_pasti())
+                    f" – orologio dell'impianto {self._scarto_testo(c.scarto_orologio_s)}" +
+                    (f"\n{avviso}" if avviso else ""), self._chat_pasti())
         try:
             from app.services.allevamento_confronto_box import confronta, testo_telegram
             testo = testo_telegram(confronta(self.lettore))
@@ -171,6 +196,7 @@ class Servizio:
                 return 60
             adesso = datetime.now()
             self._richiesta_aggiornamento(adesso)
+            self._promemoria_schermata(adesso)
             if self.traccia.in_corso or self._pasto_vicino(adesso):
                 self._fotografa(adesso)
                 self._avviso_riempimento(datetime.now())
@@ -191,6 +217,9 @@ class Servizio:
             elif not self.guasti and (not self.ultimi_orari
                                       or adesso - self.ultimi_orari >= timedelta(minutes=MINUTI_CONTROLLO_ORARI)):
                 self._controlla_orari(adesso)
+            elif not self.guasti and (not self.ultimo_recupero
+                                      or adesso - self.ultimo_recupero >= timedelta(minutes=MINUTI_RECUPERO)):
+                self._recupero(adesso)
             return 60
 
     def _controlla_orari(self, adesso):
@@ -276,10 +305,43 @@ class Servizio:
                 if vr.get(ricetta) != nr.get(ricetta):
                     cambi.append(f"rapporto di diluizione della «{html.escape(ricetta)}» {rapp(vr.get(ricetta))} → "
                                  f"<b>{rapp(nr.get(ricetta))}</b>")
+        sost_v, sost_n = vecchi.get("sostituto_siero"), nuovi.get("sostituto_siero")
+        if "sostituto_siero" in nuovi and sost_v != sost_n:
+            cambi.append(f"sostituto del siero {self._testo_sostituto(sost_v) if 'sostituto_siero' in vecchi else ''}"
+                         f"{' → ' if 'sostituto_siero' in vecchi else ''}<b>{self._testo_sostituto(sost_n)}</b>")
         if cambi:
             testo = "🧪 <b>Impostazioni dell'impianto cambiate</b>: " + "; ".join(cambi) + "."
+            avviso = self._avviso_sostituto(nuovi)
+            if avviso and (sost_v != sost_n or vecchi.get("brix") != nuovi.get("brix")):
+                testo += "\n" + avviso
             self._salva_evento("parametri_cambiati", adesso, testo)
             self._manda(testo, self._chat_pasti())
+
+    @staticmethod
+    def _testo_sostituto(s):
+        if not s:
+            return "nessuno"
+        parti = []
+        if s.get("acqua"):
+            parti.append(f"{_n(s['acqua'])}% acqua")
+        if s.get("farina"):
+            parti.append(f"{_n(s['farina'])}% farina" + (f" ({_silos(s['coclea'])})" if s.get("coclea") else ""))
+        return " + ".join(parti) or "nessuno"
+
+    @staticmethod
+    def _avviso_sostituto(par):
+        """Frase di avviso se la farina del sostituto del siero non corrisponde al Brix (None se va bene)."""
+        s, brix = (par or {}).get("sostituto_siero"), (par or {}).get("brix")
+        if not s or brix is None or abs((s.get("farina") or 0) - brix) <= SCARTO_SOSTITUTO:
+            return None
+        f = s.get("farina") or 0
+        meno = round((1 - f / brix) * 100) if brix else 0
+        return (f"⚠️ Quando manca il siero il PC mette il {_n(f)}% di farina al suo posto, ma il siero ha il "
+                f"{_n(brix)}% di secco (Brix): senza siero i suini ricevono il {meno}% di secco in meno di quello "
+                f"che dava il siero. Sul PC (Modifica dati mangimi → SIERO → F3 Sostituti) la farina andrebbe al "
+                f"{_n(brix)}% e l'acqua al {_n(100 - brix)}%." if meno > 0 else
+                f"⚠️ Quando manca il siero il PC mette il {_n(f)}% di farina al suo posto, più del Brix del siero "
+                f"({_n(brix)}%): senza siero i suini ricevono più secco di quello che dava il siero.")
 
     def _prossimo_reale(self, adesso):
         if self.prossimo_pc is None or self.scarto_s is None:
@@ -296,6 +358,90 @@ class Servizio:
         anticipo = timedelta(minutes=int(impostazione("impianto_anticipo_min") or 5))
         return p - anticipo <= adesso <= p + timedelta(minutes=MINUTI_PASTO_NON_PARTITO) \
             and self.pasto_mancato_avvisato != p
+
+    def _pasto_da_orari(self, adesso, dopo=None):
+        """Prossimo pasto in ora reale secondo gli orari del PC (ORARI.DB): il primo dopo `dopo`
+        (default: adesso − 20 minuti, così all'ora del pasto e subito dopo è ancora "questo")."""
+        if not self.orari:
+            return None, None
+        dopo = dopo or adesso - timedelta(minutes=MINUTI_PASTO_NON_PARTITO)
+        scarto = timedelta(seconds=self.scarto_s or 0)
+        candidati = sorted((datetime.combine(adesso.date() + timedelta(days=g), o) + scarto, o)
+                           for o in self.orari for g in (-1, 0, 1))
+        return next(((t, o) for t, o in candidati if t >= dopo), (None, None))
+
+    def _pasto_dedotto(self, istante):
+        """Orario (sul PC) del pasto partito per ultimo prima di `istante`, dagli orari di ORARI.DB: serve
+        quando l'orario del pasto in corso non si legge sullo schermo. None se nessuno nelle 3 ore prima."""
+        if not self.orari:
+            return None
+        pc = istante - timedelta(seconds=self.scarto_s or 0)
+        passati = [datetime.combine(pc.date() + timedelta(days=g), o) for o in self.orari for g in (-1, 0)]
+        passati = [t for t in passati if t <= pc + timedelta(minutes=10)]
+        if not passati:
+            return None
+        ultimo = max(passati)
+        return ultimo.time() if pc - ultimo <= timedelta(hours=3) else None
+
+    def _promemoria_schermata(self, adesso):
+        """EM2000 non è su «Situazione impianto» e un pasto è vicino o in corso: promemoria ogni 10 minuti."""
+        if not self.schermata_errata:
+            self.promemoria_ultimo = None
+            return
+        pagina = self._testo_pagina(self.schermata_errata)
+        recente = self.promemoria_ultimo and adesso - self.promemoria_ultimo < timedelta(minutes=MINUTI_PROMEMORIA)
+        if self.traccia.in_corso:
+            if not recente:
+                self.promemoria_ultimo = adesso
+                self._manda(f"⚠️ <b>Pasto in corso non seguito</b>: EM2000 è {pagina}. Rimetti la schermata "
+                            f"«6) Situazione impianto»: le linee di adesso non vengono lette (le recupero poi dai "
+                            f"consumi per box del PC).", self._chat_pasti())
+            return
+        quando, orario = self._pasto_da_orari(adesso)
+        if quando is None:
+            return
+        minuti = (quando - adesso).total_seconds() / 60
+        if 0 < minuti <= 60 and not recente:
+            self.promemoria_ultimo = adesso
+            self._manda(f"⚠️ Tra {max(1, round(minuti))} minuti c'è il pasto delle {_hm(orario)} ma EM2000 è "
+                        f"{pagina}. Se non rimetti la schermata «6) Situazione impianto», <b>il pasto delle "
+                        f"{_hm(orario)} NON verrà registrato</b>.", self._chat_pasti())
+        elif minuti <= 0 and self.promemoria_pasto != quando:
+            self.promemoria_pasto = self.promemoria_ultimo = quando
+            self._manda(f"🚨 <b>È l'ora del pasto delle {_hm(orario)}</b> ed EM2000 è ancora {pagina}: il pasto "
+                        f"non viene seguito. Rimetti «6) Situazione impianto»; le linee perse le recupero poi dai "
+                        f"consumi per box del PC.", self._chat_pasti())
+
+    @staticmethod
+    def _testo_pagina(stato):
+        if stato == "MENU PRINCIPALE":
+            return "sul Menu principale"
+        if stato == "SITUAZIONE IMPIANTO SPOSTATA":
+            return "sulla schermata giusta ma spostata (non si legge)"
+        if stato and stato.startswith("PAGINA ") and stato != "PAGINA ?":
+            return f"sulla pagina «{html.escape(stato[7:].capitalize())}»"
+        return "su un'altra pagina"
+
+    # ── recupero delle linee non lette ──────────────────────────────────────
+    def _recupero(self, adesso):
+        from .recupero import recupera, linee_mancanti
+        from app.routes.allevamento import _get_ciclo_attivo
+        self.ultimo_recupero = adesso
+        if modalita() != AUTOMATICO:
+            return
+        ciclo = _get_ciclo_attivo()
+        if not ciclo or not linee_mancanti(ciclo, adesso=adesso):
+            return
+        try:
+            recuperate = recupera(self.lettore, ciclo, adesso=adesso)
+        except Exception as e:
+            log.warning("recupero delle linee non lette non riuscito: %s", e)
+            return
+        for d, pasto, linea, v in recuperate:
+            testo = (f"♻️ <b>Linea {linea}</b> del pasto {pasto} del {d:%d/%m} recuperata dai consumi per box del PC: "
+                     f"farina {_q(v['farina'])} · siero {_q(v['siero'])} · acqua {_q(v['acqua'])} – registrata nel gestionale.")
+            self._salva_evento("linea_recuperata", adesso, testo, None, linea)
+            self._manda(testo, self._chat_pasti())
 
     # ── controllo periodico ────────────────────────────────────────────────
     def _controllo(self, adesso):
@@ -348,7 +494,7 @@ class Servizio:
             if (precedente.scarto_orologio_s is not None and c.scarto_orologio_s is not None
                     and abs(c.scarto_orologio_s - precedente.scarto_orologio_s) > SECONDI_SCARTO_OROLOGIO):
                 self._manda(f"🕐 L'orologio dell'impianto si è spostato: ora è {self._scarto_testo(c.scarto_orologio_s)}.", self._chat_pasti())
-        if l.fase not in (ATTESA_ORARIO, SCONOSCIUTA) and not self.traccia.in_corso:
+        if l.fase not in (ATTESA_ORARIO, SCONOSCIUTA, TRANSIZIONE) and not self.traccia.in_corso:
             # pasto trovato già in corso. Se è ancora sulla linea 1 all'inizio (es. orario spostato a ridosso
             # e visto dal controllo dei 10 minuti) è appena partito: lo si tratta come un inizio vero.
             # Altrimenti (servizio riavviato a pasto avanzato) lo si segue da qui, ma l'inizio vero non si
@@ -552,8 +698,15 @@ class Servizio:
 
     @staticmethod
     def _materiale(c):
-        """'7,69 q di acqua' / '0,40 q di farina (silos C)' per una riga di sostituzione"""
+        """'7,69 q di acqua' / '0,40 q di farina (silos C)' per una riga di sostituzione. Se quella riga non ha
+        dato tutta la sua parte ed è stata completata a sua volta ("poi"), si somma anche quella: 13/10 siero →
+        silos C (0,03 q, vuoto) → silos A (0,34 q) = 0,38 q di farina (silos C 0,03 q + silos A 0,34 q)."""
         if c["comp"] == "farina":
+            dopo = [x for x in c.get("poi") or [] if x["comp"] == "farina" and x["reale"]]
+            if dopo:
+                tot = (c["reale"] or 0) + sum(x["reale"] for x in dopo)
+                parti = " + ".join(f"{_silos(x['coclea'])} {_q(x['reale'])}" for x in [c] + dopo if x["coclea"])
+                return f"{_q(tot)} di farina ({parti})"
             return f"{_q(c['reale'])} di farina" + (f" ({_silos(c['coclea'])})" if c["coclea"] else "")
         return f"{_q(c['reale'])} di {c['comp']}"
 
@@ -613,12 +766,41 @@ class Servizio:
               if quando else "non so da quando")
         if not siero and not d["reale"]:
             # coclea a 0: EM2000 ricorda la sostituzione e non riprova il silos finché non finiscono gli altri
-            testo = (f"{icona} <b>{nome}: saltato da EM2000</b> ({da}) – la {dove} è stata fatta con {con}. "
+            testo = (f"{icona} <b>{nome}: saltato da EM2000</b> ({da}) – la sua dose della {dove} "
+                     f"({_q(d['teorico'])}) è stata fatta con {con}. "
                      f"Il PC non riprova il silos finché non finiscono gli altri: se l'hai già ricaricato non serve fare niente.")
         else:
             tirati = f" (ha tirato solo {_q(d['reale'])})" if d["reale"] else ""
-            testo = f"{icona} <b>{nome}: ancora {vuoto}</b>{tirati} – {da}. La {dove} è stata fatta con {con}."
+            if siero:
+                testo = f"{icona} <b>{nome}: ancora {vuoto}</b>{tirati} – {da}. La {dove} è stata fatta con {con}."
+            else:
+                testo = (f"{icona} <b>{nome}: ancora {vuoto}</b>{tirati} – {da}. La sua dose della {dove} "
+                         f"({_q(d['teorico'])}) è stata completata con {con}.")
+            if siero:
+                testo += self._consiglio_senza_siero(quando, e.istante)
         self._anomalia(e.tipo, e.istante, testo, self._png(img), e.pasto, e.linea, canale=chat)
+
+    def _consiglio_senza_siero(self, dal, adesso):
+        """Da più pasti senza siero (17-19/10): il PC lo sostituisce con il sostituto di COMPOSOST, che dà meno
+        secco se la sua farina è sotto il Brix. Consiglio da aggiungere a "cisterna ancora vuota"."""
+        import json
+        from app import db
+        from app.models import ImpiantoEvento, Setting
+        if not dal:
+            return ""
+        pasti = ImpiantoEvento.query.filter(ImpiantoEvento.tipo == PASTO_CONCLUSO, ImpiantoEvento.istante > dal,
+                                            ImpiantoEvento.istante < adesso).count()
+        if pasti < 1:
+            return ""
+        p = db.session.get(Setting, "impianto_parametri")
+        par = json.loads(p.value) if p and p.value else {}
+        s, brix = par.get("sostituto_siero"), par.get("brix")
+        meno = ""
+        if s and brix and (s.get("farina") or 0) < brix - SCARTO_SOSTITUTO:
+            meno = (f": il sostituto ({self._testo_sostituto(s)}) dà il {round((1 - (s.get('farina') or 0) / brix) * 100)}% "
+                    f"di secco in meno del siero (Brix {_n(brix)}%)")
+        return (f"\n💡 È il {pasti + 1}° pasto con la cisterna vuota{meno}. Se il siero non arriva a breve, passa i box alla "
+                f"«RICETTA 1» oppure porta la farina del sostituto al Brix del siero.")
 
     def _ricaricato(self, chiave, e, chat):
         from app import db
@@ -663,7 +845,12 @@ class Servizio:
         from app import db
         from .registrazione import salva_lettura_linea, registra
         chat = self._chat_pasti()
+        if e.pasto is None and self.traccia.pasto is not None:
+            e.pasto = self.traccia.pasto
         if e.tipo == PASTO_INIZIATO:
+            if e.pasto is None:
+                # orario del pasto in corso illeggibile: quello del PC appena passato (17/10 06:45, 25/10 16:45)
+                e.pasto = self.traccia.pasto = self._pasto_dedotto(e.istante)
             self.inizio_pasto, self.inizio_linee, self.linee_pasto = e.istante, {}, []
             self._salva_evento(e.tipo, e.istante, "agganciato già in corso" if self.aggancio else None, e.pasto)
             if not self.aggancio:        # agganciato dopo un riavvio: non è l'inizio vero, niente messaggio
@@ -675,12 +862,20 @@ class Servizio:
             self._salva_evento(e.tipo, e.istante, None, e.pasto, e.linea)
         elif e.tipo == LINEA_CONCLUSA and e.pasto is None:
             self._anomalia(LINEA_NON_LETTA, e.istante,
-                           f"⚠️ Linea {e.linea}: valori letti ma orario del pasto non leggibile sullo schermo, "
-                           f"lettura non salvata: {e.dati['reale']}", self._png(img), None, e.linea)
+                           f"⚠️ Linea {e.linea}: valori letti ({e.dati['reale']}) ma non si sa di quale pasto "
+                           f"(orario illeggibile e nessun orario del PC nelle 3 ore prima): la recupero dai consumi "
+                           f"per box del PC.", self._png(img), None, e.linea)
         elif e.tipo == LINEA_CONCLUSA:
             from .registrazione import normalizza_siero
             e.dati["reale"] = normalizza_siero(e.dati["reale"])
             lettura = salva_lettura_linea(e.istante.date(), e, self.orari, inizio=self.inizio_linee.get(e.linea))
+            try:            # ricetta della linea (dal nome sullo schermo) e il suo rapporto, per Alimentazione
+                ricetta = self.lettore.ricetta_in_uso(e.dati.get("lettura") or e.lettura)
+            except Exception as ex:
+                log.info("ricetta della linea non letta: %s", ex)
+                ricetta = None
+            if ricetta:
+                lettura.ricetta, lettura.rapporto = ricetta["nome"], ricetta["rapporto"]
             registrata = None
             if modalita() == AUTOMATICO and lettura.confermato:
                 registrata = registra(lettura)
@@ -704,6 +899,7 @@ class Servizio:
             for chiave in e.dati.get("piene") or []:
                 self._ricaricato(tuple(chiave), e, chat)
         elif e.tipo == PASTO_CONCLUSO:
+            self._orario_effettivo(e)
             tot = {k: sum(l.get(k) or 0 for l in self.linee_pasto) for k in COMPONENTI}
             durata = round((e.istante - self.inizio_pasto).total_seconds() / 60) if self.inizio_pasto else None
             self._salva_evento(e.tipo, e.istante, None, e.pasto)
@@ -730,10 +926,39 @@ class Servizio:
             self.schermata_errata = e.dati.get("stato") or "?"
             self.segnalati_oggi[f"stato:{self.schermata_errata}"] = e.istante.date()
             self._anomalia(e.tipo, e.istante, self._testo_sconosciuto(e.dati.get("stato")), self._png(img), e.pasto, e.linea)
+        elif e.tipo == LINEA_NON_LETTA and self._linea_gia_letta(e):
+            # linea "saltata" perché il servizio è ripartito a pasto in corso, ma letta prima del riavvio
+            self._salva_evento(e.tipo, e.istante, "già letta prima del riavvio del servizio", e.pasto, e.linea)
         elif e.tipo == LINEA_NON_LETTA:
+            perche = ("mai vista sullo schermo (EM2000 era su un'altra pagina?)" if e.dati.get("saltata")
+                      else "valori non leggibili sullo schermo")
             self._anomalia(e.tipo, e.istante,
-                           f"⚠️ Linea {e.linea} del pasto delle {_hm(e.pasto)} non letta: valori da inserire a mano.",
+                           f"⚠️ Linea {e.linea} del pasto delle {_hm(e.pasto)} non letta: {perche}. Resta stimata "
+                           f"(gialla) finché non la recupero dai consumi per box del PC, di solito dopo mezzanotte.",
                            self._png(img), e.pasto, e.linea)
+
+    @staticmethod
+    def _linea_gia_letta(e):
+        from app.models import ImpiantoLinea
+        return e.pasto is not None and ImpiantoLinea.query.filter_by(
+            data=e.istante.date(), orario_pasto=e.pasto, linea=e.linea).first() is not None
+
+    def _orario_effettivo(self, e):
+        """A fine pasto, se l'orario effettivo non è stato registrato con la linea 1 (linea 1 non letta),
+        lo si registra dall'inizio del pasto visto dal servizio: serve al recupero e al siero dei carichi."""
+        from app import db
+        from app.models import OrarioPastoEffettivo
+        from app.services.allevamento_scorte import invalida_orari_effettivi
+        from .registrazione import numero_pasto
+        if not self.inizio_pasto or not e.pasto or self.aggancio:
+            return
+        n = numero_pasto(e.pasto, self.orari)
+        d = self.inizio_pasto.date()
+        if n and not OrarioPastoEffettivo.query.filter_by(data=d, pasto=n).first():
+            db.session.add(OrarioPastoEffettivo(data=d, pasto=n, ora=self.inizio_pasto.replace(second=0, microsecond=0).time(),
+                                                operatore="impianto"))
+            db.session.commit()
+            invalida_orari_effettivi()
 
 
 def main():

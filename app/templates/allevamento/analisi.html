@@ -841,12 +841,15 @@
     });
 
     // 3b. rapporto di diluizione per linea, con il valore impostato sul PC
-    const IMP = RAW.rapporto_impostato;
+    // valore impostato giorno per giorno (dalle ricette lette con le linee); oggi e i giorni senza letture: l'ultimo noto
+    const IMP = RAW.rapporto_impostato, IMPG = RAW.rapporto_impostato_giorni || {};
+    const impDel = g => IMPG[g.data] ?? (g.data >= RAW.oggi ? IMP : null);
     document.getElementById("c-rapp-sub").textContent = "Chilogrammi di liquido (acqua + acqua del siero) ogni 10 kg di sostanza secca, come il «rapporto 10:» del PC." +
-      (IMP ? ` Tratteggiato il valore impostato (10:${nf(IMP, 0)}): sopra vuol dire che il siero porta più liquido di quanto serve e l'acqua aggiunta è a zero.` : "");
+      (IMP || Object.keys(IMPG).length ? " Tratteggiato il valore impostato sul PC giorno per giorno: sopra vuol dire che il siero porta più liquido di quanto serve e l'acqua aggiunta è a zero." : "");
     fmtTab.rapp = v => v == null ? "–" : "10:" + nf(v, 1);
     const rappDs = ls.map(l => lineDs(lineaNome(l), P.cur.map(g => agg(g, l).rapporto), T.L[l], SHAPE[l], { pointRadius: P.cur.length > 40 ? 0 : 3, endLabel: v => `${l} · ${nf(v, 1)}` }));
-    if (IMP) rappDs.push({ type: "line", label: "Impostato sul PC", data: P.cur.map(() => IMP), borderColor: T.axis, borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 0 });
+    const impSerie = P.cur.map(impDel);
+    if (impSerie.some(v => v != null)) rappDs.push({ type: "line", label: "Impostato sul PC", data: impSerie, borderColor: T.axis, borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 0, stepped: true, spanGaps: false });
     draw("rapp", {
       type: "line",
       data: { labels, datasets: rappDs },

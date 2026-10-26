@@ -1294,6 +1294,8 @@ def start_bot(app):
     import threading
     import asyncio
 
+    avvisato = [False]
+
     async def _run_bot():
         # Riprova all'infinito: se Telegram non risponde all'avvio (es. rete non ancora
         # pronta dopo un riavvio del server) il bot non deve restare spento per sempre.
@@ -1315,6 +1317,10 @@ def start_bot(app):
                         await tg_app.updater.start_polling(drop_pending_updates=True)
                         logger.info("Bot Telegram allevamento connesso.")
                         attesa = 5
+                        if not avvisato[0]:     # una volta per avvio, non a ogni riconnessione
+                            avvisato[0] = True
+                            from app.services.avvio import messaggio_avvio
+                            await asyncio.to_thread(messaggio_avvio, app)
                         await asyncio.Event().wait()  # block until task is cancelled
                     finally:
                         # shutdown() (uscita dal with) rifiuta un'app ancora in esecuzione

@@ -70,6 +70,21 @@ NOTE = {
                         ("riga", 2, "nome"): "COCLEA 1", ("riga", 3, "nr"): "SOS", ("riga", 3, "nome"): "COCLEA 3",
                         ("riga", 3, "teorico"): "1,73 Qli", ("riga", 3, "reale"): "1,72 Qli",
                         ("riga", 5, "nome"): "TOTALI RICETTA"},
+    # 25/10/2026: il "6" nel riquadro ATTUALE (16:45 e 06:45 erano illeggibili) e il nome della ricetta
+    "ora-1645.png": {"pasto_attuale": "16:45", "ricetta": "ricetta 2 siero"},
+    # 01/10/2026 sera: righe del lavaggio sotto la ricetta ("LAVA" sono 4 lettere che si toccano) e trattini
+    "lavaggio-182204.png": {("riga", 7, "nome"): ["LAVA", "G", "G", "l", "O"], ("riga", 4, "teorico"): "-" * 14},
+    # frasi brevi tra una fase e l'altra (01-02/10/2026)
+    "stato-ritardo.png": {"stato2": "RITARDO DISTRIBUZIONE ACQUA"},
+    "stato-chiusura.png": {"stato2": "CHIUSURA VALVOLA FINALE"},
+    "stato-prepara-dosaggio-box.png": {"stato2": "PREPARA DOSAGGIO BOX"},
+    "stato-prepara-box.png": {"stato2": "PREPARA BOX"},
+    "stato-prepara-lavaggio-box.png": {"stato2": "PREPARA LAVAGGIO BOX"},
+    "stato-prepara-sostituto.png": {"stato2": "PREPARA SOSTITUTO"},
+    # altre pagine di EM2000 (08/10 e 25/10/2026)
+    "titolo-previsione.png": {"titolo_finestra": "PREVISIONE DEI CONSUMI",
+                              "lettere_titolo": "PREVISIONE DEI CONSUMI DAL 08/10/2026 10.00 AL 09/10/2026 10.00 GIORNI:2"},
+    "titolo-mangimi.png": {"titolo_finestra": "MODIFICA DATI MANGIMI"},
 }
 
 
@@ -87,7 +102,7 @@ def zona(img, nome):
 
 def main(cartella):
     camp = S.Campionario()
-    camp.caratteri, camp.frasi = {}, {}
+    camp.caratteri, camp.frasi, camp.titoli, camp.lettere_titolo = {}, {}, {}, {}
     errori = []
     for nome_file, testi in NOTE.items():
         img = Image.open(os.path.join(cartella, nome_file)).convert("RGB")
@@ -106,10 +121,17 @@ def main(cartella):
                 # si impara l'inizio del titolo (lettere separate: una per glifo, spazi esclusi); il resto
                 # può cambiare (es. "VISUALIZZA DATI BOX ORARIO: <13:00> ...")
                 lettere = len(testo.replace(" ", ""))
-                camp.titoli["/".join(S.glifi_titolo(img)[:lettere])] = testo
+                gs = S.glifi_titolo(img)
+                camp.titoli["/".join(gs[:lettere])] = testo
+                # e le singole lettere, per leggere anche i titoli mai visti (schermo.titolo_letto)
+                completo = testi.get("lettere_titolo", testo).replace(" ", "")
+                for k, c in zip(gs, completo):
+                    camp.lettere_titolo[k] = c
+            elif z == "lettere_titolo":
+                pass
             elif isinstance(z, tuple) and z[-1] in ("nr", "nome"):
                 # nel carattere della tabella "I" e "l" sono lo stesso glifo: resta "l" (vedi schermo._nome)
-                if not camp.impara_testo(zona(img, z), testo.replace("I", "l")):
+                if not camp.impara_testo(zona(img, z), testo if isinstance(testo, list) else testo.replace("I", "l")):
                     errori.append(f"{nome_file} {z}: '{testo}' non si allinea")
             elif not camp.impara_testo(zona(img, z), testo):
                 errori.append(f"{nome_file} {z}: '{testo}' non si allinea")

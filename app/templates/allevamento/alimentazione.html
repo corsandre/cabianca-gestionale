@@ -9,7 +9,7 @@
 .cb-riga-ss > td { padding-top: 0; font-size: .75rem; line-height: 1.2; white-space: nowrap; }
 </style>
 {% macro quando(iso) %}{% if iso %}{{ iso[8:10] }}/{{ iso[5:7] }} alle {{ iso[11:16] }}{% endif %}{% endmacro %}
-{% macro ss_testo(v, capi, per_giorno=false, r=none) %}
+{% macro ss_testo(v, capi, per_giorno=false, r=none, rapporto_impostato=none) %}
 {%- if v[0] is not none -%}
 <span title="Sostanza secca {{ 'del giorno' if per_giorno else 'del pasto' }}{{ (' su ' ~ capi ~ ' capi') if capi else '' }}">
 s.s. {{ '%.0f'|format(v[0]) }} kg{% if v[1] is not none %} · {{ '%.2f'|format(v[1]) }} kg/capo{{ '/giorno' if per_giorno }}{% endif %}
@@ -212,9 +212,9 @@ rapporto 10:{{ ('%.1f'|format(r)).replace('.', ',') }}{% if superato %} (imposta
                 <tr class="cb-riga-ss text-muted {{ 'cb-pasto-futuro' if not avvenuto[pasto] else '' }}">
                     <td></td>
                     {% for linea in [1,2,3] %}
-                    <td colspan="4" style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">{{ ss_testo(ss[(pasto, linea)], capi_linea[linea], r=rapporto[(pasto, linea)]) }}</td>
+                    <td colspan="4" style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">{{ ss_testo(ss[(pasto, linea)], capi_linea[linea], r=rapporto[(pasto, linea)], rapporto_impostato=rapporto_imp[(pasto, linea)]) }}</td>
                     {% endfor %}
-                    <td colspan="3" class="text-center" style="border-left:2px solid #dee2e6">{{ ss_testo(ss[(pasto, 'tot')], capi_totali, r=rapporto[(pasto, 'tot')]) }}</td>
+                    <td colspan="3" class="text-center" style="border-left:2px solid #dee2e6">{{ ss_testo(ss[(pasto, 'tot')], capi_totali, r=rapporto[(pasto, 'tot')], rapporto_impostato=rapporto_imp[(pasto, 'tot')]) }}</td>
                 </tr>
                 {% endfor %}
                 <!-- Totali -->
@@ -233,9 +233,9 @@ rapporto 10:{{ ('%.1f'|format(r)).replace('.', ',') }}{% if superato %} (imposta
                 <tr class="table-light cb-riga-ss text-muted">
                     <td></td>
                     {% for linea in [1,2,3] %}
-                    <td colspan="4" style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">{{ ss_testo(ss[('giorno', linea)], capi_linea[linea], per_giorno=true, r=rapporto[('giorno', linea)]) }}</td>
+                    <td colspan="4" style="{{ 'border-left:2px solid #dee2e6;' if not loop.first else '' }}">{{ ss_testo(ss[('giorno', linea)], capi_linea[linea], per_giorno=true, r=rapporto[('giorno', linea)], rapporto_impostato=rapporto_imp[('giorno', linea)]) }}</td>
                     {% endfor %}
-                    <td colspan="3" class="text-center" style="border-left:2px solid #dee2e6">{{ ss_testo(ss[('giorno', 'tot')], capi_totali, per_giorno=true, r=rapporto[('giorno', 'tot')]) }}</td>
+                    <td colspan="3" class="text-center" style="border-left:2px solid #dee2e6">{{ ss_testo(ss[('giorno', 'tot')], capi_totali, per_giorno=true, r=rapporto[('giorno', 'tot')], rapporto_impostato=rapporto_imp[('giorno', 'tot')]) }}</td>
                 </tr>
             </tbody>
         </table>

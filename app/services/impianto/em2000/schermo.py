@@ -19,7 +19,7 @@ from PIL import Image
 
 from ..base import (LetturaSchermo, ATTESA_ORARIO, ATTESA_INIZIO, PREPARAZIONE, STABILIZZAZIONE,
                     MISCELAZIONE, RIEMPIMENTO, DISTRIBUZIONE, LAVAGGIO, ATTESA_SVUOTAMENTO,
-                    SVUOTAMENTO, SCONOSCIUTA)
+                    SVUOTAMENTO, SCONOSCIUTA, TRANSIZIONE)
 
 CAMPIONARIO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "campionario.json")
 
@@ -29,6 +29,7 @@ ZONE = {
     "pasto_attuale": (205, 52, 257, 74),
     "prossimo_pasto": (205, 99, 257, 121),
     "linea": (16, 110, 183, 125),
+    "ricetta": (14, 141, 183, 157),     # nome della ricetta in uso (es. "ricetta 2 siero"), stesso carattere della tabella
     "stato1": (285, 32, 572, 50),
     "stato2": (285, 56, 572, 74),
     "titolo": (215, 55, 500, 90),       # titolo delle altre schermate di EM2000 (es. MENU PRINCIPALE)
@@ -57,6 +58,13 @@ FASI = {
     "ATTESA VASCA VUOTA": ATTESA_SVUOTAMENTO,
     "SVUOTAMENTO": SVUOTAMENTO,
     "SVUOTA BILANCIA": SVUOTAMENTO,
+    # frasi brevi (20-40 s) imparate dalle schermate del 01-02/10/2026: la fase è quella delle frasi vicine
+    "PREPARA SOSTITUTO": PREPARAZIONE,          # dosaggio di una riga SOS
+    "PREPARA BOX": DISTRIBUZIONE,               # tra un box e l'altro
+    "PREPARA DOSAGGIO BOX": DISTRIBUZIONE,
+    "PREPARA LAVAGGIO BOX": LAVAGGIO,
+    "RITARDO DISTRIBUZIONE ACQUA": LAVAGGIO,    # dopo il dosaggio dell'acqua di lavaggio
+    "CHIUSURA VALVOLA FINALE": SVUOTAMENTO,     # dopo lo svuotamento della bilancia, prima dell'attesa
 }
 # frasi seguite dal numero del box che sta ricevendo la razione o l'acqua di lavaggio
 PREFISSI_BOX = {"DISTRIBUZIONE BOX NR.": DISTRIBUZIONE, "LAVAGGIO BOX NR.": LAVAGGIO}
@@ -129,15 +137,18 @@ class Campionario:
         self.caratteri = d.get("caratteri", {})
         self.frasi = d.get("frasi", {})
         self.titoli = d.get("titoli", {})      # titoli delle finestre di EM2000 (inizio del titolo → testo)
+        self.lettere_titolo = d.get("lettere_titolo", {})   # lettere dei titoli, per leggere quelli mai visti
 
     def salva(self):
-        json.dump({"caratteri": self.caratteri, "frasi": self.frasi, "titoli": self.titoli},
-                  open(self.percorso, "w"), sort_keys=True)
+        json.dump({"caratteri": self.caratteri, "frasi": self.frasi, "titoli": self.titoli,
+                   "lettere_titolo": self.lettere_titolo}, open(self.percorso, "w"), sort_keys=True)
 
     def impara_testo(self, cella, testo):
-        """Associa i glifi ai caratteri di un testo noto (spazi esclusi). False se non allineati."""
+        """Associa i glifi ai caratteri di un testo noto (spazi esclusi). False se non allineati.
+        Il testo può essere una lista di pezzi, uno per glifo, quando delle lettere si toccano
+        (es. ["LAVA", "G", "G", "I", "O"]: in "LAVAGGIO" le prime quattro sono un glifo solo)."""
         gs = glifi(cella)
-        car = [c for c in testo if c != " "]
+        car = list(testo) if isinstance(testo, list) else [c for c in testo if c != " "]
         if len(gs) != len(car):
             return False
         for (_, g), c in zip(gs, car):
@@ -198,7 +209,7 @@ def _orario(testo):
 
 # ── titolo della finestra ───────────────────────────────────────────────────
 # testo bianco nella barra del titolo (righe 9-18), dopo l'icona e prima dei pulsanti della finestra
-TITOLO_Y, TITOLO_X = (9, 19), (20, 740)
+TITOLO_Y, TITOLO_X = (9, 19), (23, 740)     # l'icona della finestra finisce alla colonna 21
 TITOLO_SITUAZIONE = "SITUAZIONE IMPIANTO ALIMENTAZIONE"
 STATO_SPOSTATA = "SITUAZIONE IMPIANTO SPOSTATA"
 
@@ -228,6 +239,16 @@ def titolo_finestra(img, camp):
     return None
 
 
+def titolo_letto(img, camp, massimo=40):
+    """Titolo di una finestra mai insegnata, lettera per lettera con le lettere imparate dai titoli noti
+    ("?" per quelle mai viste, spazi non distinguibili). None se non c'è almeno metà del testo leggibile."""
+    chiavi = glifi_titolo(img)[:massimo]
+    if len(chiavi) <= 3:
+        return None
+    testo = "".join(camp.lettere_titolo.get(k, "?") for k in chiavi)
+    return testo if testo.count("?") * 2 <= len(testo) else None
+
+
 def leggi(img, camp=None):
     """LetturaSchermo da un'immagine dello schermo di EM2000."""
     camp = camp or Campionario()
@@ -240,8 +261,15 @@ def leggi(img, camp=None):
     lin = camp.testo(z["linea"])                      # "L1 G1"
     if lin.startswith("L") and lin[1:2].isdigit():
         l.linea = int(lin[1])
+    ric = camp.testo(z["ricetta"])
+    l.ricetta = ric if ric and "?" not in ric else None
     s1, s2 = camp.frase(z["stato1"]), camp.frase(z["stato2"])
     l.stato = " / ".join(x for x in (s1, s2) if x) if (s1 or s2) else None
+    if s1 == "CICLO AUTOMATICO" and s2 == "":
+        # seconda riga vuota per un istante (02/10 tra miscelazione e riempimento): niente da dire
+        l.fase = TRANSIZIONE
+        _leggi_tabella(img, camp, l)
+        return l
     if s2 is None or s1 is None:
         l.fase = SCONOSCIUTA
     elif any(s2.startswith(p) for p in PREFISSI_BOX):
@@ -269,7 +297,8 @@ def leggi(img, camp=None):
             l.stato = f"PAGINA {finestra}"
             return l
         elif len(glifi_titolo(img)) > 3:
-            l.stato = "PAGINA ?"    # una finestra di EM2000 con un titolo non ancora insegnato
+            # una finestra di EM2000 con un titolo non ancora insegnato: quello che si legge, o "?"
+            l.stato = f"PAGINA {titolo_letto(img, camp) or '?'}"
             return l
     _leggi_tabella(img, camp, l)
     return l
@@ -297,6 +326,8 @@ def _leggi_tabella(img, camp, l):
         if nome == "TOTALI RICETTA":
             totale = (te, re)
             break
+        if nome.startswith("LAVAGGIO") or nome.startswith("TOTALI LAVAGGIO"):
+            break                                     # tabella scorsa fino al lavaggio: totale non visibile
         coclea = None
         if nome.startswith("ACQUA"):
             comp = "acqua"
@@ -307,7 +338,10 @@ def _leggi_tabella(img, camp, l):
         else:
             l.righe_sconosciute.append(nome)
             continue
-        l.righe.append({"comp": comp, "coclea": coclea, "sos": _nome(t["nr"]) == "SOS", "teorico": te, "reale": re})
+        nr = _nome(t["nr"])
+        l.righe.append({"comp": comp, "coclea": coclea, "sos": nr == "SOS", "teorico": te, "reale": re,
+                        "nr": int(nr) if nr.isdigit() else None})
+    _righe_nascoste(l, totale)
     for comp in ("acqua", "siero", "farina"):
         righe = [r for r in l.righe if r["comp"] == comp]
         normali = [r for r in righe if not r["sos"]]
@@ -320,5 +354,31 @@ def _leggi_tabella(img, camp, l):
         totale is not None and not l.righe_sconosciute and bool(l.righe)
         and all(r["reale"] is not None for r in l.righe)
         and all(re.get(c) is not None for c in ("acqua", "siero", "farina", "totale"))
-        and abs(sum(r["reale"] for r in l.righe) - re["totale"]) <= 0.011
+        and abs(sum(r["reale"] for r in l.righe) - re["totale"]) <= _tolleranza(l.righe)
     )
+
+
+def _tolleranza(righe):
+    """Scarto ammesso tra la somma delle righe e il totale: ogni valore è arrotondato (0,01 q o 0,1 kg),
+    con molte righe gli arrotondamenti si sommano (13/10: 7 righe, 0,012 q di scarto su 26,75 q)."""
+    return 0.006 * len(righe) + 0.005
+
+
+def _righe_nascoste(l, totale):
+    """Tabella scorsa in giù (succede con molte righe SOS): la prima riga, "1 ACQUA PRE", non si vede
+    (18/10 sera). Le righe normali sono numerate dall'1; se manca solo la 1 la si ricostruisce dal totale
+    (reale e teorico). Con più righe nascoste (es. acqua e siero) non si sa come dividere: la tabella
+    resta incoerente e la linea si recupera dai consumi per box del PC."""
+    if not totale or not l.righe or None in totale or l.righe_sconosciute:
+        return
+    if any(r["reale"] is None or r["teorico"] is None for r in l.righe):
+        return
+    normali = [r for r in l.righe if not r["sos"]]
+    if not normali or normali[0].get("nr") != 2 or l.righe[0].get("nr") != 2:
+        return
+    reale = round(totale[1] - sum(r["reale"] for r in l.righe), 4)
+    teorico = round(totale[0] - sum(r["teorico"] for r in normali), 4)
+    if reale < 0 or teorico < 0:
+        return
+    l.righe.insert(0, {"comp": "acqua", "coclea": None, "sos": False, "teorico": teorico, "reale": reale,
+                       "nr": 1, "ricostruita": True})

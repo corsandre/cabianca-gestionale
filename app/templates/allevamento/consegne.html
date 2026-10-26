@@ -114,6 +114,24 @@
                         Scarto: {{ '%+.1f'|format(s.scarto) }} q
                         <span class="text-muted" style="font-size:.75em">({{ '%+.0f'|format(s.scarto_pct) if s.scarto_pct is not none else '–' }}%)</span>
                     </div>
+                    <a class="small" data-bs-toggle="collapse" href="#chiusuraSiero{{ c.id }}" role="button">
+                        <i class="bi bi-clock-history"></i> Modifica chiusura{{ ' o riapri' if c.id == ultima_consegna_siero_id }}</a>
+                    <div class="collapse" id="chiusuraSiero{{ c.id }}">
+                        <form method="post" action="{{ url_for('allevamento.consegne_siero_chiudi', cid=c.id) }}" class="d-flex gap-1 mt-1">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="date" name="data_esaurimento" class="form-control form-control-sm" value="{{ c.data_esaurimento.isoformat() }}" style="width:7.5rem" required>
+                            <input type="time" name="ora_esaurimento" class="form-control form-control-sm" value="{{ c.ora_esaurimento.strftime('%H:%M') if c.ora_esaurimento else '' }}" style="width:6rem" required>
+                            <button class="btn btn-sm btn-outline-secondary" title="Salva il nuovo orario di chiusura"><i class="bi bi-check2"></i></button>
+                        </form>
+                        {% if c.id == ultima_consegna_siero_id %}
+                        <form method="post" action="{{ url_for('allevamento.consegne_siero_riapri', cid=c.id) }}" class="mt-1"
+                              onsubmit="return confirm('Riaprire il carico? Il siero dei pasti da adesso in poi verrà contato su questo carico.')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn btn-sm btn-outline-secondary py-0" title="Chiusa per sbaglio: torna in corso">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>Riapri carico</button>
+                        </form>
+                        {% endif %}
+                    </div>
                     {% else %}
                     <span class="badge bg-info-subtle text-info-emphasis mb-1">In corso</span>
                     <div class="small text-muted">Usato: <strong>{{ scorta_siero.usato | round(1) }}</strong> q</div>

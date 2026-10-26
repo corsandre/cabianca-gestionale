@@ -186,7 +186,8 @@ def create_app():
     @app.context_processor
     def inject_globals():
         current_section = BLUEPRINT_SECTION_MAP.get(request.blueprint, 'finanza')
-        return {"app_name": "Ca Bianca Gestionale", "current_section": current_section}
+        from app.version import VERSIONE
+        return {"app_name": "Ca Bianca Gestionale", "current_section": current_section, "versione": VERSIONE}
 
     # Create tables and seed data on first run
     with app.app_context():
@@ -303,6 +304,8 @@ def _init_db(app):
         ("cash_register_daily", "contanti", "FLOAT"),
         ("cash_register_daily", "bancomat", "FLOAT"),
         ("cash_register_daily", "carta", "FLOAT"),
+        ("impianto_letture_linee", "ricetta", "VARCHAR(100)"),
+        ("impianto_letture_linee", "rapporto", "REAL"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

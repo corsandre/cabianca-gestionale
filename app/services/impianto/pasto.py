@@ -22,6 +22,9 @@ Regole
   senza una riga di sostituzione (SOS). Con la riga SOS il componente è finito davvero (evento
   siero/silos finito); senza SOS e con poca differenza è solo l'errore di stima del "volo" (quanto
   cade dopo la chiusura) e non si segnala (07/10: 6 kg su 28 q davano un falso allarme).
+- Linee saltate: se lo schermo passa dalla linea 1 alla 3 (25/10: EM2000 su un'altra pagina per tutta
+  la linea 2) o il pasto si vede per la prima volta già oltre la linea 1, le linee mai viste sono
+  "linea non letta" anche loro: il servizio le recupera poi dai consumi per box del PC.
 - Stato sconosciuto: una frase di stato mai vista per 2 letture di fila (va mandata la fotografia).
 - Fase bloccata: la stessa fase dura più del suo limite (LIMITI_FASE_MIN).
 """
@@ -32,7 +35,7 @@ from typing import Optional
 
 from .base import (ATTESA_ORARIO, ATTESA_INIZIO, PREPARAZIONE, STABILIZZAZIONE, MISCELAZIONE,
                    RIEMPIMENTO, DISTRIBUZIONE, LAVAGGIO, ATTESA_SVUOTAMENTO, SVUOTAMENTO,
-                   SCONOSCIUTA, FASI_DOSAGGIO_CONCLUSO, LetturaSchermo)
+                   SCONOSCIUTA, TRANSIZIONE, FASI_DOSAGGIO_CONCLUSO, LetturaSchermo)
 
 MIN_CONFERME = 2
 SOGLIA_SIERO_Q = SOGLIA_Q = 0.05        # dose "piena" (ricarica) e componente sostituito
@@ -58,15 +61,24 @@ def _chiave(riga):
 
 
 def esaurimenti(lettura):
-    """{chiave: dati} dei componenti sostituiti in questa lettura (vedi docstring del modulo)."""
+    """{chiave: dati} dei componenti sostituiti in questa lettura (vedi docstring del modulo). Ogni riga
+    "con" ha in "poi" le righe che l'hanno completata a loro volta se anche lei non ha dato tutta la sua
+    parte (13/10: siero → SOS coclea 3, vuota anche lei → SOS coclea 1)."""
+    sostituzioni = lettura.sostituzioni
+    seguito = {}
+    for sostituita, sos in sostituzioni:
+        if sostituita["sos"]:
+            seguito.setdefault(id(sostituita), []).append(
+                {"comp": sos["comp"], "coclea": sos["coclea"], "reale": sos["reale"]})
     out = {}
-    for sostituita, sos in lettura.sostituzioni:
+    for sostituita, sos in sostituzioni:
         if sostituita["comp"] not in ("siero", "farina"):
             continue
         d = out.setdefault(_chiave(sostituita), {
             "coclea": sostituita["coclea"], "reale": sostituita["reale"], "teorico": sostituita["teorico"],
             "finito_ora": bool(sostituita["reale"]), "con": []})
-        d["con"].append({"comp": sos["comp"], "coclea": sos["coclea"], "reale": sos["reale"]})
+        d["con"].append({"comp": sos["comp"], "coclea": sos["coclea"], "reale": sos["reale"],
+                         "poi": seguito.get(id(sos), [])})
     return out
 
 
@@ -137,7 +149,7 @@ class TracciaPasto:
             sostituiti = {s["comp"] for s, _ in scelta.sostituzioni}
             eventi.append(Evento(LINEA_CONCLUSA, istante, self.pasto, self.linea, lettura=lettura, dati={
                 "reale": reale, "teorico": teorico, "silos": scelta.farina_per_silos, "piene": piene(scelta),
-                "conferme": conferme, "confermato": conferme >= MIN_CONFERME}))
+                "conferme": conferme, "confermato": conferme >= MIN_CONFERME, "lettura": scelta}))
             for comp, tipo in (("siero", SIERO_INSUFFICIENTE), ("farina", FARINA_INSUFFICIENTE)):
                 if (comp not in sostituiti and teorico.get(comp) is not None
                         and reale[comp] < teorico[comp] - SOGLIA_INSUFFICIENTE_Q):
@@ -149,6 +161,8 @@ class TracciaPasto:
     def aggiorna(self, istante, lettura):
         """Elabora una lettura (istante = ora reale della fotografia) e restituisce gli eventi."""
         eventi = []
+        if lettura.fase == TRANSIZIONE:
+            return eventi           # riga di stato vuota per un istante: la lettura non dice niente
         # stato mai visto: segnalato alla seconda lettura di fila (una sola lettura può essere un
         # fotogramma a metà aggiornamento)
         if lettura.fase == SCONOSCIUTA:
@@ -174,7 +188,12 @@ class TracciaPasto:
             self.pasto = lettura.pasto_attuale      # orario non leggibile alla prima lettura: preso appena possibile
         if (lettura.linea is not None and lettura.linea != self.linea and lettura.fase != ATTESA_INIZIO
                 and (self.linea is None or lettura.fase in FASI_INIZIO_LINEA)):
+            precedente = self.linea
             eventi += self._chiudi_linea(istante, lettura)
+            # linee mai viste tra la precedente e questa (o prima della prima vista)
+            for saltata in range((precedente or 0) + 1, lettura.linea):
+                eventi.append(Evento(LINEA_NON_LETTA, istante, self.pasto, saltata, lettura=lettura,
+                                     dati={"saltata": True}))
             self.linea = lettura.linea
             eventi.append(Evento(LINEA_INIZIATA, istante, self.pasto, self.linea, lettura=lettura))
 
