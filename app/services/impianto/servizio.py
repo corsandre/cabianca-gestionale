@@ -499,7 +499,9 @@ class Servizio:
             # e visto dal controllo dei 10 minuti) è appena partito: lo si tratta come un inizio vero.
             # Altrimenti (servizio riavviato a pasto avanzato) lo si segue da qui, ma l'inizio vero non si
             # conosce: niente "iniziato", durata né orario effettivo.
-            appena_partito = l.linea in (1, None) and l.fase in (ATTESA_INIZIO, PREPARAZIONE, STABILIZZAZIONE)
+            # In "attesa inizio ciclo" lo schermo mostra ancora la linea del pasto precedente (26/10: L3 con il
+            # pasto appena spostato alle 13:51): è sempre un inizio vero, qualunque linea sia scritta.
+            appena_partito = l.fase == ATTESA_INIZIO or (l.linea in (1, None) and l.fase in (PREPARAZIONE, STABILIZZAZIONE))
             self.aggancio = not appena_partito
             try:
                 for evento in self.traccia.aggiorna(adesso, l):
