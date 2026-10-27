@@ -840,7 +840,7 @@ def consegne():
     _check_allevamento()
     from app.models import ConsegnaSiero, ConsegnaMangime, SpeditoreSiero
     from app.services.allevamento_scorte import (
-        stato_mangime, stato_siero, scarto_consegna_siero, get_setting_float, attribuzione_siero,
+        stato_mangime, stato_siero, scarto_consegna_siero, get_setting_float, attribuzione_siero, per_pasto,
     )
     ciclo = _get_ciclo_attivo()
 
@@ -872,7 +872,8 @@ def consegne():
                            scorta_mangime=stato_mangime(), scorta_siero=stato_siero(),
                            scarti_siero=scarti_siero,
                            speditori=SpeditoreSiero.query.order_by(SpeditoreSiero.azienda, SpeditoreSiero.indirizzo).all(),
-                           attribuzione_siero=attribuzione_siero()["carichi"],
+                           attribuzione_siero={cid: dict(v, a_cisterna_vuota=per_pasto(v["a_cisterna_vuota"]))
+                                               for cid, v in attribuzione_siero()["carichi"].items()},
                            ultima_consegna_siero_id=next((c.id for c in sorted(
                                siero_list, key=lambda c: (c.data, c.ora or time_min, c.id), reverse=True)), None),
                            oggi=date.today())
@@ -1017,13 +1018,29 @@ def avvisi_nuovo_carico_siero(carico):
       prima, es. pasto 1 con carico alle 10, è normale che resti nel carico precedente).
     Ritorna una lista di messaggi (vuota se non c'è niente da segnalare)."""
     from app.services.allevamento_scorte import (
-        attribuzione_siero, invalida_attribuzione_siero, _inizio_carico, orario_pasto_str,
+        attribuzione_siero, invalida_attribuzione_siero, _inizio_carico, orario_pasto_str, per_pasto,
     )
     invalida_attribuzione_siero()
     att = attribuzione_siero()
     giorno = lambda d: "di oggi" if d == date.today() else f"del {d.strftime('%d/%m')}"
     avvisi = []
-    for p in att["carichi"].get(carico.id, {}).get("a_cisterna_vuota", []):
+    # pasto diviso tra questo carico e il precedente (linee partite prima e dopo l'ora del carico): giusto
+    # se il siero è stato scaricato a metà pasto (27/10), sbagliato se è stato scaricato dopo il pasto
+    nuove = {(v["data"], v["pasto"]): v for v in att["carichi"].get(carico.id, {}).get("pasti", [])}
+    for cid, v in att["carichi"].items():
+        if cid == carico.id:
+            continue
+        for p in per_pasto(v["pasti"]):
+            if (p["data"], p["pasto"]) in nuove:
+                dopo = sorted(x["linea"] for x in att["carichi"][carico.id]["pasti"]
+                              if (x["data"], x["pasto"]) == (p["data"], p["pasto"]))
+                avvisi.append(
+                    f"Il pasto {p['pasto']} {giorno(p['data'])} è diviso tra due carichi: "
+                    f"{'linee' if len(p['linee']) > 1 else 'linea'} {', '.join(map(str, sorted(p['linee'])))} sul carico "
+                    f"precedente, {'linee' if len(dopo) > 1 else 'linea'} {', '.join(map(str, dopo))} "
+                    f"su questo (partite dopo le {_inizio_carico(carico):%H:%M}). Va bene se il siero è stato scaricato a "
+                    f"metà pasto; se è stato scaricato dopo, correggi l'ora del carico.")
+    for p in per_pasto(att["carichi"].get(carico.id, {}).get("a_cisterna_vuota", [])):
         avvisi.append(
             f"Il pasto {p['pasto']} {giorno(p['data'])} ({p['istante'].strftime('%H:%M')}) risulta dato a cisterna "
             f"vuota: i suoi {p['siero']:.1f} q di siero sono stati attribuiti a questo carico. "
@@ -1032,7 +1049,7 @@ def avvisi_nuovo_carico_siero(carico):
     arrivo = _inizio_carico(carico)
     prima = [
         p for cid, v in att["carichi"].items() if cid != carico.id
-        for p in v["pasti"]
+        for p in per_pasto(v["pasti"])
         if p["data"] == arrivo.date() and arrivo - timedelta(hours=3) <= p["istante"] < arrivo
         and not p["orario_effettivo"]
     ]

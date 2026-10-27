@@ -239,6 +239,12 @@ struttura fisica vanno aggiornate in entrambi i file.
   (*Modifica chiusura*) e l'ultimo carico arrivato si può **riaprire** se è stato chiuso per sbaglio (es. a pasto in
   corso): torna in corso, si toglie anche il «cisterna vuota» del servizio dell'impianto e si ricalcolano siero e Brix
   dei pasti.
+- **Siero assegnato linea per linea**: ogni linea va al carico che c'era in cisterna quando quella linea è partita
+  (inizio letto dall'impianto; per le linee inserite a mano l'orario del pasto). Serve quando un carico viene scaricato
+  a metà pasto: il 27/10 la linea 1 ha mangiato il siero rimasto del carico precedente e le linee 2 e 3 quello nuovo.
+  Per questo l'**ora del carico è quella dello scarico in cisterna**; se un carico nuovo divide un pasto, alla
+  registrazione compare un avviso. Due orari del PC a meno di 90 minuti l'uno dall'altro (11:55 per la linea 1, 13:00
+  per le linee 2 e 3) sono lo stesso pasto.
 - **Brix ricalcolato sui pasti**: ogni volta che un carico di siero viene registrato, modificato, chiuso o eliminato
   (dal web o dal bot), Brix di riferimento e % di sostituzione di ogni pasto vengono ricalcolati dal carico a cui il
   suo siero è attribuito (`ricalcola_brix_pasti` in `allevamento_pasti.py`). Così non conta l'ordine in cui si

@@ -43,6 +43,12 @@ l'arrivo del carico successivo (la cisterna si svuota sempre prima) oppure
    finché il carico non viene registrato.
 Un pasto nello stesso minuto dell'arrivo di un carico appartiene al carico
 nuovo (la cisterna è stata svuotata e ricaricata prima del pasto).
+
+L'attribuzione è LINEA PER LINEA (dalla 2.5.2): ogni linea va al carico che c'era in cisterna quando
+quella linea è partita (inizio letto dall'impianto; per le linee inserite a mano l'istante del pasto).
+Serve quando un carico viene scaricato a metà pasto: il 27/10 la linea 1 del pasto delle 11:55 ha usato il
+siero rimasto del carico del 26/10, le linee 2 e 3 quello nuovo. Per questo l'ora di un carico è quella
+dello scarico in cisterna.
 """
 from datetime import date, datetime, timedelta, time as dt_time
 from app import db
@@ -292,13 +298,34 @@ def _fine_carico(c):
 SIERO_MINIMO_Q = 0.15
 
 
+def _inizi_linee():
+    """{(data, pasto, linea): inizio reale} delle linee lette dall'impianto."""
+    from app.models import ImpiantoLinea
+    return {(l.data, l.pasto, l.linea): l.inizio.replace(second=0, microsecond=0)
+            for l in ImpiantoLinea.query.filter(ImpiantoLinea.inizio.isnot(None), ImpiantoLinea.pasto.isnot(None),
+                                                ImpiantoLinea.stato.in_(("registrata", "approvata"))).all()}
+
+
+def per_pasto(voci):
+    """Voci di attribuzione (una per linea) raggruppate per pasto: [{"data", "pasto", "istante" (della
+    prima linea), "siero" (somma), "linee", "orario_effettivo"}], per i messaggi e la pagina Consegne."""
+    out = {}
+    for v in voci:
+        p = out.setdefault((v["data"], v["pasto"]), dict(v, siero=0.0, linee=[]))
+        p["siero"] += v["siero"]
+        p["linee"].append(v["linea"])
+        p["istante"] = min(p["istante"], v["istante"])
+    return sorted(out.values(), key=lambda x: x["istante"])
+
+
 def attribuzione_siero():
-    """Assegna il siero di ogni pasto completo a un carico (regole nel docstring del modulo).
+    """Assegna il siero di ogni linea dei pasti completi a un carico (regole nel docstring del modulo).
 
     Ritorna {"carichi": {id_consegna: {"consumo": q, "pasti": [...], "a_cisterna_vuota": [...]}},
-             "non_attribuiti": [...]}, dove ogni pasto è
-    {"data", "pasto", "istante", "siero", "orario_effettivo"}. Calcolata una volta per contesto;
-    invalidare con invalida_attribuzione_siero() dopo aver cambiato carichi, pasti o orari."""
+             "non_attribuiti": [...]}, dove ogni voce è una linea di un pasto:
+    {"data", "pasto", "linea", "istante", "siero", "orario_effettivo"} (per pasto: per_pasto()).
+    Calcolata una volta per contesto; invalidare con invalida_attribuzione_siero() dopo aver cambiato
+    carichi, pasti o orari."""
     from flask import g
     if "_attribuzione_siero" in g:
         return g._attribuzione_siero
@@ -307,17 +334,22 @@ def attribuzione_siero():
     esito = {"carichi": {c.id: {"consumo": 0.0, "pasti": [], "a_cisterna_vuota": []} for c in carichi},
              "non_attribuiti": []}
 
-    # siero per pasto (somma delle linee), solo pasti avvenuti e completi su tutte le linee attive
+    # siero per linea, solo pasti avvenuti e completi su tutte le linee attive
     linee_attive = _linee_attive()
-    per_pasto = {}
+    inizi = _inizi_linee()
+    per_linea = {}
     for riga in UsoPasto.query.filter(UsoPasto.siero_qli > 0).all():
-        per_pasto[(riga.data, riga.pasto)] = per_pasto.get((riga.data, riga.pasto), 0) + riga.siero_qli
-    for (data_p, pasto), siero in sorted(per_pasto.items()):
-        if not pasto_completo("siero_qli", data_p, pasto, linee_attive):
+        chiave = (riga.data, riga.pasto, riga.linea)
+        per_linea[chiave] = per_linea.get(chiave, 0) + riga.siero_qli
+    completi = {}
+    for (data_p, pasto, linea), siero in sorted(per_linea.items()):
+        if (data_p, pasto) not in completi:
+            completi[(data_p, pasto)] = pasto_completo("siero_qli", data_p, pasto, linee_attive)
+        if not completi[(data_p, pasto)]:
             continue
-        istante = _datetime_pasto(data_p, pasto)
-        voce = {"data": data_p, "pasto": pasto, "istante": istante, "siero": siero,
-                "orario_effettivo": orario_effettivo(data_p, pasto) is not None}
+        istante = inizi.get((data_p, pasto, linea)) or _datetime_pasto(data_p, pasto)
+        voce = {"data": data_p, "pasto": pasto, "linea": linea, "istante": istante, "siero": siero,
+                "orario_effettivo": orario_effettivo(data_p, pasto) is not None or (data_p, pasto, linea) in inizi}
 
         aperti = [c for c in carichi
                   if _inizio_carico(c) <= istante and (_fine_carico(c) is None or istante < _fine_carico(c))]

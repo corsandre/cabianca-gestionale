@@ -248,8 +248,12 @@ class Servizio:
         diverso sul PC non si cambia niente e lo si dice una volta al giorno."""
         from app import db
         from app.services.allevamento_scorte import set_setting, orario_pasto_str
+        from .registrazione import gruppi_orari
         if not orari:
             return
+        gruppi = gruppi_orari(orari)
+        if len(gruppi) == 3 and len(orari) > 3:
+            orari = [g[0] for g in gruppi]      # un pasto diviso in due orari vicini: vale il primo
         if len(orari) != 3:
             if self._da_segnalare(adesso, f"orari:{len(orari)}"):
                 self._manda(f"⚠️ Sul PC di alimentazione ci sono {len(orari)} pasti ({', '.join(_hm(o) for o in orari)}): "
@@ -929,8 +933,8 @@ class Servizio:
             self.segnalati_oggi[f"stato:{self.schermata_errata}"] = e.istante.date()
             self._anomalia(e.tipo, e.istante, self._testo_sconosciuto(e.dati.get("stato")), self._png(img), e.pasto, e.linea)
         elif e.tipo == LINEA_NON_LETTA and self._linea_gia_letta(e):
-            # linea "saltata" perché il servizio è ripartito a pasto in corso, ma letta prima del riavvio
-            self._salva_evento(e.tipo, e.istante, "già letta prima del riavvio del servizio", e.pasto, e.linea)
+            # linea "saltata" ma già registrata (prima di un riavvio, o in un'altra parte del pasto)
+            self._salva_evento(e.tipo, e.istante, "già registrata", e.pasto, e.linea)
         elif e.tipo == LINEA_NON_LETTA:
             perche = ("mai vista sullo schermo (EM2000 era su un'altra pagina?)" if e.dati.get("saltata")
                       else "valori non leggibili sullo schermo")
@@ -939,11 +943,18 @@ class Servizio:
                            f"(gialla) finché non la recupero dai consumi per box del PC, di solito dopo mezzanotte.",
                            self._png(img), e.pasto, e.linea)
 
-    @staticmethod
-    def _linea_gia_letta(e):
-        from app.models import ImpiantoLinea
-        return e.pasto is not None and ImpiantoLinea.query.filter_by(
-            data=e.istante.date(), orario_pasto=e.pasto, linea=e.linea).first() is not None
+    def _linea_gia_letta(self, e):
+        """La linea "non letta" c'è già: letta prima di un riavvio del servizio, o data in un'altra parte
+        dello stesso pasto diviso (27/10: linea 1 alle 11:55, linee 2 e 3 alle 13:00)."""
+        from app.models import ImpiantoLinea, UsoPasto
+        from .registrazione import numero_pasto
+        if e.pasto is None:
+            return False
+        if ImpiantoLinea.query.filter_by(data=e.istante.date(), orario_pasto=e.pasto, linea=e.linea).first():
+            return True
+        n = numero_pasto(e.pasto, self.orari)
+        return n is not None and UsoPasto.query.filter_by(data=e.istante.date(), pasto=n, linea=e.linea,
+                                                          stimato=False).first() is not None
 
     def _orario_effettivo(self, e):
         """A fine pasto, se l'orario effettivo non è stato registrato con la linea 1 (linea 1 non letta),

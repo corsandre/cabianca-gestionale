@@ -120,7 +120,7 @@ def ricalcola_brix_pasti():
         if b is None:
             continue
         for p in d["pasti"]:
-            for u in UsoPasto.query.filter_by(data=p["data"], pasto=p["pasto"]).all():
+            for u in UsoPasto.query.filter_by(data=p["data"], pasto=p["pasto"], linea=p["linea"]).all():
                 if u.siero_qli and u.perc_ss_siero_rif != b:
                     u.perc_ss_siero_rif = b
                     u.perc_siero = calcola_perc_siero(u.mangime_qli, u.siero_qli, b)

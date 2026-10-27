@@ -31,10 +31,26 @@ def normalizza_siero(reale):
     return r
 
 
+MINUTI_STESSO_PASTO = 90     # orari più vicini di così sono lo stesso pasto diviso (27/10: 11:55 linea 1, 13:00 linee 2-3)
+
+
+def gruppi_orari(orari_impianto):
+    """Orari del PC raggruppati per pasto: quelli a meno di MINUTI_STESSO_PASTO dal precedente sono lo stesso
+    pasto dato in due volte (es. una linea con il siero rimasto del carico vecchio, le altre dopo lo scarico)."""
+    gruppi = []
+    for o in sorted(orari_impianto or []):
+        m = o.hour * 60 + o.minute
+        if gruppi and m - (gruppi[-1][-1].hour * 60 + gruppi[-1][-1].minute) < MINUTI_STESSO_PASTO:
+            gruppi[-1].append(o)
+        else:
+            gruppi.append([o])
+    return gruppi
+
+
 def numero_pasto(orario, orari_impianto):
     if not orari_impianto:
         return None
-    n = sum(1 for o in sorted(orari_impianto) if o <= orario)
+    n = sum(1 for g in gruppi_orari(orari_impianto) if g[0] <= orario)
     return max(1, min(3, n))
 
 
