@@ -315,12 +315,14 @@ def _leggi_tabella(img, camp, l):
     teorico è la parte mancante, quindi il teorico di un componente conta solo le righe normali, il
     reale tutte le righe di quel materiale. Le righe sotto (lavaggio) non interessano. Coerente se la
     somma dei componenti fa il totale (valori in quintali o in kg, che EM2000 usa per i numeri piccoli)."""
-    totale = None
+    totale, fine_ricetta = None, False
     for i in range(TABELLA_RIGHE):
         y0, y1 = riga_tabella(i)
         t = {col: camp.testo(img.crop((x0, y0, x1, y1))) for col, (x0, x1) in COLONNE.items()}
         nome = _nome(t["nome"])
         if not nome:
+            if l.righe and t["teorico"] and set(t["teorico"]) == {"-"}:
+                fine_ricetta = True                   # trattini sotto l'ultima riga della ricetta
             continue                                  # riga vuota o di trattini
         te, re = _quintali(t["teorico"]), _quintali(t["reale"])
         if nome == "TOTALI RICETTA":
@@ -341,6 +343,8 @@ def _leggi_tabella(img, camp, l):
         nr = _nome(t["nr"])
         l.righe.append({"comp": comp, "coclea": coclea, "sos": nr == "SOS", "teorico": te, "reale": re,
                         "nr": int(nr) if nr.isdigit() else None})
+    if totale is None and fine_ricetta:
+        totale = _totale_dedotto(l)
     _righe_nascoste(l, totale)
     for comp in ("acqua", "siero", "farina"):
         righe = [r for r in l.righe if r["comp"] == comp]
@@ -356,6 +360,19 @@ def _leggi_tabella(img, camp, l):
         and all(re.get(c) is not None for c in ("acqua", "siero", "farina", "totale"))
         and abs(sum(r["reale"] for r in l.righe) - re["totale"]) <= _tolleranza(l.righe)
     )
+
+
+def _totale_dedotto(l):
+    """Con molte righe SOS (01/11: 9 righe) «TOTALI RICETTA» finisce sotto il bordo della finestra. Se si vedono
+    la prima riga della ricetta (n. 1) e i trattini che chiudono l'ultima, le righe ci sono tutte: il totale è
+    la loro somma (teorico: righe normali; reale: tutte). Verificato sulla foto di fine pasto, scorsa, dove il
+    totale si vede: 28,40 q = somma delle righe."""
+    if not l.righe or l.righe[0].get("nr") != 1 or l.righe_sconosciute:
+        return None
+    if any(r["reale"] is None or r["teorico"] is None for r in l.righe):
+        return None
+    l.totale_dedotto = True
+    return (round(sum(r["teorico"] for r in l.righe if not r["sos"]), 4), round(sum(r["reale"] for r in l.righe), 4))
 
 
 def _tolleranza(righe):

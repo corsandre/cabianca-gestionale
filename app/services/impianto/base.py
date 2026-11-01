@@ -58,6 +58,7 @@ class LetturaSchermo:
     teorico: dict = field(default_factory=dict)   # componente -> quintali (+ "totale")
     reale: dict = field(default_factory=dict)
     tabella_coerente: bool = False           # reale: acqua + siero + farina = totale, tutto in quintali
+    totale_dedotto: bool = False             # totale non visibile (sotto il bordo), calcolato dalle righe
     # righe della ricetta così come sono sullo schermo: {"comp": acqua/siero/farina, "coclea": n o None,
     # "sos": bool, "teorico", "reale"} (quintali). Una riga "sos" è entrata al posto della riga più vicina
     # sopra di lei che non ha dato tutta la sua dose, anche se è a sua volta una sostituzione (es. siero →

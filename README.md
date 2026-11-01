@@ -499,6 +499,8 @@ riga di stato vuota per un istante è un passaggio, non uno stato sconosciuto). 
 insegnate si leggono lettera per lettera con le lettere imparate dagli altri titoli. La tabella della ricetta si legge
 riga per riga dal nome (ACQUA, SIERO, COCLEA n, TOTALI RICETTA). Con molte righe gli arrotondamenti si sommano: lo
 scarto ammesso tra righe e totale cresce con il numero di righe (13/10: 7 righe, 0,012 q). Se la tabella è scorsa e
+con tante righe SOS (01/11: 9 righe) «TOTALI RICETTA» finisce sotto il bordo della finestra: se si vedono la riga 1 e i
+trattini che chiudono la ricetta, il totale è la somma delle righe. Se
 la prima riga «1 ACQUA PRE» non si vede, la si ricostruisce dal totale (con più righe nascoste no: la linea si recupera
 dai consumi per box). Quando un componente finisce durante il dosaggio,
 EM2000 aggiunge righe **SOS** che lo sostituiscono: siero finito → acqua (la parte acqua del siero) + farina (la sua
