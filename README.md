@@ -336,6 +336,9 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
   sua dose (ml/kg), i suoi giorni di somministrazione e di sospensione. Ogni medicinale resta un `Trattamento` a sé,
   quelli dati insieme hanno lo stesso `gruppo` (icona 🔗 nell'elenco); la sospensione prima del macello che conta è la
   più lunga. Il bot permette di scegliere più medicinali nello stesso percorso.
+- **Tabella per animale**: i medicinali dati insieme allo stesso animale (o gruppo di animali) stanno in un unico
+  blocco, con data, box e segno, capi e peso scritti una volta e una riga per medicinale (dose, dosi fatte, stato);
+  i contatori in cima contano gli animali, non i medicinali.
 - **Marcatore: colore e segno** (🔵 blu, ⚫ nero, 🔴 rosso × pallino, riga, S = 9 segni): se nello stesso box si
   trattano più animali, ognuno ha il suo segno; il segno si ripete sulla schiena per ogni giorno di trattamento e il
   promemoria dice quale fare («2ª S», «3° pallino»). Nelle pagine il segno è disegnato nel suo colore

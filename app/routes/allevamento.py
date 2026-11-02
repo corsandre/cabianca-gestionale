@@ -1860,9 +1860,18 @@ def trattamenti():
     for t in lista:
         if t.gruppo:
             gruppi.setdefault(t.gruppo, []).append(t.medicinale.nome)
+    # un blocco per animale (o gruppo di animali): i medicinali dati insieme stanno nello stesso blocco,
+    # così due animali con due medicinali ciascuno sono 2 blocchi e non 4 righe uguali
+    animali = {}
+    for t in lista:
+        animali.setdefault(t.gruppo or f"t{t.id}", []).append(t)
+    animali = [sorted(ts, key=lambda t: t.id) for ts in animali.values()]
+    conteggi = {"da_ripetere": sum(any(stati[t.id]["da_ripetere"] for t in ts) for ts in animali),
+                "sospensione": sum(any(stati[t.id]["in_sospensione"] for t in ts) for ts in animali),
+                "in_corso": sum(any(not stati[t.id]["completo"] for t in ts) for ts in animali)}
 
     return render_template("allevamento/trattamenti.html",
-                           ciclo=ciclo, lista=lista, stati=stati, medicinali=medicinali, gruppi=gruppi,
+                           ciclo=ciclo, lista=lista, stati=stati, medicinali=medicinali, gruppi=gruppi, animali=animali, conteggi=conteggi,
                            BOX_PER_CAP=BOX_PER_CAP, CAPANNONI=CAPANNONI,
                            oggi=date.today())
 
