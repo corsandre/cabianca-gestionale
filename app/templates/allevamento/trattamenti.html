@@ -2,6 +2,7 @@
 {% block title %}Allevamento – Trattamenti{% endblock %}
 
 {% block content %}
+{% from "components/marcatore.html" import marcatore %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="mb-0"><i class="bi bi-capsule me-2" style="color:#c2185b"></i>Registro Trattamenti</h4>
     {% if ciclo %}
@@ -22,9 +23,10 @@
 <!-- Procedura dei marcatori -->
 <div class="cb-card p-3 mb-3 small">
     <i class="bi bi-brush me-1" style="color:#c2185b"></i><strong>Marcatori:</strong>
-    se nello stesso box trattate più animali, ognuno ha il suo colore (🔵 blu, ⚫ nero, 🔴 rosso) così si riconoscono.
-    Sulla schiena si fa una riga per ogni giorno di trattamento: 1ª riga il primo giorno, 2ª il secondo e così via
-    (di solito al massimo 3). Il promemoria del mattino dice quale riga fare. Se allo stesso animale date più
+    se nello stesso box trattate più animali, ognuno ha il suo segno: un {{ marcatore('blu', 'pallino') }} pallino, una
+    {{ marcatore('blu', 'riga') }} riga o una {{ marcatore('blu', 's') }} S, in blu, nero o rosso (9 segni diversi), così si
+    riconoscono. Il segno si ripete sulla schiena per ogni giorno di trattamento: il promemoria del mattino dice quale fare
+    (es. «2ª S»). Se allo stesso animale date più
     medicinali, aggiungeteli nello stesso trattamento <i class="bi bi-link-45deg"></i>.
 </div>
 
@@ -74,7 +76,7 @@
                 </td>
                 <td class="text-muted text-nowrap">
                     {% if t.box_numero %}Box {{ t.box_numero }}{% else %}CAP {{ t.capannone_numero }} (tutto){% endif %}
-                    {% if t.colore %}<span title="Marcatore {{ t.colore }}">{{ {'blu': '🔵', 'nero': '⚫', 'rosso': '🔴'}[t.colore] }}</span>{% endif %}
+                    {{ marcatore(t.colore, t.segno) }}
                     {% if t.gruppo %}<i class="bi bi-link-45deg" title="Stesso animale: {{ gruppi[t.gruppo] | join(' + ') }}"></i>{% endif %}
                 </td>
                 <td class="fw-bold">{{ t.numero_animali }}</td>
@@ -251,13 +253,23 @@
                         <label class="form-label">Operatore</label>
                         <input type="text" name="operatore" class="form-control" value="{{ t.operatore or '' }}">
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Colore marcatore {% if t.gruppo %}<small class="text-muted">(vale per tutti i medicinali di questo animale)</small>{% endif %}</label>
-                        <select name="colore" class="form-select">
-                            <option value="" {{ 'selected' if not t.colore }}>– nessuno –</option>
-                            {% for c, e in [('blu', '🔵 Blu'), ('nero', '⚫ Nero'), ('rosso', '🔴 Rosso')] %}
-                            <option value="{{ c }}" {{ 'selected' if t.colore == c }}>{{ e }}</option>{% endfor %}
-                        </select>
+                    <div class="mb-1">
+                        <label class="form-label">Marcatore {% if t.gruppo %}<small class="text-muted">(vale per tutti i medicinali di questo animale)</small>{% endif %}</label>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <select name="colore" class="form-select" aria-label="Colore">
+                                <option value="" {{ 'selected' if not t.colore }}>– nessuno –</option>
+                                {% for c, e in [('blu', '🔵 Blu'), ('nero', '⚫ Nero'), ('rosso', '🔴 Rosso')] %}
+                                <option value="{{ c }}" {{ 'selected' if t.colore == c }}>{{ e }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <select name="segno" class="form-select" aria-label="Segno">
+                                {% for v, e in [('pallino', '● Pallino'), ('riga', '━ Riga'), ('s', 'S')] %}
+                                <option value="{{ v }}" {{ 'selected' if (t.segno or 'pallino') == v }}>{{ e }}</option>{% endfor %}
+                            </select>
+                        </div>
                     </div>
                     <div class="mb-2">
                         <label class="form-label">Note</label>
@@ -293,12 +305,18 @@
                             <input type="date" name="data_inizio" class="form-control" value="{{ oggi.isoformat() }}" required>
                         </div>
                         <div class="col-6">
-                            <label class="form-label">Colore marcatore <small class="text-muted" id="coloriInUso"></small></label>
-                            <select name="colore" class="form-select" id="selColore">
-                                <option value="">– nessuno –</option>
-                                <option value="blu">🔵 Blu</option><option value="nero">⚫ Nero</option><option value="rosso">🔴 Rosso</option>
-                            </select>
+                            <label class="form-label">Marcatore</label>
+                            <div class="d-flex gap-1">
+                                <select name="colore" class="form-select" id="selColore" aria-label="Colore">
+                                    <option value="">– nessuno –</option>
+                                    <option value="blu">🔵 Blu</option><option value="nero">⚫ Nero</option><option value="rosso">🔴 Rosso</option>
+                                </select>
+                                <select name="segno" class="form-select" id="selSegno" aria-label="Segno">
+                                    <option value="pallino">● Pallino</option><option value="riga">━ Riga</option><option value="s">S</option>
+                                </select>
+                            </div>
                         </div>
+                        <div class="col-12"><small class="text-muted" id="coloriInUso"></small></div>
                     </div>
                     <div class="row g-2 mb-3">
                         <div class="col-6">
@@ -434,15 +452,18 @@ function aggiornaDoseTotale() {
     document.getElementById(id).addEventListener('input', aggiornaDoseTotale);
 });
 
-// colore del marcatore: si propone un colore non ancora usato nel box
+// marcatore: si propone il primo segno (colore + forma) non ancora usato nel box
 async function aggiornaColori() {
     const box = document.getElementById('selBox').value;
     const info = document.getElementById('coloriInUso');
     if (!box) { info.textContent = ''; return; }
     try {
         const dati = await (await fetch('/allevamento/trattamenti/colori/' + box)).json();
-        info.textContent = dati.in_uso.length ? '(già in uso nel box: ' + dati.in_uso.join(', ') + ')' : '';
-        if (dati.suggerito) document.getElementById('selColore').value = dati.suggerito;
+        info.textContent = dati.in_uso.length ? 'Già in uso nel box: ' + dati.in_uso.join(', ') : '';
+        if (dati.suggerito) {
+            document.getElementById('selColore').value = dati.suggerito.colore;
+            document.getElementById('selSegno').value = dati.suggerito.segno;
+        }
     } catch (err) { info.textContent = ''; }
 }
 document.getElementById('selBox').addEventListener('change', aggiornaColori);

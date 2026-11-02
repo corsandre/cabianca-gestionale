@@ -1907,7 +1907,8 @@ def trattamenti_new():
         creati = crea_trattamenti(ciclo.id, medicinali, int(box) if box else None, int(cap) if cap else None,
                                   qty, peso_medio_kg, data_inizio, request.form.get("operatore", "").strip() or None,
                                   request.form.get("note", "").strip() or None,
-                                  request.form.get("colore", "").strip() or None)
+                                  request.form.get("colore", "").strip() or None,
+                                  segno=request.form.get("segno", "").strip() or None)
         db.session.commit()
         nomi = ", ".join(t.medicinale.nome for t in creati)
         flash(f"Trattamento registrato: {nomi}, {qty} capi.", "success")
@@ -1921,13 +1922,15 @@ def trattamenti_new():
 @bp.route("/trattamenti/colori/<int:box>")
 @login_required
 def trattamenti_colori(box):
-    """Colori del marcatore già in uso nel box (trattamenti in corso) e quello proposto."""
+    """Marcatori (colore + segno) già in uso nel box (trattamenti in corso) e quello proposto."""
     _check_allevamento()
-    from app.services.allevamento_trattamenti import colori_in_uso, colore_suggerito
+    from app.services.allevamento_trattamenti import marcatori_in_uso, marcatore_suggerito, testo_marcatore
     ciclo = _get_ciclo_attivo()
     if not ciclo:
         return jsonify(in_uso=[], suggerito=None)
-    return jsonify(in_uso=colori_in_uso(ciclo.id, box), suggerito=colore_suggerito(ciclo.id, box))
+    colore, segno = marcatore_suggerito(ciclo.id, box)
+    return jsonify(in_uso=[testo_marcatore(c, s) for c, s in marcatori_in_uso(ciclo.id, box)],
+                   suggerito={"colore": colore, "segno": segno} if colore else None)
 
 
 @bp.route("/trattamenti/<int:tid>/edit", methods=["POST"])
@@ -1977,12 +1980,16 @@ def trattamenti_edit(tid):
         t.giorni_somministrazione = giorni_somm
         t.giorni_sospensione = giorni_sosp
         colore = request.form.get("colore", "").strip() or None
+        segno = request.form.get("segno", "").strip() or None
         if colore not in (None, "blu", "nero", "rosso"):
             raise ValueError("Colore del marcatore non valido.")
-        # il colore è dell'animale: vale per tutti i medicinali dello stesso gruppo
+        if segno not in (None, "pallino", "riga", "s"):
+            raise ValueError("Segno del marcatore non valido.")
+        # il marcatore è dell'animale: vale per tutti i medicinali dello stesso gruppo
         compagni = Trattamento.query.filter_by(gruppo=t.gruppo).all() if t.gruppo else [t]
         for x in compagni:
             x.colore = colore
+            x.segno = (segno or "pallino") if colore else None
 
         if t.data_inizio != data_inizio:
             t.data_inizio = data_inizio

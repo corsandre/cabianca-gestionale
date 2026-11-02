@@ -336,10 +336,12 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
   sua dose (ml/kg), i suoi giorni di somministrazione e di sospensione. Ogni medicinale resta un `Trattamento` a sé,
   quelli dati insieme hanno lo stesso `gruppo` (icona 🔗 nell'elenco); la sospensione prima del macello che conta è la
   più lunga. Il bot permette di scegliere più medicinali nello stesso percorso.
-- **Colore del marcatore** (🔵 blu, ⚫ nero, 🔴 rosso): se nello stesso box si trattano più animali, ognuno ha il suo
-  colore; sulla schiena si fa una riga per ogni giorno di trattamento (1ª riga il primo giorno, 2ª il secondo…, di
-  solito al massimo 3). Per un nuovo trattamento viene proposto un colore non ancora usato nel box; il colore vale per
-  tutti i medicinali dello stesso animale. La procedura è spiegata in cima alla pagina.
+- **Marcatore: colore e segno** (🔵 blu, ⚫ nero, 🔴 rosso × pallino, riga, S = 9 segni): se nello stesso box si
+  trattano più animali, ognuno ha il suo segno; il segno si ripete sulla schiena per ogni giorno di trattamento e il
+  promemoria dice quale fare («2ª S», «3° pallino»). Nelle pagine il segno è disegnato nel suo colore
+  (`components/marcatore.html`); nel bot si sceglie tra i 9 pulsanti. Per un nuovo trattamento viene proposto il primo
+  segno non ancora usato nel box; il marcatore vale per tutti i medicinali dello stesso animale. I trattamenti
+  registrati prima del 02/11/2026 hanno solo il colore e valgono come pallino. La procedura è in cima alla pagina.
 - **Promemoria del mattino** (all'orario di Impostazioni → Avvisi giornalieri, default 07:00) nel gruppo
   dell'allevamento, una riga per animale: «box 30, maiale ⚫ nero: Cloxacillina dose 2 di 3; Micospectone dose 2 di 5
   → fai la 2ª riga». Nel bot, «Da fare oggi» elenca gli animali e registra in un colpo la dose di tutti i loro
@@ -395,7 +397,7 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
 | `UsoPasto` | `uso_pasti` | Consumo per pasto/linea, reale o stimato; `fonte` = `impianto` se letto dal PC di alimentazione |
 | `RazioneBox` | `razioni_box_v2` | % razione per box e giorno, reale o stimata |
 | `Medicinale` | `medicinali` | Farmaci disponibili |
-| `Trattamento` / `Somministrazione` | `trattamenti` / `somministrazioni` | Corso di cura (un medicinale; `gruppo` = medicinali dati insieme allo stesso animale, `colore` = marcatore, `deceduto`) e singole dosi |
+| `Trattamento` / `Somministrazione` | `trattamenti` / `somministrazioni` | Corso di cura (un medicinale; `gruppo` = medicinali dati insieme allo stesso animale, `colore` + `segno` = marcatore, `deceduto`) e singole dosi |
 | `ImpiantoControllo` | `impianto_controlli` | Controlli periodici dell'impianto (raggiungibile, stato, orologio, orari) |
 | `ImpiantoLinea` | `impianto_letture_linee` | Quantitativi letti per pasto e linea: proposta → approvata/scartata, o registrata |
 | `ImpiantoEvento` | `impianto_eventi` | Eventi dei pasti e anomalie, con la fotografia dello schermo |
@@ -409,7 +411,7 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
 | `allevamento_bot.py` | Bot Telegram dell'allevamento |
 | `allevamento_analisi.py` | Dati giornalieri per la pagina Analisi (capi, età, pasti, entrate, uscite, morti) |
 | `allevamento_siero_schede.py` | Schede Brix e sostituzione di Alimentazione (valore attuale e 15 giorni) |
-| `allevamento_trattamenti.py` | Più medicinali per animale, colore del marcatore, dosi da ripetere per animale |
+| `allevamento_trattamenti.py` | Più medicinali per animale, marcatore (colore + segno), dosi da ripetere per animale |
 | `allevamento_avvisi.py` | Avviso del mattino con i trattamenti da ripetere |
 | `impianto/` | Collegamento all'impianto di alimentazione (vedi sotto) |
 

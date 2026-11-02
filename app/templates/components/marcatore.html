@@ -1,0 +1,14 @@
+{# Segno del marcatore di un trattamento: pallino, riga o S nel colore del marcatore (blu, nero, rosso).
+   Un trattamento senza segno (registrato prima del 02/11/2026) vale come pallino. #}
+{% macro marcatore(colore, segno, size=16) -%}
+{%- if colore -%}
+{%- set c = {'blu': '#1565c0', 'nero': '#212121', 'rosso': '#c62828'}.get(colore, '#6c757d') -%}
+{%- set sg = segno or 'pallino' -%}
+{%- set nome = {'pallino': 'pallino', 'riga': 'riga', 's': 'S'}[sg] ~ ' ' ~ (colore if colore == 'blu' or sg == 'pallino' else colore[:-1] ~ 'a') -%}
+<svg class="align-text-bottom" width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" role="img" aria-label="Marcatore {{ nome }}"><title>Marcatore: {{ nome }}</title>
+{%- if sg == 'riga' %}<rect x="1" y="6" width="14" height="4" rx="2" fill="{{ c }}"/>
+{%- elif sg == 's' %}<text x="8" y="14" text-anchor="middle" font-size="16" font-weight="700" font-family="Arial, Helvetica, sans-serif" fill="{{ c }}">S</text>
+{%- else %}<circle cx="8" cy="8" r="6" fill="{{ c }}"/>{% endif -%}
+</svg>
+{%- endif -%}
+{%- endmacro %}

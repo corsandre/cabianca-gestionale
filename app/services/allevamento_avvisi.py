@@ -4,7 +4,7 @@ Ogni minuto lo scheduler chiama controlla(): passato l'orario impostato (Imposta
 allevamento_orario_avvisi, default 07:00) manda gli avvisi del giorno una volta sola (il giorno
 dell'ultimo invio è in allevamento_avvisi_inviati_il, così un riavvio non li ripete).
 Avvisi: trattamenti con una dose da ripetere oggi, raggruppati per animale (medicinali dati insieme
-allo stesso animale) con il colore del marcatore e la riga da fare sulla schiena. Se non c'è niente da
+allo stesso animale) con il marcatore (colore e segno) e quale segno fare sulla schiena. Se non c'è niente da
 dire, nessun messaggio.
 """
 import html
@@ -24,8 +24,8 @@ def orario_avvisi():
 
 
 def trattamenti_da_ripetere():
-    """Righe di testo, una per animale (o gruppo di animali), con i medicinali da dare oggi. Con il colore
-    del marcatore si indica anche quale riga fare sulla schiena (una per giorno di trattamento)."""
+    """Righe di testo, una per animale (o gruppo di animali), con i medicinali da dare oggi. Con il marcatore
+    si indica anche quale segno fare sulla schiena (uno per giorno di trattamento, es. «2ª S»)."""
     from app.models import Ciclo
     from app.services.allevamento_trattamenti import da_ripetere_per_animale, riga_ordinale
     ciclo = Ciclo.query.filter_by(attivo=True).first()
@@ -37,7 +37,7 @@ def trattamenti_da_ripetere():
         for t, s in g["trattamenti"]:
             ml = f", {s['dose_totale_ml']:.0f} ml in tutto".replace(".", ",") if s["dose_totale_ml"] else ""
             dosi.append(f"<b>{html.escape(t.medicinale.nome)}</b> dose {s['fatte'] + 1} di {s['totali']}{ml}")
-        riga = f" → fai la <b>{riga_ordinale(g['riga'])}</b>" if g["colore"] else ""
+        riga = f" → fai {'la' if g['segno'] in ('riga', 's') else 'il'} <b>{riga_ordinale(g['riga'], g['segno'])}</b>" if g["colore"] else ""
         righe.append(f"• {html.escape(g['animale'])}: " + "; ".join(dosi) + riga)
     return righe
 

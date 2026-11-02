@@ -658,6 +658,7 @@ class Trattamento(db.Model):
     deceduto = db.Column(db.Boolean, default=False)   # chiuso perché l'animale è morto: niente sospensione
     gruppo = db.Column(db.String(32))   # stesso valore per i medicinali dati insieme allo stesso animale
     colore = db.Column(db.String(10))   # colore del marcatore sull'animale: blu, nero, rosso
+    segno = db.Column(db.String(10))    # forma del segno: pallino, riga, s (senza = pallino, come prima)
     registrato_da = db.Column(db.String(20), default="web")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     ciclo = db.relationship("Ciclo", backref="trattamenti")

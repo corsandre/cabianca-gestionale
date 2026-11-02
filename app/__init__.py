@@ -306,6 +306,7 @@ def _init_db(app):
         ("cash_register_daily", "carta", "FLOAT"),
         ("impianto_letture_linee", "ricetta", "VARCHAR(100)"),
         ("impianto_letture_linee", "rapporto", "REAL"),
+        ("trattamenti", "segno", "VARCHAR(10)"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

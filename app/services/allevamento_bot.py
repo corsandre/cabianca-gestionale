@@ -195,7 +195,7 @@ def start_bot(app):
                 if ciclo:
                     for g in da_ripetere_per_animale(ciclo.id):
                         meds = " + ".join(t.medicinale.nome for t, _ in g["trattamenti"])
-                        riga = f" · {riga_ordinale(g['riga'])}" if g["colore"] else ""
+                        riga = f" · {riga_ordinale(g['riga'], g['segno'])}" if g["colore"] else ""
                         righe.append((g["chiave"], f"{g['animale']}: {meds} (dose {g['riga']}){riga}"))
             if not righe:
                 await q.edit_message_text("✅ Nessuna dose da somministrare oggi.\n\nUsa /start per continuare.")
@@ -415,7 +415,10 @@ def start_bot(app):
                 db.session.commit()
                 testo = f"✅ Registrato per {g['animale']}: " + ", ".join(fatte) + "."
                 if g["colore"]:
-                    testo += f"\nRicordati la {riga_ordinale(g['riga'])} con il marcatore {g['colore']}."
+                    from app.services.allevamento_trattamenti import testo_marcatore
+                    art = "la" if g["segno"] in ("riga", "s") else "il"
+                    testo += (f"\nRicordati di fare {art} {riga_ordinale(g['riga'], g['segno'])} "
+                              f"({testo_marcatore(g['colore'], g['segno'])}).")
             await q.edit_message_text(testo + "\n\nUsa /start per continuare.")
             return ConversationHandler.END
         tid = int(q.data.replace("somm_", ""))
@@ -541,26 +544,31 @@ def start_bot(app):
 
         ctx.user_data["tratt_peso"] = peso
         box = ctx.user_data.get("tratt_box")
+        from app.services.allevamento_trattamenti import COLORI, SEGNI, EMOJI, testo_marcatore
         suggerito, usati = None, []
         if box:
             with app.app_context():
                 from app.models import Ciclo
-                from app.services.allevamento_trattamenti import colori_in_uso, colore_suggerito
+                from app.services.allevamento_trattamenti import marcatori_in_uso, marcatore_suggerito
                 ciclo = Ciclo.query.filter_by(attivo=True).first()
                 if ciclo:
-                    usati, suggerito = colori_in_uso(ciclo.id, box), colore_suggerito(ciclo.id, box)
+                    usati, suggerito = marcatori_in_uso(ciclo.id, box), marcatore_suggerito(ciclo.id, box)
+        # 9 segni: una riga di pulsanti per forma (pallino, riga, S), una colonna per colore
         kb = InlineKeyboardMarkup([[
-            InlineKeyboardButton(("👉 " if c == suggerito else "") + e, callback_data=f"col_{c}")
-            for c, e in (("blu", "🔵 Blu"), ("nero", "⚫ Nero"), ("rosso", "🔴 Rosso"))
-        ], [InlineKeyboardButton("Nessun colore", callback_data="col_")]])
-        nota = f" (già in uso nel box: {', '.join(usati)})" if usati else ""
-        await update.message.reply_text(f"🖍️ Colore del marcatore per riconoscere l'animale{nota}:", reply_markup=kb)
+            InlineKeyboardButton(("👉 " if (c, sg) == suggerito else "") + f"{EMOJI[c]} {testo_marcatore(c, sg)}",
+                                 callback_data=f"col_{c}_{sg}")
+            for c in COLORI] for sg in SEGNI
+        ] + [[InlineKeyboardButton("Nessun segno", callback_data="col_")]])
+        nota = f" (già in uso nel box: {', '.join(testo_marcatore(c, sg) for c, sg in usati)})" if usati else ""
+        await update.message.reply_text(f"🖍️ Segno del marcatore per riconoscere l'animale{nota}:", reply_markup=kb)
         return TRATTAMENTO_COLORE
 
     async def trattamento_colore(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         q = update.callback_query
         await q.answer()
-        colore = q.data.replace("col_", "") or None
+        scelta = q.data.replace("col_", "")
+        colore, _, segno = scelta.partition("_")
+        colore, segno = colore or None, segno or None
         ids = ctx.user_data.get("tratt_medicinali") or []
         cap = ctx.user_data.get("tratt_cap")
         box = ctx.user_data.get("tratt_box")
@@ -578,7 +586,7 @@ def start_bot(app):
             meds = [(m, m.ml_per_kg, m.giorni_somministrazione, m.giorni_sospensione) for m in meds if m]
             creati = crea_trattamenti(ciclo.id, meds, box, cap, qty, peso, date.today(),
                                       f"telegram:{update.effective_user.first_name or update.effective_user.id}",
-                                      None, colore, registrato_da="telegram")
+                                      None, colore, registrato_da="telegram", segno=segno)
             db.session.commit()
             righe = []
             for t in creati:
@@ -587,7 +595,8 @@ def start_bot(app):
             chi = animale(creati[0])
         testo = f"✅ Trattamento registrato: {chi}, {qty} capi.\n" + "\n".join(righe)
         if colore:
-            testo += f"\nFai la 1ª riga con il marcatore {colore}."
+            from app.services.allevamento_trattamenti import testo_marcatore, riga_ordinale
+            testo += f"\nFai {'la' if segno in ('riga', 's') else 'il'} {riga_ordinale(1, segno)} ({testo_marcatore(colore, segno)})."
         await q.edit_message_text(testo + "\n\nUsa /start per continuare.")
         return ConversationHandler.END
 
