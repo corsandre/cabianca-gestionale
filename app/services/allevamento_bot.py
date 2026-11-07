@@ -215,6 +215,7 @@ def start_bot(app):
                 return ConversationHandler.END
             ctx.user_data["tratt_nomi"] = nomi
             ctx.user_data["tratt_medicinali"] = []
+            ctx.user_data["tratt_caps"] = []
             await q.edit_message_text(
                 "💊 *Nuovo trattamento*\nScegli il medicinale (anche più d'uno se allo stesso animale ne date più insieme), poi «Avanti»:",
                 parse_mode="Markdown", reply_markup=kb_medicinali(nomi, []),
@@ -460,7 +461,7 @@ def start_bot(app):
         if q.data == "med_avanti":
             if not scelti:
                 return TRATTAMENTO_MEDICINALE
-            await q.edit_message_text("📍 Capannone:", reply_markup=kb_capannoni())
+            await q.edit_message_text("📍 Capannone:", reply_markup=kb_capannoni_trattamento())
             return TRATTAMENTO_CAP
         mid = int(q.data.replace("med_", ""))
         if mid in scelti:
@@ -473,11 +474,55 @@ def start_bot(app):
                                   reply_markup=kb_medicinali(nomi, scelti))
         return TRATTAMENTO_MEDICINALE
 
+    def kb_capannoni_trattamento():
+        """Come kb_capannoni, più gli ambiti larghi: più capannoni insieme o tutto l'allevamento (es. broda)."""
+        rows = kb_capannoni().inline_keyboard
+        return InlineKeyboardMarkup([*rows, [InlineKeyboardButton("🔀 Più capannoni", callback_data="tcap_piu"),
+                                             InlineKeyboardButton("🏠 Tutto l'allevamento", callback_data="tcap_tutti")]])
+
+    def kb_capannoni_multi(scelti):
+        buttons = [InlineKeyboardButton(("✅ " if c in scelti else "") + f"CAP {c}", callback_data=f"tcap_{c}")
+                   for c in CAPANNONI]
+        rows = [buttons[i:i+4] for i in range(0, len(buttons), 4)]
+        if scelti:
+            rows.append([InlineKeyboardButton("➡️ Avanti", callback_data="tcap_ok")])
+        return InlineKeyboardMarkup(rows)
+
+    async def chiedi_qty_capannoni(q, ctx, caps):
+        """Più capannoni (o tutti): niente box, si chiede il numero di capi proponendo i presenti."""
+        ctx.user_data["tratt_caps"], ctx.user_data["tratt_cap"], ctx.user_data["tratt_box"] = caps, None, None
+        with app.app_context():
+            from app.models import Ciclo
+            from app.services.allevamento_trattamenti import capi_e_peso
+            ciclo = Ciclo.query.filter_by(attivo=True).first()
+            capi = capi_e_peso(ciclo, [b for c in caps for b in BOX_PER_CAP.get(c, [])])[0] if ciclo else 0
+        dove = "tutto l'allevamento" if sorted(caps) == CAPANNONI else "CAP " + ", ".join(map(str, caps))
+        await q.edit_message_text(f"📍 {dove}\nQuanti animali?" + (f" (presenti ora: {capi})" if capi else ""))
+        return TRATTAMENTO_QTY
+
     async def trattamento_cap(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         q = update.callback_query
         await q.answer()
+        if q.data == "tcap_tutti":
+            return await chiedi_qty_capannoni(q, ctx, list(CAPANNONI))
+        if q.data.startswith("tcap_"):
+            scelti = ctx.user_data.setdefault("tratt_caps", [])
+            scelta = q.data.replace("tcap_", "")
+            if scelta == "ok":
+                if not scelti:
+                    return TRATTAMENTO_CAP
+                return await chiedi_qty_capannoni(q, ctx, sorted(scelti))
+            if scelta != "piu":
+                c = int(scelta)
+                if c in scelti:
+                    scelti.remove(c)
+                else:
+                    scelti.append(c)
+            await q.edit_message_text("🔀 Spunta i capannoni, poi «Avanti»:", reply_markup=kb_capannoni_multi(scelti))
+            return TRATTAMENTO_CAP
         cap = int(q.data)
         ctx.user_data["tratt_cap"] = cap
+        ctx.user_data["tratt_caps"] = []
         await q.edit_message_text("📦 Box (o tutto il capannone):", reply_markup=kb_boxes(cap))
         return TRATTAMENTO_BOX
 
@@ -502,7 +547,15 @@ def start_bot(app):
 
         peso_auto = None
         box = ctx.user_data.get("tratt_box")
-        if box:
+        caps = ctx.user_data.get("tratt_caps") or ([ctx.user_data["tratt_cap"]] if ctx.user_data.get("tratt_cap") and not box else [])
+        if caps:
+            with app.app_context():
+                from app.models import Ciclo
+                from app.services.allevamento_trattamenti import capi_e_peso
+                ciclo = Ciclo.query.filter_by(attivo=True).first()
+                if ciclo:
+                    peso_auto = capi_e_peso(ciclo, [b for c in caps for b in BOX_PER_CAP.get(c, [])])[1]
+        elif box:
             with app.app_context():
                 from app.models import Censimento, CensimentoBox, Ciclo
                 ciclo = Ciclo.query.filter_by(attivo=True).first()
@@ -586,7 +639,8 @@ def start_bot(app):
             meds = [(m, m.ml_per_kg, m.giorni_somministrazione, m.giorni_sospensione) for m in meds if m]
             creati = crea_trattamenti(ciclo.id, meds, box, cap, qty, peso, date.today(),
                                       f"telegram:{update.effective_user.first_name or update.effective_user.id}",
-                                      None, colore, registrato_da="telegram", segno=segno)
+                                      None, colore, registrato_da="telegram", segno=segno,
+                                      capannoni=ctx.user_data.get("tratt_caps") or None)
             db.session.commit()
             righe = []
             for t in creati:

@@ -7,6 +7,8 @@
   trattamento senza segno vale come pallino). Il segno si ripete sulla schiena per ogni giorno di
   trattamento: il promemoria dice quale fare (es. «2ª S»). Per un nuovo trattamento si propone il primo
   segno non ancora usato nel box.
+- Ambito: un box, un capannone intero, oppure più capannoni insieme (`capannoni` = "1,2,3"; tutti e 7 =
+  tutto l'allevamento), es. vaccinazioni o trattamenti nella broda (dal 07/11/2026).
 """
 import uuid
 
@@ -51,14 +53,62 @@ def marcatore_suggerito(ciclo_id, box):
     return next(((c, s) for s in SEGNI for c in COLORI if (c, s) not in usati), (None, None))
 
 
+def normalizza_ambito(box, cap, caps=None):
+    """(box, capannone_numero, capannoni) da salvare. Più capannoni → solo `capannoni` ("1,2,3", in ordine);
+    un capannone solo scelto nell'elenco vale come quel capannone intero."""
+    from app.routes.allevamento import CAPANNONI
+    if isinstance(caps, str):
+        caps = caps.split(",")
+    caps = sorted({int(c) for c in caps or [] if str(c).strip()})
+    if any(c not in CAPANNONI for c in caps):
+        raise ValueError("Capannone non valido.")
+    if len(caps) > 1:
+        return None, None, ",".join(map(str, caps))
+    if caps:
+        return None, caps[0], None
+    if not box and not cap:
+        raise ValueError("Seleziona un box, un capannone o più capannoni.")
+    return box, cap, None
+
+
+def caps_di(t):
+    """Capannoni coperti da un trattamento a più capannoni ([] se box o capannone singolo)."""
+    return [int(c) for c in t.capannoni.split(",")] if t.capannoni else []
+
+
+def tutto_allevamento(t):
+    from app.routes.allevamento import CAPANNONI
+    return sorted(caps_di(t)) == sorted(CAPANNONI)
+
+
+def capi_e_peso(ciclo, boxes):
+    """Capi presenti adesso nei box (ultimo censimento ± mortalità e spostamenti) e peso medio a capo
+    dall'ultimo censimento di ogni box, pesato sui capi (None se manca)."""
+    from app.models import Censimento, CensimentoBox
+    from app.routes.allevamento import _live_count
+    conta = _live_count(ciclo)
+    capi = sum(conta.get(b, 0) for b in boxes)
+    tot_peso = capi_con_peso = 0
+    for b in boxes:
+        riga = (CensimentoBox.query.join(Censimento)
+                .filter(Censimento.ciclo_id == ciclo.id, CensimentoBox.box_numero == b,
+                        CensimentoBox.peso_stimato_kg.isnot(None))
+                .order_by(Censimento.data.desc(), Censimento.id.desc()).first())
+        if riga and conta.get(b, 0):
+            tot_peso += riga.peso_stimato_kg * conta[b]
+            capi_con_peso += conta[b]
+    return capi, (round(tot_peso / capi_con_peso, 1) if capi_con_peso else None)
+
+
 def crea_trattamenti(ciclo_id, medicinali, box, cap, qty, peso, data_inizio, operatore, note, colore,
-                     registrato_da="web", segno=None):
+                     registrato_da="web", segno=None, capannoni=None):
     """medicinali: [(Medicinale, ml_per_kg, giorni_somministrazione, giorni_sospensione)].
     Crea un Trattamento per medicinale (stesso gruppo se più d'uno) con la prima dose del giorno di inizio."""
     from app import db
     from app.models import Trattamento, Somministrazione
     if not medicinali:
         raise ValueError("Scegli almeno un medicinale.")
+    box, cap, capannoni = normalizza_ambito(box, cap, capannoni)
     if colore not in (None, "") + COLORI:
         raise ValueError("Colore del marcatore non valido.")
     if segno not in (None, "") + SEGNI:
@@ -68,6 +118,7 @@ def crea_trattamenti(ciclo_id, medicinali, box, cap, qty, peso, data_inizio, ope
     creati = []
     for med, ml, gs, gsosp in medicinali:
         t = Trattamento(ciclo_id=ciclo_id, medicinale_id=med.id, box_numero=box, capannone_numero=cap,
+                        capannoni=capannoni,
                         numero_animali=qty, peso_medio_kg=peso, data_inizio=data_inizio, operatore=operatore,
                         note=note, ml_per_kg=ml, giorni_somministrazione=gs, giorni_sospensione=gsosp,
                         registrato_da=registrato_da, gruppo=gruppo, colore=colore or None, segno=segno)
@@ -79,7 +130,12 @@ def crea_trattamenti(ciclo_id, medicinali, box, cap, qty, peso, data_inizio, ope
 
 
 def ambito(t):
-    return f"box {t.box_numero}" if t.box_numero else f"CAP {t.capannone_numero} (tutto)"
+    """'box 30' / 'CAP 4 (tutto)' / 'CAP 1, 2, 3' / 'tutto l'allevamento'"""
+    if t.box_numero:
+        return f"box {t.box_numero}"
+    if t.capannoni:
+        return "tutto l'allevamento" if tutto_allevamento(t) else "CAP " + ", ".join(map(str, caps_di(t)))
+    return f"CAP {t.capannone_numero} (tutto)"
 
 
 def animale(t):

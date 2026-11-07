@@ -646,6 +646,7 @@ class Trattamento(db.Model):
     medicinale_id = db.Column(db.Integer, db.ForeignKey("medicinali.id"), nullable=False)
     box_numero = db.Column(db.Integer)
     capannone_numero = db.Column(db.Integer)
+    capannoni = db.Column(db.String(40))   # più capannoni insieme (es. "1,2,3", tutti = tutto l'allevamento): box e CAP vuoti
     numero_animali = db.Column(db.Integer, nullable=False)
     peso_medio_kg = db.Column(db.Float)  # peso medio a capo, per calcolare la dose totale
     data_inizio = db.Column(db.Date, nullable=False)

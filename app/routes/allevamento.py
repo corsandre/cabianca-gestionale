@@ -1848,6 +1848,7 @@ def box_ultimo_peso(box_numero):
 def trattamenti():
     _check_allevamento()
     from app.models import Trattamento, Medicinale
+    from app.services.allevamento_trattamenti import ambito, caps_di
     ciclo = _get_ciclo_attivo()
 
     lista = Trattamento.query.filter_by(
@@ -1872,8 +1873,40 @@ def trattamenti():
 
     return render_template("allevamento/trattamenti.html",
                            ciclo=ciclo, lista=lista, stati=stati, medicinali=medicinali, gruppi=gruppi, animali=animali, conteggi=conteggi,
-                           BOX_PER_CAP=BOX_PER_CAP, CAPANNONI=CAPANNONI,
+                           BOX_PER_CAP=BOX_PER_CAP, CAPANNONI=CAPANNONI, ambito=ambito, caps_di=caps_di,
                            oggi=date.today())
+
+
+def _ambito_trattamento_da_form():
+    """(box, cap, capannoni) dal modulo: il campo capannone vale "1".."7", "piu" (più capannoni, spuntati
+    nelle caselle `capannoni`) o "tutti" (tutto l'allevamento)."""
+    from app.services.allevamento_trattamenti import normalizza_ambito
+    box = request.form.get("box_numero", "").strip()
+    cap = request.form.get("capannone_numero", "").strip()
+    if cap == "tutti":
+        return normalizza_ambito(None, None, CAPANNONI)
+    if cap == "piu":
+        caps = request.form.getlist("capannoni")
+        if not caps:
+            raise ValueError("Spunta almeno un capannone.")
+        return normalizza_ambito(None, None, caps)
+    return normalizza_ambito(int(box) if box else None, int(cap) if cap else None)
+
+
+@bp.route("/trattamenti/capi")
+@login_required
+def trattamenti_capi():
+    """Capi presenti e peso medio per precompilare il modulo: ?box=N, oppure ?cap=1&cap=2 (capannoni interi)."""
+    _check_allevamento()
+    from app.services.allevamento_trattamenti import capi_e_peso
+    ciclo = _get_ciclo_attivo()
+    box = request.args.get("box", type=int)
+    caps = request.args.getlist("cap", type=int)
+    boxes = [box] if box else [b for c in caps for b in BOX_PER_CAP.get(c, [])]
+    if not ciclo or not boxes:
+        return jsonify(capi=None, peso_stimato_kg=None)
+    capi, peso = capi_e_peso(ciclo, boxes)
+    return jsonify(capi=capi, peso_stimato_kg=peso)
 
 
 @bp.route("/trattamenti/new", methods=["POST"])
@@ -1888,10 +1921,7 @@ def trattamenti_new():
 
     try:
         from app.services.allevamento_trattamenti import crea_trattamenti
-        box = request.form.get("box_numero", "").strip()
-        cap = request.form.get("capannone_numero", "").strip()
-        if not box and not cap:
-            raise ValueError("Seleziona un box o un capannone.")
+        box, cap, caps = _ambito_trattamento_da_form()
         data_inizio = date.fromisoformat(request.form.get("data_inizio", str(date.today())))
         qty = int(request.form["numero_animali"])
         peso_val = request.form.get("peso_medio_kg", "").strip()
@@ -1913,11 +1943,11 @@ def trattamenti_new():
                 float(ml_val.replace(",", ".")) if ml_val else medicinale.ml_per_kg,
                 int((gss[k] if k < len(gss) else "") or medicinale.giorni_somministrazione),
                 int((gsps[k] if k < len(gsps) else "") or medicinale.giorni_sospensione)))
-        creati = crea_trattamenti(ciclo.id, medicinali, int(box) if box else None, int(cap) if cap else None,
+        creati = crea_trattamenti(ciclo.id, medicinali, box, cap,
                                   qty, peso_medio_kg, data_inizio, request.form.get("operatore", "").strip() or None,
                                   request.form.get("note", "").strip() or None,
                                   request.form.get("colore", "").strip() or None,
-                                  segno=request.form.get("segno", "").strip() or None)
+                                  segno=request.form.get("segno", "").strip() or None, capannoni=caps)
         db.session.commit()
         nomi = ", ".join(t.medicinale.nome for t in creati)
         flash(f"Trattamento registrato: {nomi}, {qty} capi.", "success")
@@ -1960,10 +1990,7 @@ def trattamenti_edit(tid):
         if not medicinale:
             raise ValueError("Medicinale non valido.")
 
-        box = request.form.get("box_numero", "").strip()
-        cap = request.form.get("capannone_numero", "").strip()
-        if not box and not cap:
-            raise ValueError("Seleziona un box o un capannone.")
+        box, cap, caps = _ambito_trattamento_da_form()
 
         data_str = request.form.get("data_inizio", str(t.data_inizio))
         data_inizio = date.fromisoformat(data_str)
@@ -1979,8 +2006,9 @@ def trattamenti_edit(tid):
         peso_medio_kg = float(peso_val.replace(",", ".")) if peso_val else None
 
         t.medicinale_id = medicinale.id
-        t.box_numero = int(box) if box else None
-        t.capannone_numero = int(cap) if cap else None
+        t.box_numero = box
+        t.capannone_numero = cap
+        t.capannoni = caps
         t.numero_animali = qty
         t.peso_medio_kg = peso_medio_kg
         t.operatore = operatore

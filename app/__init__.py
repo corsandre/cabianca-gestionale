@@ -307,6 +307,7 @@ def _init_db(app):
         ("impianto_letture_linee", "ricetta", "VARCHAR(100)"),
         ("impianto_letture_linee", "rapporto", "REAL"),
         ("trattamenti", "segno", "VARCHAR(10)"),
+        ("trattamenti", "capannoni", "VARCHAR(40)"),
     ]
     for table, col, col_type in _migrate_columns:
         try:
