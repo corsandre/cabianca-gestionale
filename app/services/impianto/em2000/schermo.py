@@ -349,6 +349,12 @@ def _leggi_tabella(img, camp, l):
     for comp in ("acqua", "siero", "farina"):
         righe = [r for r in l.righe if r["comp"] == comp]
         normali = [r for r in righe if not r["sos"]]
+        if not righe and totale is not None and l.righe and l.righe[0].get("nr") == 1:
+            # componente che la ricetta non ha (10/11: «Ricetta 2» senza siero, solo ACQUA PRE + COCLEA 1): 0.
+            # Solo con la tabella non scorsa (si vede la riga 1); in ogni caso una riga nascosta farebbe
+            # mancare la somma delle righe al totale e la tabella resterebbe incoerente.
+            l.reale[comp] = l.teorico[comp] = 0.0
+            continue
         l.reale[comp] = None if not righe or any(r["reale"] is None for r in righe) else round(sum(r["reale"] for r in righe), 4)
         l.teorico[comp] = None if not normali or any(r["teorico"] is None for r in normali) else round(sum(r["teorico"] for r in normali), 4)
     if totale:
