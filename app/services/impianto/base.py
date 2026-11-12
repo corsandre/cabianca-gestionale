@@ -65,6 +65,7 @@ class LetturaSchermo:
     # acqua + farina; coclea 1 → coclea 3 → coclea 2 quando finisce anche il silos della 3).
     righe: list = field(default_factory=list)
     righe_sconosciute: list = field(default_factory=list)   # righe della ricetta con nome mai visto
+    correzioni: list = field(default_factory=list)          # valori dello schermo corretti dal lettore (testo)
 
     @property
     def sostituzioni(self):

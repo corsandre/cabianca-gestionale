@@ -64,13 +64,24 @@ def esaurimenti(lettura):
     """{chiave: dati} dei componenti sostituiti in questa lettura (vedi docstring del modulo). Ogni riga
     "con" ha in "poi" le righe che l'hanno completata a loro volta se anche lei non ha dato tutta la sua
     parte (13/10: siero → SOS coclea 3, vuota anche lei → SOS coclea 1)."""
-    sostituzioni = lettura.sostituzioni
+    out = {}
+    for i, r in enumerate(lettura.righe):
+        if not r.get("corretta"):
+            continue
+        # coclea che ha ripreso (vedi schermo._sos_contata_due_volte): è finito il silos della riga SOS,
+        # completato dalla coclea della ricetta (12/11: silos B finito dopo 3,19 q, completato da A con 1,07 q)
+        for s in _sos_sotto(lettura.righe, i):
+            out[_chiave(s)] = {"coclea": s["coclea"], "reale": s["reale"], "teorico": s["teorico"],
+                               "finito_ora": bool(s["reale"]),
+                               "con": [{"comp": "farina", "coclea": r["coclea"], "reale": r["reale"], "poi": []}]}
+    gia = {id(s) for i, r in enumerate(lettura.righe) if r.get("corretta")
+           for s in _sos_sotto(lettura.righe, i)}
+    sostituzioni = [(a, b) for a, b in lettura.sostituzioni if id(b) not in gia]
     seguito = {}
     for sostituita, sos in sostituzioni:
         if sostituita["sos"]:
             seguito.setdefault(id(sostituita), []).append(
                 {"comp": sos["comp"], "coclea": sos["coclea"], "reale": sos["reale"]})
-    out = {}
     for sostituita, sos in sostituzioni:
         if sostituita["comp"] not in ("siero", "farina"):
             continue
@@ -82,10 +93,32 @@ def esaurimenti(lettura):
     return out
 
 
+def _sos_sotto(righe, i):
+    """Righe SOS subito sotto la riga i (fino alla prossima riga normale)."""
+    out = []
+    for s in righe[i + 1:]:
+        if not s["sos"]:
+            break
+        out.append(s)
+    return out
+
+
 def piene(lettura):
-    """Siero e coclee che in questa lettura hanno dato la dose piena (riga normale, reale ≈ teorico)."""
-    return sorted({_chiave(r) for r in lettura.righe if not r["sos"] and r["comp"] in ("siero", "farina")
-                   and r["teorico"] and r["reale"] is not None and r["reale"] >= r["teorico"] - SOGLIA_Q})
+    """Siero e coclee che in questa lettura hanno dato la dose piena, quindi non sono vuoti: riga normale con
+    reale ≈ teorico, ANCHE una riga SOS di farina che ha dato tutta la sua parte (il silos usato da EM2000 come
+    sostituto funziona: prima del 12/11 B e C restavano «vuoti» per settimane mentre li si usava così), e la
+    coclea che ha ripreso dopo il sostituto finito (riga "corretta": 12/11 silos A, pieno, di nuovo in uso)."""
+    out = set()
+    for r in lettura.righe:
+        if r["comp"] not in ("siero", "farina") or r["reale"] is None:
+            continue
+        if r.get("corretta") and r["reale"] > SOGLIA_Q:
+            out.add(_chiave(r))
+        elif r["sos"] and r["comp"] != "farina":
+            continue
+        elif r["teorico"] and r["teorico"] > SOGLIA_Q and r["reale"] >= r["teorico"] - SOGLIA_Q:
+            out.add(_chiave(r))
+    return sorted(out)
 
 
 @dataclass

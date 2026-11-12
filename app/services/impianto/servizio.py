@@ -899,6 +899,10 @@ class Servizio:
             else:
                 esito = "da approvare in Alimentazione"
             avviso = "" if lettura.confermato else "\n⚠️ Valori letti una sola volta: da controllare."
+            scelta = e.dati.get("lettura") or e.lettura
+            if scelta is not None and scelta.correzioni:
+                avviso += "\n🔧 Corretto rispetto allo schermo: " + html.escape("; ".join(scelta.correzioni)) + \
+                          ". Controlla la bilancia (REALE) se puoi."
             self._salva_evento(e.tipo, e.istante, valori, e.pasto, e.linea)
             self._manda(f"✅ <b>Linea {e.linea}</b> (pasto delle {_hm(e.pasto)}): {valori} – totale {_q(r['totale'])}\n"
                         f"{esito}{avviso}", chat)

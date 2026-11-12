@@ -346,6 +346,9 @@ def _leggi_tabella(img, camp, l):
     if totale is None and fine_ricetta:
         totale = _totale_dedotto(l)
     _righe_nascoste(l, totale)
+    doppio = _sos_contata_due_volte(l)
+    if doppio and totale and totale[1] is not None:
+        totale = (totale[0], round(totale[1] - doppio, 4))
     for comp in ("acqua", "siero", "farina"):
         righe = [r for r in l.righe if r["comp"] == comp]
         normali = [r for r in righe if not r["sos"]]
@@ -366,6 +369,40 @@ def _leggi_tabella(img, camp, l):
         and all(re.get(c) is not None for c in ("acqua", "siero", "farina", "totale"))
         and abs(sum(r["reale"] for r in l.righe) - re["totale"]) <= _tolleranza(l.righe)
     )
+
+
+SOGLIA_DOPPIO_Q = 0.3     # coclea + sue righe SOS oltre la dose della coclea: la SOS è contata due volte
+
+
+def _sos_contata_due_volte(l):
+    """Silos riprovato da EM2000 che finisce durante il dosaggio (12/11 07:55, linea 1: «ricomincia il giro»
+    dal silos A dopo che C e poi B erano finiti): la riga della coclea mostra il TOTALE della farina caricata
+    (4,26 su 4,27) e la riga SOS sotto la parte del sostituto (3,19), che EM2000 somma ancora nel totale
+    (28,05 q contro 24,97 q in bilancia). Visto dall'operatore: silos A 1,07 q + silos B 3,19 q. Nei casi
+    normali coclea + SOS fanno la dose della coclea (29/10: 0,63 + 3,98 = 4,61; 06/11: 3,55 + 1,68 = 5,23);
+    le righe SOS di farina che sostituiscono il SIERO stanno sotto la riga del siero e qui non contano.
+    Toglie la parte SOS dalla riga della coclea e restituisce i quintali da togliere al totale (0 se niente)."""
+    tolto = 0.0
+    for i, r in enumerate(l.righe):
+        if r["sos"] or r["comp"] != "farina" or r["reale"] is None or not r["teorico"]:
+            continue
+        sos = []
+        for s in l.righe[i + 1:]:
+            if not s["sos"]:
+                break
+            sos.append(s)
+        if not sos or any(s["reale"] is None for s in sos) or any(s["comp"] != "farina" for s in sos):
+            continue
+        parte = round(sum(s["reale"] for s in sos), 4)
+        if (parte > 0.05 and r["reale"] >= r["teorico"] - 0.05 and r["reale"] >= parte
+                and r["reale"] + parte > r["teorico"] + SOGLIA_DOPPIO_Q):
+            vecchio = r["reale"]
+            r["reale"] = round(vecchio - parte, 4)
+            r["corretta"] = True
+            tolto += parte
+            l.correzioni.append(f"coclea {r['coclea']}: lo schermo mostra {vecchio:.2f} q (totale con la riga SOS "
+                                f"di {parte:.2f} q, contata due volte da EM2000), usati {r['reale']:.2f} q")
+    return round(tolto, 4)
 
 
 def _totale_dedotto(l):
