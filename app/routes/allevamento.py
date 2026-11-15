@@ -308,6 +308,44 @@ def mortalita_new():
     return redirect(url_for("allevamento.mortalita"))
 
 
+@bp.route("/mortalita/<int:ev_id>/edit", methods=["POST"])
+@login_required
+def mortalita_edit(ev_id):
+    """Modifica di una mortalità già registrata (data, capannone, box, capi, causa, note). I morti sono
+    sempre ricalcolati da questi eventi (capi per box, panoramica, analisi, confronto col PC): basta la riga.
+    Le azioni già segnate (PC alimentazione, Webfarm, RIFT, ARAL) restano."""
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.models import EventoMortalita
+    ev = db.session.get(EventoMortalita, ev_id)
+    if not ev:
+        flash("Evento non trovato.", "danger")
+        return redirect(url_for("allevamento.mortalita"))
+    try:
+        cap = int(request.form["capannone"])
+        if cap not in CAPANNONI:
+            raise ValueError("Capannone non valido.")
+        box = request.form.get("box", "").strip()
+        box_num = int(box) if box else None
+        if box_num is not None and box_num not in BOX_PER_CAP.get(cap, []):
+            raise ValueError(f"Il box {box_num} non è nel CAP {cap}.")
+        qty = int(request.form.get("quantita", 1))
+        if qty < 1:
+            raise ValueError("Il numero di capi deve essere almeno 1.")
+        ev.data = date.fromisoformat(request.form["data"])
+        ev.capannone_numero, ev.box_numero, ev.quantita = cap, box_num, qty
+        ev.causa = request.form.get("causa", "").strip() or None
+        ev.note = request.form.get("note", "").strip() or None
+        db.session.commit()
+        flash(f"Mortalità aggiornata: {qty} capi in CAP {cap}" + (f" box {box_num}" if box_num else "") +
+              f" del {ev.data.strftime('%d/%m/%Y')}.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
+    return redirect(url_for("allevamento.mortalita"))
+
+
 @bp.route("/mortalita/<int:ev_id>/delete", methods=["POST"])
 @login_required
 def mortalita_delete(ev_id):
@@ -1800,11 +1838,13 @@ def _stato_trattamento(t):
     data_fine_sospensione = None
     if completo and ultima and not t.deceduto:   # animale morto: nessuna sospensione prima del macello
         data_fine_sospensione = ultima.data + timedelta(days=t.giorni_sospensione)
-    dose_capo_ml = None
-    dose_totale_ml = None
+    # dosi in ml o in g secondo il medicinale (polveri in broda = g): ml_per_kg è "unità per kg al giorno"
+    dose_capo_ml = None        # dose giornaliera a capo
+    dose_totale_ml = None      # dose giornaliera di tutti i capi
     if t.ml_per_kg and t.peso_medio_kg:
         dose_capo_ml = t.ml_per_kg * t.peso_medio_kg
         dose_totale_ml = dose_capo_ml * t.numero_animali
+    giorni_previsti = fatte if t.chiuso_anticipatamente else t.giorni_somministrazione
     return {
         "fatte": fatte,
         "totali": t.giorni_somministrazione,
@@ -1818,6 +1858,9 @@ def _stato_trattamento(t):
         "in_sospensione": bool(data_fine_sospensione and oggi < data_fine_sospensione),
         "dose_capo_ml": dose_capo_ml,
         "dose_totale_ml": dose_totale_ml,
+        "unita": t.medicinale.unita_dose if t.medicinale else "ml",
+        "dose_trattamento": dose_totale_ml * giorni_previsti if dose_totale_ml is not None else None,
+        "dose_finora": dose_totale_ml * fatte if dose_totale_ml is not None else None,
     }
 
 
@@ -1848,7 +1891,7 @@ def box_ultimo_peso(box_numero):
 def trattamenti():
     _check_allevamento()
     from app.models import Trattamento, Medicinale
-    from app.services.allevamento_trattamenti import ambito, caps_di
+    from app.services.allevamento_trattamenti import ambito, caps_di, quantita
     ciclo = _get_ciclo_attivo()
 
     lista = Trattamento.query.filter_by(
@@ -1874,7 +1917,7 @@ def trattamenti():
     return render_template("allevamento/trattamenti.html",
                            ciclo=ciclo, lista=lista, stati=stati, medicinali=medicinali, gruppi=gruppi, animali=animali, conteggi=conteggi,
                            BOX_PER_CAP=BOX_PER_CAP, CAPANNONI=CAPANNONI, ambito=ambito, caps_di=caps_di,
-                           oggi=date.today())
+                           quantita=quantita, oggi=date.today())
 
 
 def _ambito_trattamento_da_form():
@@ -2127,6 +2170,7 @@ def medicinali_new():
         db.session.add(Medicinale(
             nome=nome, tipo=tipo,
             ml_per_kg=float(ml_val.replace(",", ".")) if ml_val else None,
+            unita=request.form.get("unita") if request.form.get("unita") in ("ml", "g") else None,
             giorni_somministrazione=int(request.form.get("giorni_somministrazione") or 1),
             giorni_sospensione=int(request.form.get("giorni_sospensione") or 0),
         ))
@@ -2152,6 +2196,8 @@ def medicinali_edit(mid):
     try:
         ml_val = request.form.get("ml_per_kg", "").strip()
         m.ml_per_kg = float(ml_val.replace(",", ".")) if ml_val else None
+        if request.form.get("unita") in ("ml", "g"):
+            m.unita = request.form["unita"]
         m.giorni_somministrazione = int(request.form.get("giorni_somministrazione") or 1)
         m.giorni_sospensione = int(request.form.get("giorni_sospensione") or 0)
         db.session.commit()

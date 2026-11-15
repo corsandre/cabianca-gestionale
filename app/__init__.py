@@ -308,6 +308,7 @@ def _init_db(app):
         ("impianto_letture_linee", "rapporto", "REAL"),
         ("trattamenti", "segno", "VARCHAR(10)"),
         ("trattamenti", "capannoni", "VARCHAR(40)"),
+        ("medicinali", "unita", "VARCHAR(4)"),
     ]
     for table, col, col_type in _migrate_columns:
         try:
@@ -315,6 +316,15 @@ def _init_db(app):
             db.session.commit()
         except sqlalchemy.exc.OperationalError:
             db.session.rollback()  # Column already exists
+    # 2.5.9: unità del dosaggio dei medicinali già presenti (polveri in broda = grammi, gli altri = ml)
+    try:
+        db.session.execute(sqlalchemy.text(
+            "UPDATE medicinali SET unita = CASE WHEN lower(coalesce(tipo,'')) LIKE '%polver%' "
+            "OR lower(coalesce(tipo,'')) LIKE '%broda%' OR lower(nome) LIKE '%wsp%' THEN 'g' ELSE 'ml' END "
+            "WHERE unita IS NULL OR unita = ''"))
+        db.session.commit()
+    except sqlalchemy.exc.OperationalError:
+        db.session.rollback()
 
     # speditori_siero nasceva con UNIQUE(azienda): stessa azienda con sedi diverse
     # deve poter esistere. SQLite non toglie un vincolo: ricostruisco la tabella.

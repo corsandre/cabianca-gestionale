@@ -27,7 +27,7 @@ def trattamenti_da_ripetere():
     """Righe di testo, una per animale (o gruppo di animali), con i medicinali da dare oggi. Con il marcatore
     si indica anche quale segno fare sulla schiena (uno per giorno di trattamento, es. «2ª S»)."""
     from app.models import Ciclo
-    from app.services.allevamento_trattamenti import da_ripetere_per_animale, riga_ordinale
+    from app.services.allevamento_trattamenti import da_ripetere_per_animale, riga_ordinale, quantita
     ciclo = Ciclo.query.filter_by(attivo=True).first()
     if not ciclo:
         return []
@@ -35,7 +35,7 @@ def trattamenti_da_ripetere():
     for g in da_ripetere_per_animale(ciclo.id):
         dosi = []
         for t, s in g["trattamenti"]:
-            ml = f", {s['dose_totale_ml']:.0f} ml in tutto".replace(".", ",") if s["dose_totale_ml"] else ""
+            ml = f", {quantita(s['dose_totale_ml'], s['unita'])} oggi per tutti i capi" if s["dose_totale_ml"] else ""
             dosi.append(f"<b>{html.escape(t.medicinale.nome)}</b> dose {s['fatte'] + 1} di {s['totali']}{ml}")
         riga = f" → fai {'la' if g['segno'] in ('riga', 's') else 'il'} <b>{riga_ordinale(g['riga'], g['segno'])}</b>" if g["colore"] else ""
         righe.append(f"• {html.escape(g['animale'])}: " + "; ".join(dosi) + riga)

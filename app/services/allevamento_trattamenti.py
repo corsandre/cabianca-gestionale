@@ -20,6 +20,15 @@ NOME_SEGNO = {"pallino": "pallino", "riga": "riga", "s": "S"}
 FEMMINILE = {"riga", "s"}                       # la riga, la S
 
 
+def quantita(valore, unita):
+    """'6,2 g', '11,07 kg', '0,5 ml', '1,25 l': grammi/ml fino a 1000, poi kg/litri. None → '–'."""
+    if valore is None:
+        return "–"
+    grande = {"g": "kg", "ml": "l"}.get(unita, unita)
+    testo = f"{valore / 1000:,.2f} {grande}" if valore >= 1000 else f"{valore:,.1f} {unita}"
+    return testo.replace(",", "§").replace(".", ",").replace("§", ".")
+
+
 def segno_di(t):
     return (t.segno or "pallino") if t.colore else None
 

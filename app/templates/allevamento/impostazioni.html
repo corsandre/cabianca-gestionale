@@ -312,7 +312,7 @@
 <div class="cb-card p-0 mb-4" style="overflow-x:auto">
     <table class="table table-sm mb-0">
         <thead class="table-light">
-            <tr><th>Nome</th><th>Tipo</th><th>ml/kg</th><th>Giorni somm.</th><th>Giorni sosp.</th><th></th></tr>
+            <tr><th>Nome</th><th>Tipo</th><th title="Quantità per kg di peso vivo, ogni giorno">Dosaggio per kg al giorno</th><th>Giorni somm.</th><th>Giorni sosp.</th><th></th></tr>
         </thead>
         <tbody>
             {% for m in medicinali %}
@@ -320,8 +320,14 @@
                 <td class="fw-semibold">{{ m.nome }}</td>
                 <td class="text-muted">{{ m.tipo }}</td>
                 <td>
-                    <input type="number" name="ml_per_kg" form="frm-med-{{ m.id }}" class="form-control form-control-sm" step="0.01" min="0"
+                    <div class="d-flex gap-1">
+                    <input type="number" name="ml_per_kg" form="frm-med-{{ m.id }}" class="form-control form-control-sm" step="0.001" min="0"
                            value="{{ m.ml_per_kg if m.ml_per_kg is not none else '' }}" style="width:90px">
+                    <select name="unita" form="frm-med-{{ m.id }}" class="form-select form-select-sm" style="width:80px" aria-label="Unità">
+                        <option value="ml" {{ 'selected' if m.unita_dose == 'ml' }}>ml/kg</option>
+                        <option value="g" {{ 'selected' if m.unita_dose == 'g' }}>g/kg</option>
+                    </select>
+                    </div>
                 </td>
                 <td>
                     <input type="number" name="giorni_somministrazione" form="frm-med-{{ m.id }}" class="form-control form-control-sm" min="1"
@@ -360,8 +366,13 @@
             <input type="text" name="tipo" class="form-control form-control-sm" value="iniettabile">
         </div>
         <div class="col-md-2">
-            <label class="form-label small">ml/kg</label>
-            <input type="number" name="ml_per_kg" class="form-control form-control-sm" step="0.01" min="0">
+            <label class="form-label small">Dosaggio per kg al giorno</label>
+            <div class="d-flex gap-1">
+            <input type="number" name="ml_per_kg" class="form-control form-control-sm" step="0.001" min="0">
+            <select name="unita" class="form-select form-select-sm" style="width:80px" aria-label="Unità">
+                <option value="ml">ml/kg</option><option value="g">g/kg</option>
+            </select>
+            </div>
         </div>
         <div class="col-md-2">
             <label class="form-label small">Giorni somm.</label>

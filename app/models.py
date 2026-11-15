@@ -628,10 +628,19 @@ class Medicinale(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(100), nullable=False)
     tipo = db.Column(db.String(30), default="iniettabile")
-    ml_per_kg = db.Column(db.Float)
+    ml_per_kg = db.Column(db.Float)   # dosaggio per kg di peso vivo al giorno, nell'unità `unita` (non sempre ml)
+    unita = db.Column(db.String(4))   # "ml" (iniettabili) o "g" (polveri in broda); vuoto = dedotto dal tipo
     giorni_somministrazione = db.Column(db.Integer, nullable=False, default=1)
     giorni_sospensione = db.Column(db.Integer, nullable=False, default=0)
     attivo = db.Column(db.Boolean, default=True)
+
+    @property
+    def unita_dose(self):
+        """"g" o "ml": quella impostata, altrimenti g per polveri/broda e ml per il resto."""
+        if self.unita in ("g", "ml"):
+            return self.unita
+        t = (self.tipo or "").lower()
+        return "g" if any(k in t for k in ("polver", "broda", "wsp", "mangim")) else "ml"
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 

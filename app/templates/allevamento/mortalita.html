@@ -117,10 +117,17 @@
                     <span class="badge {{ 'bg-success' if completate == 4 else ('bg-warning text-dark' if completate > 0 else 'bg-secondary') }}">{{ completate }}/4</span>
                 </td>
                 {% if current_user.role == 'admin' %}
-                <td>
-                    <form method="post" action="{{ url_for('allevamento.mortalita_delete', ev_id=ev.id) }}" onsubmit="return confirm('Elimina questo evento?')">
+                <td class="text-nowrap">
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 cb-modifica-mortalita" title="Modifica"
+                            data-bs-toggle="modal" data-bs-target="#modalModificaMortalita"
+                            data-url="{{ url_for('allevamento.mortalita_edit', ev_id=ev.id) }}" data-data="{{ ev.data.isoformat() }}"
+                            data-cap="{{ ev.capannone_numero }}" data-box="{{ ev.box_numero or '' }}" data-quantita="{{ ev.quantita }}"
+                            data-causa="{{ ev.causa or '' }}" data-note="{{ ev.note or '' }}">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <form method="post" action="{{ url_for('allevamento.mortalita_delete', ev_id=ev.id) }}" class="d-inline" onsubmit="return confirm('Elimina questo evento?')">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button class="btn btn-sm btn-outline-danger py-0"><i class="bi bi-trash"></i></button>
+                        <button class="btn btn-sm btn-outline-danger py-0" title="Elimina"><i class="bi bi-trash"></i></button>
                     </form>
                 </td>
                 {% endif %}
@@ -207,14 +214,70 @@
         </div>
     </div>
 </div>
+
+<!-- Modal modifica mortalità (uno solo, riempito dal pulsante della riga) -->
+{% if current_user.role == 'admin' %}
+<div class="modal fade" id="modalModificaMortalita" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#c2185b;color:#fff">
+                <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Modifica mortalità</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" id="frmModificaMortalita">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Data</label>
+                        <input type="date" name="data" id="modData" class="form-control" required>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Capannone</label>
+                            <select name="capannone" class="form-select" id="modCap" required onchange="updateBoxes('modCap', 'modBox')">
+                                {% for cap in CAPANNONI %}
+                                <option value="{{ cap }}">CAP {{ cap }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Box <small class="text-muted">(opzionale)</small></label>
+                            <select name="box" class="form-select" id="modBox">
+                                <option value="">– tutto il CAP –</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">N° capi morti</label>
+                        <input type="number" name="quantita" id="modQuantita" class="form-control" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Causa</label>
+                        <input type="text" name="causa" id="modCausa" class="form-control">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Note</label>
+                        <textarea name="note" id="modNote" class="form-control" rows="2"></textarea>
+                    </div>
+                    <small class="text-muted">Le azioni già segnate (PC alimentazione, Webfarm, RIFT, ARAL) restano come sono.</small>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn" style="background:#c2185b;color:#fff">Salva modifiche</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
 const BOX_PER_CAP = {{ BOX_PER_CAP | tojson }};
-function updateBoxes() {
-    const cap = document.getElementById('selCap').value;
-    const sel = document.getElementById('selBox');
+function updateBoxes(idCap = 'selCap', idBox = 'selBox') {
+    const cap = document.getElementById(idCap).value;
+    const sel = document.getElementById(idBox);
     sel.innerHTML = '<option value="">– tutto il CAP –</option>';
     if (cap && BOX_PER_CAP[cap]) {
         BOX_PER_CAP[cap].forEach(b => {
@@ -224,6 +287,21 @@ function updateBoxes() {
         });
     }
 }
+
+// modifica: riempie il modulo con i dati della riga
+document.querySelectorAll('.cb-modifica-mortalita').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        const d = btn.dataset;
+        document.getElementById('frmModificaMortalita').action = d.url;
+        document.getElementById('modData').value = d.data;
+        document.getElementById('modCap').value = d.cap;
+        updateBoxes('modCap', 'modBox');
+        document.getElementById('modBox').value = d.box;
+        document.getElementById('modQuantita').value = d.quantita;
+        document.getElementById('modCausa').value = d.causa;
+        document.getElementById('modNote').value = d.note;
+    });
+});
 
 const CSRF_TOKEN = "{{ csrf_token() }}";
 

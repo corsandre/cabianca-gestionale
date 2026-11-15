@@ -630,7 +630,7 @@ def start_bot(app):
         with app.app_context():
             from app import db
             from app.models import Ciclo, Medicinale
-            from app.services.allevamento_trattamenti import crea_trattamenti, animale
+            from app.services.allevamento_trattamenti import crea_trattamenti, animale, quantita
             ciclo = Ciclo.query.filter_by(attivo=True).first()
             if not ciclo:
                 await q.edit_message_text("⚠️ Nessun ciclo attivo.")
@@ -644,7 +644,10 @@ def start_bot(app):
             db.session.commit()
             righe = []
             for t in creati:
-                dose = f" – {t.ml_per_kg * peso:.1f} ml/capo, {t.ml_per_kg * peso * qty:.1f} ml in tutto" if t.ml_per_kg and peso else ""
+                u = t.medicinale.unita_dose
+                dose = (f" – al giorno {quantita(t.ml_per_kg * peso, u)} a capo, {quantita(t.ml_per_kg * peso * qty, u)} "
+                        f"tutti i capi; trattamento intero {quantita(t.ml_per_kg * peso * qty * t.giorni_somministrazione, u)}"
+                        if t.ml_per_kg and peso else "")
                 righe.append(f"💉 {t.medicinale.nome}{dose}")
             chi = animale(creati[0])
         testo = f"✅ Trattamento registrato: {chi}, {qty} capi.\n" + "\n".join(righe)
