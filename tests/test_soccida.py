@@ -94,9 +94,24 @@ class Tabella(unittest.TestCase):
         self.assertAlmostEqual(S.percentuale_tabella(2.8), 23.7)
         self.assertAlmostEqual(S.percentuale_tabella(2.5), 27.9)
 
-    def test_sopra_l_ultima_riga_resta_ferma(self):
+    def test_sopra_l_ultima_riga_si_prolunga(self):
+        # stesso passo delle ultime due righe: −0,83 punti ogni 0,1 di indice, mai sotto zero
         self.assertAlmostEqual(S.percentuale_tabella(4.0), 9.46)
-        self.assertAlmostEqual(S.percentuale_tabella(4.7), 9.46)
+        self.assertAlmostEqual(S.percentuale_tabella(4.1), 8.63)
+        self.assertAlmostEqual(S.percentuale_tabella(4.7), 9.46 - 7 * 0.83)
+        self.assertEqual(S.percentuale_tabella(6.0), 0.0)
+
+    def test_nessun_salto_ai_bordi_della_tabella(self):
+        for bordo in (2.9, 4.0):
+            self.assertAlmostEqual(S.percentuale_tabella(bordo - 1e-9), S.percentuale_tabella(bordo + 1e-9), places=6)
+
+    def test_righe_prolungate_per_le_impostazioni(self):
+        migliori, peggiori = S.righe_prolungate()
+        self.assertEqual([i for i, _ in migliori], [2.6, 2.7, 2.8])
+        self.assertAlmostEqual(migliori[0][1], 26.5)            # 2,6 → 22,3 + 3 × 1,4
+        self.assertAlmostEqual(S.percentuale_tabella(2.62), 26.22)
+        self.assertEqual([i for i, _ in peggiori], [4.1, 4.2])
+        self.assertAlmostEqual(peggiori[1][1], 7.8)
 
     def test_prezzo_di_tabella(self):
         self.assertAlmostEqual(NUOVO.prezzo_tabella, 1.74)

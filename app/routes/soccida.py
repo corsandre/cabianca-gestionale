@@ -19,6 +19,7 @@ from flask_login import current_user, login_required
 from app import db
 from app.models import BankTransaction, SdiInvoice, SoccidaAnticipo, SoccidaFattura, SoccidaTabella
 from app.routes.allevamento import _check_allevamento, _get_ciclo_attivo, bp
+from app.services import soccida as S
 from app.services import soccida_dati as D
 from app.services import soccida_scheda as V
 
@@ -119,8 +120,10 @@ def soccida_impostazioni():
         q = SdiInvoice.query.filter(SdiInvoice.sender_partita_iva.in_(piva), SdiInvoice.direction == "ricevuta",
                                     SdiInvoice.invoice_date >= ciclo.data_inizio - timedelta(days=120))
         fatture = [{"f": f, "nel_ciclo": f.id in del_ciclo, "a_mano": f.id in a_mano} for f in q.order_by(SdiInvoice.invoice_date)]
+    migliori, peggiori = S.righe_prolungate(contratto.tabella)     # come prosegue la tabella oltre le righe di Veronesi
     return render_template(
         "allevamento/soccida_impostazioni.html", ciclo=ciclo, par=par, righe=righe, prezzo_tabella=contratto.prezzo_tabella,
+        righe_migliori=migliori, righe_peggiori=peggiori,
         anticipi=D.anticipi(ciclo), da_banca=D.anticipi_da_banca(ciclo, par), fatture=fatture, V=V)
 
 

@@ -188,3 +188,17 @@ Aggiunto alla 3.0.0 su richiesta di Andrea (15/11/2026):
 - **Fatture del siero abbinate alle consegne**, nella pagina Consegne (scheda Siero, solo admin): colonna «Fattura» con importo del carico ed esito, riepilogo in alto, righe di fattura senza consegna. Moduli `siero_fatture_pdf.py` (lettura del testo, con test) e `siero_fatture.py` (righe in `siero_fatture_righe`, abbinamento per numero di bolla e poi per data).
 - **Controllo di ogni mattina alle 8:45**: legge le fatture di siero nuove e manda il riepilogo su Telegram (canale finanza), solo per le fatture degli ultimi 60 giorni. La prima lettura delle fatture già presenti va fatta dal pulsante «Cerca fatture nuove», che non manda messaggi.
 - Sulla copia del database: 12 fatture lette, 196 carichi; nel ciclo in corso 87 carichi abbinati e le stesse differenze trovate a mano (11/09 e 26/10 quantità, 27/10 e 31/10 numero di bolla, 1 e 4 maggio senza consegna).
+
+## Rilascio (15/11/2026, 22:25)
+
+La 3.0.0 è in produzione (commit 60c3f57). Copia del database prima del rilascio: `data/gestionale.db.pre-deploy-3.0.0` sul server.
+Impostazioni Soccida compilate: partita IVA Nosari, pagante «LA PELLEGRINA», ultimo giorno pagato 11/05/2026, giacenza iniziale 3.000 kg (ipotesi), 19 suini di Fattoria Ca' Bianca. Anticipi confermati dai bonifici: 45.000 € (13/07 18.000, 19/08, 21/09, 19/10 da 9.000); il bonifico del 22/06 da 29.494,51 € è il saldo del ciclo scorso e resta proposto senza essere un anticipo. Fatture di siero lette: 12, senza messaggi.
+Restano: chiusura del ciclo con fotografia del conto, storico dei cicli dall'Excel, riscontro del macello dal bot Telegram.
+
+## 3.0.1 — tabella di rapporto senza limiti (16/11/2026)
+
+Chiarito con Andrea: le righe della tabella sono quelle date da Veronesi, ma da contratto il miglioramento non ha limite e il conto si fa comunque anche oltre il 4,0.
+- **Indici migliori della prima riga** (2,8, 2,7, 2,62…): la tabella prosegue con il passo delle prime due righe (+1,4 punti ogni 0,1). Era già così.
+- **Indici peggiori dell'ultima riga** (oltre 4,0): prosegue con il passo delle ultime due (−0,83 punti ogni 0,1), mai sotto zero. Prima restava ferma a 9,46: corretto. Lì vince quasi sempre il minimo, ma resa e indice mostrati ora sono quelli veri.
+- In Impostazioni Soccida le righe di Veronesi restano modificabili; sopra e sotto compaiono in grigio le righe calcolate (2,6–2,8 e 4,1–4,2) per far vedere come prosegue.
+La regola 6 in cima a questo piano («sopra 4,0 resta il valore di 4,0») è superata da questa.

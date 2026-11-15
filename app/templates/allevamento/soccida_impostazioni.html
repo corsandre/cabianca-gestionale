@@ -6,6 +6,13 @@
 {% macro num(v, dec=2) %}{% if v is not none %}{{ ('%.' ~ dec ~ 'f')|format(v)|replace('.', ',') }}{% endif %}{% endmacro %}
 {% macro intero(v) %}{% if v is not none %}{{ '%d'|format(v) }}{% endif %}{% endmacro %}
 
+{% block extra_head %}
+<style>
+/* righe della tabella di rapporto calcolate dal gestionale (non date da Veronesi): grigie e non modificabili */
+.cb-calcolata > td { background:#eef0f3 !important; color:#55525c !important; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
     <h4 class="mb-0"><i class="bi bi-sliders me-2" style="color:#c2185b"></i>Impostazioni Soccida</h4>
@@ -69,16 +76,21 @@
 <div class="col-lg-6">
     <h6 class="text-uppercase text-muted small mb-2" id="tabella">Tabella di rapporto</h6>
     <div class="cb-card p-3">
-        <p class="text-muted small">Indice e percentuale si inseriscono; il valore in €/kg è calcolato: percentuale × {{ num(prezzo_tabella, 4) }} / 100. Sotto la prima riga la tabella si prolunga con il passo delle prime due; sopra l'ultima resta ferma.</p>
+        <p class="text-muted small">Le righe bianche sono quelle date da Veronesi: indice e percentuale si inseriscono, il valore in €/kg è calcolato (percentuale × {{ num(prezzo_tabella, 4) }} / 100). Tra una riga e l'altra il valore si interpola.</p>
+        <p class="text-muted small">La tabella non ha limiti: le righe in grigio mostrano come prosegue da sola oltre quelle scritte. Per indici migliori della prima riga (anche 2,62) continua con il passo delle prime due righe; per indici peggiori dell'ultima con il passo delle ultime due. Le righe grigie non si scrivono: se Veronesi ti dà un valore diverso, aggiungilo come riga nuova.</p>
         <form method="post" action="{{ url_for('allevamento.soccida_tabella_salva') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="table-responsive"><table class="table table-sm align-middle mb-2">
                 <thead><tr><th>Indice di conversione</th><th>Percentuale</th><th class="text-end">€/kg</th></tr></thead>
                 <tbody>
+                {% for i, perc in righe_migliori %}<tr class="cb-calcolata">
+                    <td class="ps-3">{{ num(i, 1) }} <span class="small">· calcolata</span></td><td class="ps-3">{{ num(perc) }}</td><td class="text-end">{{ num(perc * prezzo_tabella / 100, 4) }}</td></tr>{% endfor %}
                 {% for r in righe %}<tr>
                     <td><input class="form-control form-control-sm" name="indice" inputmode="decimal" value="{{ num(r.indice, 1) }}" aria-label="Indice"></td>
                     <td><input class="form-control form-control-sm" name="percentuale" inputmode="decimal" value="{{ num(r.percentuale) }}" aria-label="Percentuale"></td>
                     <td class="text-end">{{ num(r.percentuale * prezzo_tabella / 100, 4) }}</td></tr>{% endfor %}
+                {% for i, perc in righe_peggiori %}<tr class="cb-calcolata">
+                    <td class="ps-3">{{ num(i, 1) }} <span class="small">· calcolata</span></td><td class="ps-3">{{ num(perc) }}</td><td class="text-end">{{ num(perc * prezzo_tabella / 100, 4) }}</td></tr>{% endfor %}
                 {% for _ in range(2) %}<tr>
                     <td><input class="form-control form-control-sm" name="indice" inputmode="decimal" placeholder="nuova riga" aria-label="Indice"></td>
                     <td><input class="form-control form-control-sm" name="percentuale" inputmode="decimal" aria-label="Percentuale"></td><td></td></tr>{% endfor %}
@@ -159,7 +171,7 @@
                 <li>Mangime consumato = bolle + giacenza iniziale − giacenza finale. Il siero non conta.</li>
                 <li>Carne valida = peso morto dei grassi + peso morto degli scarti contato in quota ({{ num(par.quota_scarti_perc, 0) }}%). Per gli scarti il peso morto è il peso vivo meno il calo del {{ num(par.calo_scarti_perc) }}%.</li>
                 <li>Indice di conversione = mangime consumato diviso carne valida.</li>
-                <li>Valore in €/kg = percentuale della tabella, interpolata tra le due righe vicine, × prezzo di partenza × (1 + premio su tabella).</li>
+                <li>Valore in €/kg = percentuale della tabella, interpolata tra le due righe vicine, × prezzo di partenza × (1 + premio su tabella). La tabella non ha limiti: oltre le righe scritte prosegue con lo stesso passo, sia per indici migliori sia per indici peggiori.</li>
                 <li>Resa = valore × carne valida × (1 + premi da prontuario + premio extra).</li>
                 <li>Minimo = minimo annuo / 365 × giorni dall'ultimo giorno pagato del ciclo precedente all'ultimo carico. Ogni giorno dell'anno è pagato una volta sola.</li>
                 <li>Pagato = il più alto tra resa e minimo più siero. Saldo = pagato meno anticipi.</li>

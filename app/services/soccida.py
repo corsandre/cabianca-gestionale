@@ -17,8 +17,10 @@ Il conto (contratto con Veronesi)
 3. Indice di conversione = mangime consumato / carne valida.
 4. Valore €/kg = percentuale della tabella di rapporto, interpolata tra le due
    righe vicine, × prezzo di partenza × (1 + premio su tabella) / 100.
-   Sotto la prima riga la tabella si prolunga con il passo delle prime due righe;
-   sopra l'ultima resta ferma (lì vince comunque il minimo).
+   Le righe scritte sono quelle date da Veronesi, ma la tabella non ha limiti: sotto
+   la prima riga (indici migliori, es. 2,8 o 2,62) prosegue con il passo delle prime
+   due righe, sopra l'ultima (indici peggiori di 4,0) con il passo delle ultime due,
+   senza scendere sotto zero. Lì vince quasi sempre il minimo, ma il conto si fa lo stesso.
 5. Resa = valore × carne valida × (1 + premi da prontuario + premio extra).
 6. Minimo = minimo annuo / 365 × giorni dall'ultimo giorno pagato del ciclo
    precedente all'ultimo carico (ogni giorno dell'anno è pagato una volta sola).
@@ -81,14 +83,25 @@ def percentuale_tabella(indice, tabella=TABELLA_RAPPORTO):
     if len(righe) < 2:
         raise ValueError("La tabella di rapporto deve avere almeno due righe.")
     (i0, p0), (i1, p1) = righe[0], righe[1]
-    if indice <= i0:                       # meglio della prima riga: stesso passo delle prime due
+    if indice <= i0:                       # meglio della prima riga: stesso passo delle prime due, senza limite
         return p0 + (i0 - indice) * (p0 - p1) / (i1 - i0)
-    if indice >= righe[-1][0]:             # peggio dell'ultima riga: ferma
-        return righe[-1][1]
+    (ip, pp), (iu, pu) = righe[-2], righe[-1]
+    if indice >= iu:                       # peggio dell'ultima riga: stesso passo delle ultime due, mai sotto zero
+        return max(0.0, pu - (indice - iu) * (pp - pu) / (iu - ip))
     for (a, pa), (b, pb) in zip(righe, righe[1:]):
         if a <= indice <= b:
             return pa + (pb - pa) * (indice - a) / (b - a)
     return righe[-1][1]
+
+
+def righe_prolungate(tabella=TABELLA_RAPPORTO, sopra=3, sotto=2, passo=0.1):
+    """Esempi di come la tabella prosegue oltre le righe scritte, per mostrarli in Impostazioni:
+    ([(indice, percentuale)] migliori della prima riga, [(…)] peggiori dell'ultima)."""
+    righe = sorted(tabella)
+    primo, ultimo = righe[0][0], righe[-1][0]
+    migliori = [(round(primo - passo * k, 3), percentuale_tabella(primo - passo * k, tabella)) for k in range(sopra, 0, -1)]
+    peggiori = [(round(ultimo + passo * k, 3), percentuale_tabella(ultimo + passo * k, tabella)) for k in range(1, sotto + 1)]
+    return migliori, peggiori
 
 
 def valore_kg(indice, contratto):
@@ -222,7 +235,7 @@ def indice_pareggio(c, contratto):
     None se nemmeno il miglior indice provato (2,0) basta."""
     def margine(indice):
         return valore_kg(indice, contratto) * c.carne_kg * (1 + c.premi_perc / 100) - c.siero_eur - c.minimo_eur
-    basso, alto = 2.0, max(r[0] for r in contratto.tabella)
+    basso, alto = 2.0, max(r[0] for r in contratto.tabella) + 2.0     # la tabella prosegue oltre l'ultima riga
     if margine(basso) <= 0:
         return None
     if margine(alto) > 0:

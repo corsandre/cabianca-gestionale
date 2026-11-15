@@ -406,7 +406,8 @@ garantito), con che probabilità si arriva a premio e cosa sposta il risultato. 
 - **Il conto** (regole complete nel docstring di `app/services/soccida.py` e, per chi usa, in
   Impostazioni Soccida › «Come funziona»): mangime consumato = bolle + giacenza iniziale − giacenza finale;
   carne valida = peso morto dei grassi + scarti al 50% con calo fisso; indice di conversione → tabella di
-  rapporto (interpolata) → €/kg; resa = €/kg × carne × (1 + premi); Veronesi paga il più alto tra *resa* e
+  rapporto (interpolata, e prolungata senza limiti oltre le righe scritte: meglio di 2,9 con il passo delle prime
+  due righe, peggio di 4,0 con quello delle ultime due) → €/kg; resa = €/kg × carne × (1 + premi); Veronesi paga il più alto tra *resa* e
   *minimo + siero*, e il siero resta a carico dell'allevatore. **A premio** quando resa − siero > minimo.
 - **Nessuna registrazione propria**: la scheda legge Consegne (bolle di mangime e siero), le fatture SDI dei
   fornitori di siero (totale con IVA), gli Spostamenti (entrate dei suinetti; uscite al macello con il riscontro),
