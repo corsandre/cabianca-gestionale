@@ -980,8 +980,14 @@ def consegne():
         for c in siero_list if c.data_esaurimento
     }
 
+    # righe delle fatture di siero abbinate alle consegne (solo per l'admin: sono importi)
+    fatture_siero = None
+    if ciclo and tab == "siero" and current_user.role == "admin":
+        from app.services.siero_fatture import controllo
+        fatture_siero = controllo(ciclo)
+
     return render_template("allevamento/consegne.html",
-                           ciclo=ciclo, tab=tab,
+                           ciclo=ciclo, tab=tab, fatture_siero=fatture_siero,
                            siero_list=siero_list, mangime_list=mangime_list,
                            tot_siero=tot_siero, tot_mangime=tot_mangime,
                            scorta_mangime=stato_mangime(), scorta_siero=stato_siero(),
@@ -992,6 +998,28 @@ def consegne():
                            ultima_consegna_siero_id=next((c.id for c in sorted(
                                siero_list, key=lambda c: (c.data, c.ora or time_min, c.id), reverse=True)), None),
                            oggi=date.today())
+
+
+@bp.route("/consegne/siero/fatture/leggi", methods=["POST"])
+@login_required
+def consegne_siero_fatture_leggi():
+    """Legge subito le fatture di siero non ancora lette (lo stesso controllo che gira ogni mattina),
+    oppure, con rileggi=1, rilegge tutte quelle dei fornitori di siero."""
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.services import siero_fatture as F
+    try:
+        if request.form.get("rileggi") == "1":
+            lette = [f for f in F.fatture_fornitori() if F.leggi_fattura(f) is not None]
+            F.abbina()
+        else:
+            lette = F.controlla_nuove(avvisa=False)
+        flash(f"Fatture di siero lette: {len(lette)}." if lette else "Nessuna fattura di siero nuova da leggere.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore nella lettura delle fatture: {e}", "danger")
+    return redirect(url_for("allevamento.consegne", tab="siero"))
 
 
 @bp.route("/mangime/ricalibra", methods=["POST"])

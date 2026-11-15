@@ -73,11 +73,33 @@
 </ul>
 
 {% if tab == 'siero' %}
+{# Fatture del siero (3.0): riepilogo del confronto con le consegne. Il dettaglio è nella colonna «Fattura». #}
+{% if fatture_siero is not none %}
+<div class="cb-card p-3 mb-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div><i class="bi bi-receipt me-1" style="color:#c2185b"></i><strong>Fatture del siero</strong>
+            {% if not fatture_siero.letta_qualcosa %}<span class="text-muted small ms-1">nessuna fattura letta: indica la partita IVA dei fornitori in <a href="{{ url_for('allevamento.soccida_impostazioni') }}#ciclo">Impostazioni Soccida</a></span>
+            {% elif fatture_siero.differenze %}<span class="badge ms-1" style="background:#fbe6ee;color:#1d1922">{{ fatture_siero.differenze }} da controllare</span>
+            {% else %}<span class="text-muted small ms-1">tutto coincide</span>{% endif %}
+            {% if fatture_siero.fatturato_fino_al %}<span class="text-muted small ms-1">· fatturato fino al {{ fatture_siero.fatturato_fino_al.strftime('%d/%m/%Y') }}</span>{% endif %}
+        </div>
+        <form method="post" action="{{ url_for('allevamento.consegne_siero_fatture_leggi') }}" class="d-flex gap-2 m-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-secondary" title="Lo stesso controllo che gira ogni mattina alle 8:45">Cerca fatture nuove</button>
+            <button class="btn btn-sm btn-outline-secondary" name="rileggi" value="1" title="Rilegge tutte le fatture dei fornitori di siero">Rileggi tutte</button>
+        </form>
+    </div>
+    {% if fatture_siero.senza_consegna %}
+    <div class="small mt-2">In fattura ma non in Consegne:
+        {% for r in fatture_siero.senza_consegna %}<span class="badge text-dark border fw-normal me-1">{{ r.data.strftime('%d/%m') }} · bolla {{ r.ddt }} · {{ '%g'|format(r.tonnellate) }} t · {{ '%.2f'|format(r.importo)|replace('.', ',') }} €</span>{% endfor %}
+    </div>{% endif %}
+</div>
+{% endif %}
 <div class="cb-card p-0" style="overflow-x:auto">
     {% if siero_list %}
     <table class="table table-sm mb-0">
         <thead class="table-light">
-            <tr><th>Data</th><th>Ora</th><th>Qli</th><th>% s.s. (Brix)</th><th>Lotto</th><th>Speditore</th><th>Trasportatore</th><th>Note</th><th>Bolla</th><th>Periodo</th>
+            <tr><th>Data</th><th>Ora</th><th>Qli</th><th>% s.s. (Brix)</th><th>Lotto</th><th>Speditore</th><th>Trasportatore</th><th>Note</th><th>Bolla</th>{% if fatture_siero is not none %}<th>Fattura</th>{% endif %}<th>Periodo</th>
             {% if current_user.role == 'admin' %}<th></th>{% endif %}</tr>
         </thead>
         <tbody>
@@ -103,6 +125,14 @@
                     </label>
                     {% endif %}
                 </td>
+                {% if fatture_siero is not none %}<td class="small" style="min-width:130px">
+                    {% set fr = fatture_siero.per_consegna.get(c.id) %}
+                    {% if fr %}<div>{{ '%.2f'|format(fr.riga.importo)|replace('.', ',') }} €</div>
+                        {% if fr.stato == 'ok' %}<div class="text-muted">coincide</div>
+                        {% else %}<div style="color:#a3154d"><i class="bi bi-exclamation-circle me-1"></i>{{ fr.testo }}</div>{% endif %}
+                    {% elif fatture_siero.fatturato_fino_al and c.data <= fatture_siero.fatturato_fino_al %}<div style="color:#a3154d"><i class="bi bi-exclamation-circle me-1"></i>non è in fattura</div>
+                    {% else %}<div class="text-muted">in attesa della fattura</div>{% endif %}
+                </td>{% endif %}
                 <td style="min-width:150px">
                     {% if c.data_esaurimento %}
                     {% set s = scarti_siero.get(c.id) %}

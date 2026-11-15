@@ -269,6 +269,21 @@ si aggiunge quando arriva, e la scheda Soccida passa dalla resa stimata a quella
 - Stime: pasti/giorni residui (simulazione pasto per pasto ripetendo l'ultimo pasto completo, non una media
   storica) e data/ora in cui ci sarà spazio nei silos per un nuovo carico da riordinare.
 
+**Fatture del siero abbinate alle consegne (dalla 3.0, solo admin).** Nella scheda Siero ogni consegna ha la
+colonna **Fattura**: l'importo del carico (con la sua parte di indicizzazione gasolio e di IVA, così la somma dà il
+totale della fattura) e l'esito del confronto: *coincide*, quantità diversa, numero di bolla diverso, *non è in
+fattura*, oppure *in attesa della fattura* per i carichi successivi all'ultima fattura letta. In alto il riepilogo,
+le righe di fattura senza consegna e i pulsanti «Cerca fatture nuove» e «Rileggi tutte».
+- Le righe si leggono dalla copia PDF della fattura (`pdftotext -layout`): `services/siero_fatture_pdf.py` è la
+  sola analisi del testo (provata in `tests/test_siero_fatture.py`), `services/siero_fatture.py` salva le righe in
+  `siero_fatture_righe` e le abbina: prima per numero di bolla (DDT = campo «Lotto», entro 5 giorni), poi per
+  stessa data e quantità simile.
+- I fornitori di siero sono le partite IVA indicate in Impostazioni Soccida. La scheda Soccida continua a usare i
+  totali delle fatture; qui si controlla carico per carico.
+- **Ogni mattina alle 8:45** (dopo lo scarico delle fatture delle 8:30) il gestionale legge le fatture di siero
+  nuove e manda su Telegram (canale finanza) un riepilogo: totale, carichi, tonnellate e differenze con le
+  consegne. Per le fatture più vecchie di 60 giorni legge senza avvisare.
+
 #### Orari dei pasti e attribuzione del siero ai carichi
 Il gestionale non registra quando la cucina distribuisce davvero un pasto: ogni pasto ha un **istante**, che è
 il giorno più l'orario standard di Impostazioni (es. pasto 2 alle 12:50). Da quell'istante dipendono: se il pasto
@@ -681,6 +696,7 @@ APScheduler gira nel processo dell'app (fuso `Europe/Rome`):
 | 08:30, 14:30, 20:30 | Recupero fatture SDI da email (IMAP) | Solo se configurato IMAP |
 | 7:10–22:40, ogni 30 minuti | Ordini Amazon dalle mail, abbinamento agli addebiti, domande sul bot Telegram | Solo se configurato IMAP |
 | 08:35, 14:35, 20:35 | Fatture emesse da email (OCR) e abbinamento ai bonifici | Solo se configurati IMAP e `FATTURE_EMESSE_MITTENTE` |
+| 08:45 | Fatture di siero nuove: lettura delle righe, abbinamento alle consegne, riepilogo su Telegram | Fornitori da Impostazioni Soccida |
 
 ---
 
@@ -876,6 +892,7 @@ app/
     allevamento_scorte.py allevamento_pasti.py allevamento_bot.py  # allevamento
     allevamento_analisi.py
     soccida.py soccida_dati.py soccida_scheda.py                   # soccida: calcolo, raccolta dati, scheda
+    siero_fatture_pdf.py siero_fatture.py                          # fatture del siero: lettura delle righe, abbinamento alle consegne
     impianto/          # collegamento all'impianto di alimentazione (servizio, lettore EM2000)
   templates/           # Jinja2, tutti estendono base.html; una cartella per sezione
     components/        # sidebar_nav.html, scorta_card.html, …
@@ -883,7 +900,7 @@ app/
     css/style.css      # branding Ca Bianca
     uploads/           # allegati e foto bolle (volume)
   utils/decorators.py  # role_required, admin_required, write_required, section_required
-tests/                 # test_soccida.py: il calcolo della soccida contro l'Excel (python3 -m unittest discover -s tests)
+tests/                 # calcolo della soccida contro l'Excel, lettura delle fatture di siero (python3 -m unittest discover -s tests)
 docs/                  # piano-3.0-soccida.md: decisioni e fasi della 3.0; soccida-dati/: prototipo e dati di partenza
 scripts/               # script di manutenzione; em2000_addestra.py costruisce il campionario dello schermo
 Dockerfile  docker-compose.yml  gunicorn.conf.py  setup.sh  requirements.txt

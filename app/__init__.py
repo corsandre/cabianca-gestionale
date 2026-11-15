@@ -561,7 +561,20 @@ def _init_scheduler(app):
                 except Exception as e:
                     app.logger.error(f"Errore generazione ricorrenti: {e}")
 
+        def fatture_siero():
+            with app.app_context():
+                try:
+                    from app.services.siero_fatture import controlla_nuove
+                    lette = controlla_nuove()
+                    if lette:
+                        app.logger.info(f"Fatture di siero lette: {len(lette)}")
+                except Exception as e:
+                    db.session.rollback()
+                    app.logger.error(f"Errore fatture di siero: {e}")
+
         scheduler.add_job(generate_recurring, "cron", hour=3, minute=0)
+        # ogni mattina, dopo lo scarico delle fatture delle 8:30: righe delle fatture di siero e confronto con le consegne
+        scheduler.add_job(fatture_siero, "cron", hour=8, minute=45)
         scheduler.add_job(run_backup, "cron", hour=backup_hour, minute=backup_minute, id="backup")
         if app.config.get("CLOUD_OFFICE_USER") and app.config.get("CLOUD_OFFICE_PASSWORD"):
             scheduler.add_job(sync_cassa, "cron", hour=4, minute=0)

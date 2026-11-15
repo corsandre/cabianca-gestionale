@@ -857,3 +857,23 @@ class SoccidaFattura(db.Model):
     sdi_invoice_id = db.Column(db.Integer, db.ForeignKey("sdi_invoices.id"), nullable=False, unique=True)
     ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"))
 
+
+class SieroFatturaRiga(db.Model):
+    """Riga letta da una fattura di siero (3.0): un carico (DDT, data, tonnellate, importo) abbinato,
+    quando si trova, alla consegna registrata in Consegne. Scritte da app/services/siero_fatture.py.
+    Una fattura già letta ha sempre almeno una riga: se non contiene carichi, una riga di tipo «vuota»."""
+    __tablename__ = "siero_fatture_righe"
+    id = db.Column(db.Integer, primary_key=True)
+    sdi_invoice_id = db.Column(db.Integer, db.ForeignKey("sdi_invoices.id"), nullable=False, index=True)
+    tipo = db.Column(db.String(10), nullable=False, default="carico")   # carico | extra (gasolio) | vuota
+    ddt = db.Column(db.String(50))
+    data = db.Column(db.Date)
+    tonnellate = db.Column(db.Float)
+    importo_netto = db.Column(db.Float)       # come stampato in fattura, senza IVA
+    importo = db.Column(db.Float)             # carico con la sua parte di gasolio e di IVA: la somma dà il totale fattura
+    descrizione = db.Column(db.String(200))
+    consegna_id = db.Column(db.Integer, db.ForeignKey("consegne_siero.id"), index=True)
+    come = db.Column(db.String(10))           # come è stata abbinata: bolla | data
+    fattura = db.relationship("SdiInvoice")
+    consegna = db.relationship("ConsegnaSiero")
+

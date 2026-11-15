@@ -183,3 +183,8 @@ Aggiornamenti del 15/11/2026, notte:
 - **Cursori tornati nello scenario**: date (± 21 giorni attorno a quella mostrata, più il campo data per scriverla) e valori (peso, resa, morti, premi, giacenza iniziale). Al rilascio del cursore la scheda si ricalcola sul server: restano i cursori e resta un motore solo.
 - **Fase 4 spostata**: l'abbinamento tra righe delle fatture di siero e consegne non va nella scheda Soccida ma nella sezione **Fatture ricevute** (Finanza). La scheda Soccida tiene solo il riepilogo mensile bolle/fattura e legge i totali.
 - Correzione: l'abbinamento tra righe delle fatture di siero e consegne va nella pagina **Consegne** (Allevamento), non in Fatture ricevute.
+
+Aggiunto alla 3.0.0 su richiesta di Andrea (15/11/2026):
+- **Fatture del siero abbinate alle consegne**, nella pagina Consegne (scheda Siero, solo admin): colonna «Fattura» con importo del carico ed esito, riepilogo in alto, righe di fattura senza consegna. Moduli `siero_fatture_pdf.py` (lettura del testo, con test) e `siero_fatture.py` (righe in `siero_fatture_righe`, abbinamento per numero di bolla e poi per data).
+- **Controllo di ogni mattina alle 8:45**: legge le fatture di siero nuove e manda il riepilogo su Telegram (canale finanza), solo per le fatture degli ultimi 60 giorni. La prima lettura delle fatture già presenti va fatta dal pulsante «Cerca fatture nuove», che non manda messaggi.
+- Sulla copia del database: 12 fatture lette, 196 carichi; nel ciclo in corso 87 carichi abbinati e le stesse differenze trovate a mano (11/09 e 26/10 quantità, 27/10 e 31/10 numero di bolla, 1 e 4 maggio senza consegna).
