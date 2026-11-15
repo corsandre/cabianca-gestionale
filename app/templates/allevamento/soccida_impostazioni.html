@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}Allevamento – Impostazioni Soccida{% endblock %}
+{# Impostazioni della soccida per il ciclo attivo: contratto, dati del ciclo, scenario standard, tabella,
+   anticipi, fatture del siero, e la spiegazione del modulo. Rotte in app/routes/soccida.py. #}
+
+{% macro num(v, dec=2) %}{% if v is not none %}{{ ('%.' ~ dec ~ 'f')|format(v)|replace('.', ',') }}{% endif %}{% endmacro %}
+{% macro intero(v) %}{% if v is not none %}{{ '%d'|format(v) }}{% endif %}{% endmacro %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+    <h4 class="mb-0"><i class="bi bi-sliders me-2" style="color:#c2185b"></i>Impostazioni Soccida</h4>
+    <a class="btn btn-sm" style="border:1px solid #c2185b;color:#a3154d" href="{{ url_for('allevamento.soccida') }}"><i class="bi bi-arrow-left me-1"></i>Torna alla scheda</a>
+</div>
+
+{% if not ciclo %}
+<div class="cb-card p-3">Nessun ciclo attivo. Crea un ciclo in <a href="{{ url_for('allevamento.impostazioni') }}">Impostazioni Allevamento</a>.</div>
+{% else %}
+<p class="text-muted small">Valori del ciclo «{{ ciclo.nome }}». Ogni ciclo conserva i propri: cambiare il contratto non modifica i cicli già chiusi. Un ciclo nuovo parte copiando quelli del precedente.</p>
+
+<form method="post" action="{{ url_for('allevamento.soccida_impostazioni_salva') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+<h6 class="text-uppercase text-muted small mb-2">Contratto con Veronesi</h6>
+<div class="cb-card p-3 mb-4">
+    <div class="row g-3">
+        <div class="col-6 col-md-3"><label class="form-label" for="minimo_annuo">Minimo garantito annuo (€)</label><input class="form-control" id="minimo_annuo" name="minimo_annuo" inputmode="decimal" value="{{ num(par.minimo_annuo, 0) }}" required><div class="form-text">Al netto del siero. {{ num(par.minimo_annuo / 365) }} € al giorno</div></div>
+        <div class="col-6 col-md-3"><label class="form-label" for="posti">Posti suino</label><input class="form-control" id="posti" name="posti" inputmode="numeric" value="{{ intero(par.posti) }}"></div>
+        <div class="col-6 col-md-3"><label class="form-label" for="prezzo_partenza">Prezzo di partenza (€/kg)</label><input class="form-control" id="prezzo_partenza" name="prezzo_partenza" inputmode="decimal" value="{{ num(par.prezzo_partenza) }}" required></div>
+        <div class="col-6 col-md-3"><label class="form-label" for="premio_tabella_perc">Premio su tabella (%)</label><input class="form-control" id="premio_tabella_perc" name="premio_tabella_perc" inputmode="decimal" value="{{ num(par.premio_tabella_perc) }}" required><div class="form-text">Prezzo usato in tabella: {{ num(prezzo_tabella, 4) }} €/kg</div></div>
+        <div class="col-6 col-md-3"><label class="form-label" for="quota_scarti_perc">Scarti: carne contata (%)</label><input class="form-control" id="quota_scarti_perc" name="quota_scarti_perc" inputmode="decimal" value="{{ num(par.quota_scarti_perc) }}" required></div>
+        <div class="col-6 col-md-3"><label class="form-label" for="calo_scarti_perc">Scarti: calo peso (%)</label><input class="form-control" id="calo_scarti_perc" name="calo_scarti_perc" inputmode="decimal" value="{{ num(par.calo_scarti_perc) }}" required><div class="form-text">Peso morto = peso vivo meno il calo</div></div>
+        <div class="col-6 col-md-3"><label class="form-label" for="resa_partenza_perc">Resa dei grassi senza riscontro (%)</label><input class="form-control" id="resa_partenza_perc" name="resa_partenza_perc" inputmode="decimal" value="{{ num(par.resa_partenza_perc) }}" required><div class="form-text">Per i carichi partiti, finché nessuno è riscontrato</div></div>
+        <div class="col-6 col-md-3"><label class="form-label" for="premio_extra_perc">Premio extra (%)</label><input class="form-control" id="premio_extra_perc" name="premio_extra_perc" inputmode="decimal" value="{{ num(par.premio_extra_perc) }}" required><div class="form-text">Era il 10% Esselunga fino al ciclo 5</div></div>
+    </div>
+</div>
+
+<h6 class="text-uppercase text-muted small mb-2" id="ciclo">Dati di questo ciclo</h6>
+<div class="cb-card p-3 mb-4">
+    <div class="row g-3">
+        <div class="col-12 col-md-4"><label class="form-label" for="ultimo_giorno_pagato_prec">Ultimo giorno pagato del ciclo precedente</label><input type="date" class="form-control" id="ultimo_giorno_pagato_prec" name="ultimo_giorno_pagato_prec" value="{{ par.ultimo_giorno_pagato_prec.isoformat() }}" required><div class="form-text">I giorni del minimo partono dal giorno dopo, anche se i cicli si accavallano</div></div>
+        <div class="col-6 col-md-4"><label class="form-label" for="giacenza_iniziale_kg">Giacenza iniziale di mangime (kg)</label><input class="form-control" id="giacenza_iniziale_kg" name="giacenza_iniziale_kg" inputmode="decimal" value="{{ num(par.giacenza_iniziale_kg, 0) }}"><div class="form-text">Quella comunicata a Veronesi a inizio ciclo</div></div>
+        <div class="col-6 col-md-4"><label class="form-label" for="giacenza_finale_kg">Giacenza finale di mangime (kg)</label><input class="form-control" id="giacenza_finale_kg" name="giacenza_finale_kg" inputmode="decimal" value="{{ num(par.giacenza_finale_kg, 0) }}" placeholder="a fine ciclo"><div class="form-text">Finché è vuota si usa la giacenza stimata dei silos</div></div>
+        <div class="col-6 col-md-4"><label class="form-label" for="premi_perc">Premi da prontuario (%)</label><input class="form-control" id="premi_perc" name="premi_perc" inputmode="decimal" value="{{ num(par.premi_perc) }}" required>
+            <div class="form-check mt-1"><input class="form-check-input" type="checkbox" id="premi_noti" name="premi_noti" value="1" {{ 'checked' if par.premi_noti }}><label class="form-check-label small" for="premi_noti">comunicati da Veronesi (non più una stima)</label></div></div>
+        <div class="col-6 col-md-4"><label class="form-label" for="suini_cabianca">Suini di Fattoria Ca' Bianca nel ciclo</label><input class="form-control" id="suini_cabianca" name="suini_cabianca" inputmode="numeric" value="{{ intero(par.suini_cabianca) }}"><div class="form-text">Esclusi da capi e carne; il loro mangime resta nel totale</div></div>
+        <div class="col-6 col-md-4"><label class="form-label" for="fornitori_siero_piva">Partita IVA dei fornitori di siero</label><input class="form-control" id="fornitori_siero_piva" name="fornitori_siero_piva" value="{{ par.fornitori_siero_piva or '' }}" placeholder="es. 00883710196"><div class="form-text">Più di una: separate da virgola. Le loro fatture contano come siero</div></div>
+        <div class="col-6 col-md-4"><label class="form-label" for="anticipi_pagante">Chi paga gli anticipi</label><input class="form-control" id="anticipi_pagante" name="anticipi_pagante" value="{{ par.anticipi_pagante or '' }}" placeholder="es. LA PELLEGRINA"><div class="form-text">Testo cercato nell'ordinante dei bonifici, per proporli qui sotto</div></div>
+    </div>
+</div>
+
+<h6 class="text-uppercase text-muted small mb-2" id="scenario">Scenario standard</h6>
+<div class="cb-card p-3 mb-4">
+    <p class="text-muted small mb-3">Le previsioni su cui si basa la stima. Sono gli stessi valori del riquadro Scenario nella scheda: si correggono da qui o da lì.</p>
+    <div class="row g-3">
+        <div class="col-6 col-md-3"><label class="form-label" for="primo_carico">Primo carico previsto</label><input type="date" class="form-control" id="primo_carico" name="primo_carico" value="{{ par.primo_carico.isoformat() }}" required></div>
+        <div class="col-6 col-md-3"><label class="form-label" for="ultimo_carico">Ultimo carico previsto</label><input type="date" class="form-control" id="ultimo_carico" name="ultimo_carico" value="{{ par.ultimo_carico.isoformat() }}" required>
+            <div class="form-check mt-1"><input class="form-check-input" type="checkbox" id="date_confermate" name="date_confermate" value="1" {{ 'checked' if par.date_confermate }}><label class="form-check-label small" for="date_confermate">date confermate da Veronesi</label></div></div>
+        <div class="col-6 col-md-3"><label class="form-label" for="capi_carico">Capi per carico</label><input class="form-control" id="capi_carico" name="capi_carico" inputmode="numeric" value="{{ intero(par.capi_carico) }}" required><div class="form-text">Di solito tra 120 e 135</div></div>
+        <div class="col-6 col-md-3"><label class="form-label" for="carichi_giorno">Carichi al giorno, al massimo</label><input class="form-control" id="carichi_giorno" name="carichi_giorno" inputmode="numeric" value="{{ intero(par.carichi_giorno) }}" required></div>
+        <div class="col-6 col-md-4"><label class="form-label" for="peso_extra_kg">Kg di peso vivo in più rispetto alla curva</label><input class="form-control" id="peso_extra_kg" name="peso_extra_kg" inputmode="decimal" value="{{ num(par.peso_extra_kg, 1) }}" required><div class="form-text">0 = come la curva di accrescimento alla data media di uscita</div></div>
+        <div class="col-6 col-md-4"><label class="form-label" for="resa_perc">Resa al macello prevista (%)</label><input class="form-control" id="resa_perc" name="resa_perc" inputmode="decimal" value="{{ num(par.resa_perc) }}" required><div class="form-text">Sostituita dalla resa vera dal primo riscontro</div></div>
+        <div class="col-6 col-md-4"><label class="form-label" for="morti_giorno">Morti attesi al giorno</label><input class="form-control" id="morti_giorno" name="morti_giorno" inputmode="decimal" value="{{ num(par.morti_giorno, 1) }}" required></div>
+    </div>
+</div>
+<div class="d-flex justify-content-end mb-4"><button class="btn" style="background:#c2185b;color:#fff"><i class="bi bi-check-lg me-1"></i>Salva impostazioni</button></div>
+</form>
+
+<div class="row g-4 mb-4">
+<div class="col-lg-6">
+    <h6 class="text-uppercase text-muted small mb-2" id="tabella">Tabella di rapporto</h6>
+    <div class="cb-card p-3">
+        <p class="text-muted small">Indice e percentuale si inseriscono; il valore in €/kg è calcolato: percentuale × {{ num(prezzo_tabella, 4) }} / 100. Sotto la prima riga la tabella si prolunga con il passo delle prime due; sopra l'ultima resta ferma.</p>
+        <form method="post" action="{{ url_for('allevamento.soccida_tabella_salva') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="table-responsive"><table class="table table-sm align-middle mb-2">
+                <thead><tr><th>Indice di conversione</th><th>Percentuale</th><th class="text-end">€/kg</th></tr></thead>
+                <tbody>
+                {% for r in righe %}<tr>
+                    <td><input class="form-control form-control-sm" name="indice" inputmode="decimal" value="{{ num(r.indice, 1) }}" aria-label="Indice"></td>
+                    <td><input class="form-control form-control-sm" name="percentuale" inputmode="decimal" value="{{ num(r.percentuale) }}" aria-label="Percentuale"></td>
+                    <td class="text-end">{{ num(r.percentuale * prezzo_tabella / 100, 4) }}</td></tr>{% endfor %}
+                {% for _ in range(2) %}<tr>
+                    <td><input class="form-control form-control-sm" name="indice" inputmode="decimal" placeholder="nuova riga" aria-label="Indice"></td>
+                    <td><input class="form-control form-control-sm" name="percentuale" inputmode="decimal" aria-label="Percentuale"></td><td></td></tr>{% endfor %}
+                </tbody>
+            </table></div>
+            <div class="d-flex justify-content-between align-items-center"><span class="text-muted small">Per togliere una riga svuota i due campi.</span>
+                <button class="btn btn-sm" style="background:#c2185b;color:#fff">Salva tabella</button></div>
+        </form>
+    </div>
+</div>
+<div class="col-lg-6">
+    <h6 class="text-uppercase text-muted small mb-2" id="anticipi">Anticipi</h6>
+    <div class="cb-card p-3 mb-4">
+        <p class="text-muted small">Si tolgono dall'importo pagato per ottenere il saldo.</p>
+        <div class="table-responsive"><table class="table table-sm align-middle">
+            <thead><tr><th>Data</th><th class="text-end">Importo</th><th>Nota</th><th></th></tr></thead>
+            <tbody>
+            {% for a in anticipi %}<tr><td>{{ a.data.strftime('%d/%m/%Y') }}</td><td class="text-end">{{ V.eur(a.importo) }}</td><td class="small text-muted">{{ a.nota or '' }}{% if a.bank_transaction_id %} · dalla banca{% endif %}</td>
+                <td class="text-end"><form method="post" action="{{ url_for('allevamento.soccida_anticipo_elimina', aid=a.id) }}" onsubmit="return confirm('Eliminare questo anticipo?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger" aria-label="Elimina anticipo"><i class="bi bi-trash"></i></button></form></td></tr>
+            {% else %}<tr><td colspan="4" class="text-muted">Nessun anticipo registrato.</td></tr>{% endfor %}
+            {% if anticipi %}<tr class="fw-bold"><td>Totale</td><td class="text-end">{{ V.eur(anticipi|sum(attribute='importo')) }}</td><td colspan="2"></td></tr>{% endif %}
+            </tbody>
+        </table></div>
+        {% if da_banca %}
+        <div class="small text-muted mb-1">Bonifici trovati in banca, non ancora registrati:</div>
+        {% for t in da_banca %}<form method="post" action="{{ url_for('allevamento.soccida_anticipo_nuovo') }}" class="d-flex justify-content-between align-items-center gap-2 border-top py-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="bank_id" value="{{ t.id }}">
+            <span>{{ t.operation_date.strftime('%d/%m/%Y') }} · {{ V.eur_cent(t.amount) }} <span class="small text-muted">{{ (t.remittance_info or '')|trim }}</span></span>
+            <button class="btn btn-sm btn-outline-secondary">È un anticipo</button></form>{% endfor %}
+        {% endif %}
+        <form method="post" action="{{ url_for('allevamento.soccida_anticipo_nuovo') }}" class="row g-2 align-items-end border-top pt-3 mt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-5"><label class="form-label small" for="a-data">Data</label><input type="date" class="form-control form-control-sm" id="a-data" name="data" required></div>
+            <div class="col-4"><label class="form-label small" for="a-importo">Importo (€)</label><input class="form-control form-control-sm" id="a-importo" name="importo" inputmode="decimal" required></div>
+            <div class="col-3"><button class="btn btn-sm w-100" style="border:1px solid #c2185b;color:#a3154d">Aggiungi</button></div>
+        </form>
+    </div>
+
+    <h6 class="text-uppercase text-muted small mb-2" id="fatture">Fatture del siero e cicli</h6>
+    <div class="cb-card p-3">
+        <p class="text-muted small">Ogni fattura conta in un solo ciclo. Di norma decide la data (dopo l'ultimo giorno pagato del ciclo precedente); per quelle a cavallo lo scegli tu.</p>
+        {% if not fatture %}<div class="text-muted">Nessuna fattura trovata: controlla la partita IVA dei fornitori di siero qui sopra.</div>{% endif %}
+        {% for x in fatture %}<form method="post" action="{{ url_for('allevamento.soccida_fattura_assegna', fid=x.f.id) }}" class="d-flex flex-wrap justify-content-between align-items-center gap-2 border-top py-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <span>{{ x.f.invoice_date.strftime('%d/%m/%Y') }} · {{ V.eur_cent(x.f.total_amount) }} <span class="small text-muted">{{ x.f.invoice_number }}</span></span>
+            <span class="d-flex gap-2 align-items-center">
+                <label class="visually-hidden" for="f-{{ x.f.id }}">Ciclo della fattura {{ x.f.invoice_number }}</label>
+                <select class="form-select form-select-sm" id="f-{{ x.f.id }}" name="scelta" onchange="this.form.submit()" style="width:auto">
+                    <option value="data" {{ 'selected' if not x.a_mano }}>Secondo la data: {{ 'in questo ciclo' if x.nel_ciclo and not x.a_mano else ('fuori' if not x.a_mano else '…') }}</option>
+                    <option value="dentro" {{ 'selected' if x.a_mano and x.nel_ciclo }}>A mano: in questo ciclo</option>
+                    <option value="fuori" {{ 'selected' if x.a_mano and not x.nel_ciclo }}>A mano: fuori da questo ciclo</option>
+                </select></span>
+        </form>{% endfor %}
+    </div>
+</div>
+</div>
+
+<h6 class="text-uppercase text-muted small mb-2" id="come-funziona">Come funziona il modulo Soccida</h6>
+<div class="cb-card p-4 mb-4">
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <h6 style="color:#a3154d">1. Cosa calcola</h6>
+            <p>Il compenso del ciclo secondo il contratto di soccida. Veronesi paga il più alto tra due importi: la <em>resa</em>, che dipende da quanta carne hai prodotto e con quanto mangime, e il <em>minimo garantito più le fatture del siero</em>. Il siero lo paghi sempre tu, quindi al netto ti resta il più alto tra «resa meno siero» e «minimo».</p>
+            <p>Arrivi a premio quando la resa meno il siero supera il minimo. La scheda dice quanto è probabile e cosa lo sposta.</p>
+            <h6 style="color:#a3154d">2. Da dove arrivano i dati</h6>
+            <p>Il modulo non ha registrazioni proprie: legge quelle che fai già nel gestionale.</p>
+            <ul>
+                <li><strong>Mangime</strong>: le bolle in Consegne. I dati della cucina servono solo come confronto.</li>
+                <li><strong>Siero</strong>: le quantità dalle bolle in Consegne, gli importi dalle fatture dei fornitori indicati qui sopra (totale con IVA).</li>
+                <li><strong>Suinetti in entrata</strong>: gli spostamenti di tipo Entrata.</li>
+                <li><strong>Carichi al macello</strong>: gli spostamenti di tipo Uscita, categoria «fine ciclo» o «scarto», con il riscontro del macello. Un camion è una riga sola.</li>
+                <li><strong>Capi presenti e pesi</strong>: censimenti, mortalità e curva di accrescimento.</li>
+                <li><strong>Giacenza dei silos</strong>: quella stimata in Consegne dall'ultima ricalibrazione.</li>
+                <li><strong>Contratto, anticipi e previsioni</strong>: questa pagina.</li>
+            </ul>
+            <h6 style="color:#a3154d">3. Il conto</h6>
+            <ol>
+                <li>Mangime consumato = bolle + giacenza iniziale − giacenza finale. Il siero non conta.</li>
+                <li>Carne valida = peso morto dei grassi + peso morto degli scarti contato in quota ({{ num(par.quota_scarti_perc, 0) }}%). Per gli scarti il peso morto è il peso vivo meno il calo del {{ num(par.calo_scarti_perc) }}%.</li>
+                <li>Indice di conversione = mangime consumato diviso carne valida.</li>
+                <li>Valore in €/kg = percentuale della tabella, interpolata tra le due righe vicine, × prezzo di partenza × (1 + premio su tabella).</li>
+                <li>Resa = valore × carne valida × (1 + premi da prontuario + premio extra).</li>
+                <li>Minimo = minimo annuo / 365 × giorni dall'ultimo giorno pagato del ciclo precedente all'ultimo carico. Ogni giorno dell'anno è pagato una volta sola.</li>
+                <li>Pagato = il più alto tra resa e minimo più siero. Saldo = pagato meno anticipi.</li>
+            </ol>
+            <p>I suini di Fattoria Ca' Bianca sono esclusi da capi e carne.</p>
+        </div>
+        <div class="col-lg-6">
+            <h6 style="color:#a3154d">4. Come si stima durante il ciclo</h6>
+            <p>Finché il ciclo è aperto, quello che manca viene previsto dallo scenario standard:</p>
+            <ul>
+                <li><strong>Carne dei capi in stalla</strong>: capi presenti meno i morti attesi, × peso vivo previsto alla data media di uscita × resa prevista. Il peso viene dalla curva di accrescimento e dall'età media dell'ultimo censimento, più i kg che aggiungi tu.</li>
+                <li><strong>Carne dei carichi partiti senza riscontro</strong>: peso vivo della bolla × resa media dei carichi già riscontrati.</li>
+                <li><strong>Mangime e siero ancora da consumare</strong>: consumo medio degli ultimi 21 giorni, pieno fino al primo carico e poi a calare fino all'ultimo, perché i capi escono un camion alla volta.</li>
+                <li><strong>Siero consegnato ma non fatturato</strong>: quantità vere, prezzo dell'ultima fattura.</li>
+                <li><strong>Minimo</strong>: giorni fino all'ultimo carico previsto.</li>
+            </ul>
+            <p>Ogni bolla, fattura e riscontro sostituisce una stima con un dato reale. A fine ciclo non resta niente di stimato.</p>
+            <h6 style="color:#a3154d">5. La probabilità di premio</h6>
+            <p>Il conto viene rifatto 4.000 volte, ogni volta spostando un po' i dati incerti: date dei carichi, peso di uscita, resa, capi, consumo di mangime, giacenze, siero, premi. La probabilità è la quota di volte in cui la resa meno il siero supera il minimo.</p>
+            <p>Quanto si sposta ogni dato dipende da quanto è cambiato nei cicli passati. Segnare le date come confermate riduce l'incertezza sulle date da 5 giorni a 1; segnare i premi come comunicati la toglie del tutto.</p>
+            <p>È una stima di modello, non una certezza: va letta insieme all'intervallo tra caso sfavorevole e favorevole.</p>
+            <h6 style="color:#a3154d">6. Stato dei dati</h6>
+            <ul>
+                <li><strong>Reale</strong>: viene da una bolla, una fattura o un riscontro.</li>
+                <li><strong>Stimato</strong>: calcolato da altri dati del gestionale.</li>
+                <li><strong>Ipotesi</strong>: scelto a mano in questa pagina o nello scenario.</li>
+                <li><strong>Da fare</strong>: manca o non coincide.</li>
+            </ul>
+            <h6 style="color:#a3154d">7. A fine ciclo</h6>
+            <p>Quando tutti i carichi hanno il riscontro, inserisci qui la giacenza finale e i premi da prontuario comunicati: la scheda non stima più niente e mostra il conto definitivo, da confrontare con la liquidazione di Veronesi.</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

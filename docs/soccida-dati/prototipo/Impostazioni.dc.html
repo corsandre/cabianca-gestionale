@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Impostazioni Soccida</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Varela+Round&family=Yeseva+One&display=swap">
+<style>
+body{margin:0;background:#f5f6f8}
+a{color:#a3154d}a:hover{color:#7d0f3a}
+button{font:inherit;cursor:pointer}
+input,select{font:inherit;color:#1d1922;box-sizing:border-box;width:100%;min-height:44px;padding:0 12px;border:1px solid rgba(29,25,34,0.25);border-radius:8px;background:#ffffff}
+button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #c2185b;outline-offset:2px}
+table{border-collapse:collapse;width:100%}
+th{font-weight:400;text-align:left}
+</style>
+</helmet>
+<div style="font-family: 'Varela Round', system-ui, sans-serif; color: #1d1922; font-size: 14px; line-height: 1.5; max-width: 1240px; margin: 0 auto; padding: 20px 16px 64px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; font-variant-numeric: tabular-nums">
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 24px">
+  <div style="display: flex; flex-direction: column; gap: 2px">
+    <div style="font-size: 12.5px; color: #55525c">Allevamento suini</div>
+    <h1 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 30px; line-height: 1.1">Impostazioni Allevamento</h1>
+  </div>
+  <a href="Main.dc.html" style="text-decoration: none; display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid #c2185b; background: #ffffff; color: #a3154d">Torna alla scheda Soccida</a>
+</div>
+
+<nav aria-label="Schede delle impostazioni" style="display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid rgba(29,25,34,0.12); padding-bottom: 10px">
+  <a href="#" style="text-decoration: none; border-radius: 8px; padding: 10px 14px; color: #1d1922; background: #ffffff; border: 1px solid rgba(29,25,34,0.12)">Ciclo e scorte</a>
+  <a href="#" style="text-decoration: none; border-radius: 8px; padding: 10px 14px; color: #1d1922; background: #ffffff; border: 1px solid rgba(29,25,34,0.12)">Medicinali</a>
+  <a href="#" style="text-decoration: none; border-radius: 8px; padding: 10px 14px; color: #1d1922; background: #ffffff; border: 1px solid rgba(29,25,34,0.12)">Curva di accrescimento</a>
+  <a href="#" aria-current="page" style="text-decoration: none; border-radius: 8px; padding: 10px 14px; color: #ffffff; background: #c2185b; border: 1px solid #c2185b">Soccida</a>
+</nav>
+
+<div style="font-size: 13px; color: #55525c">Valori del ciclo «Ciclo 05/2026». Ogni ciclo conserva i propri: cambiare il contratto non modifica i cicli già chiusi. Un ciclo nuovo parte copiando quelli del precedente.</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start">
+
+  <!-- CONTRATTO -->
+  <section style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0">
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <h2 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 20px">Contratto con Veronesi</h2>
+      <div style="font-size: 13px; color: #55525c">Cambiano solo quando si rinegozia.</div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 16px">
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="c1">Minimo garantito annuo (€)</label><input id="c1" type="text" inputmode="decimal" value="98.000"><div style="font-size: 12.5px; color: #55525c">268,49 € al giorno, al netto del siero</div></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="c2">Posti suino</label><input id="c2" type="text" inputmode="numeric" value="1.820"></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="c3">Prezzo di partenza (€/kg)</label><input id="c3" type="text" inputmode="decimal" value="1,45"></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="c4">Premio su tabella (%)</label><input id="c4" type="text" inputmode="decimal" value="20"><div style="font-size: 12.5px; color: #55525c">Prezzo usato in tabella: 1,74 €/kg</div></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="c5">Scarti: quota di carne contata (%)</label><input id="c5" type="text" inputmode="decimal" value="50"></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="c6">Scarti: calo peso (%)</label><input id="c6" type="text" inputmode="decimal" value="16,38"><div style="font-size: 12.5px; color: #55525c">Peso morto = peso vivo meno il calo</div></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="c7">Resa dei grassi senza riscontro (%)</label><input id="c7" type="text" inputmode="decimal" value="82"><div style="font-size: 12.5px; color: #55525c">Vale finché nessun carico è riscontrato</div></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="c8">Premio extra (%)</label><input id="c8" type="text" inputmode="decimal" value="0"><div style="font-size: 12.5px; color: #55525c">Era il 10% Esselunga fino al ciclo 5</div></div>
+    </div>
+  </section>
+
+  <!-- CICLO -->
+  <section style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0">
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <h2 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 20px">Dati di questo ciclo</h2>
+      <div style="font-size: 13px; color: #55525c">Si inseriscono una volta, all'inizio o alla fine.</div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 16px">
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="d1">Ultimo giorno pagato del ciclo precedente</label><input id="d1" type="date" value="2026-05-11"><div style="font-size: 12.5px; color: #55525c">I giorni del minimo partono dal giorno dopo, anche se i cicli si accavallano</div></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="d2">Giacenza iniziale di mangime (kg)</label><input id="d2" type="text" inputmode="numeric" value="3.000"><div style="font-size: 12.5px; color: #55525c">Ipotesi: giacenza finale del ciclo scorso</div></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="d3">Giacenza finale di mangime (kg)</label><input id="d3" type="text" inputmode="numeric" value="" placeholder="da comunicare a fine ciclo"><div style="font-size: 12.5px; color: #55525c">Finché è vuota uso la giacenza stimata dei silos</div></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="d4">Premi da prontuario (%)</label><input id="d4" type="text" inputmode="decimal" value="8"><div style="font-size: 12.5px; color: #55525c">Stima: quelli del ciclo scorso. Veronesi li comunica a fine ciclo</div></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="d5">Suini di Fattoria Ca' Bianca nel ciclo</label><input id="d5" type="text" inputmode="numeric" value="19"><div style="font-size: 12.5px; color: #55525c">Da confermare. Esclusi da capi e carne; il loro mangime resta nel totale</div></div>
+    </div>
+  </section>
+
+  <!-- SCENARIO STANDARD -->
+  <section style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0">
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <h2 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 20px">Scenario standard</h2>
+      <div style="font-size: 13px; color: #55525c">Le previsioni su cui si basa la stima. Sono gli stessi valori del riquadro Scenario nella scheda: si correggono da qui o da lì.</div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 16px">
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="s1">Primo carico previsto</label><input id="s1" type="date" value="2026-12-03"></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="s2">Ultimo carico previsto</label><input id="s2" type="date" value="2026-12-23"></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="s3">Stato delle date</label><select id="s3"><option>Presunte</option><option>Confermate da Veronesi</option></select></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="s4">Capi per carico</label><input id="s4" type="text" value="120–135"></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="s5">Carichi al giorno, al massimo</label><input id="s5" type="text" inputmode="numeric" value="2"></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="s6">Peso vivo di uscita rispetto alla curva (kg)</label><input id="s6" type="text" inputmode="decimal" value="0"><div style="font-size: 12.5px; color: #55525c">0 = come la curva di accrescimento</div></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="s7">Resa al macello prevista (%)</label><input id="s7" type="text" inputmode="decimal" value="83"><div style="font-size: 12.5px; color: #55525c">Sostituita dalla resa vera dal primo riscontro</div></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="s8">Morti attesi al giorno</label><input id="s8" type="text" inputmode="decimal" value="1"><div style="font-size: 12.5px; color: #55525c">A novembre la media è 1,5</div></div>
+    </div>
+  </section>
+
+  <!-- ANTICIPI -->
+  <section style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px">
+      <h2 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 20px">Anticipi</h2>
+      <button style="min-height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid #c2185b; background: #ffffff; color: #a3154d">Aggiungi anticipo</button>
+    </div>
+    <div style="font-size: 13px; color: #55525c">Inseriti a mano. Si tolgono dall'importo pagato per ottenere il saldo.</div>
+    <div style="overflow-x: auto">
+      <table style="min-width: 300px">
+        <thead><tr style="font-size: 12.5px; color: #55525c"><th style="padding: 6px 8px 6px 0">N.</th><th style="padding: 6px 8px">Data</th><th style="padding: 6px 0 6px 8px; text-align: right">Importo</th></tr></thead>
+        <tbody>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 8px 8px 8px 0">1</td><td style="padding: 8px">[DATA]</td><td style="padding: 8px 0 8px 8px; text-align: right">9.000 €</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 8px 8px 8px 0">2</td><td style="padding: 8px">[DATA]</td><td style="padding: 8px 0 8px 8px; text-align: right">9.000 €</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 8px 8px 8px 0">3</td><td style="padding: 8px">[DATA]</td><td style="padding: 8px 0 8px 8px; text-align: right">9.000 €</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 8px 8px 8px 0">4</td><td style="padding: 8px">[DATA]</td><td style="padding: 8px 0 8px 8px; text-align: right">9.000 €</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 8px 8px 8px 0">5</td><td style="padding: 8px">[DATA]</td><td style="padding: 8px 0 8px 8px; text-align: right">9.000 €</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 8px 8px 8px 0">6</td><td style="padding: 8px">[DATA]</td><td style="padding: 8px 0 8px 8px; text-align: right">9.000 €</td></tr>
+          <tr style="border-top: 2px solid #1d1922"><td style="padding: 8px 8px 8px 0">Totale</td><td style="padding: 8px"></td><td style="padding: 8px 0 8px 8px; text-align: right">54.000 €</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- TABELLA -->
+  <section style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px">
+      <h2 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 20px">Tabella di rapporto</h2>
+      <button style="min-height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid #c2185b; background: #ffffff; color: #a3154d">Aggiungi riga</button>
+    </div>
+    <div style="font-size: 13px; color: #55525c">Indice e percentuale si inseriscono; il valore in €/kg è calcolato: percentuale × 1,74 / 100.</div>
+    <div style="overflow-x: auto">
+      <table style="min-width: 320px">
+        <thead><tr style="font-size: 12.5px; color: #55525c"><th style="padding: 6px 8px 6px 0">Indice di conversione</th><th style="padding: 6px 8px; text-align: right">Percentuale</th><th style="padding: 6px 0 6px 8px; text-align: right">€/kg</th></tr></thead>
+        <tbody>
+          <tr style="border-top: 1px solid #e7e8ec; color: #55525c"><td style="padding: 7px 8px 7px 0">sotto 2,9</td><td style="padding: 7px 8px; text-align: right">+1,4 ogni 0,1</td><td style="padding: 7px 0 7px 8px; text-align: right">prolungata</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 7px 8px 7px 0">2,9</td><td style="padding: 7px 8px; text-align: right">22,30</td><td style="padding: 7px 0 7px 8px; text-align: right">0,3880</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 7px 8px 7px 0">3,0</td><td style="padding: 7px 8px; text-align: right">20,90</td><td style="padding: 7px 0 7px 8px; text-align: right">0,3637</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 7px 8px 7px 0">3,1</td><td style="padding: 7px 8px; text-align: right">19,50</td><td style="padding: 7px 0 7px 8px; text-align: right">0,3393</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 7px 8px 7px 0">3,2</td><td style="padding: 7px 8px; text-align: right">18,10</td><td style="padding: 7px 0 7px 8px; text-align: right">0,3149</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 7px 8px 7px 0">3,3</td><td style="padding: 7px 8px; text-align: right">16,70</td><td style="padding: 7px 0 7px 8px; text-align: right">0,2906</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 7px 8px 7px 0">3,4</td><td style="padding: 7px 8px; text-align: right">15,46</td><td style="padding: 7px 0 7px 8px; text-align: right">0,2690</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 7px 8px 7px 0">3,5</td><td style="padding: 7px 8px; text-align: right">14,22</td><td style="padding: 7px 0 7px 8px; text-align: right">0,2474</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 7px 8px 7px 0">3,6</td><td style="padding: 7px 8px; text-align: right">12,98</td><td style="padding: 7px 0 7px 8px; text-align: right">0,2259</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 7px 8px 7px 0">3,7</td><td style="padding: 7px 8px; text-align: right">11,94</td><td style="padding: 7px 0 7px 8px; text-align: right">0,2078</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 7px 8px 7px 0">3,8</td><td style="padding: 7px 8px; text-align: right">11,12</td><td style="padding: 7px 0 7px 8px; text-align: right">0,1935</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 7px 8px 7px 0">3,9</td><td style="padding: 7px 8px; text-align: right">10,29</td><td style="padding: 7px 0 7px 8px; text-align: right">0,1790</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 7px 8px 7px 0">4,0</td><td style="padding: 7px 8px; text-align: right">9,46</td><td style="padding: 7px 0 7px 8px; text-align: right">0,1646</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec; color: #55525c"><td style="padding: 7px 8px 7px 0">sopra 4,0</td><td style="padding: 7px 8px; text-align: right">9,46</td><td style="padding: 7px 0 7px 8px; text-align: right">ferma: vince il minimo</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ASSEGNAZIONE AI CICLI -->
+  <section style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0">
+    <h2 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 20px">Carichi a cavallo tra due cicli</h2>
+    <div style="font-size: 13px; color: #55525c">Ogni carico di siero o di mangime conta in un solo ciclo. Di norma decide la data; per quelli vicini alla fine di un ciclo e all'inizio dell'altro lo scegli tu.</div>
+    <div style="overflow-x: auto">
+      <table style="min-width: 420px">
+        <thead><tr style="font-size: 12.5px; color: #55525c"><th style="padding: 6px 8px 6px 0">Carico</th><th style="padding: 6px 8px; text-align: right">Quantità</th><th style="padding: 6px 0 6px 8px">Conta nel ciclo</th></tr></thead>
+        <tbody>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 8px 8px 8px 0">Siero 01/05/2026, DDT 8509<div style="font-size: 12.5px; color: #55525c">Solo in fattura, senza consegna</div></td><td style="padding: 8px; text-align: right">19,0 t</td><td style="padding: 8px 0 8px 8px"><label for="a1" style="position: absolute; left: -9999px">Ciclo del carico DDT 8509</label><select id="a1"><option>Ciclo 05/2026</option><option>Ciclo precedente</option></select></td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 8px 8px 8px 0">Siero 04/05/2026, DDT 8510<div style="font-size: 12.5px; color: #55525c">Solo in fattura, senza consegna</div></td><td style="padding: 8px; text-align: right">10,0 t</td><td style="padding: 8px 0 8px 8px"><label for="a2" style="position: absolute; left: -9999px">Ciclo del carico DDT 8510</label><select id="a2"><option>Ciclo 05/2026</option><option>Ciclo precedente</option></select></td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 8px 8px 8px 0">Mangime 19/05/2026, bolla 010819/C01</td><td style="padding: 8px; text-align: right">14,9 t</td><td style="padding: 8px 0 8px 8px"><label for="a3" style="position: absolute; left: -9999px">Ciclo della bolla 010819</label><select id="a3"><option>Ciclo 05/2026</option><option>Ciclo precedente</option></select></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="font-size: 12.5px; color: #55525c">Compaiono qui i carichi nei 15 giorni prima e dopo il cambio di ciclo, e le righe di fattura che non hanno una consegna.</div>
+  </section>
+</div>
+
+<div style="display: flex; justify-content: flex-end; gap: 8px">
+  <button style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid rgba(29,25,34,0.2); background: #ffffff; color: #1d1922">Annulla</button>
+  <button style="min-height: 44px; padding: 0 18px; border-radius: 8px; border: 0; background: #c2185b; color: #ffffff">Salva impostazioni</button>
+</div>
+
+<!-- COME FUNZIONA -->
+<section style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 24px 20px; display: flex; flex-direction: column; gap: 18px">
+  <div style="display: flex; flex-direction: column; gap: 2px">
+    <h2 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 22px">Come funziona il modulo Soccida</h2>
+    <div style="font-size: 13px; color: #55525c">Cosa calcola, da dove prende i dati e come arriva alla probabilità.</div>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px 32px; font-size: 14.5px; line-height: 1.55">
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <h3 style="margin: 0; font-weight: 400; font-size: 17px; color: #a3154d">1. Cosa calcola</h3>
+      <p style="margin: 0">Il compenso del ciclo secondo il contratto di soccida. Veronesi paga il più alto tra due importi: la resa, che dipende da quanta carne hai prodotto e con quanto mangime, e il minimo garantito più le fatture del siero. Il siero lo paghi sempre tu, quindi al netto ti resta il più alto tra «resa meno siero» e «minimo».</p>
+      <p style="margin: 0">Arrivi a premio quando la resa meno il siero supera il minimo. La scheda dice quanto è probabile e cosa lo sposta.</p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <h3 style="margin: 0; font-weight: 400; font-size: 17px; color: #a3154d">2. Da dove arrivano i dati</h3>
+      <p style="margin: 0">Il modulo non ha registrazioni proprie: legge quelle che fai già nel gestionale.</p>
+      <ul style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px">
+        <li>Mangime: le bolle in Consegne. I dati della cucina servono solo come confronto.</li>
+        <li>Siero: le quantità dalle bolle in Consegne, gli importi dalle fatture del fornitore, abbinate per numero di DDT.</li>
+        <li>Suinetti in entrata: gli spostamenti di tipo Entrata.</li>
+        <li>Carichi al macello: gli spostamenti di tipo Uscita, con categoria e riscontro del macello.</li>
+        <li>Capi presenti e pesi: censimenti, mortalità e curva di accrescimento.</li>
+        <li>Giacenza dei silos: quella stimata in Consegne, dall'ultima ricalibrazione.</li>
+        <li>Contratto, anticipi e previsioni: questa pagina.</li>
+      </ul>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <h3 style="margin: 0; font-weight: 400; font-size: 17px; color: #a3154d">3. Il conto</h3>
+      <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px">
+        <li>Mangime consumato = bolle + giacenza iniziale − giacenza finale. Il siero non conta.</li>
+        <li>Carne valida = peso morto dei grassi + peso morto degli scarti contato al 50%. Per gli scarti il peso morto è il peso vivo meno il calo del 16,38%.</li>
+        <li>Indice di conversione = mangime consumato diviso carne valida.</li>
+        <li>Valore in €/kg = percentuale della tabella, interpolata tra le due righe vicine, × prezzo di partenza × (1 + premio su tabella).</li>
+        <li>Resa = valore × carne valida × (1 + premi da prontuario + premio extra).</li>
+        <li>Minimo = minimo annuo / 365 × giorni dall'ultimo giorno pagato del ciclo precedente all'ultimo carico.</li>
+        <li>Pagato = il più alto tra resa e minimo più siero. Saldo = pagato meno anticipi.</li>
+      </ol>
+      <p style="margin: 0">I suini di Fattoria Ca' Bianca sono esclusi da capi e carne. Il siero entra con il totale fattura, IVA compresa; l'indicizzazione del gasolio è ripartita sui carichi del mese.</p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <h3 style="margin: 0; font-weight: 400; font-size: 17px; color: #a3154d">4. Come si stima durante il ciclo</h3>
+      <p style="margin: 0">Finché il ciclo è aperto, quello che manca viene previsto dallo scenario standard:</p>
+      <ul style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px">
+        <li>Carne dei capi ancora in stalla: capi presenti meno i morti attesi, × peso vivo previsto alla data media di uscita × resa prevista.</li>
+        <li>Carne dei carichi partiti senza riscontro: peso vivo della bolla × resa media dei carichi già riscontrati.</li>
+        <li>Mangime e siero ancora da consumare: consumo degli ultimi 21 giorni, pieno fino al primo carico e poi a calare fino all'ultimo, perché i capi escono un camion alla volta.</li>
+        <li>Siero consegnato ma non fatturato: quantità vere, prezzo dell'ultima fattura.</li>
+        <li>Minimo: giorni fino all'ultimo carico previsto.</li>
+      </ul>
+      <p style="margin: 0">Ogni bolla, fattura e riscontro sostituisce una stima con un dato reale. A fine ciclo non resta niente di stimato.</p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <h3 style="margin: 0; font-weight: 400; font-size: 17px; color: #a3154d">5. La probabilità di premio</h3>
+      <p style="margin: 0">Il conto viene rifatto 4.000 volte, ogni volta spostando un po' i dati incerti: date dei carichi, peso di uscita, resa, capi, consumo di mangime, siero, premi, giacenza iniziale. La probabilità è la quota di volte in cui la resa meno il siero supera il minimo.</p>
+      <p style="margin: 0">Quanto si sposta ogni dato dipende da quanto è cambiato nei cicli passati. Quando un dato diventa reale smette di muoversi, e l'intervallo si restringe. Segnare le date come confermate da Veronesi riduce l'incertezza sulle date da 5 giorni a 1.</p>
+      <p style="margin: 0">È una stima di modello, non una certezza: va letta insieme all'intervallo tra caso sfavorevole e favorevole.</p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <h3 style="margin: 0; font-weight: 400; font-size: 17px; color: #a3154d">6. Stato dei dati e controlli</h3>
+      <ul style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px">
+        <li>Reale: viene da una bolla, una fattura o un riscontro.</li>
+        <li>Stimato: calcolato da altri dati del gestionale.</li>
+        <li>Ipotesi: scelto a mano in questa pagina.</li>
+        <li>Da fare: manca o non coincide.</li>
+      </ul>
+      <p style="margin: 0">I controlli segnalano: bolle di siero senza fattura, righe di fattura senza bolla, quantità diverse, carichi contati in due cicli o in nessuno, e lo scarto tra le bolle e i consumi della cucina.</p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <h3 style="margin: 0; font-weight: 400; font-size: 17px; color: #a3154d">7. Chiusura del ciclo</h3>
+      <p style="margin: 0">Quando tutti i carichi hanno il riscontro, inserisci giacenza finale e premi da prontuario e chiudi il ciclo. Il conto viene fotografato e non cambia più. Poi registri l'importo liquidato da Veronesi e il bonifico a saldo, e la scheda mostra la differenza con il tuo conto.</p>
+    </div>
+  </div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":4300}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

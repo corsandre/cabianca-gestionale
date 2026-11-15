@@ -227,6 +227,14 @@ struttura fisica vanno aggiornate in entrambi i file.
   (`app/services/allevamento_confronto_box.py`). Lo stesso controllo gira ogni mattina alle 6:50 insieme al
   riepilogo "Impianto OK" e manda un messaggio nel gruppo dell'allevamento solo se trova differenze.
 
+**Uscite al macello (dalla 3.0).** Un camion è **una riga sola**: nel modulo dell'uscita si elencano i *box
+svuotati dal camion*, ognuno «del tutto» o «in parte» con i capi tolti (tabella `spostamenti_box`; per un box
+svuotato del tutto i capi si possono lasciare vuoti e vengono presi dal conteggio). Con i box indicati i capi del
+camion sono la loro somma e il conteggio per box (`_live_count`) scala ogni box del suo. Per le categorie «fine
+ciclo» e «scarto» c'è il **riscontro del macello** (numero bolla, data, capi riscontrati, peso morto medio, foto):
+si aggiunge quando arriva, e la scheda Soccida passa dalla resa stimata a quella vera. I campi sono nel template
+`allevamento/_uscita_campi.html`, letti da `_campi_uscita()`.
+
 #### Consegne mangime e siero (`/allevamento/consegne`)
 - Registro consegne con data/ora, quantità (quintali), foto bolla, note; modifica ed eliminazione riservate
   all'admin. La foto della bolla si può aggiungere anche dopo, dall'icona 📷 nella tabella.
@@ -373,6 +381,46 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
   bastano per chi ha difficoltà a distinguere i colori. Palette verificata con lo strumento della skill dataviz.
 - I dati grezzi giornalieri li prepara `app/services/allevamento_analisi.py`; aggregazioni e filtri sono calcolati nel
   browser, quindi cambiare filtro non ricarica la pagina. La giornata in corso è esclusa dalle medie.
+
+#### Soccida (`/allevamento/soccida`, solo admin, dalla 3.0)
+
+Il compenso del ciclo secondo il contratto di soccida con Veronesi: quanto si incasserà (resa oppure minimo
+garantito), con che probabilità si arriva a premio e cosa sposta il risultato. Sostituisce l'Excel
+«Calcoli compenso Soccida» usato fino al ciclo 6.
+
+- **Il conto** (regole complete nel docstring di `app/services/soccida.py` e, per chi usa, in
+  Impostazioni Soccida › «Come funziona»): mangime consumato = bolle + giacenza iniziale − giacenza finale;
+  carne valida = peso morto dei grassi + scarti al 50% con calo fisso; indice di conversione → tabella di
+  rapporto (interpolata) → €/kg; resa = €/kg × carne × (1 + premi); Veronesi paga il più alto tra *resa* e
+  *minimo + siero*, e il siero resta a carico dell'allevatore. **A premio** quando resa − siero > minimo.
+- **Nessuna registrazione propria**: la scheda legge Consegne (bolle di mangime e siero), le fatture SDI dei
+  fornitori di siero (totale con IVA), gli Spostamenti (entrate dei suinetti; uscite al macello con il riscontro),
+  censimenti, mortalità, curva di accrescimento e giacenza dei silos. I dati della cucina servono solo da confronto.
+- **Stime a ciclo aperto**: quello che manca si prevede dallo *scenario standard* (date del primo e dell'ultimo
+  carico, kg in più rispetto alla curva, resa, morti al giorno, premi). Tra primo e ultimo carico i capi escono in
+  modo regolare, quindi mangime e siero residui = consumo recente × media dei giorni che mancano ai due carichi.
+- **Probabilità di premio**: simulazione di 4.000 scenari (seme fisso: a parità di dati il numero non cambia) che
+  sposta i dati incerti secondo `Incertezze`. Grafici: distribuzione del margine, probabilità per peso di uscita,
+  griglia primo × ultimo carico, leve.
+- **Prove**: i valori cambiati nel riquadro Scenario sono parametri dell'indirizzo e la pagina si ricalcola sul
+  server (un solo motore, niente copia in JavaScript). «Salva come standard» li rende lo scenario del ciclo.
+- **Dati da aggiornare**: per ogni dato che regge la stima lo stato (ipotesi, stimato, reale, da fare), quanto
+  sposta il margine e la pagina dove si aggiorna, in ordine di peso.
+- **Impostazioni Soccida** (`/allevamento/soccida/impostazioni`): contratto, dati del ciclo, scenario standard,
+  tabella di rapporto, anticipi (a mano o confermando i bonifici trovati in banca), assegnazione a mano delle
+  fatture di siero a cavallo tra due cicli. Una riga di parametri per ciclo (`soccida_parametri`): cambiare il
+  contratto non modifica i cicli chiusi; un ciclo nuovo copia quelli del precedente.
+
+Il codice è diviso in tre moduli, più le rotte (`app/routes/soccida.py`, sul blueprint dell'allevamento):
+
+| Modulo | Cosa fa | Si tocca quando |
+|---|---|---|
+| `services/soccida.py` | Il calcolo: funzioni pure, nessun database, nessun import dall'app | Cambia una regola del contratto o della stima |
+| `services/soccida_dati.py` | Legge il gestionale e prepara `Contratto`, `Situazione`, `Scenario` | Cambia da dove arriva un dato |
+| `services/soccida_scheda.py` | Trasforma dati e risultati in quello che la scheda mostra | Cambia cosa si vede nella scheda |
+
+`tests/test_soccida.py` confronta il calcolo con l'Excel dei cicli 1–6 e con la prima stima del ciclo 05/2026;
+si lancia senza Flask: `python3 -m unittest discover -s tests`.
 
 #### Impostazioni allevamento (`/allevamento/impostazioni`, solo admin)
 - Apertura/chiusura ciclo.
@@ -816,6 +864,7 @@ app/
     banca.py anagrafica.py categorie.py analisi.py scadenzario.py controllo.py
     fatture_emesse.py impostazioni.py
     allevamento.py     # tutta la sezione Allevamento
+    soccida.py         # scheda e impostazioni della soccida (rotte sul blueprint dell'allevamento)
     impianto.py        # impostazioni e letture dell'impianto di alimentazione
   services/
     sdi_parser.py sdi_importer.py email_fetcher.py pdf_parser.py   # fatture elettroniche
@@ -826,6 +875,7 @@ app/
     backup.py telegram_bot.py                                      # backup e notifiche
     allevamento_scorte.py allevamento_pasti.py allevamento_bot.py  # allevamento
     allevamento_analisi.py
+    soccida.py soccida_dati.py soccida_scheda.py                   # soccida: calcolo, raccolta dati, scheda
     impianto/          # collegamento all'impianto di alimentazione (servizio, lettore EM2000)
   templates/           # Jinja2, tutti estendono base.html; una cartella per sezione
     components/        # sidebar_nav.html, scorta_card.html, …
@@ -833,6 +883,8 @@ app/
     css/style.css      # branding Ca Bianca
     uploads/           # allegati e foto bolle (volume)
   utils/decorators.py  # role_required, admin_required, write_required, section_required
+tests/                 # test_soccida.py: il calcolo della soccida contro l'Excel (python3 -m unittest discover -s tests)
+docs/                  # piano-3.0-soccida.md: decisioni e fasi della 3.0; soccida-dati/: prototipo e dati di partenza
 scripts/               # script di manutenzione; em2000_addestra.py costruisce il campionario dello schermo
 Dockerfile  docker-compose.yml  gunicorn.conf.py  setup.sh  requirements.txt
 ```

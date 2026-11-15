@@ -134,7 +134,10 @@ def _live_count(ciclo, al_giorno=None):
             if s.box_destinazione:
                 count[s.box_destinazione] = count.get(s.box_destinazione, 0) + s.quantita
         elif s.tipo == "uscita":
-            if s.box_origine:
+            if s.box_svuotati:      # camion da più box (3.0): i capi tolti da ogni box sono in spostamenti_box
+                for r in s.box_svuotati:
+                    count[r.box_numero] = count.get(r.box_numero, 0) - r.capi
+            elif s.box_origine:
                 count[s.box_origine] = count.get(s.box_origine, 0) - s.quantita
 
     return {b: max(0, n) for b, n in count.items()}
@@ -620,6 +623,62 @@ def spostamenti_confronto():
     return render_template("allevamento/confronto_box.html", esito=confronta(), CAP_PER_BOX=CAP_PER_BOX)
 
 
+def _campi_uscita(s, ciclo, giorno, escludi_id=None):
+    """Legge dal form i campi delle uscite aggiunti dalla 3.0 e li scrive sullo spostamento `s`:
+    i box svuotati dal camion (template _uscita_campi.html) e il riscontro del macello.
+    Per un box «del tutto» senza capi indicati prende quelli presenti nel box quel giorno.
+    Ritorna il totale dei capi dei box, o None se non ne è stato indicato nessuno."""
+    from app.models import SpostamentoBox
+    def numero(nome, tipo=float):
+        v = request.form.get(nome, "").strip().replace(",", ".")
+        return tipo(float(v)) if v else None
+
+    righe = []
+    presenti = None
+    for box, capi, tutto in zip(request.form.getlist("usc_box"), request.form.getlist("usc_capi"), request.form.getlist("usc_tutto")):
+        if not box:
+            continue
+        box, tutto = int(box), tutto == "1"
+        if any(r[0] == box for r in righe):
+            raise ValueError(f"Il box {box} è indicato due volte.")
+        if capi.strip():
+            n = int(capi)
+        elif tutto:
+            if presenti is None:            # capi nei box prima di questa uscita
+                presenti = _live_count(ciclo, al_giorno=giorno)
+                if escludi_id:              # in modifica il conteggio contiene già questa uscita: la rimetto
+                    for r in s.box_svuotati:
+                        presenti[r.box_numero] = presenti.get(r.box_numero, 0) + r.capi
+            n = presenti.get(box, 0)
+            if n <= 0:
+                raise ValueError(f"Il box {box} risulta vuoto: indica quanti capi sono usciti.")
+        else:
+            raise ValueError(f"Indica quanti capi sono usciti dal box {box}.")
+        righe.append((box, n, tutto))
+    s.box_svuotati = [SpostamentoBox(box_numero=b, capi=n, svuotato=t) for b, n, t in righe]
+    if righe and not s.box_origine:
+        s.box_origine = righe[0][0]         # il primo box resta anche qui, per le pagine che mostrano un solo box
+
+    s.numero_bolla = request.form.get("numero_bolla", "").strip() or None
+    giorno_risc = request.form.get("riscontro_data", "").strip()
+    s.riscontro_data = date.fromisoformat(giorno_risc) if giorno_risc else None
+    s.capi_riscontrati = numero("capi_riscontrati", int)
+    s.peso_morto_kg = numero("peso_morto_kg")
+    if (s.capi_riscontrati is None) != (s.peso_morto_kg is None):
+        raise ValueError("Per il riscontro servono sia i capi riscontrati sia il peso morto medio.")
+    foto = _salva_bolla(request.files.get("riscontro"))
+    if foto:
+        _elimina_bolla(s.riscontro_path)
+        s.riscontro_path = foto
+    return sum(n for _, n, _ in righe) if righe else None
+
+
+def _svuota_campi_uscita(s):
+    """Uno spostamento che non è (più) un'uscita non ha box del camion né riscontro."""
+    s.box_svuotati = []
+    s.numero_bolla = s.riscontro_data = s.capi_riscontrati = s.peso_morto_kg = None
+
+
 @bp.route("/spostamenti/new", methods=["POST"])
 @login_required
 def spostamenti_new():
@@ -643,8 +702,12 @@ def spostamenti_new():
         cap_dest = request.form.get("capannone_destinazione")
 
         # Un capannone intero non si sposta mai tutto insieme: il box è sempre obbligatorio.
-        if tipo in ("interno", "uscita") and not box_orig:
+        # Per un'uscita basta anche l'elenco dei box svuotati dal camion (vedi _campi_uscita).
+        box_del_camion = any(request.form.getlist("usc_box"))
+        if tipo == "interno" and not box_orig:
             raise ValueError("Il box di origine è obbligatorio.")
+        if tipo == "uscita" and not box_orig and not box_del_camion:
+            raise ValueError("Indica il box di origine o i box svuotati dal camion.")
         if tipo in ("interno", "entrata") and not box_dest:
             raise ValueError("Il box di destinazione è obbligatorio.")
 
@@ -670,6 +733,10 @@ def spostamenti_new():
             peso_medio_kg=peso_medio,
             bolla_path=_salva_bolla(request.files.get("bolla")) if tipo in ("entrata", "uscita") else None,
         )
+        if tipo == "uscita":
+            totale_box = _campi_uscita(s, ciclo, s.data)
+            if totale_box:                      # con i box indicati i capi del camion sono la loro somma
+                s.quantita = qty = totale_box
         db.session.add(s)
         if tipo in ("entrata", "uscita"):
             _aggiungi_pagine_modello4(s, request.files.getlist("modello4"))
@@ -706,8 +773,11 @@ def spostamenti_edit(sp_id):
         cap_orig = request.form.get("capannone_origine")
         cap_dest = request.form.get("capannone_destinazione")
 
-        if tipo in ("interno", "uscita") and not box_orig:
+        box_del_camion = any(request.form.getlist("usc_box"))
+        if tipo == "interno" and not box_orig:
             raise ValueError("Il box di origine è obbligatorio.")
+        if tipo == "uscita" and not box_orig and not box_del_camion:
+            raise ValueError("Indica il box di origine o i box svuotati dal camion.")
         if tipo in ("interno", "entrata") and not box_dest:
             raise ValueError("Il box di destinazione è obbligatorio.")
 
@@ -722,6 +792,13 @@ def spostamenti_edit(sp_id):
             peso_medio = float(peso_val.replace(",", ".")) if peso_val else None
 
         s.data = date.fromisoformat(data_str)
+        # i campi delle uscite ci sono solo nel modulo di un'uscita (usc_box presente): se mancano non li tocco
+        if tipo == "uscita" and "usc_box" in request.form:
+            totale_box = _campi_uscita(s, s.ciclo, s.data, escludi_id=s.id)
+            if totale_box:
+                qty = totale_box
+        elif tipo != "uscita":
+            _svuota_campi_uscita(s)
         s.tipo = tipo
         s.quantita = qty
         s.motivo = motivo

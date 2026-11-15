@@ -1,0 +1,32 @@
+{# Campi aggiunti dalla 3.0 alle uscite verso il macello, usati sia in «Registra» sia in «Modifica» spostamento:
+   - i box svuotati dal camion (un camion = una riga di spostamento, più box);
+   - il riscontro del macello, che arriva giorni dopo e alimenta la scheda Soccida.
+   s = lo spostamento in modifica, oppure none per uno nuovo. Lettura lato server: _campi_uscita() in routes/allevamento.py. #}
+{% macro campi_uscita(s, boxes, righe=8) %}
+<details class="mb-3 border rounded p-2" {{ 'open' if s and s.box_svuotati }}>
+    <summary class="fw-bold" style="cursor:pointer">Box svuotati dal camion <small class="text-muted fw-normal">(facoltativo, per un camion da più box)</small></summary>
+    <div class="form-text mb-2">Un camion è una riga sola. Indica i box da cui sono usciti i capi: per un box svuotato del tutto puoi lasciare vuoti i capi, li prendo dal conteggio. Con i box indicati il numero di capi è la loro somma.</div>
+    {% set gia = s.box_svuotati if s else [] %}
+    {% for i in range(righe) %}{% set r = gia[i] if i < gia|length else none %}
+    <div class="row g-1 mb-1">
+        <div class="col-4"><select name="usc_box" class="form-select form-select-sm" aria-label="Box {{ i + 1 }}">
+            <option value="">– box –</option>{% for b in boxes %}<option value="{{ b }}" {{ 'selected' if r and r.box_numero == b }}>Box {{ b }}</option>{% endfor %}</select></div>
+        <div class="col-4"><input type="number" name="usc_capi" class="form-control form-control-sm" min="1" placeholder="capi" value="{{ r.capi if r else '' }}" aria-label="Capi dal box {{ i + 1 }}"></div>
+        <div class="col-4"><select name="usc_tutto" class="form-select form-select-sm" aria-label="Svuotato del tutto o in parte">
+            <option value="0" {{ 'selected' if r and not r.svuotato }}>in parte</option><option value="1" {{ 'selected' if r and r.svuotato }}>del tutto</option></select></div>
+    </div>{% endfor %}
+</details>
+<div class="mb-3 border rounded p-2" style="border-color:#c2185b !important;background:#fff8fb">
+    <div class="fw-bold mb-1">Riscontro del macello <small class="text-muted fw-normal">(solo fine ciclo e scarti)</small></div>
+    <div class="form-text mb-2">Si compila quando arriva, anche giorni dopo l'uscita. Finché è vuoto la scheda Soccida stima il peso morto con la resa media.</div>
+    <div class="row g-2">
+        <div class="col-6"><label class="form-label small mb-0">Numero bolla del camion</label><input type="text" name="numero_bolla" class="form-control form-control-sm" value="{{ (s.numero_bolla or '') if s else '' }}"></div>
+        <div class="col-6"><label class="form-label small mb-0">Data del riscontro</label><input type="date" name="riscontro_data" class="form-control form-control-sm" value="{{ s.riscontro_data.isoformat() if s and s.riscontro_data else '' }}"></div>
+        <div class="col-6"><label class="form-label small mb-0">Capi riscontrati</label><input type="number" name="capi_riscontrati" class="form-control form-control-sm cb-risc-capi" min="0" value="{{ s.capi_riscontrati if s and s.capi_riscontrati is not none else '' }}"></div>
+        <div class="col-6"><label class="form-label small mb-0">Peso morto medio (kg)</label><input type="number" name="peso_morto_kg" class="form-control form-control-sm cb-risc-peso" step="0.001" min="0" value="{{ s.peso_morto_kg if s and s.peso_morto_kg is not none else '' }}"></div>
+        <div class="col-12"><label class="form-label small mb-0">Foto del riscontro</label><input type="file" name="riscontro" class="form-control form-control-sm" accept="image/*,.pdf">
+            {% if s and s.riscontro_path %}<a class="small" href="{{ url_for('static', filename='uploads/' + s.riscontro_path) }}" target="_blank">riscontro già caricato</a>{% endif %}</div>
+        <div class="col-12 small text-muted cb-risc-esito" aria-live="polite"></div>
+    </div>
+</div>
+{% endmacro %}

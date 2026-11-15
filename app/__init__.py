@@ -75,6 +75,7 @@ def create_app():
     from app.routes.banca import bp as banca_bp
     from app.routes.ricorrenti import bp as ricorrenti_bp
     from app.routes.allevamento import bp as allevamento_bp
+    from app.routes import soccida as _soccida  # noqa: F401  (aggiunge le pagine della soccida al blueprint dell'allevamento)
     from app.routes.impianto import bp as impianto_bp
 
     app.register_blueprint(auth_bp)
@@ -309,6 +310,12 @@ def _init_db(app):
         ("trattamenti", "segno", "VARCHAR(10)"),
         ("trattamenti", "capannoni", "VARCHAR(40)"),
         ("medicinali", "unita", "VARCHAR(4)"),
+        # 3.0 Soccida: riscontro del macello sulle uscite (le tabelle soccida_* e spostamenti_box le crea db.create_all())
+        ("spostamenti_animali", "numero_bolla", "VARCHAR(50)"),
+        ("spostamenti_animali", "riscontro_data", "DATE"),
+        ("spostamenti_animali", "capi_riscontrati", "INTEGER"),
+        ("spostamenti_animali", "peso_morto_kg", "REAL"),
+        ("spostamenti_animali", "riscontro_path", "VARCHAR(300)"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

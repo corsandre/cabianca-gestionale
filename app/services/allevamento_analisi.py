@@ -113,9 +113,11 @@ def dati_analisi(ciclo):
                        "pasti": pasti_per_giorno.get(d, {})})
         d += timedelta(days=1)
 
-    uscite = [{"data": s.data.isoformat(), "box": s.box_origine, "linea": LINEA_PER_BOX.get(s.box_origine),
-               "n": s.quantita, "categoria": s.categoria_uscita, "peso": s.peso_medio_kg}
-              for s in Spostamento.query.filter_by(ciclo_id=ciclo.id, tipo="uscita").order_by(Spostamento.data).all()]
+    # un camion da più box (3.0) conta box per box, così ogni linea ha le sue uscite
+    uscite = [{"data": s.data.isoformat(), "box": box, "linea": LINEA_PER_BOX.get(box),
+               "n": n, "categoria": s.categoria_uscita, "peso": s.peso_medio_kg}
+              for s in Spostamento.query.filter_by(ciclo_id=ciclo.id, tipo="uscita").order_by(Spostamento.data).all()
+              for box, n in ([(r.box_numero, r.capi) for r in s.box_svuotati] or [(s.box_origine, s.quantita)])]
     morti = [{"data": m.data.isoformat(), "cap": m.capannone_numero, "box": m.box_numero,
               "n": m.quantita, "causa": m.causa or ""}
              for m in EventoMortalita.query.filter_by(ciclo_id=ciclo.id).order_by(EventoMortalita.data).all()]

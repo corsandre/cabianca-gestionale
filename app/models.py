@@ -506,9 +506,30 @@ class Spostamento(db.Model):
     pc_alimentazione_operatore = db.Column(db.String(100))
     registrato_da = db.Column(db.String(20), default="web")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Riscontro del macello (3.0), solo per le uscite di fine ciclo e gli scarti: un camion = una riga.
+    # Vuoto finché il riscontro non arriva; la scheda Soccida intanto stima il peso morto con la resa media.
+    numero_bolla = db.Column(db.String(50))
+    riscontro_data = db.Column(db.Date)
+    capi_riscontrati = db.Column(db.Integer)
+    peso_morto_kg = db.Column(db.Float)          # medio a capo
+    riscontro_path = db.Column(db.String(300))   # foto del riscontro, relativa a UPLOAD_FOLDER
     ciclo = db.relationship("Ciclo", backref="spostamenti")
+    box_svuotati = db.relationship("SpostamentoBox", cascade="all, delete-orphan", lazy="select",
+                                   order_by="SpostamentoBox.box_numero")
     pagine_modello4 = db.relationship("PaginaModello4", order_by="PaginaModello4.ordine",
                                       cascade="all, delete-orphan", lazy="select")
+
+
+class SpostamentoBox(db.Model):
+    """Box da cui escono i capi di un camion (3.0): l'uscita resta una riga sola in spostamenti_animali
+    e qui si elencano i box svuotati, del tutto o in parte, con i capi tolti da ognuno.
+    Se una uscita ha righe qui, il conteggio dei capi per box usa queste e non box_origine."""
+    __tablename__ = "spostamenti_box"
+    id = db.Column(db.Integer, primary_key=True)
+    spostamento_id = db.Column(db.Integer, db.ForeignKey("spostamenti_animali.id"), nullable=False, index=True)
+    box_numero = db.Column(db.Integer, nullable=False)
+    capi = db.Column(db.Integer, nullable=False)
+    svuotato = db.Column(db.Boolean, default=False)   # True = box svuotato del tutto
 
 
 class SpeditoreSiero(db.Model):
@@ -764,4 +785,75 @@ class ImpiantoEvento(db.Model):
     messaggio = db.Column(db.Text)
     immagine = db.Column(db.String(300))                # percorso della fotografia, relativo alla cartella dati
     anomalia = db.Column(db.Boolean, default=False)
+
+
+# === SOCCIDA (3.0): contratto, previsioni e anticipi, uno per ciclo ===
+
+class SoccidaParametri(db.Model):
+    """Contratto di soccida, dati del ciclo e scenario standard: una riga per ciclo, così cambiare
+    il contratto non modifica i cicli chiusi. Si modificano in Allevamento › Soccida › Impostazioni.
+    I valori di partenza e il loro significato sono in app/services/soccida.py (Contratto, Scenario)."""
+    __tablename__ = "soccida_parametri"
+    id = db.Column(db.Integer, primary_key=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"), nullable=False, unique=True)
+    # contratto
+    minimo_annuo = db.Column(db.Float, nullable=False, default=98000.0)
+    posti = db.Column(db.Integer, default=1820)
+    prezzo_partenza = db.Column(db.Float, nullable=False, default=1.45)
+    premio_tabella_perc = db.Column(db.Float, nullable=False, default=20.0)
+    quota_scarti_perc = db.Column(db.Float, nullable=False, default=50.0)
+    calo_scarti_perc = db.Column(db.Float, nullable=False, default=16.38)
+    resa_partenza_perc = db.Column(db.Float, nullable=False, default=82.0)
+    premio_extra_perc = db.Column(db.Float, nullable=False, default=0.0)
+    # dati del ciclo
+    ultimo_giorno_pagato_prec = db.Column(db.Date)        # del ciclo precedente: da lì partono i giorni del minimo
+    giacenza_iniziale_kg = db.Column(db.Float)            # mangime nei silos a inizio ciclo
+    giacenza_finale_kg = db.Column(db.Float)              # comunicata a Veronesi a fine ciclo
+    premi_perc = db.Column(db.Float, nullable=False, default=8.0)   # premi da prontuario
+    premi_noti = db.Column(db.Boolean, default=False)     # True quando Veronesi li ha comunicati
+    suini_cabianca = db.Column(db.Integer, default=0)     # suini di Fattoria Ca' Bianca nel ciclo: esclusi dal conto
+    fornitori_siero_piva = db.Column(db.String(200))      # partite IVA dei fornitori di siero, separate da virgola
+    anticipi_pagante = db.Column(db.String(200))          # testo da cercare nell'ordinante dei bonifici degli anticipi
+    # scenario standard
+    primo_carico = db.Column(db.Date)
+    ultimo_carico = db.Column(db.Date)
+    date_confermate = db.Column(db.Boolean, default=False)
+    peso_extra_kg = db.Column(db.Float, nullable=False, default=0.0)
+    resa_perc = db.Column(db.Float, nullable=False, default=83.0)
+    morti_giorno = db.Column(db.Float, nullable=False, default=1.0)
+    capi_carico = db.Column(db.Integer, nullable=False, default=130)
+    carichi_giorno = db.Column(db.Integer, nullable=False, default=2)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    ciclo = db.relationship("Ciclo", backref=db.backref("soccida", uselist=False))
+
+
+class SoccidaTabella(db.Model):
+    """Una riga della tabella di rapporto del contratto: indice di conversione → percentuale."""
+    __tablename__ = "soccida_tabella"
+    __table_args__ = (db.UniqueConstraint("ciclo_id", "indice", name="uq_soccida_tabella"),)
+    id = db.Column(db.Integer, primary_key=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"), nullable=False, index=True)
+    indice = db.Column(db.Float, nullable=False)
+    percentuale = db.Column(db.Float, nullable=False)
+
+
+class SoccidaAnticipo(db.Model):
+    """Anticipo pagato da Veronesi nel ciclo. Inserito a mano o confermato da un bonifico trovato in banca."""
+    __tablename__ = "soccida_anticipi"
+    id = db.Column(db.Integer, primary_key=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"), nullable=False, index=True)
+    data = db.Column(db.Date, nullable=False)
+    importo = db.Column(db.Float, nullable=False)
+    nota = db.Column(db.String(200))
+    bank_transaction_id = db.Column(db.Integer, db.ForeignKey("bank_transactions.id"), unique=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class SoccidaFattura(db.Model):
+    """Assegna a mano una fattura di siero a un ciclo (o la esclude con ciclo_id vuoto) quando la data
+    non basta: fatture a cavallo tra due cicli. Senza una riga qui decide la data della fattura."""
+    __tablename__ = "soccida_fatture"
+    id = db.Column(db.Integer, primary_key=True)
+    sdi_invoice_id = db.Column(db.Integer, db.ForeignKey("sdi_invoices.id"), nullable=False, unique=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"))
 

@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Scheda Soccida</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Varela+Round&family=Yeseva+One&display=swap">
+<style>
+body{margin:0;background:#f5f6f8}
+a{color:#a3154d}a:hover{color:#7d0f3a}
+input[type=range]{accent-color:#c2185b;width:100%;height:28px;margin:0}
+button{font:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid #c2185b;outline-offset:2px}
+table{border-collapse:collapse;width:100%}
+th{font-weight:400;text-align:left}
+</style>
+</helmet>
+<div style="font-family: 'Varela Round', system-ui, sans-serif; color: #1d1922; font-size: 14px; line-height: 1.45; max-width: 1240px; margin: 0 auto; padding: 20px 16px 64px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; font-variant-numeric: tabular-nums">
+
+<!-- intestazione -->
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 24px">
+  <div style="display: flex; flex-direction: column; gap: 2px">
+    <div style="font-size: 12.5px; color: #55525c">Allevamento suini</div>
+    <h1 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 30px; line-height: 1.1">Soccida</h1>
+  </div>
+  <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+    <span style="background: #fbe6ee; border-radius: 999px; padding: 4px 12px; font-size: 12.5px">Ciclo 05/2026</span>
+    <span style="background: #ffffff; border: 1px solid rgba(29,25,34,0.12); border-radius: 999px; padding: 4px 12px; font-size: 12.5px">Giorno 180 del ciclo</span>
+    <span style="font-size: 12.5px; color: #55525c">Dati al 15/11/2026</span>
+    <a href="Impostazioni.dc.html" style="text-decoration: none; display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid #c2185b; background: #ffffff; color: #a3154d">Impostazioni Soccida</a>
+  </div>
+</div>
+
+<nav aria-label="Sezioni della scheda" style="display: flex; flex-wrap: wrap; gap: 6px">
+  <a href="#esito" style="text-decoration: none; background: #ffffff; border: 1px solid rgba(29,25,34,0.12); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #1d1922">Esito</a>
+  <a href="#scenario" style="text-decoration: none; background: #ffffff; border: 1px solid rgba(29,25,34,0.12); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #1d1922">Scenario</a>
+  <a href="#probabilita" style="text-decoration: none; background: #ffffff; border: 1px solid rgba(29,25,34,0.12); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #1d1922">Probabilità</a>
+  <a href="#leve" style="text-decoration: none; background: #ffffff; border: 1px solid rgba(29,25,34,0.12); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #1d1922">Leve</a>
+  <a href="#dati" style="text-decoration: none; background: #ffffff; border: 1px solid rgba(29,25,34,0.12); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #1d1922">Dati da aggiornare</a>
+  <a href="#conto" style="text-decoration: none; background: #ffffff; border: 1px solid rgba(29,25,34,0.12); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #1d1922">Il conto</a>
+  <a href="#controlli" style="text-decoration: none; background: #ffffff; border: 1px solid rgba(29,25,34,0.12); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #1d1922">Animali e controlli</a>
+</nav>
+
+<!-- ESITO -->
+<section id="esito" style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px; display: flex; flex-wrap: wrap; gap: 24px">
+  <div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+    <div style="font-size: 12.5px; color: #55525c">Probabilità di arrivare a premio</div>
+    <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+      <div style="font-family: 'Yeseva One', Georgia, serif; font-size: 72px; line-height: 1">{{probTxt}}</div>
+      <sc-if value="{{sopra}}" hint-placeholder-val="{{ true }}">
+        <div style="font-size: 16px">Oggi sei <strong style="font-weight: 400; background: #dbe8f8; border-radius: 6px; padding: 1px 6px">{{margineAbs}} sopra</strong> il minimo</div>
+      </sc-if>
+      <sc-if value="{{sotto}}" hint-placeholder-val="{{ false }}">
+        <div style="font-size: 16px">Oggi sei <strong style="font-weight: 400; background: #fbe0d3; border-radius: 6px; padding: 1px 6px">{{margineAbs}} sotto</strong> il minimo</div>
+      </sc-if>
+    </div>
+    <div style="font-size: 13px; color: #55525c">Margine sul minimo: da {{p10Txt}} (caso sfavorevole) a {{p90Txt}} (caso favorevole). Otto scenari su dieci cadono in questo intervallo.</div>
+    <div role="img" aria-label="{{bulletAria}}" style="position: relative; height: 46px; margin-top: 2px">
+      <div style="position: absolute; left: 0; right: 0; top: 14px; height: 10px; border-radius: 5px; background: #eceef1"></div>
+      <div style="position: absolute; top: 14px; height: 10px; border-radius: 5px; background: #2a78d6; left: {{bandLeft}}; width: {{bandWidth}}"></div>
+      <div style="position: absolute; top: 9px; height: 20px; width: 3px; background: #1d1922; border-radius: 2px; left: {{medLeft}}"></div>
+      <div style="position: absolute; top: 2px; height: 34px; width: 0; border-left: 2px dashed #55525c; left: {{zeroLeft}}"></div>
+      <div style="position: absolute; top: 30px; font-size: 11.5px; color: #55525c; transform: translateX(-50%); left: {{zeroLeft}}; white-space: nowrap">minimo garantito</div>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: #55525c">
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 18px; height: 8px; border-radius: 4px; background: #2a78d6; display: inline-block"></span>intervallo probabile</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 3px; height: 14px; background: #1d1922; display: inline-block"></span>valore atteso</span>
+    </div>
+  </div>
+  <div style="flex: 2 1 420px; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-content: start">
+    <div style="background: #f7f8fa; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px">
+      <div style="font-size: 12.5px; color: #55525c">Indice di conversione</div>
+      <div style="font-size: 26px">{{icTxt}}</div>
+      <div style="font-size: 12.5px; color: #55525c">Pareggio a {{pareggioTxt}}: restano {{margineMangimeTxt}} di mangime</div>
+    </div>
+    <div style="background: #f7f8fa; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px">
+      <div style="font-size: 12.5px; color: #55525c">Resa meno siero</div>
+      <div style="font-size: 26px">{{nettoResaTxt}}</div>
+      <div style="font-size: 12.5px; color: #55525c">Resa {{resaEurTxt}}, siero {{sieroTxt}}</div>
+    </div>
+    <div style="background: #f7f8fa; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px">
+      <div style="font-size: 12.5px; color: #55525c">Minimo garantito</div>
+      <div style="font-size: 26px">{{minimoTxt}}</div>
+      <div style="font-size: 12.5px; color: #55525c">{{giorniTxt}} giorni pagati, fino al {{fineTxt}}</div>
+    </div>
+    <div style="background: #f7f8fa; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px">
+      <div style="font-size: 12.5px; color: #55525c">Saldo previsto da Veronesi</div>
+      <div style="font-size: 26px">{{saldoTxt}}</div>
+      <div style="font-size: 12.5px; color: #55525c">Pagato {{pagatoTxt}} meno 54.000 € di anticipi</div>
+    </div>
+    <div style="grid-column: 1 / -1; display: flex; flex-direction: column; gap: 10px; padding-top: 4px">
+      <div style="font-size: 12.5px; color: #55525c">Quanto del conto è già dato reale</div>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; justify-content: space-between; gap: 8px; font-size: 13px"><span>Mangime</span><span style="color: #55525c">{{mangRealeTxt}} da bolle · {{mangStimTxt}} stimato fino a fine ciclo</span></div>
+        <div role="img" aria-label="{{mangAria}}" style="display: flex; gap: 2px; height: 12px">
+          <div style="background: #c2185b; border-radius: 4px; width: {{mangRealeW}}"></div>
+          <div style="background: #d9dbe1; border-radius: 4px; flex: 1 1 0"></div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; justify-content: space-between; gap: 8px; font-size: 13px; flex-wrap: wrap"><span>Siero</span><span style="color: #55525c">{{sieroFattTxt}} fatturato · {{sieroRegTxt}} consegnato, non ancora fatturato · {{sieroStimTxt}} stimato</span></div>
+        <div role="img" aria-label="{{sieroAria}}" style="display: flex; gap: 2px; height: 12px">
+          <div style="background: #c2185b; border-radius: 4px; width: {{sieroFattW}}"></div>
+          <div style="background: #e58aae; border-radius: 4px; width: {{sieroRegW}}"></div>
+          <div style="background: #d9dbe1; border-radius: 4px; flex: 1 1 0"></div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; justify-content: space-between; gap: 8px; font-size: 13px"><span>Carne</span><span style="color: #55525c">nessun carico riscontrato · tutto stimato</span></div>
+        <div role="img" aria-label="Carne: nessun carico riscontrato" style="display: flex; gap: 2px; height: 12px">
+          <div style="background: #d9dbe1; border-radius: 4px; flex: 1 1 0"></div>
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: #55525c">
+        <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 12px; height: 12px; border-radius: 3px; background: #c2185b; display: inline-block"></span>reale (bolla, fattura o riscontro)</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 12px; height: 12px; border-radius: 3px; background: #e58aae; display: inline-block"></span>registrato in Consegne, importo stimato</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 12px; height: 12px; border-radius: 3px; background: #d9dbe1; display: inline-block"></span>stimato</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SCENARIO -->
+<section id="scenario" style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px; display: flex; flex-direction: column; gap: 14px">
+  <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 20px">
+    <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 320px">
+      <h2 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 21px">Scenario</h2>
+      <div style="font-size: 13px; color: #55525c">Muovi i valori per provare. Tutta la scheda si ricalcola. Lo scenario standard cambia solo quando lo salvi.</div>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+      <span style="font-size: 13px; background: #f7f8fa; border-radius: 8px; padding: 8px 12px">{{confrontoTxt}}</span>
+      <button onClick="{{torna}}" style="min-height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid rgba(29,25,34,0.2); background: #ffffff; color: #1d1922">Torna allo standard</button>
+      <button onClick="{{salva}}" style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 0; background: #c2185b; color: #ffffff">Salva come standard</button>
+    </div>
+  </div>
+
+  <div style="background: #f7f8fa; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; align-items: center">
+      <div style="font-size: 15px">Carichi al macello</div>
+      <label style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px"><input type="checkbox" checked="{{confermata}}" onChange="{{setConfermata}}" style="accent-color: #c2185b; width: 18px; height: 18px">date confermate da Veronesi</label>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 12px 28px">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <label for="s-ini" style="display: flex; justify-content: space-between; gap: 8px"><span>Primo carico</span><span>{{iniTxt}}</span></label>
+        <input id="s-ini" type="range" min="-14" max="21" step="1" value="{{iniVal}}" onChange="{{setIni}}">
+        <div style="font-size: 12.5px; color: #55525c">Fino a qui tutti i capi mangiano</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <label for="s-fine" style="display: flex; justify-content: space-between; gap: 8px"><span>Ultimo carico (fine ciclo)</span><span>{{fineTxt}}</span></label>
+        <input id="s-fine" type="range" min="-14" max="21" step="1" value="{{fineVal}}" onChange="{{setFine}}">
+        <div style="font-size: 12.5px; color: #55525c">Fino a qui si paga il minimo: {{giorniTxt}} giorni</div>
+      </div>
+    </div>
+    <div style="font-size: 13px">{{carichiTxt}}</div>
+    <div style="font-size: 12.5px; color: #55525c">Tra il primo e l'ultimo carico i capi escono in modo regolare, quindi mangime e siero calano fino a zero. Uscita media il {{mediaTxt}}.</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px 28px">
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <label for="s-peso" style="display: flex; justify-content: space-between; gap: 8px"><span>Peso vivo medio di uscita</span><span>{{pesoTxt}}</span></label>
+      <input id="s-peso" type="range" min="-6" max="8" step="0.5" value="{{pesoVal}}" onChange="{{setPeso}}">
+      <div style="font-size: 12.5px; color: #55525c">{{pesoNota}}</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <label for="s-resa" style="display: flex; justify-content: space-between; gap: 8px"><span>Resa al macello</span><span>{{resaTxt}}</span></label>
+      <input id="s-resa" type="range" min="81" max="85" step="0.1" value="{{resaVal}}" onChange="{{setResa}}">
+      <div style="font-size: 12.5px; color: #55525c">Media dei cicli passati: da 82,6 a 83,7%</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <label for="s-capi" style="display: flex; justify-content: space-between; gap: 8px"><span>Capi grassi a macello</span><span>{{capiTxt}}</span></label>
+      <input id="s-capi" type="range" min="-60" max="30" step="5" value="{{capiVal}}" onChange="{{setCapi}}">
+      <div style="font-size: 12.5px; color: #55525c">Presenti oggi circa 1.771, meno i morti attesi</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <label for="s-premi" style="display: flex; justify-content: space-between; gap: 8px"><span>Premi da prontuario</span><span>{{premiTxt}}</span></label>
+      <input id="s-premi" type="range" min="4" max="10" step="0.1" value="{{premiVal}}" onChange="{{setPremi}}">
+      <div style="font-size: 12.5px; color: #55525c">Ciclo scorso 8%. Veronesi li comunica a fine ciclo</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <label for="s-giac" style="display: flex; justify-content: space-between; gap: 8px"><span>Giacenza iniziale di mangime</span><span>{{giacTxt}}</span></label>
+      <input id="s-giac" type="range" min="0" max="12000" step="500" value="{{giacVal}}" onChange="{{setGiac}}">
+      <div style="font-size: 12.5px; color: #55525c">Ipotesi: la giacenza finale del ciclo scorso</div>
+    </div>
+  </div>
+</section>
+
+<!-- PROBABILITA -->
+<section id="probabilita" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px">
+
+  <div style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0">
+    <h2 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 19px">Dove può finire il margine</h2>
+    <div style="font-size: 13px; color: #55525c">4.000 scenari simulati, raggruppati per margine sul minimo. Più alta la colonna, più probabile quel risultato.</div>
+    <div role="img" aria-label="{{istoAria}}" style="display: flex; align-items: flex-end; gap: 2px; height: 180px; padding-top: 6px">
+      <sc-for list="{{isto}}" as="b" hint-placeholder-count="18">
+        <div title="{{b.tip}}" style="flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: flex-end">
+          <div style="width: 100%; border-radius: 4px 4px 0 0; height: {{b.h}}; background: {{b.col}}"></div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display: flex; gap: 2px; border-top: 1px solid #c9cbd2; padding-top: 4px">
+      <sc-for list="{{isto}}" as="b" hint-placeholder-count="18">
+        <div style="flex: 1 1 0; min-width: 0; font-size: 10.5px; color: #55525c; text-align: center; white-space: nowrap; overflow: visible">{{b.lab}}</div>
+      </sc-for>
+    </div>
+    <div style="font-size: 11.5px; color: #55525c; text-align: center">margine sul minimo, in migliaia di euro</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px">
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 12px; height: 12px; border-radius: 3px; background: #eb6834; display: inline-block"></span>sotto il minimo: {{pSottoTxt}}</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 12px; height: 12px; border-radius: 3px; background: #2a78d6; display: inline-block"></span>a premio: {{probTxt}}</span>
+    </div>
+    <div style="font-size: 13px">Sfavorevole {{p10Txt}} · atteso {{p50Txt}} · favorevole {{p90Txt}}</div>
+  </div>
+
+  <div style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0">
+    <h2 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 19px">Probabilità secondo il peso di uscita</h2>
+    <div style="font-size: 13px; color: #55525c">Kg di peso vivo medio in più o in meno rispetto alla curva, a parità di mangime. Tocca una colonna per provarla.</div>
+    <div role="img" aria-label="Probabilità di premio per peso di uscita" style="position: relative; display: flex; align-items: flex-end; gap: 6px; height: 200px">
+      <div style="position: absolute; left: 0; right: 0; bottom: 50%; border-top: 1px dashed #8a8791"></div>
+      <div style="position: absolute; right: 0; bottom: calc(50% + 2px); font-size: 11px; color: #55525c; background: #ffffff; padding-left: 4px">50%</div>
+      <sc-for list="{{perPeso}}" as="d" hint-placeholder-count="7">
+        <button onClick="{{d.pick}}" aria-label="{{d.aria}}" title="{{d.aria}}" style="flex: 1 1 0; min-width: 0; height: 100%; border: 0; background: transparent; padding: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; gap: 3px; position: relative">
+          <span style="font-size: 12px; color: #1d1922; text-align: center">{{d.pct}}</span>
+          <span style="display: block; border-radius: 4px 4px 0 0; height: {{d.h}}; background: {{d.col}}"></span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="display: flex; gap: 6px; border-top: 1px solid #c9cbd2; padding-top: 4px">
+      <sc-for list="{{perPeso}}" as="d" hint-placeholder-count="7">
+        <div style="flex: 1 1 0; min-width: 0; font-size: 11.5px; color: #55525c; text-align: center; white-space: nowrap">{{d.lab}}</div>
+      </sc-for>
+    </div>
+    <div style="font-size: 11.5px; color: #55525c; text-align: center">peso vivo medio di uscita, kg</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px">
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 12px; height: 12px; border-radius: 3px; background: #c2185b; display: inline-block"></span>peso dello scenario</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 12px; height: 12px; border-radius: 3px; background: #b9bcc6; display: inline-block"></span>altri pesi</span>
+    </div>
+  </div>
+
+  <div style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0; grid-column: 1 / -1">
+    <h2 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 19px">Primo e ultimo carico insieme</h2>
+    <div style="font-size: 13px; color: #55525c">Probabilità di premio per ogni coppia di date. Le righe sono la data del primo carico, le colonne quella dell'ultimo. Tocca una casella per provarla.</div>
+    <div style="overflow-x: auto">
+      <div style="min-width: 520px; display: flex; flex-direction: column; gap: 2px">
+        <div style="display: grid; grid-template-columns: 130px repeat(5, minmax(0, 1fr)); gap: 2px; font-size: 12px; color: #55525c">
+          <div></div>
+          <sc-for list="{{heatCols}}" as="c" hint-placeholder-count="5">
+            <div style="text-align: center; padding: 2px 0">{{c.lab}}</div>
+          </sc-for>
+        </div>
+        <sc-for list="{{heatRows}}" as="r" hint-placeholder-count="5">
+          <div style="display: grid; grid-template-columns: 130px repeat(5, minmax(0, 1fr)); gap: 2px">
+            <div style="font-size: 12.5px; color: #55525c; display: flex; align-items: center">{{r.lab}}</div>
+            <sc-for list="{{r.celle}}" as="x" hint-placeholder-count="5">
+              <button onClick="{{x.pick}}" aria-label="{{x.aria}}" title="{{x.aria}}" style="min-height: 44px; border-radius: 4px; color: #1d1922; font-size: 14px; background: {{x.bg}}; border: {{x.bordo}}">{{x.pct}}</button>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; align-items: center">
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 14px; height: 14px; border-radius: 3px; background: #f4b89c; display: inline-block"></span>sotto 30%</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 14px; height: 14px; border-radius: 3px; background: #fadccc; display: inline-block"></span>30–45%</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 14px; height: 14px; border-radius: 3px; background: #e9eaee; display: inline-block"></span>45–55%</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 14px; height: 14px; border-radius: 3px; background: #cfe0f6; display: inline-block"></span>55–70%</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 14px; height: 14px; border-radius: 3px; background: #a3c6ef; display: inline-block"></span>oltre 70%</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 14px; height: 14px; border-radius: 3px; border: 2px solid #c2185b; box-sizing: border-box; display: inline-block"></span>scenario attuale</span>
+      <span style="color: #55525c">– : meno di 7 giorni tra primo e ultimo carico, non fattibile</span>
+    </div>
+  </div>
+</section>
+
+<!-- LEVE -->
+<section id="leve" style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px; display: flex; flex-direction: column; gap: 12px">
+  <h2 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 21px">Cosa sposta il risultato</h2>
+  <div style="font-size: 13px; color: #55525c">Effetto sul margine di una variazione alla volta, partendo dallo scenario attuale. In alto le leve che pesano di più.</div>
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <sc-for list="{{leve}}" as="l" hint-placeholder-count="8">
+      <div style="display: grid; grid-template-columns: minmax(120px, 210px) minmax(0, 1fr); gap: 4px 14px; align-items: center">
+        <div style="font-size: 13.5px">{{l.nome}}</div>
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; align-items: center">
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; border-right: 1px solid #8a8791; min-height: 30px">
+            <span style="font-size: 12.5px; color: #55525c; white-space: nowrap">{{l.negTxt}}</span>
+            <span title="{{l.negTip}}" style="display: block; height: 16px; border-radius: 4px 0 0 4px; background: #eb6834; width: {{l.negW}}"></span>
+          </div>
+          <div style="display: flex; justify-content: flex-start; align-items: center; gap: 8px; min-height: 30px">
+            <span title="{{l.posTip}}" style="display: block; height: 16px; border-radius: 0 4px 4px 0; background: #2a78d6; width: {{l.posW}}"></span>
+            <span style="font-size: 12.5px; color: #55525c; white-space: nowrap">{{l.posTxt}}</span>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px">
+    <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 12px; height: 12px; border-radius: 3px; background: #eb6834; display: inline-block"></span>toglie margine</span>
+    <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 12px; height: 12px; border-radius: 3px; background: #2a78d6; display: inline-block"></span>aggiunge margine</span>
+  </div>
+</section>
+
+<!-- DATI DA AGGIORNARE -->
+<section id="dati" style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px; display: flex; flex-direction: column; gap: 14px">
+  <div style="display: flex; flex-direction: column; gap: 2px">
+    <h2 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 21px">Dati da aggiornare per migliorare la stima</h2>
+    <div style="font-size: 13px; color: #55525c">In ordine di peso sul risultato. Per ognuno: cosa uso oggi, quanto può spostare il margine e dove si aggiorna nel gestionale.</div>
+  </div>
+  <div style="display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px">
+    <span style="display: inline-flex; align-items: center; gap: 6px"><span style="border: 1px solid #1d1922; border-radius: 999px; padding: 1px 9px">Ipotesi</span>valore scelto a mano</span>
+    <span style="display: inline-flex; align-items: center; gap: 6px"><span style="background: #eceef1; border-radius: 999px; padding: 2px 9px">Stimato</span>calcolato da altri dati</span>
+    <span style="display: inline-flex; align-items: center; gap: 6px"><span style="background: #1d1922; color: #ffffff; border-radius: 999px; padding: 2px 9px">Reale</span>da bolla, fattura o riscontro</span>
+    <span style="display: inline-flex; align-items: center; gap: 6px"><span style="background: #fbe6ee; border-radius: 999px; padding: 2px 9px">Da fare</span>dato mancante o da correggere</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px 20px; padding: 14px 0; border-top: 1px solid #e7e8ec; align-items: start">
+      <div style="display: flex; flex-direction: column; gap: 4px"><div style="font-size: 15px">Date dei carichi</div><div><span style="border: 1px solid #1d1922; border-radius: 999px; padding: 1px 9px; font-size: 12px">Ipotesi</span></div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>Primo carico 03/12, ultimo 23/12</div><div style="font-size: 12.5px; color: #55525c">Scelte a mano</div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>7 giorni sull'ultimo carico valgono circa 3.500 €</div><div style="font-size: 12.5px; color: #55525c">La più pesante di tutte</div></div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><div>Correggile appena Veronesi dà notizie, poi segnale come confermate.</div><div><a href="#scenario">Scenario standard</a></div></div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px 20px; padding: 14px 0; border-top: 1px solid #e7e8ec; align-items: start">
+      <div style="display: flex; flex-direction: column; gap: 4px"><div style="font-size: 15px">Peso vivo di uscita</div><div><span style="background: #eceef1; border-radius: 999px; padding: 2px 9px; font-size: 12px">Stimato</span></div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>172 kg di media</div><div style="font-size: 12.5px; color: #55525c">Curva di accrescimento, ultimo censimento l'11/09</div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>2 kg valgono circa 3.400 €</div><div style="font-size: 12.5px; color: #55525c">Diventa reale con le bolle di uscita</div></div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><div>Fai un censimento con i pesi stimati, o pesa un campione di box.</div><div><a href="#dati">Censimento</a></div></div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px 20px; padding: 14px 0; border-top: 1px solid #e7e8ec; align-items: start">
+      <div style="display: flex; flex-direction: column; gap: 4px"><div style="font-size: 15px">Capi presenti</div><div><span style="background: #eceef1; border-radius: 999px; padding: 2px 9px; font-size: 12px">Stimato</span></div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>Circa 1.771 di Veronesi</div><div style="font-size: 12.5px; color: #55525c">1.827 all'11/09, meno morti e uscite. Suini di Fattoria Ca' Bianca rimasti: circa 10, da confermare</div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>20 capi valgono circa 3.400 €</div><div style="font-size: 12.5px; color: #55525c">A novembre 22 morti in 15 giorni</div></div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><div>Nuovo censimento e numero esatto dei vostri suini ancora in stalla.</div><div><a href="#dati">Censimento</a></div></div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px 20px; padding: 14px 0; border-top: 1px solid #e7e8ec; align-items: start">
+      <div style="display: flex; flex-direction: column; gap: 4px"><div style="font-size: 15px">Resa al macello</div><div><span style="border: 1px solid #1d1922; border-radius: 999px; padding: 1px 9px; font-size: 12px">Ipotesi</span></div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>83%</div><div style="font-size: 12.5px; color: #55525c">Media dei cicli passati</div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>Mezzo punto vale circa 1.800 €</div><div style="font-size: 12.5px; color: #55525c">Nessun carico ancora riscontrato</div></div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><div>Aggiungi il riscontro del macello alle uscite: dal primo camion la resa diventa quella vera.</div><div><a href="Riscontro.dc.html">Spostamenti, uscita</a></div></div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px 20px; padding: 14px 0; border-top: 1px solid #e7e8ec; align-items: start">
+      <div style="display: flex; flex-direction: column; gap: 4px"><div style="font-size: 15px">Mangime nei silos oggi</div><div><span style="background: #eceef1; border-radius: 999px; padding: 2px 9px; font-size: 12px">Stimato</span></div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>31,6 t</div><div style="font-size: 12.5px; color: #55525c">Ultima ricalibrazione il 15/09, due mesi fa</div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>10 t valgono circa 2.600 €</div><div style="font-size: 12.5px; color: #55525c">Il pareggio è a poche tonnellate</div></div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><div>Controlla i silos e ricalibra la giacenza.</div><div><a href="#dati">Consegne, ricalibra mangime</a></div></div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px 20px; padding: 14px 0; border-top: 1px solid #e7e8ec; align-items: start">
+      <div style="display: flex; flex-direction: column; gap: 4px"><div style="font-size: 15px">Giacenza iniziale di mangime</div><div><span style="border: 1px solid #1d1922; border-radius: 999px; padding: 1px 9px; font-size: 12px">Ipotesi</span></div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>3.000 kg</div><div style="font-size: 12.5px; color: #55525c">Giacenza finale del ciclo scorso nell'Excel</div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>Ogni tonnellata vale circa 260 €</div><div style="font-size: 12.5px; color: #55525c">Con 10 t il margine scende di 1.800 €</div></div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><div>Inserisci il dato comunicato a Veronesi a inizio ciclo.</div><div><a href="Impostazioni.dc.html">Impostazioni Soccida</a></div></div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px 20px; padding: 14px 0; border-top: 1px solid #e7e8ec; align-items: start">
+      <div style="display: flex; flex-direction: column; gap: 4px"><div style="font-size: 15px">Siero consegnato, non fatturato</div><div><span style="background: #eceef1; border-radius: 999px; padding: 2px 9px; font-size: 12px">Stimato</span></div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>188,5 t di novembre a 11,32 €/t</div><div style="font-size: 12.5px; color: #55525c">Quantità reali dalle Consegne, prezzo di ottobre con gasolio e IVA</div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>Circa 2.100 €</div><div style="font-size: 12.5px; color: #55525c">Diventa reale con la fattura del mese</div></div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><div>Si aggiorna da solo quando arriva la fattura Nosari di novembre.</div><div style="font-size: 12.5px; color: #55525c">Nessuna azione</div></div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px 20px; padding: 14px 0; border-top: 1px solid #e7e8ec; align-items: start">
+      <div style="display: flex; flex-direction: column; gap: 4px"><div style="font-size: 15px">Premi da prontuario</div><div><span style="border: 1px solid #1d1922; border-radius: 999px; padding: 1px 9px; font-size: 12px">Ipotesi</span></div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>8%</div><div style="font-size: 12.5px; color: #55525c">Quelli del ciclo scorso</div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>Un punto vale circa 800 €</div><div style="font-size: 12.5px; color: #55525c">Noti solo a fine ciclo</div></div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><div>Inserisci la percentuale quando Veronesi la comunica.</div><div><a href="Impostazioni.dc.html">Impostazioni Soccida</a></div></div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px 20px; padding: 14px 0; border-top: 1px solid #e7e8ec; align-items: start">
+      <div style="display: flex; flex-direction: column; gap: 4px"><div style="font-size: 15px">Bolle e registrazioni</div><div><span style="background: #fbe6ee; border-radius: 999px; padding: 2px 9px; font-size: 12px">Da fare</span></div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><div>6 voci aperte</div><div style="font-size: 12.5px; color: #55525c">Non cambiano la stima, servono per il conto finale</div></div>
+      <div style="display: flex; flex-direction: column; gap: 2px; grid-column: span 2">
+        <div>Spostamenti: entrate dei suinetti non ancora registrate</div>
+        <div>Consegne, siero del 26/10: 18,0 t in bolla, 19,48 t in fattura</div>
+        <div>Consegne, siero dell'11/09: manca il numero di bolla, 15,0 t contro 15,2 t</div>
+        <div>Consegne, siero del 27/10 e del 31/10: numero di bolla diverso dalla fattura</div>
+        <div>Consegne, mangime del 19/09: manca il numero di bolla</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- IL CONTO -->
+<section id="conto" style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px; display: flex; flex-direction: column; gap: 12px">
+  <h2 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 21px">Il conto, passo per passo</h2>
+  <div style="font-size: 13px; color: #55525c">Lo stesso calcolo dell'Excel, con i valori dello scenario attuale.</div>
+  <div style="overflow-x: auto">
+    <table style="min-width: 640px; font-size: 14px">
+      <thead>
+        <tr style="font-size: 12.5px; color: #55525c">
+          <th style="padding: 6px 10px 6px 0">Voce</th><th style="padding: 6px 10px; text-align: right">Valore</th><th style="padding: 6px 10px">Come si ottiene</th><th style="padding: 6px 0 6px 10px">Stato</th>
+        </tr>
+      </thead>
+      <tbody>
+        <sc-for list="{{righe}}" as="r" hint-placeholder-count="12">
+          <tr style="border-top: 1px solid #e7e8ec">
+            <td style="padding: 9px 10px 9px 0">{{r.voce}}</td>
+            <td style="padding: 9px 10px; text-align: right; white-space: nowrap; font-size: 15px">{{r.val}}</td>
+            <td style="padding: 9px 10px; color: #55525c; font-size: 13px">{{r.come}}</td>
+            <td style="padding: 9px 0 9px 10px; white-space: nowrap; font-size: 12.5px">{{r.stato}}</td>
+          </tr>
+        </sc-for>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ANIMALI E CONTROLLI -->
+<section id="controlli" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px">
+  <div style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px">
+      <h2 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 19px">Entrate e uscite</h2>
+      <span style="font-size: 12.5px; color: #55525c">lette da Spostamenti, qui non si duplica niente</span>
+    </div>
+    <div style="overflow-x: auto">
+      <table style="min-width: 440px; font-size: 13.5px">
+        <thead><tr style="font-size: 12.5px; color: #55525c"><th style="padding: 6px 8px 6px 0">Data</th><th style="padding: 6px 8px">Tipo</th><th style="padding: 6px 8px; text-align: right">Capi</th><th style="padding: 6px 8px; text-align: right">Peso vivo</th><th style="padding: 6px 0 6px 8px">Nel conto</th></tr></thead>
+        <tbody>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 9px 8px 9px 0">19/05 – 09/06</td><td style="padding: 9px 8px">Entrate suinetti</td><td style="padding: 9px 8px; text-align: right">1.874</td><td style="padding: 9px 8px; text-align: right">–</td><td style="padding: 9px 0 9px 8px"><span style="background: #fbe6ee; border-radius: 999px; padding: 2px 9px; font-size: 12px">Da registrare</span> oggi solo nei censimenti</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 9px 8px 9px 0">20/08</td><td style="padding: 9px 8px">Uscita, scarti</td><td style="padding: 9px 8px; text-align: right">24</td><td style="padding: 9px 8px; text-align: right">69,6 kg</td><td style="padding: 9px 0 9px 8px">698 kg di carne: calo 16,38%, al 50%</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 9px 8px 9px 0">31/08 – 09/11</td><td style="padding: 9px 8px">Uscite agriturismo</td><td style="padding: 9px 8px; text-align: right">9</td><td style="padding: 9px 8px; text-align: right">–</td><td style="padding: 9px 0 9px 8px">Escluse: suini di Fattoria Ca' Bianca</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 9px 8px 9px 0">–</td><td style="padding: 9px 8px">Uscite, fine ciclo</td><td style="padding: 9px 8px; text-align: right">0</td><td style="padding: 9px 8px; text-align: right">–</td><td style="padding: 9px 0 9px 8px">Nessun carico ancora partito</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="background: #f7f8fa; border-radius: 10px; padding: 14px; font-size: 13.5px; display: flex; flex-direction: column; gap: 10px">
+      <div>Entrate e uscite si registrano in Spostamenti, come oggi. All'uscita si aggiungono i dati del riscontro del macello quando arrivano.</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <a href="Riscontro.dc.html" style="text-decoration: none; display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 8px; background: #c2185b; color: #ffffff">Registra un'uscita</a>
+        <a href="Riscontro.dc.html" style="text-decoration: none; display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #c2185b; background: #ffffff; color: #a3154d">Apri Spostamenti</a>
+      </div>
+    </div>
+  </div>
+  <div style="background: #ffffff; border: 1px solid rgba(29,25,34,0.08); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px">
+      <h2 style="margin: 0; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; font-size: 19px">Siero: fatture, bolle e cucina</h2>
+      <span style="font-size: 12.5px; color: #55525c">bolle da Consegne, importi dalle fatture</span>
+    </div>
+    <div style="overflow-x: auto">
+      <table style="min-width: 460px; font-size: 13.5px">
+        <thead><tr style="font-size: 12.5px; color: #55525c"><th style="padding: 6px 8px 6px 0">Mese</th><th style="padding: 6px 8px; text-align: right">Carichi</th><th style="padding: 6px 8px; text-align: right">Fattura</th><th style="padding: 6px 8px; text-align: right">Bolle</th><th style="padding: 6px 8px; text-align: right">Con IVA</th><th style="padding: 6px 0 6px 8px">Esito</th></tr></thead>
+        <tbody>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 8px 8px 8px 0">Maggio</td><td style="padding: 8px; text-align: right">2</td><td style="padding: 8px; text-align: right">29,0 t</td><td style="padding: 8px; text-align: right">–</td><td style="padding: 8px; text-align: right">318,04 €</td><td style="padding: 8px 0 8px 8px">Assegnati a mano a questo ciclo</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 8px 8px 8px 0">Giugno</td><td style="padding: 8px; text-align: right">1</td><td style="padding: 8px; text-align: right">6,0 t</td><td style="padding: 8px; text-align: right">6,0 t</td><td style="padding: 8px; text-align: right">65,27 €</td><td style="padding: 8px 0 8px 8px">Coincide</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 8px 8px 8px 0">Luglio</td><td style="padding: 8px; text-align: right">14</td><td style="padding: 8px; text-align: right">165,1 t</td><td style="padding: 8px; text-align: right">165,1 t</td><td style="padding: 8px; text-align: right">1.811,10 €</td><td style="padding: 8px 0 8px 8px">Coincide</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 8px 8px 8px 0">Agosto</td><td style="padding: 8px; text-align: right">24</td><td style="padding: 8px; text-align: right">362,0 t</td><td style="padding: 8px; text-align: right">362,0 t</td><td style="padding: 8px; text-align: right">4.033,90 €</td><td style="padding: 8px 0 8px 8px">Coincide</td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 8px 8px 8px 0">Settembre</td><td style="padding: 8px; text-align: right">23</td><td style="padding: 8px; text-align: right">361,1 t</td><td style="padding: 8px; text-align: right">360,9 t</td><td style="padding: 8px; text-align: right">4.087,29 €</td><td style="padding: 8px 0 8px 8px"><span style="background: #fbe6ee; border-radius: 999px; padding: 2px 9px; font-size: 12px">1 da controllare</span></td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 8px 8px 8px 0">Ottobre</td><td style="padding: 8px; text-align: right">25</td><td style="padding: 8px; text-align: right">439,0 t</td><td style="padding: 8px; text-align: right">437,6 t</td><td style="padding: 8px; text-align: right">4.969,40 €</td><td style="padding: 8px 0 8px 8px"><span style="background: #fbe6ee; border-radius: 999px; padding: 2px 9px; font-size: 12px">3 da controllare</span></td></tr>
+          <tr style="border-top: 1px solid #e7e8ec"><td style="padding: 8px 8px 8px 0">Novembre</td><td style="padding: 8px; text-align: right">11</td><td style="padding: 8px; text-align: right">–</td><td style="padding: 8px; text-align: right">188,5 t</td><td style="padding: 8px; text-align: right">–</td><td style="padding: 8px 0 8px 8px">In attesa della fattura</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="font-size: 13px; color: #55525c">Bolle contro cucina dal 30/06 al 10/09: 6.595 q consegnati, 6.415 q pesati in cucina (2,7% in meno).</div>
+  </div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":4500}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    var std = { ini: 0, fine: 0, peso: 0, resa: 83, capi: 0, premi: 8, giac: 3000, confermata: false };
+    this.state = { ini: 0, fine: 0, peso: 0, resa: 83, capi: 0, premi: 8, giac: 3000, confermata: false, std: std };
+  }
+  perc(ic) {
+    var T = [[2.9,22.3],[3.0,20.9],[3.1,19.5],[3.2,18.1],[3.3,16.7],[3.4,15.46],[3.5,14.22],[3.6,12.98],[3.7,11.94],[3.8,11.12],[3.9,10.29],[4.0,9.46]];
+    if (ic <= 2.9) return 22.3 + (2.9 - ic) * 14;
+    if (ic >= 4) return 9.46;
+    for (var i = 0; i < T.length - 1; i++) {
+      if (ic >= T[i][0] && ic <= T[i + 1][0]) return T[i][1] + (T[i + 1][1] - T[i][1]) * (ic - T[i][0]) / (T[i + 1][0] - T[i][0]);
+    }
+    return 9.46;
+  }
+  // giorni da oggi (15/11): primo carico 18 (03/12), ultimo 38 (23/12). Tra i due i capi escono in modo regolare,
+  // quindi ogni capo mangia in media fino a metà finestra: giorni effettivi = (primo + ultimo) / 2.
+  conto(s, o) {
+    o = o || {};
+    var dg = o.dg || 0;
+    var gI = 18 + s.ini + (o.ini || 0) + dg, gF = 38 + s.fine + (o.fine || 0) + dg;
+    if (gF < gI + 1) gF = gI + 1;
+    var eff = (gI + gF) / 2, dAvg = eff - 28;
+    var peso = 172 + 0.6 * dAvg + s.peso + (o.peso || 0);
+    var resa = (s.resa + (o.resa || 0)) / 100;
+    var capi = 1740 - dAvg + s.capi + (o.capi || 0);
+    var carne = capi * peso * resa + 24 * 69.6 * (1 - 0.1638) * 0.5;
+    var residuo = (4450 + (o.mangGiorno || 0)) * eff + (o.mangKg || 0);
+    var mangFinora = 669730 + (s.giac - 3000);
+    var mangime = mangFinora + (o.giac || 0) + residuo;
+    var ic = mangime / carne;
+    var premi = s.premi + (o.premi || 0);
+    var eurkg = this.perc(ic) * 1.74 / 100;
+    var resaEur = eurkg * carne * (1 + premi / 100);
+    var prezzo = 11.32 + (o.sieroEurT || 0);
+    var sieroReg = 188.54 * prezzo;
+    var sieroSt = Math.max(0, 13.5 * eff + (o.sieroT || 0)) * prezzo;
+    var siero = 15285 + sieroReg + sieroSt;
+    var giorni = 226 + s.fine + (o.fine || 0) + dg;
+    var minimo = 98000 / 365 * giorni;
+    return { eff: eff, peso: peso, capi: capi, carne: carne, mangime: mangime, mangFinora: mangFinora, residuo: residuo, ic: ic, eurkg: eurkg, resaEur: resaEur, siero: siero, sieroReg: sieroReg, sieroSt: sieroSt, giorni: giorni, minimo: minimo, premi: premi, margine: resaEur - siero - minimo, pagato: Math.max(resaEur, minimo + siero) };
+  }
+  simula(s, n) {
+    var a = 7, self = this, ms = [];
+    function r() { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }
+    function g() { var u = 0; while (u === 0) u = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * r()); }
+    var sd = s.confermata ? 1 : 5;
+    for (var i = 0; i < n; i++) {
+      ms.push(self.conto(s, { dg: g() * sd, peso: g() * 4, resa: g() * 0.5, capi: g() * 15, mangGiorno: g() * 250, giac: g() * 3000, sieroT: g() * 100, sieroEurT: g() * 0.3, premi: g() * 1.2 }).margine);
+    }
+    ms.sort(function (x, y) { return x - y; });
+    var pos = 0; for (var j = 0; j < n; j++) if (ms[j] > 0) pos++;
+    return { ms: ms, p: pos / n, p10: ms[Math.floor(n * 0.1)], p50: ms[Math.floor(n * 0.5)], p90: ms[Math.floor(n * 0.9)] };
+  }
+  renderVals() {
+    var self = this, st = this.state;
+    var s = { ini: st.ini, fine: st.fine, peso: st.peso, resa: st.resa, capi: st.capi, premi: st.premi, giac: st.giac, confermata: st.confermata };
+    var nf0 = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0, useGrouping: 'always' });
+    function n0(v) { return nf0.format(Math.round(v)); }
+    function n1(v, d) { return v.toFixed(d == null ? 1 : d).replace('.', ','); }
+    function eur(v) { return n0(v) + ' €'; }
+    function seur(v) { return (v >= 0 ? '+' : '−') + n0(Math.abs(v)) + ' €'; }
+    function pct(p) { return Math.round(p * 100) + '%'; }
+    function giorno(g) { var d = new Date(2026, 10, 15 + Math.round(g)); return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2); }
+    function copia(extra) { var c = {}; for (var x in s) c[x] = s[x]; for (var y in extra) c[y] = extra[y]; return c; }
+
+    var b = this.conto(s);
+    var sim = this.simula(s, 4000);
+    var bStd = this.conto(st.std), simStd = this.simula(st.std, 4000);
+
+    var lo = 2.5, hi = 4;
+    for (var i = 0; i < 50; i++) { var m = (lo + hi) / 2; if (this.perc(m) * 1.74 / 100 * b.carne * (1 + b.premi / 100) - b.siero - b.minimo > 0) lo = m; else hi = m; }
+    var margMang = lo * b.carne - b.mangime;
+
+    var MIN = -20000, MAX = 25000, STEP = 2500;
+    function pos(v) { return Math.max(0, Math.min(100, (v - MIN) / (MAX - MIN) * 100)); }
+    var bins = []; for (var k = 0; k < (MAX - MIN) / STEP; k++) bins.push(0);
+    sim.ms.forEach(function (v) { var ix = Math.floor((v - MIN) / STEP); ix = Math.max(0, Math.min(bins.length - 1, ix)); bins[ix]++; });
+    var mx = Math.max.apply(null, bins);
+    var isto = bins.map(function (c, ix) {
+      var from = MIN + ix * STEP;
+      return { h: Math.max(1, c / mx * 100) + '%', col: from < 0 ? '#eb6834' : '#2a78d6', lab: ix % 2 === 0 ? (from > 0 ? '+' : '') + (from / 1000) : '', tip: 'Da ' + seur(from) + ' a ' + seur(from + STEP) + ': ' + n1(c / 40) + '% degli scenari' };
+    });
+
+    var pesi = [-4, -2, 0, 2, 4, 6, 8];
+    var perPeso = pesi.map(function (dp) {
+      var c = copia({ peso: dp }), p = self.simula(c, 1500).p, kg = self.conto(c).peso;
+      return { pct: pct(p), h: Math.max(2, p * 100 * 0.86) + '%', col: dp === s.peso ? '#c2185b' : '#b9bcc6', lab: n1(kg, 0), aria: 'Peso medio ' + n1(kg) + ' kg: premio al ' + pct(p), pick: function () { self.setState({ peso: dp }); } };
+    });
+
+    var offI = [-10, -5, 0, 5, 10], offF = [-10, -5, 0, 5, 10];
+    function bg(p) { return p < 0.30 ? '#f4b89c' : p < 0.45 ? '#fadccc' : p < 0.55 ? '#e9eaee' : p < 0.70 ? '#cfe0f6' : '#a3c6ef'; }
+    var heatCols = offF.map(function (o) { return { lab: 'ultimo ' + giorno(38 + o) }; });
+    var heatRows = offI.map(function (oi) {
+      return { lab: 'primo ' + giorno(18 + oi), celle: offF.map(function (of) {
+        var ok = (38 + of) - (18 + oi) >= 7, sel = oi === s.ini && of === s.fine;
+        if (!ok) return { pct: '–', bg: '#ffffff', bordo: '2px solid #eceef1', aria: 'Non fattibile: meno di 7 giorni', pick: function () {} };
+        var p = self.simula(copia({ ini: oi, fine: of }), 1200).p;
+        return { pct: pct(p), bg: bg(p), bordo: sel ? '2px solid #c2185b' : '2px solid transparent', aria: 'Primo carico ' + giorno(18 + oi) + ', ultimo ' + giorno(38 + of) + ': premio al ' + pct(p), pick: function () { self.setState({ ini: oi, fine: of }); } };
+      }) };
+    });
+
+    function d(o) { return self.conto(s, o).margine - b.margine; }
+    var L = [
+      { nome: 'Ultimo carico, 7 giorni', a: d({ fine: 7 }), b: d({ fine: -7 }), ta: '7 giorni dopo', tb: '7 giorni prima' },
+      { nome: 'Primo carico, 7 giorni', a: d({ ini: 7 }), b: d({ ini: -7 }), ta: '7 giorni dopo', tb: '7 giorni prima' },
+      { nome: 'Peso vivo medio, 2 kg', a: d({ peso: -2 }), b: d({ peso: 2 }), ta: '2 kg in meno', tb: '2 kg in più' },
+      { nome: 'Capi a macello, 20', a: d({ capi: -20 }), b: d({ capi: 20 }), ta: '20 in meno', tb: '20 in più' },
+      { nome: 'Mangime residuo, 10 t', a: d({ mangKg: 10000 }), b: d({ mangKg: -10000 }), ta: '10 t in più', tb: '10 t in meno' },
+      { nome: 'Resa al macello, 0,5 punti', a: d({ resa: -0.5 }), b: d({ resa: 0.5 }), ta: '0,5 in meno', tb: '0,5 in più' },
+      { nome: 'Siero residuo, 100 t', a: d({ sieroT: 100 }), b: d({ sieroT: -100 }), ta: '100 t in più', tb: '100 t in meno' },
+      { nome: 'Premi da prontuario, 1 punto', a: d({ premi: -1 }), b: d({ premi: 1 }), ta: '1 in meno', tb: '1 in più' }
+    ];
+    L.sort(function (x, y) { return Math.max(Math.abs(y.a), Math.abs(y.b)) - Math.max(Math.abs(x.a), Math.abs(x.b)); });
+    var lm = Math.max.apply(null, L.map(function (x) { return Math.max(Math.abs(x.a), Math.abs(x.b)); }));
+    var leve = L.map(function (x) {
+      return { nome: x.nome, negW: Math.abs(x.a) / lm * 62 + '%', posW: Math.abs(x.b) / lm * 62 + '%', negTxt: x.ta + ' ' + seur(x.a), posTxt: seur(x.b) + ' ' + x.tb, negTip: x.ta + ': ' + seur(x.a), posTip: x.tb + ': ' + seur(x.b) };
+    });
+
+    var gI = 18 + s.ini, gF = 38 + s.fine, finestra = gF - gI;
+    var nCar = Math.ceil(b.capi / 130), gMin = Math.ceil(nCar / 2);
+    var carichiTxt = 'Circa ' + nCar + ' carichi da 120–135 capi. Con 2 carichi al giorno servono almeno ' + gMin + ' giorni di carico; la finestra è di ' + finestra + ' giorni' + (finestra < gMin ? ': troppo stretta.' : '.');
+
+    var righe = [
+      { voce: 'Mangime consumato finora', val: n0(b.mangFinora) + ' kg', come: 'Bolle 698.320 + giacenza iniziale ' + n0(s.giac) + ' − silos oggi 31.590', stato: 'Reale, giacenze stimate' },
+      { voce: 'Mangime fino a fine ciclo', val: n0(b.residuo) + ' kg', come: '4.450 kg al giorno pieni fino al ' + giorno(gI) + ', poi a calare fino al ' + giorno(gF) + ': ' + n1(b.eff) + ' giorni pieni equivalenti', stato: 'Stimato' },
+      { voce: 'Mangime totale', val: n0(b.mangime) + ' kg', come: 'Somma delle due righe sopra', stato: 'Stimato' },
+      { voce: 'Carne valida', val: n0(b.carne) + ' kg', come: n0(b.capi) + ' capi × ' + n1(b.peso) + ' kg × ' + n1(s.resa) + '%, più 698 kg di scarti al 50%', stato: 'Stimato' },
+      { voce: 'Indice di conversione', val: n1(b.ic, 3), come: 'Mangime totale diviso carne valida', stato: 'Stimato' },
+      { voce: 'Valore da tabella', val: n1(b.eurkg, 4) + ' €/kg', come: 'Interpolato in tabella: ' + n1(this.perc(b.ic), 2) + '% × 1,45 € × 1,20', stato: 'Contratto' },
+      { voce: 'Resa', val: eur(b.resaEur), come: 'Valore × carne valida, più ' + n1(s.premi) + '% di premi', stato: 'Stimato' },
+      { voce: 'Siero', val: eur(b.siero), come: '15.285 € fatturati con IVA, ' + eur(b.sieroReg) + ' consegnati da fatturare, ' + eur(b.sieroSt) + ' stimati', stato: 'Reale al ' + Math.round(15285 / b.siero * 100) + '%' },
+      { voce: 'Minimo del ciclo', val: eur(b.minimo), come: '98.000 € / 365 × ' + b.giorni + ' giorni, dall\'11/05 al ' + giorno(gF), stato: 'Dipende dalla data' },
+      { voce: 'Resa meno siero', val: eur(b.resaEur - b.siero), come: 'Da confrontare con il minimo', stato: 'Stimato' },
+      { voce: 'Pagato da Veronesi', val: eur(b.pagato), come: 'Il più alto tra resa e minimo più siero', stato: 'Stimato' },
+      { voce: 'Saldo', val: eur(b.pagato - 54000), come: 'Pagato meno 6 anticipi da 9.000 €', stato: 'Stimato' }
+    ];
+
+    var dM = b.margine - bStd.margine, dP = Math.round((sim.p - simStd.p) * 100);
+    var uguale = Math.abs(dM) < 1 && dP === 0 && s.confermata === st.std.confermata;
+    function num(e) { return parseFloat(e.target.value); }
+    var mR = Math.round(b.mangFinora / b.mangime * 100), sF = Math.round(15285 / b.siero * 100), sR = Math.round(b.sieroReg / b.siero * 100);
+
+    return {
+      probTxt: pct(sim.p), pSottoTxt: pct(1 - sim.p), sopra: b.margine >= 0, sotto: b.margine < 0, margineAbs: eur(Math.abs(b.margine)),
+      p10Txt: seur(sim.p10), p50Txt: seur(sim.p50), p90Txt: seur(sim.p90),
+      bandLeft: pos(sim.p10) + '%', bandWidth: (pos(sim.p90) - pos(sim.p10)) + '%', medLeft: 'calc(' + pos(sim.p50) + '% - 1px)', zeroLeft: pos(0) + '%',
+      bulletAria: 'Margine sul minimo tra ' + seur(sim.p10) + ' e ' + seur(sim.p90) + ', atteso ' + seur(sim.p50),
+      istoAria: 'Distribuzione del margine: ' + pct(1 - sim.p) + ' degli scenari sotto il minimo, ' + pct(sim.p) + ' a premio',
+      icTxt: n1(b.ic, 2), pareggioTxt: n1(lo, 2), margineMangimeTxt: (margMang >= 0 ? '' : '−') + n1(Math.abs(margMang) / 1000) + ' t',
+      nettoResaTxt: eur(b.resaEur - b.siero), resaEurTxt: eur(b.resaEur), sieroTxt: eur(b.siero),
+      minimoTxt: eur(b.minimo), giorniTxt: b.giorni, fineTxt: giorno(gF), iniTxt: giorno(gI), mediaTxt: giorno((gI + gF) / 2),
+      saldoTxt: eur(b.pagato - 54000), pagatoTxt: eur(b.pagato),
+      mangRealeW: mR + '%', mangRealeTxt: mR + '%', mangStimTxt: (100 - mR) + '%', mangAria: 'Mangime: ' + mR + '% da bolle, ' + (100 - mR) + '% stimato',
+      sieroFattW: sF + '%', sieroRegW: sR + '%', sieroFattTxt: sF + '%', sieroRegTxt: sR + '%', sieroStimTxt: (100 - sF - sR) + '%', sieroAria: 'Siero: ' + sF + '% fatturato, ' + sR + '% consegnato non fatturato, ' + (100 - sF - sR) + '% stimato',
+      confrontoTxt: uguale ? 'Stai guardando lo scenario standard' : 'Rispetto allo standard: ' + seur(dM) + ', ' + (dP >= 0 ? '+' : '−') + Math.abs(dP) + ' punti di probabilità',
+      iniVal: s.ini, fineVal: s.fine, pesoVal: s.peso, resaVal: s.resa, capiVal: s.capi, premiVal: s.premi, giacVal: s.giac, confermata: s.confermata,
+      carichiTxt: carichiTxt,
+      pesoTxt: n1(b.peso) + ' kg', pesoNota: s.peso === 0 ? 'Come la curva di accrescimento alla data media di uscita' : (s.peso > 0 ? n1(s.peso) + ' kg sopra' : n1(Math.abs(s.peso)) + ' kg sotto') + ' la curva di accrescimento',
+      resaTxt: n1(s.resa) + '%', capiTxt: n0(b.capi), premiTxt: n1(s.premi) + '%', giacTxt: n0(s.giac) + ' kg',
+      setIni: function (e) { var v = num(e), f = self.state.fine; if ((38 + f) - (18 + v) < 7) f = v - 13; self.setState({ ini: v, fine: Math.min(21, f) }); },
+      setFine: function (e) { var v = num(e), n = self.state.ini; if ((38 + v) - (18 + n) < 7) n = v + 13; self.setState({ fine: v, ini: Math.max(-14, n) }); },
+      setPeso: function (e) { self.setState({ peso: num(e) }); },
+      setResa: function (e) { self.setState({ resa: num(e) }); },
+      setCapi: function (e) { self.setState({ capi: num(e) }); },
+      setPremi: function (e) { self.setState({ premi: num(e) }); },
+      setGiac: function (e) { self.setState({ giac: num(e) }); },
+      setConfermata: function (e) { self.setState({ confermata: !!e.target.checked }); },
+      salva: function () { self.setState({ std: s }); },
+      torna: function () { var t = self.state.std; self.setState({ ini: t.ini, fine: t.fine, peso: t.peso, resa: t.resa, capi: t.capi, premi: t.premi, giac: t.giac, confermata: t.confermata }); },
+      isto: isto, perPeso: perPeso, heatCols: heatCols, heatRows: heatRows, leve: leve, righe: righe
+    };
+  }
+}
+</script>
+</body>
+</html>

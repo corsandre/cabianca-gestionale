@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Allevamento – Spostamenti{% endblock %}
 
+{% from "allevamento/_uscita_campi.html" import campi_uscita %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="mb-0"><i class="bi bi-arrow-left-right me-2" style="color:#c2185b"></i>Spostamenti animali</h4>
@@ -112,7 +113,8 @@
                 <td class="text-muted">
                     {% if s.tipo == 'entrata' %}esterno
                     {% else %}
-                        {% if s.box_origine %}Box {{ s.box_origine }}{% elif s.capannone_origine %}CAP {{ s.capannone_origine }}{% else %}–{% endif %}
+                        {% if s.box_svuotati %}Box {% for r in s.box_svuotati %}{{ r.box_numero }}{{ '' if r.svuotato else ' (parte)' }}{{ ', ' if not loop.last }}{% endfor %}
+                        {% elif s.box_origine %}Box {{ s.box_origine }}{% elif s.capannone_origine %}CAP {{ s.capannone_origine }}{% else %}–{% endif %}
                     {% endif %}
                 </td>
                 <td class="text-muted">
@@ -122,7 +124,11 @@
                     {% endif %}
                 </td>
                 <td class="fw-bold">{{ s.quantita }}</td>
-                <td class="text-muted">{{ (s.peso_medio_kg ~ ' kg') if s.peso_medio_kg is not none else '–' }}</td>
+                <td class="text-muted">{{ (s.peso_medio_kg ~ ' kg') if s.peso_medio_kg is not none else '–' }}
+                    {% if s.tipo == 'uscita' and s.categoria_uscita in ('fine_ciclo', 'scarto_sottopeso') %}
+                        {% if s.capi_riscontrati is not none and s.peso_morto_kg is not none %}<div class="small">riscontro: {{ s.capi_riscontrati }} a {{ s.peso_morto_kg }} kg</div>
+                        {% elif s.categoria_uscita == 'fine_ciclo' %}<div class="small" style="color:#a3154d">riscontro da inserire</div>{% endif %}
+                    {% endif %}</td>
                 <td>
                     {% if s.tipo in ('entrata', 'uscita') %}
                     {% if s.bolla_path %}
@@ -194,7 +200,7 @@
                 <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Modifica spostamento</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="post" action="{{ url_for('allevamento.spostamenti_edit', sp_id=s.id) }}">
+            <form method="post" action="{{ url_for('allevamento.spostamenti_edit', sp_id=s.id) }}" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
                     <div class="row g-2 mb-3">
@@ -264,6 +270,7 @@
                         <label class="form-label">Peso medio (kg) <small class="text-muted">(solo entrata/uscita)</small></label>
                         <input type="number" name="peso_medio_kg" class="form-control" step="0.1" min="0" value="{{ s.peso_medio_kg if s.peso_medio_kg is not none else '' }}">
                     </div>
+                    {% if s.tipo == 'uscita' %}{{ campi_uscita(s, range(1, 55)) }}{% endif %}
                     <div class="mb-3">
                         <label class="form-label">Motivo</label>
                         <input type="text" name="motivo" class="form-control" value="{{ s.motivo or '' }}">
@@ -369,6 +376,7 @@
                             <input type="file" name="modello4" class="form-control cb-m4-input" accept="image/*,.pdf" multiple>
                         </div>
                     </div>
+                    <div id="rowCampiUscita" style="display:none">{{ campi_uscita(none, range(1, 55)) }}</div>
                     <div class="mb-3">
                         <label class="form-label">Motivo</label>
                         <input type="text" name="motivo" class="form-control" placeholder="es. vendita, macellazione, riorganizzazione…">
@@ -449,7 +457,26 @@ function aggiornaForm() {
 
     document.getElementById('rowCategoriaUscita').style.display = tipo === 'uscita' ? '' : 'none';
     document.getElementById('rowPesoBolla').style.display = (tipo === 'entrata' || tipo === 'uscita') ? '' : 'none';
+    // 3.0: box del camion e riscontro del macello, solo per le uscite; con i box indicati basta quello come origine
+    document.getElementById('rowCampiUscita').style.display = tipo === 'uscita' ? '' : 'none';
+    if (tipo === 'uscita') boxOrig.required = false;
 }
+
+// Riscontro del macello: resa e peso morto totale calcolati mentre si scrive (solo un aiuto: il conto lo fa il server)
+document.querySelectorAll('form').forEach(function (form) {
+    const capi = form.querySelector('.cb-risc-capi'), peso = form.querySelector('.cb-risc-peso'), esito = form.querySelector('.cb-risc-esito');
+    if (!capi || !peso || !esito) return;
+    function aggiorna() {
+        const n = parseFloat(capi.value), kg = parseFloat(peso.value);
+        const partiti = parseFloat((form.querySelector('[name=quantita]') || {}).value), vivo = parseFloat((form.querySelector('[name=peso_medio_kg]') || {}).value);
+        if (!n || !kg) { esito.textContent = ''; return; }
+        let t = 'Peso morto totale ' + Math.round(n * kg).toLocaleString('it-IT') + ' kg';
+        if (partiti && vivo) t += ' · resa ' + (n * kg / (partiti * vivo) * 100).toFixed(1).replace('.', ',') + '%';
+        if (partiti && partiti !== n) t += ' · ' + partiti + ' capi in bolla, ' + n + ' riscontrati';
+        esito.textContent = t;
+    }
+    form.addEventListener('input', aggiorna); aggiorna();
+});
 aggiornaForm();
 
 // Compressione foto bolla lato browser, stesso meccanismo delle Consegne.

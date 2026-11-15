@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+{% block title %}Allevamento – Soccida{% endblock %}
+{# Scheda Soccida. Non fa conti: mostra quello che prepara app/services/soccida_scheda.py.
+   Le prove dello scenario sono parametri dell'indirizzo (?primo=…&ultimo=…): la pagina si ricalcola sul server. #}
+
+{% block extra_head %}
+<style>
+.cb-soc { --ink:#1d1922; --ink2:#55525c; --bordo:rgba(29,25,34,.1); --riga:#e7e8ec; --fondo2:#f7f8fa; --rosa:#c2185b; --rosa-ink:#a3154d;
+  --rosa-tenue:#fbe6ee; --rosa-medio:#e58aae; --grigio:#d9dbe1; --blu:#2a78d6; --arancio:#eb6834;
+  color:var(--ink); font-size:14px; line-height:1.45; display:grid; grid-template-columns:minmax(0,1fr); gap:16px; font-variant-numeric:tabular-nums; }
+.cb-soc > *, .cb-soc .due > * { min-width:0; }
+.cb-soc a { color:var(--rosa-ink); }
+.cb-soc h2 { font-family:"Yeseva One",Georgia,serif; font-weight:400; font-size:20px; margin:0; }
+.cb-soc .nota { font-size:12.5px; color:var(--ink2); }
+.cb-soc .carta { background:#fff; border:1px solid var(--bordo); border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.06); padding:20px; display:grid; gap:12px; min-width:0; }
+.cb-soc .due { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr)); gap:16px; }
+.cb-soc .intera { grid-column:1/-1; }
+.cb-soc .salti { display:flex; flex-wrap:wrap; gap:6px; }
+.cb-soc .salti a, .cb-soc .bottone { text-decoration:none; background:#fff; border:1px solid var(--bordo); border-radius:8px; padding:8px 12px; font-size:13px; color:var(--ink); }
+.cb-soc .bottone.pieno, .cb-soc .bottone.pieno:hover { color:#fff; }
+.cb-soc .bottone { min-height:44px; display:inline-flex; align-items:center; cursor:pointer; }
+.cb-soc .bottone.pieno { background:var(--rosa); border-color:var(--rosa); color:#fff; }
+.cb-soc .bottone.bordo { border-color:var(--rosa); color:var(--rosa-ink); }
+.cb-soc .pillola { border-radius:999px; padding:2px 9px; font-size:12px; white-space:nowrap; }
+.cb-soc .st-ipotesi { border:1px solid var(--ink); } .cb-soc .st-stimato { background:#eceef1; }
+.cb-soc .st-reale { background:var(--ink); color:#fff; } .cb-soc .st-dafare { background:var(--rosa-tenue); }
+/* esito */
+.cb-soc .esito { display:flex; flex-wrap:wrap; gap:24px; }
+.cb-soc .esito > .sx { flex:1 1 280px; min-width:0; display:grid; gap:10px; align-content:start; }
+.cb-soc .esito > .dx { flex:2 1 400px; min-width:0; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr)); gap:12px; align-content:start; }
+.cb-soc .grande { font-family:"Yeseva One",Georgia,serif; font-size:68px; line-height:1; }
+.cb-soc .segno { border-radius:6px; padding:1px 6px; } .cb-soc .segno.su { background:#dbe8f8; } .cb-soc .segno.giu { background:#fbe0d3; }
+.cb-soc .fascia { position:relative; height:46px; }
+.cb-soc .fascia .binario { position:absolute; left:0; right:0; top:14px; height:10px; border-radius:5px; background:#eceef1; }
+.cb-soc .fascia .banda { position:absolute; top:14px; height:10px; border-radius:5px; background:var(--blu); }
+.cb-soc .fascia .atteso { position:absolute; top:9px; height:20px; width:3px; background:var(--ink); border-radius:2px; }
+.cb-soc .fascia .zero { position:absolute; top:2px; height:34px; border-left:2px dashed var(--ink2); }
+.cb-soc .fascia .zero-t { position:absolute; top:30px; font-size:11.5px; color:var(--ink2); transform:translateX(-50%); white-space:nowrap; }
+.cb-soc .kpi { background:var(--fondo2); border-radius:10px; padding:12px 14px; display:grid; gap:2px; align-content:start; }
+.cb-soc .kpi b { font-weight:400; font-size:25px; }
+.cb-soc .barra { display:flex; gap:2px; height:12px; } .cb-soc .barra > i { border-radius:4px; display:block; }
+.cb-soc .leg { display:flex; flex-wrap:wrap; gap:6px 16px; font-size:12.5px; align-items:center; }
+.cb-soc .leg i { width:12px; height:12px; border-radius:3px; display:inline-block; margin-right:6px; vertical-align:-1px; }
+/* scenario */
+.cb-soc .campi { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr)); gap:12px 24px; }
+.cb-soc .campo { display:grid; gap:3px; align-content:start; }
+.cb-soc .campo input[type=date], .cb-soc .campo input[type=number] { min-height:44px; border:1px solid rgba(29,25,34,.25); border-radius:8px; padding:0 10px; width:100%; font:inherit; background:#fff; }
+.cb-soc input[type=range] { accent-color:var(--rosa); width:100%; height:28px; margin:0; }
+.cb-soc output { white-space:nowrap; }
+.cb-soc .riquadro { background:var(--fondo2); border-radius:10px; padding:14px 16px; display:grid; gap:10px; }
+/* grafici */
+.cb-soc .colonne { display:flex; align-items:flex-end; gap:2px; height:180px; position:relative; }
+.cb-soc .colonne > * { flex:1 1 0; min-width:0; height:100%; display:flex; flex-direction:column; justify-content:flex-end; gap:3px; text-decoration:none; color:var(--ink); }
+.cb-soc .colonne span.c { display:block; border-radius:4px 4px 0 0; }
+.cb-soc .colonne .v { font-size:12px; text-align:center; }
+.cb-soc .asse { display:flex; gap:2px; border-top:1px solid #c9cbd2; padding-top:4px; }
+.cb-soc .asse > div { flex:1 1 0; min-width:0; font-size:11px; color:var(--ink2); text-align:center; white-space:nowrap; }
+.cb-soc .meta { position:absolute; left:0; right:0; bottom:50%; border-top:1px dashed #8a8791; height:0 !important; flex:none !important; }
+.cb-soc .griglia { display:grid; gap:2px; min-width:520px; }
+.cb-soc .griglia .r { display:grid; grid-template-columns:120px repeat(5,minmax(0,1fr)); gap:2px; }
+.cb-soc .griglia a, .cb-soc .griglia .vuota { min-height:44px; border-radius:4px; display:flex; align-items:center; justify-content:center; color:var(--ink); text-decoration:none; border:2px solid transparent; }
+.cb-soc .griglia .vuota { border-color:#eceef1; color:var(--ink2); }
+.cb-soc .griglia .attuale { border-color:var(--rosa); }
+.cb-soc .c1 { background:#f4b89c; } .cb-soc .c2 { background:#fadccc; } .cb-soc .c3 { background:#e9eaee; } .cb-soc .c4 { background:#cfe0f6; } .cb-soc .c5 { background:#a3c6ef; }
+.cb-soc .leva { display:grid; grid-template-columns:minmax(110px,200px) minmax(0,1fr) minmax(0,1fr); gap:0 0; align-items:center; }
+.cb-soc .leva .nome { padding-right:12px; }
+.cb-soc .leva .sx, .cb-soc .leva .dx { display:flex; align-items:center; gap:8px; min-height:30px; font-size:12.5px; color:var(--ink2); white-space:nowrap; }
+.cb-soc .leva .sx { justify-content:flex-end; border-right:1px solid #8a8791; }
+.cb-soc .leva i { display:block; height:16px; }
+.cb-soc .leva .sx i { border-radius:4px 0 0 4px; } .cb-soc .leva .dx i { border-radius:0 4px 4px 0; }
+/* elenchi */
+.cb-soc .dato { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr)); gap:6px 20px; padding:14px 0; border-top:1px solid var(--riga); align-items:start; }
+.cb-soc .dato > div { display:grid; gap:3px; align-content:start; }
+.cb-soc table { width:100%; border-collapse:collapse; } .cb-soc th { font-weight:400; font-size:12.5px; color:var(--ink2); text-align:left; padding:6px 8px 6px 0; }
+.cb-soc td { padding:9px 8px 9px 0; border-top:1px solid var(--riga); vertical-align:top; } .cb-soc .num { text-align:right; white-space:nowrap; }
+.cb-soc .scorri { overflow-x:auto; }
+@media (max-width:575px) { .cb-soc .leva { grid-template-columns:1fr 1fr; } .cb-soc .leva .nome { grid-column:1/-1; } .cb-soc .grande { font-size:54px; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cb-soc">
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-2">
+    <h4 class="mb-0"><i class="bi bi-cash-coin me-2" style="color:#c2185b"></i>Soccida</h4>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+        {% if s and s.ciclo %}<span class="pillola st-dafare">{{ s.ciclo.nome }}</span>
+        <span class="nota">Giorno {{ s.giorno_ciclo }} del ciclo · dati al {{ s.oggi.strftime('%d/%m/%Y') }}</span>{% endif %}
+        <a class="bottone bordo" href="{{ url_for('allevamento.soccida_impostazioni') }}"><i class="bi bi-sliders me-1"></i>Impostazioni Soccida</a>
+    </div>
+</div>
+
+{% if not s %}
+<div class="carta">Nessun ciclo attivo. Crea un ciclo in <a href="{{ url_for('allevamento.impostazioni') }}">Impostazioni</a> per usare la scheda.</div>
+{% elif s.errore %}
+<div class="carta">
+    <div>La scheda non può ancora fare il conto: {{ s.errore }}</div>
+    <div class="nota">Servono almeno un censimento (capi presenti) oppure un'uscita al macello registrata in Spostamenti.</div>
+</div>
+{% else %}
+
+<nav class="salti" aria-label="Sezioni della scheda">
+    <a href="#esito">Esito</a><a href="#scenario">Scenario</a><a href="#probabilita">Probabilità</a><a href="#leve">Leve</a>
+    <a href="#dati">Dati da aggiornare</a><a href="#conto">Il conto</a><a href="#controlli">Animali e controlli</a>
+</nav>
+
+{# ── ESITO ── #}
+<section id="esito" class="carta"><div class="esito">
+    <div class="sx">
+        <div class="nota">Probabilità di arrivare a premio{% if s.in_prova %} · scenario di prova{% endif %}</div>
+        <div class="d-flex flex-wrap align-items-baseline gap-3">
+            <div class="grande">{{ s.prob }}</div>
+            <div style="font-size:16px">Oggi sei <span class="segno {{ 'su' if s.sopra else 'giu' }}">{{ s.margine }} {{ 'sopra' if s.sopra else 'sotto' }}</span> il minimo</div>
+        </div>
+        <div class="nota">Margine sul minimo: da {{ s.sfavorevole }} (caso sfavorevole) a {{ s.favorevole }} (caso favorevole). Otto scenari su dieci cadono in questo intervallo.</div>
+        <div class="fascia" role="img" aria-label="Margine sul minimo tra {{ s.sfavorevole }} e {{ s.favorevole }}, atteso {{ s.atteso }}">
+            <div class="binario"></div>
+            <div class="banda" style="left:{{ s.fascia.da }}%;width:{{ s.fascia.larghezza }}%"></div>
+            <div class="atteso" style="left:calc({{ s.fascia.atteso }}% - 1px)"></div>
+            <div class="zero" style="left:{{ s.fascia.zero }}%"></div>
+            <div class="zero-t" style="left:{{ s.fascia.zero }}%">minimo garantito</div>
+        </div>
+        <div class="leg nota"><span><i style="background:var(--blu)"></i>intervallo probabile</span><span><i style="background:var(--ink);width:3px"></i>valore atteso</span></div>
+    </div>
+    <div class="dx">
+        <div class="kpi"><span class="nota">Indice di conversione</span><b>{{ s.indice }}</b>
+            <span class="nota">{% if s.pareggio %}Pareggio a {{ s.pareggio }}: {{ 'restano' if s.sopra else 'mancano' }} {{ s.margine_mangime|replace('-', '') }} t di mangime{% else %}Pareggio non raggiungibile{% endif %}</span></div>
+        <div class="kpi"><span class="nota">Resa meno siero</span><b>{{ s.resa_netta }}</b><span class="nota">Resa {{ s.resa }}, siero {{ s.siero }}</span></div>
+        <div class="kpi"><span class="nota">Minimo garantito</span><b>{{ s.minimo }}</b><span class="nota">{{ s.giorni }} giorni pagati, fino al {{ s.sce.ultimo_carico.strftime('%d/%m') }}</span></div>
+        <div class="kpi"><span class="nota">Saldo previsto da Veronesi</span><b>{{ s.saldo }}</b><span class="nota">Pagato {{ s.pagato }} meno {{ s.anticipi }} di anticipi</span></div>
+        <div class="intera" style="display:grid;gap:10px">
+            <div class="nota">Quanto del conto è già dato reale</div>
+            <div>
+                <div class="d-flex justify-content-between flex-wrap gap-2" style="font-size:13px"><span>Mangime</span><span class="nota">{{ s.reale.mangime }}% da bolle · {{ 100 - s.reale.mangime }}% stimato</span></div>
+                <div class="barra" role="img" aria-label="Mangime: {{ s.reale.mangime }}% da bolle">
+                    <i style="background:var(--rosa);width:{{ s.reale.mangime }}%"></i>{% if s.reale.mangime < 100 %}<i style="background:var(--grigio);flex:1"></i>{% endif %}</div>
+            </div>
+            <div>
+                <div class="d-flex justify-content-between flex-wrap gap-2" style="font-size:13px"><span>Siero</span><span class="nota">{{ s.reale.siero_fatturato }}% fatturato · {{ s.reale.siero_registrato }}% consegnato, non ancora fatturato · {{ s.reale.siero_stimato }}% stimato</span></div>
+                <div class="barra" role="img" aria-label="Siero: {{ s.reale.siero_fatturato }}% fatturato, {{ s.reale.siero_registrato }}% consegnato non fatturato">
+                    <i style="background:var(--rosa);width:{{ s.reale.siero_fatturato }}%"></i>{% if s.reale.siero_registrato %}<i style="background:var(--rosa-medio);width:{{ s.reale.siero_registrato }}%"></i>{% endif %}{% if s.reale.siero_stimato %}<i style="background:var(--grigio);flex:1"></i>{% endif %}</div>
+            </div>
+            <div>
+                <div class="d-flex justify-content-between flex-wrap gap-2" style="font-size:13px"><span>Carne</span><span class="nota">{{ s.reale.carne_riscontrata }}% riscontrata · {{ s.reale.carne_partita }}% partita, da riscontrare o scarti · {{ s.reale.carne_stimata }}% in stalla</span></div>
+                <div class="barra" role="img" aria-label="Carne: {{ s.reale.carne_riscontrata }}% riscontrata">
+                    {% if s.reale.carne_riscontrata %}<i style="background:var(--rosa);width:{{ s.reale.carne_riscontrata }}%"></i>{% endif %}{% if s.reale.carne_partita %}<i style="background:var(--rosa-medio);width:{{ s.reale.carne_partita }}%"></i>{% endif %}{% if s.reale.carne_stimata %}<i style="background:var(--grigio);flex:1"></i>{% endif %}</div>
+            </div>
+            <div class="leg nota"><span><i style="background:var(--rosa)"></i>reale (bolla, fattura o riscontro)</span><span><i style="background:var(--rosa-medio)"></i>registrato, valore stimato</span><span><i style="background:var(--grigio)"></i>stimato</span></div>
+        </div>
+    </div>
+</div></section>
+
+{# ── SCENARIO ── #}
+{% if s.in_stalla %}
+<section id="scenario" class="carta">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div style="flex:1 1 300px"><h2>Scenario</h2><div class="nota">Cambia un valore per provare: la scheda si ricalcola. Lo scenario standard cambia solo quando lo salvi.</div></div>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <span class="riquadro" style="padding:8px 12px;font-size:13px">{{ s.confronto or 'Stai guardando lo scenario standard' }}</span>
+            {% if s.in_prova %}<a class="bottone" href="{{ url_for('allevamento.soccida') }}#scenario">Torna allo standard</a>
+            {# salva lo scenario che si sta guardando: i valori sono quelli già calcolati, non quelli ancora da inviare #}
+            <form method="post" action="{{ url_for('allevamento.soccida_scenario') }}" class="m-0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="primo" value="{{ s.sce.primo_carico.isoformat() }}"><input type="hidden" name="ultimo" value="{{ s.sce.ultimo_carico.isoformat() }}">
+                <input type="hidden" name="conf" value="{{ '1' if s.sce.date_confermate else '0' }}"><input type="hidden" name="peso" value="{{ s.sce.peso_extra_kg }}">
+                <input type="hidden" name="resa" value="{{ s.sce.resa_perc }}"><input type="hidden" name="premi" value="{{ s.sce.premi_perc }}">
+                <input type="hidden" name="morti" value="{{ s.sce.morti_giorno }}"><input type="hidden" name="giac" value="{{ s.giacenza_iniziale }}">
+                <button class="bottone pieno" type="submit">Salva come standard</button>
+            </form>{% endif %}
+        </div>
+    </div>
+    <form id="frm-prova" method="get" action="{{ url_for('allevamento.soccida') }}#scenario" style="display:grid;gap:14px">
+        <div class="riquadro">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div style="font-size:15px">Carichi al macello</div>
+                <label class="d-inline-flex align-items-center gap-2" style="min-height:44px"><input type="checkbox" name="conf" value="1" {{ 'checked' if s.sce.date_confermate }} style="accent-color:#c2185b;width:18px;height:18px">date confermate da Veronesi</label>
+            </div>
+            <div class="campi">
+                <div class="campo"><label for="p-primo">Primo carico</label><input id="p-primo" type="date" name="primo" value="{{ s.sce.primo_carico.isoformat() }}" required>
+                    <input type="range" class="cb-giorni" data-per="p-primo" min="-21" max="21" step="1" value="0" aria-label="Sposta il primo carico di alcuni giorni"><span class="nota">Fino a qui tutti i capi mangiano</span></div>
+                <div class="campo"><label for="p-ultimo">Ultimo carico (fine ciclo)</label><input id="p-ultimo" type="date" name="ultimo" value="{{ s.sce.ultimo_carico.isoformat() }}" required>
+                    <input type="range" class="cb-giorni" data-per="p-ultimo" min="-21" max="21" step="1" value="0" aria-label="Sposta l'ultimo carico di alcuni giorni"><span class="nota">Fino a qui si paga il minimo: {{ s.giorni }} giorni</span></div>
+            </div>
+            <div style="font-size:13px">{{ s.carichi_testo }}</div>
+            <div class="nota">Tra il primo e l'ultimo carico i capi escono in modo regolare, quindi mangime e siero calano fino a zero. Uscita media il {{ s.uscita_media }}.</div>
+        </div>
+        {# Cursori: mentre li trascini cambia solo il numero accanto; al rilascio la scheda si ricalcola sul server.
+           I limiti si allargano da soli se il valore salvato è fuori dall'intervallo abituale. #}
+        {% macro cursore(id, nome, etichetta, valore, minimo, massimo, passo, unita, nota) %}
+        <div class="campo"><label for="{{ id }}" class="d-flex justify-content-between gap-2"><span>{{ etichetta }}</span><output for="{{ id }}" data-unita="{{ unita }}">{{ valore }}{{ unita }}</output></label>
+            <input id="{{ id }}" type="range" class="cb-cursore" name="{{ nome }}" min="{{ [minimo, valore]|min }}" max="{{ [massimo, valore]|max }}" step="{{ passo }}" value="{{ valore }}"><span class="nota">{{ nota }}</span></div>
+        {% endmacro %}
+        <div class="campi">
+            {{ cursore('p-peso', 'peso', 'Kg di peso vivo in più rispetto alla curva', s.sce.peso_extra_kg, -6, 10, 0.5, ' kg', 'Peso medio di uscita previsto: ' ~ s.peso_uscita ~ ' kg') }}
+            {{ cursore('p-resa', 'resa', 'Resa al macello', s.sce.resa_perc, 81, 85, 0.1, '%', 'Media dei carichi riscontrati' if s.resa_reale else 'Cicli passati: da 82,6 a 83,7%') }}
+            {{ cursore('p-morti', 'morti', 'Morti attesi al giorno', s.sce.morti_giorno, 0, 4, 0.1, '', 'Capi a macello previsti: ' ~ s.capi_macello) }}
+            {{ cursore('p-premi', 'premi', 'Premi da prontuario', s.sce.premi_perc, 4, 10, 0.1, '%', 'Comunicati da Veronesi' if par.premi_noti else 'Stima: Veronesi li comunica a fine ciclo') }}
+            {{ cursore('p-giac', 'giac', 'Giacenza iniziale di mangime', s.giacenza_iniziale, 0, 12000, 500, ' kg', 'Quella comunicata a Veronesi a inizio ciclo') }}
+        </div>
+        <noscript><button class="bottone bordo" type="submit">Ricalcola</button></noscript>
+    </form>
+</section>
+{% endif %}
+
+{# ── PROBABILITÀ ── #}
+<section id="probabilita" class="due">
+    <div class="carta">
+        <h2>Dove può finire il margine</h2>
+        <div class="nota">4.000 scenari simulati, raggruppati per margine sul minimo. Più alta la colonna, più probabile quel risultato.</div>
+        <div class="colonne" role="img" aria-label="Distribuzione del margine: {{ s.prob_sotto }} degli scenari sotto il minimo, {{ s.prob }} a premio">
+            {% for b in s.istogramma %}<div title="{{ b.titolo }}"><span class="c" style="height:{{ b.altezza }}%;background:var(--{{ 'arancio' if b.sotto else 'blu' }})"></span></div>{% endfor %}
+        </div>
+        <div class="asse">{% for b in s.istogramma %}<div>{{ b.etichetta }}</div>{% endfor %}</div>
+        <div class="nota text-center">margine sul minimo, in migliaia di euro</div>
+        <div class="leg"><span><i style="background:var(--arancio)"></i>sotto il minimo: {{ s.prob_sotto }}</span><span><i style="background:var(--blu)"></i>a premio: {{ s.prob }}</span></div>
+        <div style="font-size:13px">Sfavorevole {{ s.sfavorevole }} · atteso {{ s.atteso }} · favorevole {{ s.favorevole }}</div>
+    </div>
+    {% if s.per_peso %}
+    <div class="carta">
+        <h2>Probabilità secondo il peso di uscita</h2>
+        <div class="nota">Peso vivo medio di uscita, a parità di mangime. Tocca una colonna per provarla.</div>
+        <div class="colonne" style="height:200px;gap:6px">
+            <div class="meta"></div>
+            {% for d in s.per_peso %}<a href="{{ url_for('allevamento.soccida', primo=s.sce.primo_carico.isoformat(), ultimo=s.sce.ultimo_carico.isoformat(), conf='1' if s.sce.date_confermate else '0', peso=d.peso, resa=s.sce.resa_perc, morti=s.sce.morti_giorno, premi=s.sce.premi_perc, giac=s.giacenza_iniziale) }}#probabilita" title="{{ d.titolo }}" aria-label="{{ d.titolo }}"><span class="v">{{ d.pct }}</span><span class="c" style="height:{{ d.altezza }}%;background:{{ 'var(--rosa)' if d.attuale else '#b9bcc6' }}"></span></a>{% endfor %}
+        </div>
+        <div class="asse" style="gap:6px">{% for d in s.per_peso %}<div>{{ d.etichetta }}</div>{% endfor %}</div>
+        <div class="nota text-center">peso vivo medio di uscita, kg · la linea tratteggiata è il 50%</div>
+        <div class="leg"><span><i style="background:var(--rosa)"></i>peso dello scenario</span><span><i style="background:#b9bcc6"></i>altri pesi</span></div>
+    </div>
+    {% endif %}
+    {% if s.griglia %}
+    <div class="carta intera">
+        <h2>Primo e ultimo carico insieme</h2>
+        <div class="nota">Probabilità di premio per ogni coppia di date. Tocca una casella per provarla.</div>
+        <div class="scorri"><div class="griglia">
+            <div class="r nota"><div></div>{% for c in s.griglia.colonne %}<div class="text-center">{{ c }}</div>{% endfor %}</div>
+            {% for r in s.griglia.righe %}<div class="r">
+                <div class="nota d-flex align-items-center">{{ r.etichetta }}</div>
+                {% for x in r.celle %}{% if x.valida %}<a class="{{ x.colore }}{{ ' attuale' if x.attuale }}" title="{{ x.titolo }}" aria-label="{{ x.titolo }}" href="{{ url_for('allevamento.soccida', primo=x.primo, ultimo=x.ultimo, conf='1' if s.sce.date_confermate else '0', peso=s.sce.peso_extra_kg, resa=s.sce.resa_perc, morti=s.sce.morti_giorno, premi=s.sce.premi_perc, giac=s.giacenza_iniziale) }}#probabilita">{{ x.pct }}</a>{% else %}<div class="vuota" title="Non fattibile">–</div>{% endif %}{% endfor %}
+            </div>{% endfor %}
+        </div></div>
+        <div class="leg"><span><i class="c1"></i>sotto 30%</span><span><i class="c2"></i>30–45%</span><span><i class="c3"></i>45–55%</span><span><i class="c4"></i>55–70%</span><span><i class="c5"></i>oltre 70%</span>
+            <span><i style="border:2px solid var(--rosa);box-sizing:border-box"></i>scenario attuale</span><span class="nota">– : date già passate o meno di 7 giorni tra i due carichi</span></div>
+    </div>
+    {% endif %}
+</section>
+
+{# ── LEVE ── #}
+{% if s.leve %}
+<section id="leve" class="carta">
+    <h2>Cosa sposta il risultato</h2>
+    <div class="nota">Effetto sul margine di una variazione alla volta, partendo dallo scenario attuale. In alto le leve che pesano di più.</div>
+    <div style="display:grid;gap:8px">
+        {% for l in s.leve %}<div class="leva">
+            <div class="nome">{{ l.nome }}</div>
+            <div class="sx"><span>{{ l.peggio }}</span><i style="width:{{ l.larghezza_peggio }}%;background:var(--{{ 'arancio' if l.peggio_negativo else 'blu' }})"></i></div>
+            <div class="dx"><i style="width:{{ l.larghezza_meglio }}%;background:var(--{{ 'blu' if l.meglio_positivo else 'arancio' }})"></i><span>{{ l.meglio }}</span></div>
+        </div>{% endfor %}
+    </div>
+    <div class="leg"><span><i style="background:var(--arancio)"></i>toglie margine</span><span><i style="background:var(--blu)"></i>aggiunge margine</span></div>
+</section>
+{% endif %}
+
+{# ── DATI DA AGGIORNARE ── #}
+<section id="dati" class="carta">
+    <div><h2>Dati da aggiornare per migliorare la stima</h2>
+        <div class="nota">In ordine di peso sul risultato. Per ognuno: cosa uso oggi, quanto può spostare il margine e dove si aggiorna.</div></div>
+    <div class="leg">
+        <span><span class="pillola st-ipotesi">Ipotesi</span> valore scelto a mano</span><span><span class="pillola st-stimato">Stimato</span> calcolato da altri dati</span>
+        <span><span class="pillola st-reale">Reale</span> da bolla, fattura o riscontro</span><span><span class="pillola st-dafare">Da fare</span> manca o non coincide</span>
+    </div>
+    <div>
+        {% for d in s.dati %}<div class="dato">
+            <div><div style="font-size:15px">{{ d.nome }}</div><div><span class="pillola st-{{ d.stato|lower }}">{{ d.stato }}</span></div></div>
+            <div><div>{{ d.valore }}</div><div class="nota">{{ d.fonte }}</div></div>
+            <div><div>{{ d.peso_testo }}</div></div>
+            <div><div>{{ d.azione }}</div>{% if d.link %}<div><a href="{{ d.link[1] }}">{{ d.link[0] }}</a></div>{% endif %}</div>
+        </div>{% endfor %}
+        {% if s.da_fare %}<div class="dato">
+            <div><div style="font-size:15px">Registrazioni</div><div><span class="pillola st-dafare">Da fare</span></div></div>
+            <div><div>{{ s.da_fare|length }} {{ 'voce aperta' if s.da_fare|length == 1 else 'voci aperte' }}</div><div class="nota">Non cambiano la stima, servono per il conto finale</div></div>
+            <div style="grid-column:span 2">{% for v in s.da_fare %}<div>{{ v }}</div>{% endfor %}</div>
+        </div>{% endif %}
+    </div>
+</section>
+
+{# ── IL CONTO ── #}
+<section id="conto" class="carta">
+    <h2>Il conto, passo per passo</h2>
+    <div class="nota">Lo stesso calcolo dell'Excel, con i valori dello scenario{{ ' di prova' if s.in_prova else ' standard' }}.</div>
+    <div class="scorri"><table style="min-width:620px">
+        <thead><tr><th>Voce</th><th class="num">Valore</th><th>Come si ottiene</th><th>Stato</th></tr></thead>
+        <tbody>{% for r in s.righe %}<tr><td>{{ r.voce }}</td><td class="num" style="font-size:15px">{{ r.valore }}</td><td class="nota">{{ r.come }}</td><td class="nota" style="white-space:nowrap">{{ r.stato }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+</section>
+
+{# ── ANIMALI E CONTROLLI ── #}
+<section id="controlli" class="due">
+    <div class="carta">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2"><h2>Entrate e uscite</h2><span class="nota">lette da Spostamenti</span></div>
+        <div class="scorri"><table style="min-width:430px">
+            <thead><tr><th>Data</th><th>Tipo</th><th class="num">Capi</th><th class="num">Peso vivo</th><th>Nel conto</th></tr></thead>
+            <tbody>{% for a in s.animali %}<tr><td>{{ a.data }}</td><td>{{ a.tipo }}</td><td class="num">{{ a.capi }}</td><td class="num">{{ a.peso }}</td>
+                <td>{% if a.da_fare %}<span class="pillola st-dafare">Da fare</span> {% endif %}{{ a.conto }}</td></tr>{% endfor %}</tbody>
+        </table></div>
+        <div class="riquadro"><div>Entrate e uscite si registrano in Spostamenti. All'uscita di un camion si aggiunge il riscontro del macello quando arriva.</div>
+            <div><a class="bottone pieno" href="{{ url_for('allevamento.spostamenti') }}">Apri Spostamenti</a></div></div>
+    </div>
+    <div class="carta">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2"><h2>Siero: bolle e fatture</h2><span class="nota">bolle da Consegne, importi con IVA dalle fatture</span></div>
+        <div class="scorri"><table style="min-width:430px">
+            <thead><tr><th>Mese</th><th class="num">Carichi</th><th class="num">Bolle</th><th class="num">Fattura</th><th>Esito</th></tr></thead>
+            <tbody>{% for m in s.siero_mensile %}<tr><td>{{ m.mese }}</td><td class="num">{{ m.carichi }}</td><td class="num">{{ m.t }}</td><td class="num">{{ m.fattura }}</td><td>{{ m.esito }}</td></tr>{% endfor %}</tbody>
+        </table></div>
+        <div class="nota">Bolle contro cucina, siero: {{ '{:,.0f}'.format(s.cucina.bolle_q).replace(',', '.') }} q consegnati, {{ '{:,.0f}'.format(s.cucina.cucina_q).replace(',', '.') }} q pesati in cucina.
+            Mangime: {{ '{:,.0f}'.format(s.cucina.mangime_bolle_q).replace(',', '.') }} q in bolla, {{ '{:,.0f}'.format(s.cucina.mangime_cucina_q).replace(',', '.') }} q pesati in cucina, {{ '{:,.0f}'.format(s.cucina.mangime_silos_q).replace(',', '.') }} q nei silos.</div>
+    </div>
+</section>
+{% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Scenario: ogni cambiamento ricalcola la scheda sul server (il conto lo fa un motore solo, in Python).
+(function () {
+    const form = document.getElementById('frm-prova');
+    if (!form) return;
+    function invia() { if (form.reportValidity()) { document.querySelector('.cb-soc').style.opacity = .55; form.submit(); } }
+    form.querySelectorAll('input[type=date], input[type=checkbox]').forEach(function (i) { i.addEventListener('change', invia); });
+    // cursori dei valori: il numero accanto segue il dito, il ricalcolo parte al rilascio
+    form.querySelectorAll('.cb-cursore').forEach(function (c) {
+        const out = form.querySelector('output[for="' + c.id + '"]');
+        function mostra() { out.textContent = Number(c.value).toLocaleString('it-IT', { maximumFractionDigits: 1, useGrouping: 'always' }) + out.dataset.unita; }
+        c.addEventListener('input', mostra);
+        c.addEventListener('change', invia);
+        mostra();
+    });
+    // cursori delle date: spostano la data del campo sopra di ± giorni rispetto a quella mostrata all'apertura
+    form.querySelectorAll('.cb-giorni').forEach(function (c) {
+        const campo = document.getElementById(c.dataset.per), base = new Date(campo.value + 'T12:00:00');
+        c.addEventListener('input', function () {
+            const d = new Date(base); d.setDate(d.getDate() + parseInt(c.value, 10));
+            campo.value = d.toISOString().slice(0, 10);
+        });
+        c.addEventListener('change', invia);
+    });
+})();
+</script>
+{% endblock %}

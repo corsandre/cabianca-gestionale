@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Spostamento in uscita con riscontro del macello</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Varela+Round&family=Yeseva+One&display=swap">
+<style>
+body{margin:0;background:#f5f6f8}
+a{color:#a3154d}a:hover{color:#7d0f3a}
+button{font:inherit;cursor:pointer}
+input,select,textarea{font:inherit;color:#1d1922;box-sizing:border-box;width:100%;min-height:44px;padding:0 12px;border:1px solid rgba(29,25,34,0.25);border-radius:8px;background:#ffffff}
+button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #c2185b;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 600px; height: 1320px; box-sizing: border-box; padding: 20px; font-family: 'Varela Round', system-ui, sans-serif; color: #1d1922; font-size: 14px; line-height: 1.45; font-variant-numeric: tabular-nums">
+  <div style="background: #ffffff; border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,0.18); overflow: hidden; display: flex; flex-direction: column">
+    <div style="background: #c2185b; color: #ffffff; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; gap: 12px">
+      <div style="font-size: 18px">Modifica spostamento</div>
+      <button aria-label="Chiudi" style="width: 44px; height: 44px; border: 0; background: transparent; color: #ffffff; font-size: 22px; line-height: 1">×</button>
+    </div>
+
+    <div style="padding: 18px; display: flex; flex-direction: column; gap: 14px">
+      <div style="font-size: 12.5px; color: #55525c">I campi di oggi restano uguali. Per le uscite di fine ciclo e gli scarti si aggiunge il riquadro del riscontro.</div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <div style="display: flex; flex-direction: column; gap: 4px"><label for="r1">Data</label><input id="r1" type="date" value="2026-04-20"></div>
+        <div style="display: flex; flex-direction: column; gap: 4px"><label for="r2">Tipo</label><select id="r2"><option>Uscita (macello/vendita)</option><option>Entrata (da esterno)</option><option>Interno (box→box)</option></select></div>
+        <div style="display: flex; flex-direction: column; gap: 4px"><label for="r3">CAP origine</label><select id="r3"><option>CAP 4</option></select></div>
+        <div style="display: flex; flex-direction: column; gap: 4px"><label for="r4">Box origine</label><select id="r4"><option>Box 22</option></select></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="r5">Categoria uscita</label><select id="r5"><option>Fine ciclo (165-180 kg)</option><option>Scarto/sottopeso (macellazione anticipata)</option><option>Macellati Ca Bianca Agriturismo</option><option>Venduti Ca Bianca Agriturismo</option></select></div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <div style="display: flex; flex-direction: column; gap: 4px"><label for="r6">Numero capi</label><input id="r6" type="text" inputmode="numeric" value="127"></div>
+        <div style="display: flex; flex-direction: column; gap: 4px"><label for="r7">Peso medio (kg)</label><input id="r7" type="text" inputmode="decimal" value="173,1"></div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <div style="display: flex; flex-direction: column; gap: 4px"><div>Foto bolla</div><div style="min-height: 44px; border: 1px dashed rgba(29,25,34,0.35); border-radius: 8px; display: flex; align-items: center; padding: 0 12px; color: #55525c">bolla caricata</div></div>
+        <div style="display: flex; flex-direction: column; gap: 4px"><div>Modello 4</div><div style="min-height: 44px; border: 1px dashed rgba(29,25,34,0.35); border-radius: 8px; display: flex; align-items: center; padding: 0 12px; color: #55525c">2 pagine caricate</div></div>
+      </div>
+
+      <!-- NUOVO -->
+      <div style="border: 2px solid #c2185b; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 12px; background: #fff8fb">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap">
+          <div style="font-family: 'Yeseva One', Georgia, serif; font-size: 18px">Riscontro del macello</div>
+          <span style="background: #c2185b; color: #ffffff; border-radius: 999px; padding: 2px 10px; font-size: 12px">Nuovo</span>
+        </div>
+        <div style="font-size: 12.5px; color: #55525c">Si compila quando arriva il riscontro, anche giorni dopo l'uscita. Vuoto = carico non ancora riscontrato: la scheda Soccida stima il peso morto con la resa media.</div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+          <div style="display: flex; flex-direction: column; gap: 4px"><label for="n1">Numero bolla del camion</label><input id="n1" type="text" value="[N. BOLLA]"><div style="font-size: 12.5px; color: #55525c">Unisce gli spostamenti dello stesso camion</div></div>
+          <div style="display: flex; flex-direction: column; gap: 4px"><label for="n2">Data del riscontro</label><input id="n2" type="date" value="2026-04-22"></div>
+          <div style="display: flex; flex-direction: column; gap: 4px"><label for="n3">Capi riscontrati</label><input id="n3" type="text" inputmode="numeric" value="127"></div>
+          <div style="display: flex; flex-direction: column; gap: 4px"><label for="n4">Peso morto medio (kg)</label><input id="n4" type="text" inputmode="decimal" value="143,159"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px"><div>Foto del riscontro</div><div style="min-height: 44px; border: 1px dashed rgba(29,25,34,0.35); border-radius: 8px; display: flex; align-items: center; padding: 0 12px; color: #55525c">Scatta o scegli un file</div></div>
+        <div style="background: #ffffff; border: 1px solid rgba(29,25,34,0.12); border-radius: 8px; padding: 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+          <div style="display: flex; flex-direction: column; gap: 2px"><div style="font-size: 12.5px; color: #55525c">Peso morto totale</div><div style="font-size: 18px">18.181 kg</div></div>
+          <div style="display: flex; flex-direction: column; gap: 2px"><div style="font-size: 12.5px; color: #55525c">Resa</div><div style="font-size: 18px">82,7%</div></div>
+          <div style="display: flex; flex-direction: column; gap: 2px"><div style="font-size: 12.5px; color: #55525c">Capi, bolla e riscontro</div><div style="font-size: 18px">127 e 127</div></div>
+        </div>
+        <div style="font-size: 12.5px; color: #55525c">Calcolati mentre scrivi. Esempio con un carico vero del ciclo scorso (20/04/2026).</div>
+        <div style="font-size: 13px">Il riscontro vale per tutto il camion: se il carico è registrato su più box con la stessa data e la stessa bolla, lo inserisci una volta sola.</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="r8">Motivo</label><input id="r8" type="text" value="macellazione"></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><label for="r9">Note</label><textarea id="r9" rows="2" style="padding: 10px 12px; min-height: 64px"></textarea></div>
+    </div>
+
+    <div style="padding: 14px 18px; border-top: 1px solid #e7e8ec; display: flex; justify-content: flex-end; gap: 8px">
+      <button style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 0; background: #6c757d; color: #ffffff">Annulla</button>
+      <button style="min-height: 44px; padding: 0 18px; border-radius: 8px; border: 0; background: #c2185b; color: #ffffff">Salva</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":600,"height":1320}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

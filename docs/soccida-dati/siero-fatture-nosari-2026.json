@@ -1,0 +1,929 @@
+[
+ {
+  "fattura": "2026-FTC-0000330",
+  "data": "31-05-2026",
+  "righe": [
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 19.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 175.75,
+    "ddt": "8509",
+    "data": "2026-05-01"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 10.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 92.5,
+    "ddt": "8510",
+    "data": "2026-05-04"
+   }
+  ],
+  "extra": [
+   {
+    "desc": "(INT) INDICIZZAZIONE GASOLIO VENDITE MAGGIO 2026",
+    "q": 1.0,
+    "prezzo": 20.88,
+    "um": "NR",
+    "tot": 20.88
+   }
+  ],
+  "imponibile": [
+   [
+    "289,13",
+    "28,91"
+   ]
+  ]
+ },
+ {
+  "fattura": "2026-FTC-0000483",
+  "data": "31-07-2026",
+  "righe": [
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 6.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 55.5,
+    "ddt": "8512",
+    "data": "2026-07-03"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 6.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 55.5,
+    "ddt": "8514",
+    "data": "2026-07-06"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 7.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 64.75,
+    "ddt": "8515",
+    "data": "2026-07-08"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 13.5,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 124.88,
+    "ddt": "8516",
+    "data": "2026-07-10"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 9.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 83.25,
+    "ddt": "8517",
+    "data": "2026-07-13"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 12.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 111.0,
+    "ddt": "8518",
+    "data": "2026-07-15"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "1001",
+    "data": "2026-07-17"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 12.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 111.0,
+    "ddt": "1002",
+    "data": "2026-07-20"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 17.64,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 163.17,
+    "ddt": "1003",
+    "data": "2026-07-22"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 8.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 74.0,
+    "ddt": "1004",
+    "data": "2026-07-24"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "1005",
+    "data": "2026-07-25"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "1006",
+    "data": "2026-07-27"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "1007",
+    "data": "2026-07-29"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 8.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 74.0,
+    "ddt": "1008",
+    "data": "2026-07-31"
+   }
+  ],
+  "extra": [
+   {
+    "desc": "(INT) INDICIZZAZIONE GASOLIO VENDITE LUGLIO 2026",
+    "q": 1.0,
+    "prezzo": 118.9,
+    "um": "NR",
+    "tot": 118.9
+   }
+  ],
+  "imponibile": [
+   [
+    "1.646,45",
+    "164,65"
+   ]
+  ]
+ },
+ {
+  "fattura": "2026-FTC-0000404",
+  "data": "30-06-2026",
+  "righe": [
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 6.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 55.5,
+    "ddt": "8511",
+    "data": "2026-06-30"
+   }
+  ],
+  "extra": [
+   {
+    "desc": "(INT) INDICIZZAZIONE GASOLIO VENDITE GIUGNO 2026",
+    "q": 1.0,
+    "prezzo": 3.84,
+    "um": "NR",
+    "tot": 3.84
+   }
+  ],
+  "imponibile": [
+   [
+    "59,34",
+    "5,93"
+   ]
+  ]
+ },
+ {
+  "fattura": "2026-FTC-0000552",
+  "data": "31-08-2026",
+  "righe": [
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 15.29,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 141.43,
+    "ddt": "1009",
+    "data": "2026-08-01"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "1010",
+    "data": "2026-08-03"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 10.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 92.5,
+    "ddt": "1011",
+    "data": "2026-08-05"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 10.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 92.5,
+    "ddt": "1012",
+    "data": "2026-08-06"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 12.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 111.0,
+    "ddt": "1013",
+    "data": "2026-08-07"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.07,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.65,
+    "ddt": "1014",
+    "data": "2026-08-08"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 13.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 120.25,
+    "ddt": "1015",
+    "data": "2026-08-10"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 13.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 120.25,
+    "ddt": "1016",
+    "data": "2026-08-11"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 13.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 120.25,
+    "ddt": "1017",
+    "data": "2026-08-12"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 17.01,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 157.34,
+    "ddt": "1018",
+    "data": "2026-08-13"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "1019",
+    "data": "2026-08-14"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 15.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 138.75,
+    "ddt": "1020",
+    "data": "2026-08-17"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 15.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 138.75,
+    "ddt": "1021",
+    "data": "2026-08-18"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "1022",
+    "data": "2026-08-19"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 10.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 92.5,
+    "ddt": "1023",
+    "data": "2026-08-20"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 17.64,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 163.17,
+    "ddt": "7526",
+    "data": "2026-08-21"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.5,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 171.13,
+    "ddt": "7527",
+    "data": "2026-08-22"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 15.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 138.75,
+    "ddt": "7528",
+    "data": "2026-08-24"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.5,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 152.63,
+    "ddt": "7529",
+    "data": "2026-08-25"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.5,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 152.63,
+    "ddt": "7530",
+    "data": "2026-08-26"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.5,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 152.63,
+    "ddt": "7531",
+    "data": "2026-08-27"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "7532",
+    "data": "2026-08-28"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "7533",
+    "data": "2026-08-29"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "7534",
+    "data": "2026-08-31"
+   }
+  ],
+  "extra": [
+   {
+    "desc": "(INT) INDICIZZAZIONE GASOLIO VENDITE AGOSTO 2026",
+    "q": 1.0,
+    "prezzo": 318.57,
+    "um": "NR",
+    "tot": 318.57
+   }
+  ],
+  "imponibile": [
+   [
+    "3.667,18",
+    "366,72"
+   ]
+  ]
+ },
+ {
+  "fattura": "2026-FTC-0000703",
+  "data": "31-10-2026",
+  "righe": [
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 13.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 120.25,
+    "ddt": "2108",
+    "data": "2026-10-01"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 17.5,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 161.88,
+    "ddt": "2109",
+    "data": "2026-10-02"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "2110",
+    "data": "2026-10-03"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "2111",
+    "data": "2026-10-05"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "2112",
+    "data": "2026-10-06"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "2113",
+    "data": "2026-10-07"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.18,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 149.67,
+    "ddt": "2114",
+    "data": "2026-10-08"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 17.76,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 164.28,
+    "ddt": "2115",
+    "data": "2026-10-09"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "2116",
+    "data": "2026-10-10"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "2117",
+    "data": "2026-10-12"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "2118",
+    "data": "2026-10-13"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "2119",
+    "data": "2026-10-14"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.01,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.59,
+    "ddt": "2120",
+    "data": "2026-10-15"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "2121",
+    "data": "2026-10-16"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "2122",
+    "data": "2026-10-19"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.1,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 167.43,
+    "ddt": "2123",
+    "data": "2026-10-20"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "2124",
+    "data": "2026-10-21"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "2125",
+    "data": "2026-10-22"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "5151",
+    "data": "2026-10-23"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.5,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 171.13,
+    "ddt": "5152",
+    "data": "2026-10-24"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 19.48,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 180.19,
+    "ddt": "5153",
+    "data": "2026-10-26"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.5,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 171.13,
+    "ddt": "5154",
+    "data": "2026-10-27"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "5155",
+    "data": "2026-10-29"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "5156",
+    "data": "2026-10-30"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "5157",
+    "data": "2026-10-31"
+   }
+  ],
+  "extra": [
+   {
+    "desc": "(INT) INDICIZZAZIONE GASOLIO VENDITE OTTOBRE",
+    "q": 1.0,
+    "prezzo": 456.59,
+    "um": "NR",
+    "tot": 456.59
+   }
+  ],
+  "imponibile": [
+   [
+    "4.517,64",
+    "451,76"
+   ]
+  ]
+ },
+ {
+  "fattura": "2026-FTC-0000624",
+  "data": "30-09-2026",
+  "righe": [
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 15.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 138.75,
+    "ddt": "7535",
+    "data": "2026-09-02"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 15.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 138.75,
+    "ddt": "7536",
+    "data": "2026-09-03"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 15.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 138.75,
+    "ddt": "7537",
+    "data": "2026-09-04"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "7538",
+    "data": "2026-09-05"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 17.4,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 160.95,
+    "ddt": "7539",
+    "data": "2026-09-07"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "7540",
+    "data": "2026-09-08"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 15.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 138.75,
+    "ddt": "7541",
+    "data": "2026-09-09"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 15.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 138.75,
+    "ddt": "7542",
+    "data": "2026-09-10"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 15.2,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 140.6,
+    "ddt": "7543",
+    "data": "2026-09-11"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 166.5,
+    "ddt": "7544",
+    "data": "2026-09-12"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 14.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 129.5,
+    "ddt": "7545",
+    "data": "2026-09-14"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "7546",
+    "data": "2026-09-16"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "7547",
+    "data": "2026-09-17"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "7548",
+    "data": "2026-09-18"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 18.5,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 171.13,
+    "ddt": "7549",
+    "data": "2026-09-19"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "7550",
+    "data": "2026-09-21"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "2101",
+    "data": "2026-09-22"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 15.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 138.75,
+    "ddt": "2102",
+    "data": "2026-09-23"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 15.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 138.75,
+    "ddt": "2103",
+    "data": "2026-09-24"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "2104",
+    "data": "2026-09-25"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 13.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 120.25,
+    "ddt": "2105",
+    "data": "2026-09-26"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 16.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 148.0,
+    "ddt": "2106",
+    "data": "2026-09-28"
+   },
+   {
+    "desc": "S.ZOOTEC. PAGLIOLI S.ZOOTEC. PAGLIOLI",
+    "q": 14.0,
+    "prezzo": 9.25,
+    "um": "TN",
+    "tot": 129.5,
+    "ddt": "2107",
+    "data": "2026-09-30"
+   }
+  ],
+  "extra": [
+   {
+    "desc": "(INT) INDICIZZAZIONE GASOLIO VENDITE SETTEMBRE",
+    "q": 1.0,
+    "prezzo": 375.54,
+    "um": "NR",
+    "tot": 375.54
+   }
+  ],
+  "imponibile": [
+   [
+    "3.715,72",
+    "371,57"
+   ]
+  ]
+ }
+]
