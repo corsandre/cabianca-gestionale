@@ -46,6 +46,17 @@
 .cb-soc .campo { display:grid; gap:3px; align-content:start; }
 .cb-soc .campo input[type=date], .cb-soc .campo input[type=number] { min-height:44px; border:1px solid rgba(29,25,34,.25); border-radius:8px; padding:0 10px; width:100%; font:inherit; background:#fff; }
 .cb-soc input[type=range] { accent-color:var(--rosa); width:100%; height:28px; margin:0; }
+/* col dito: lo scorrimento verticale resta alla pagina anche partendo da un cursore, e il pallino è più grande */
+.cb-soc input[type=range] { touch-action:pan-y; }
+@media (pointer:coarse) {
+    .cb-soc input[type=range] { -webkit-appearance:none; appearance:none; background:transparent; height:36px; }
+    .cb-soc input[type=range]::-webkit-slider-runnable-track { height:6px; border-radius:3px; background:#e6c9d5; }
+    .cb-soc input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:28px; height:28px; margin-top:-11px;
+        border-radius:50%; background:var(--rosa); border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,.35); }
+    .cb-soc input[type=range]::-moz-range-track { height:6px; border-radius:3px; background:#e6c9d5; }
+    .cb-soc input[type=range]::-moz-range-thumb { width:24px; height:24px; border-radius:50%; background:var(--rosa);
+        border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,.35); }
+}
 .cb-soc output { white-space:nowrap; }
 .cb-soc .riquadro { background:var(--fondo2); border-radius:10px; padding:14px 16px; display:grid; gap:10px; }
 /* grafici */
@@ -329,22 +340,56 @@
     if (!form) return;
     function invia() { if (form.reportValidity()) { document.querySelector('.cb-soc').style.opacity = .55; form.submit(); } }
     form.querySelectorAll('input[type=date], input[type=checkbox]').forEach(function (i) { i.addEventListener('change', invia); });
+    // Col dito un cursore risponde solo se preso dal pallino e trascinato in orizzontale: toccare la barra
+    // o scorrere la pagina passandoci sopra non cambia il valore e non ricalcola (richiesta di Andrea, 16/11/2026).
+    // Niente preventDefault: la pagina deve continuare a scorrere anche partendo da qui. Col mouse non cambia nulla.
+    const PALLINO = window.matchMedia('(pointer: coarse)').matches ? 28 : 16, VICINO = 30;
+    function collega(c, aggiorna) {
+        const apertura = c.value;
+        let fermo = c.value;                  // ultimo valore buono, a cui tornare
+        let toccando = false, ignora = false, deciso = false, x0 = 0, y0 = 0, ignoraFino = 0;
+        function bloccato() { return (toccando && ignora) || Date.now() < ignoraFino; }
+        function torna() { c.value = fermo; aggiorna(); }
+        c.addEventListener('touchstart', function (e) {
+            const t = e.touches[0], r = c.getBoundingClientRect(), min = Number(c.min), max = Number(c.max);
+            const quota = max > min ? (Number(fermo) - min) / (max - min) : 0;
+            const pallinoX = r.left + PALLINO / 2 + quota * (r.width - PALLINO);
+            toccando = true; deciso = false; ignoraFino = 0; x0 = t.clientX; y0 = t.clientY;
+            ignora = Math.abs(t.clientX - pallinoX) > VICINO;
+        }, { passive: true });
+        c.addEventListener('touchmove', function (e) {
+            const t = e.touches[0], dx = Math.abs(t.clientX - x0), dy = Math.abs(t.clientY - y0);
+            if (!deciso && Math.max(dx, dy) > 6) { deciso = true; if (dy > dx) ignora = true; }   // sta scorrendo la pagina
+            if (ignora) torna();
+        }, { passive: true });
+        function fine(annullato) {
+            if (annullato) ignora = true;
+            // dopo il tocco il browser può ancora mandare il clic «di compatibilità» sulla barra: resta ignorato
+            if (ignora) { ignoraFino = Date.now() + 800; torna(); }
+            toccando = false;
+        }
+        c.addEventListener('touchend', function () { fine(false); }, { passive: true });
+        c.addEventListener('touchcancel', function () { fine(true); }, { passive: true });
+        c.addEventListener('input', function () { if (bloccato()) c.value = fermo; aggiorna(); });
+        c.addEventListener('change', function () {
+            if (bloccato()) { torna(); return; }
+            fermo = c.value;
+            if (c.value !== apertura) invia();   // ricalcola solo se il valore è cambiato davvero
+        });
+        aggiorna();
+    }
     // cursori dei valori: il numero accanto segue il dito, il ricalcolo parte al rilascio
     form.querySelectorAll('.cb-cursore').forEach(function (c) {
         const out = form.querySelector('output[for="' + c.id + '"]');
-        function mostra() { out.textContent = Number(c.value).toLocaleString('it-IT', { maximumFractionDigits: 1, useGrouping: 'always' }) + out.dataset.unita; }
-        c.addEventListener('input', mostra);
-        c.addEventListener('change', invia);
-        mostra();
+        collega(c, function () { out.textContent = Number(c.value).toLocaleString('it-IT', { maximumFractionDigits: 1, useGrouping: 'always' }) + out.dataset.unita; });
     });
     // cursori delle date: spostano la data del campo sopra di ± giorni rispetto a quella mostrata all'apertura
     form.querySelectorAll('.cb-giorni').forEach(function (c) {
         const campo = document.getElementById(c.dataset.per), base = new Date(campo.value + 'T12:00:00');
-        c.addEventListener('input', function () {
+        collega(c, function () {
             const d = new Date(base); d.setDate(d.getDate() + parseInt(c.value, 10));
             campo.value = d.toISOString().slice(0, 10);
         });
-        c.addEventListener('change', invia);
     });
 })();
 </script>

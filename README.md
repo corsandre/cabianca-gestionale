@@ -432,6 +432,9 @@ garantito), con che probabilità si arriva a premio e cosa sposta il risultato. 
   griglia primo × ultimo carico, leve.
 - **Prove**: i valori cambiati nel riquadro Scenario sono parametri dell'indirizzo e la pagina si ricalcola sul
   server (un solo motore, niente copia in JavaScript). «Salva come standard» li rende lo scenario del ciclo.
+  Il ricalcolo parte al rilascio di un cursore, solo se il valore è cambiato. **Col dito** un cursore risponde
+  solo se preso dal pallino e trascinato in orizzontale: toccare la barra o scorrere la pagina passandoci sopra
+  non cambia il valore (`collega()` nello script di `soccida.html`); col mouse funziona come sempre.
 - **Dati da aggiornare**: per ogni dato che regge la stima lo stato (ipotesi, stimato, reale, da fare), quanto
   sposta il margine e la pagina dove si aggiorna, in ordine di peso.
 - **Impostazioni Soccida** (`/allevamento/soccida/impostazioni`): contratto, dati del ciclo, scenario standard,

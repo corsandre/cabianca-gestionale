@@ -236,3 +236,13 @@ Segnalato da Andrea: dopo il censimento del 16/11 il gestionale aveva un capo in
 - **Correzione**: `eventi_dopo_censimento(modello, cens)` in `app/routes/allevamento.py`, usata da `_live_count` e dai movimenti di «Confronta con il PC». Nel giorno del censimento contano solo gli eventi registrati dopo averlo salvato (`created_at`); dai giorni successivi tutti.
 - **Conti passati invariati**: la regola nuova vale per i censimenti dal 16/11/2026 (`REGOLA_ORA_CENSIMENTO_DAL`). Il censimento ricostruito del 26/06 ha due decessi dello stesso giorno registrati prima di lui: con la regola nuova sarebbero spariti dal conteggio di quel periodo.
 - **Prova** (`data/_prova_conteggio_censimento.py` su una copia del database di produzione): oggi 1.777 invece di 1.776, cambia solo il box 5 (37); i 3 venduti del box 4, registrati dopo il censimento, restano tolti; nessun altro giorno del ciclo cambia.
+
+## 3.0.5 — cursori della scheda Soccida che da telefono rispondono solo dal pallino (16/11/2026)
+
+Segnalato da Andrea: usando la scheda dal telefono, scorrendo la pagina il dito finiva sulla barra di un cursore, il valore saltava lì e la pagina si ricalcolava. Tra le soluzioni proposte (solo dal pallino, lucchetto, tasto «Ricalcola») ha scelto la prima.
+- **Col dito** i 7 cursori dello scenario (5 valori, 2 date) si muovono solo se presi dal pallino (entro 30 px) e trascinati in orizzontale. Un tocco sulla barra, uno scorrimento verticale partito dal pallino, un tocco interrotto dal browser e il clic «di compatibilità» che può seguire il tocco rimettono il valore di prima e non ricalcolano.
+- Nessun `preventDefault` e `touch-action: pan-y`: la pagina scorre normalmente anche partendo da un cursore.
+- **Ricalcolo solo se il valore è cambiato** rispetto all'apertura della pagina (anche col mouse): toccare il pallino senza trascinare non ricarica più.
+- Sui dispositivi a tocco (`pointer: coarse`) il pallino è più grande (28 px). Col mouse nulla di diverso.
+- Tutto in `app/templates/allevamento/soccida.html` (`collega()`); server e calcoli non toccati.
+- **Prova**: `data/_prova_soccida_cursori.py` + `data/_soccida_cursori.js` su una copia del database di produzione, in Chromium senza interfaccia con tocchi simulati (barra, verticale, tocco fermo, orizzontale, mouse) sul cursore della resa e su quello dell'ultimo carico. La prova con il dito vero resta da fare sul telefono: i tocchi simulati non dicono come si comportano Chrome e Safari veri.
