@@ -203,6 +203,13 @@ struttura fisica vanno aggiornate in entrambi i file.
 #### Censimento (`/allevamento/censimento`)
 - Censimenti per box (`Censimento` + `CensimentoBox`): quantità, giorni di vita, peso stimato.
 - Basta inserire uno tra giorni di vita e peso: l'altro si ricava dalla **curva di accrescimento**.
+- Il modal «Nuovo censimento» mostra per ogni box l'**ultimo censimento** (capi, età e peso di allora) e la
+  **nostra stima** alla data scelta (capi dal conteggio live, età proiettata, peso dalla curva): i campi partono
+  già compilati con la stima, e quello che si cambia viene evidenziato con la differenza di capi per box,
+  capannone e totale. Cambiando la data, attesi e stima si ricalcolano a quel giorno (`/censimento/stima`).
+- Età e peso si possono cambiare **in gruppo**: si selezionano dei box (o tutto il capannone), si scrive l'età
+  oppure il peso nella barra in alto e l'altro si ricava dalla curva; «Rimetti la stima» annulla le modifiche.
+- Un box con 0 capi viene salvato senza età e senza peso.
 - I censimenti sono **immutabili** e restano consultabili nello storico paginato, con dettaglio per box.
 
 #### Mortalità (`/allevamento/mortalita`)

@@ -108,6 +108,23 @@
 </div>
 
 <!-- Modal nuovo censimento -->
+<style>
+    .cb-cens-tab th { font-size: .72rem; text-transform: uppercase; color: #6c757d; font-weight: 600; white-space: nowrap; }
+    .cb-cens-tab td { vertical-align: middle; }
+    .cb-cens-tab input[type=number] { min-width: 3.6rem; max-width: 6rem; }
+    .cb-cens-tab .cb-cens-diverso { border-color: #c2185b; background: #fce4ec; }
+    .cb-cens-tab tr.cb-cens-selezionata > td { background: #fdf3f7; }
+    .cb-cens-diff { font-size: .75rem; font-weight: 600; white-space: nowrap; }
+    .cb-cens-gruppo input[type=number] { width: 5.5rem; }
+    .cb-cens-rif-riga > td { font-size: .7rem; padding-top: 0; }
+    @media (max-width: 767.98px) {
+        .cb-cens-tab tr.cb-cens-riga > td { border-bottom: 0; padding-bottom: .1rem; }
+        .cb-cens-tab td, .cb-cens-tab th { padding-left: .2rem; padding-right: .2rem; }
+        .cb-cens-tab input[type=number] { min-width: 0; width: 3.9rem; padding-left: .35rem; padding-right: .2rem; }
+        .cb-cens-tab small { display: block; font-size: .65rem; line-height: 1; }
+        .cb-cens-gruppo input[type=number] { width: 3.6rem; }
+    }
+</style>
 <div class="modal fade" id="modalCensimento" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
@@ -115,18 +132,38 @@
                 <h5 class="modal-title"><i class="bi bi-123 me-2"></i>Nuovo censimento manuale</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="post" action="{{ url_for('allevamento.censimento_new') }}">
+            <form method="post" action="{{ url_for('allevamento.censimento_new') }}" id="cbCensForm">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="cb-censimento-totale-bar d-flex justify-content-between align-items-center px-3 py-2"
-                     style="position:sticky;top:0;z-index:5;background:#fce4ec;border-bottom:2px solid #c2185b">
-                    <span class="fw-semibold" style="color:#c2185b">Totale suini inseriti</span>
-                    <span class="fs-4 fw-bold cb-censimento-totale" style="color:#c2185b">0</span>
+                <div style="position:sticky;top:0;z-index:5;background:#fce4ec;border-bottom:2px solid #c2185b">
+                    <div class="d-flex justify-content-between align-items-center px-3 pt-2">
+                        <span class="fw-semibold" style="color:#c2185b">Totale suini inseriti
+                            <span class="fw-normal text-muted small ms-2">attesi <span id="cbCensAttesiTot">0</span>
+                                <span id="cbCensDiffTot" class="cb-cens-diff"></span></span>
+                        </span>
+                        <span class="fs-4 fw-bold" id="cbCensTotale" style="color:#c2185b">0</span>
+                    </div>
+                    <div class="cb-cens-gruppo d-flex flex-wrap align-items-center gap-2 px-3 pb-2 small">
+                        <span><strong id="cbCensNumSel">0</strong> box selezionati</span>
+                        <div class="input-group input-group-sm" style="width:auto">
+                            <span class="input-group-text">Età</span>
+                            <input type="number" id="cbCensGruppoGiorni" class="form-control" min="0" max="365" placeholder="gg">
+                        </div>
+                        <div class="input-group input-group-sm" style="width:auto">
+                            <span class="input-group-text">Peso</span>
+                            <input type="number" id="cbCensGruppoPeso" class="form-control" min="0" max="250" step="0.1" placeholder="kg">
+                        </div>
+                        <button type="button" class="btn btn-sm" id="cbCensApplica" style="background:#c2185b;color:#fff" disabled>Applica</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="cbCensRimetti" disabled>Rimetti la stima</button>
+                        <span class="ms-auto">
+                            <a href="#" id="cbCensSelTutti">Tutti</a> · <a href="#" id="cbCensSelNessuno">Nessuno</a>
+                        </span>
+                    </div>
                 </div>
                 <div class="modal-body">
-                    <div class="row g-3 mb-4">
+                    <div class="row g-3 mb-3">
                         <div class="col-md-4">
                             <label class="form-label">Data</label>
-                            <input type="date" name="data" class="form-control" value="{{ oggi.isoformat() }}" required>
+                            <input type="date" name="data" id="cbCensData" class="form-control" value="{{ oggi.isoformat() }}" max="{{ oggi.isoformat() }}" required>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Operatore</label>
@@ -137,27 +174,63 @@
                             <input type="text" name="note" class="form-control">
                         </div>
                     </div>
+                    <p class="text-muted small mb-3">
+                        I campi sono già compilati con la nostra stima <span id="cbCensStimaQuando">a oggi</span>: capi dall'ultimo censimento
+                        <span id="cbCensUltimoData"></span> ± decessi e spostamenti, età proiettata, peso dalla curva di accrescimento.
+                        Correggi solo quello che non torna. Cambiando l'età il peso si ricalcola dalla curva, e viceversa.
+                        Per cambiare età o peso a più box insieme, selezionali (o spunta il capannone) e usa la barra in alto.
+                    </p>
+                    <div id="cbCensErrore" class="alert alert-warning py-2 small" hidden></div>
                     {% for cap in CAPANNONI %}
-                    <h6 class="text-uppercase small mb-2">CAP {{ cap }}</h6>
-                    <div class="row g-2 mb-3">
-                        {% for b in BOX_PER_CAP[cap] %}
-                        <div class="col-6 col-sm-4 col-md-3 col-lg-2">
-                            <label class="form-label small mb-0 fw-semibold">Box {{ b }} <small class="text-muted">(max {{ POSTI_PER_BOX_STANDARD[b] }})</small></label>
-                            <input type="number" name="box_{{ b }}" class="form-control form-control-sm mb-1 cb-censimento-capi"
-                                   placeholder="Capi" value="{{ live.get(b, 0) }}" min="0" data-capienza="{{ POSTI_PER_BOX_STANDARD[b] }}">
-                            <div class="small text-warning-emphasis fw-semibold cb-censimento-overflow" hidden>⚠ sopra capienza</div>
-                            <div class="input-group input-group-sm mb-1">
-                                <span class="input-group-text" title="Giorni di vita">gg</span>
-                                <input type="number" name="giorni_{{ b }}" class="form-control form-control-sm"
-                                       placeholder="Età" min="0" max="365">
-                            </div>
-                            <div class="input-group input-group-sm">
-                                <span class="input-group-text" title="Peso medio stimato">kg</span>
-                                <input type="number" name="peso_{{ b }}" class="form-control form-control-sm"
-                                       placeholder="Peso" min="0" max="250" step="0.1">
-                            </div>
-                        </div>
-                        {% endfor %}
+                    <div class="d-flex justify-content-between align-items-center mb-1 mt-3">
+                        <label class="mb-0 fw-semibold text-uppercase small">
+                            <input type="checkbox" class="form-check-input me-1 cb-cens-sel-cap" data-cap="{{ cap }}">
+                            <span class="badge" style="background:#c2185b">CAP {{ cap }}</span>
+                        </label>
+                        <span class="small text-muted">attesi <span class="cb-cens-attesi-cap" data-cap="{{ cap }}">0</span>
+                            · inseriti <strong class="cb-cens-inseriti-cap" data-cap="{{ cap }}" style="color:#c2185b">0</strong>
+                            <span class="cb-cens-diff cb-cens-diff-cap" data-cap="{{ cap }}"></span></span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0 cb-cens-tab">
+                            <thead>
+                                <tr>
+                                    <th style="width:1.5rem"></th>
+                                    <th>Box</th>
+                                    <th class="d-none d-md-table-cell">Ultimo censimento</th>
+                                    <th class="d-none d-md-table-cell">Nostra stima</th>
+                                    <th>Capi</th>
+                                    <th>Età gg</th>
+                                    <th>Peso kg</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for b in BOX_PER_CAP[cap] %}
+                                <tr class="cb-cens-riga" data-box="{{ b }}" data-cap="{{ cap }}" data-capienza="{{ POSTI_PER_BOX_STANDARD[b] }}">
+                                    <td><input type="checkbox" class="form-check-input cb-cens-sel" aria-label="Seleziona box {{ b }}"></td>
+                                    <td>
+                                        <span class="fw-semibold">{{ b }}</span>
+                                        <small class="text-muted">max {{ POSTI_PER_BOX_STANDARD[b] }}</small>
+                                    </td>
+                                    <td class="d-none d-md-table-cell small text-muted cb-cens-ultimo"></td>
+                                    <td class="d-none d-md-table-cell small cb-cens-stima"></td>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-1">
+                                            <input type="number" name="box_{{ b }}" class="form-control form-control-sm cb-cens-capi" min="0" value="{{ live.get(b, 0) }}" aria-label="Capi box {{ b }}">
+                                            <span class="cb-cens-diff cb-cens-diff-box"></span>
+                                        </div>
+                                    </td>
+                                    <td><input type="number" name="giorni_{{ b }}" class="form-control form-control-sm cb-cens-giorni" min="0" max="365" aria-label="Età box {{ b }}"></td>
+                                    <td><input type="number" name="peso_{{ b }}" class="form-control form-control-sm cb-cens-peso" min="0" max="250" step="0.1" aria-label="Peso box {{ b }}"></td>
+                                </tr>
+                                {# su telefono ultimo censimento e stima stanno in una riga sotto il box #}
+                                <tr class="d-md-none cb-cens-rif-riga">
+                                    <td></td>
+                                    <td colspan="6" class="text-muted cb-cens-rif-mobile"></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                     {% endfor %}
                 </div>
@@ -213,30 +286,248 @@ document.querySelectorAll('.cb-riga-censimento').forEach(function (tr) {
     });
 });
 
-const cbCensimentoInputs = document.querySelectorAll('.cb-censimento-capi');
-const cbCensimentoTotale = document.querySelector('.cb-censimento-totale');
+// ── Nuovo censimento: stima nei campi, differenze, modifiche di gruppo ──────
+(function () {
+    const form = document.getElementById('cbCensForm');
+    if (!form) return;
+    let STIMA = {{ stima | tojson }};
+    const CURVA = {{ curva | tojson }};            // [[giorni, kg], …] in ordine di età
+    const URL_STIMA = {{ url_for('allevamento.censimento_stima') | tojson }};
+    const OGGI = {{ oggi.isoformat() | tojson }};
+    const righe = Array.from(form.querySelectorAll('.cb-cens-riga'));
+    const CAMPI = ['capi', 'giorni', 'peso'];
 
-function cbCensimentoAggiornaTotale() {
-    let tot = 0;
-    cbCensimentoInputs.forEach(function (i) {
-        const v = parseInt(i.value, 10);
-        if (!isNaN(v)) tot += v;
-    });
-    cbCensimentoTotale.textContent = tot;
-}
-
-cbCensimentoInputs.forEach(function (input) {
-    const capienza = parseInt(input.dataset.capienza, 10);
-    const overflow = input.parentElement.querySelector('.cb-censimento-overflow');
-    function check() {
-        const sopra = parseInt(input.value, 10) > capienza;
-        input.classList.toggle('bg-warning-subtle', sopra);
-        input.classList.toggle('border-warning', sopra);
-        overflow.hidden = !sopra;
-        cbCensimentoAggiornaTotale();
+    function num(input) {
+        const v = parseFloat(String(input.value).replace(',', '.'));
+        return isNaN(v) ? null : v;
     }
-    input.addEventListener('input', check);
-    check();
-});
+    function it(n) { return String(n).replace('.', ','); }
+    function arr1(n) { return Math.round(n * 10) / 10; }
+
+    // Stessa interpolazione di peso_da_giorni / giorni_da_peso (allevamento_scorte.py)
+    function pesoDaGiorni(g) {
+        if (!CURVA.length || g == null) return null;
+        if (g <= CURVA[0][0]) return CURVA[0][1];
+        if (g >= CURVA[CURVA.length - 1][0]) return CURVA[CURVA.length - 1][1];
+        for (let i = 0; i < CURVA.length - 1; i++) {
+            const [x0, y0] = CURVA[i], [x1, y1] = CURVA[i + 1];
+            if (g >= x0 && g <= x1) return x1 === x0 ? y0 : y0 + (y1 - y0) * (g - x0) / (x1 - x0);
+        }
+        return null;
+    }
+    function giorniDaPeso(p) {
+        if (!CURVA.length || p == null) return null;
+        if (p <= CURVA[0][1]) return CURVA[0][0];
+        if (p >= CURVA[CURVA.length - 1][1]) return CURVA[CURVA.length - 1][0];
+        for (let i = 0; i < CURVA.length - 1; i++) {
+            const [x0, y0] = CURVA[i], [x1, y1] = CURVA[i + 1];
+            if (p >= y0 && p <= y1) return y1 === y0 ? x0 : Math.round(x0 + (x1 - x0) * (p - y0) / (y1 - y0));
+        }
+        return null;
+    }
+
+    function campi(tr) {
+        return {
+            capi: tr.querySelector('.cb-cens-capi'),
+            giorni: tr.querySelector('.cb-cens-giorni'),
+            peso: tr.querySelector('.cb-cens-peso'),
+        };
+    }
+    function stimaDi(tr) {
+        const d = STIMA.box[tr.dataset.box];
+        return d ? d.stima : { capi: 0, giorni: null, peso: null };
+    }
+    function scrivi(input, valore) { input.value = valore == null ? '' : valore; }
+    function descrivi(d) {
+        if (!d) return '–';
+        let t = String(d.capi);
+        if (d.giorni != null) t += ' · ' + d.giorni + ' gg';
+        if (d.peso != null) t += ' · ' + it(d.peso) + ' kg';
+        return t;
+    }
+
+    // Scrive la stima nei campi; con soloIntatti lascia stare quelli toccati a mano.
+    function mettiStima(tr, soloIntatti) {
+        const c = campi(tr), st = stimaDi(tr);
+        CAMPI.forEach(function (k) {
+            if (soloIntatti && c[k].dataset.mano === '1') return;
+            scrivi(c[k], k === 'capi' ? st.capi : st[k]);
+            delete c[k].dataset.mano;
+        });
+    }
+
+    function aggiornaRiferimenti() {
+        righe.forEach(function (tr) {
+            const d = STIMA.box[tr.dataset.box] || {};
+            const ult = descrivi(d.ultimo), st = descrivi(d.stima);
+            tr.querySelector('.cb-cens-ultimo').textContent = ult;
+            tr.querySelector('.cb-cens-stima').textContent = st;
+            tr.nextElementSibling.querySelector('.cb-cens-rif-mobile').textContent = 'ultimo ' + ult + ' → stima ' + st;
+        });
+        document.getElementById('cbCensUltimoData').textContent = STIMA.ultimo_data ? '(' + STIMA.ultimo_data + ')' : '';
+    }
+
+    function segno(d) { return d === 0 ? '' : ' (' + (d > 0 ? '+' : '−') + Math.abs(d) + ')'; }
+    function coloraDiff(el, d) {
+        el.classList.toggle('text-danger', d < 0);
+        el.classList.toggle('text-success', d > 0);
+    }
+
+    function aggiorna() {
+        let tot = 0, attesi = 0, sel = 0;
+        const perCap = {};
+        righe.forEach(function (tr) {
+            const c = campi(tr), st = stimaDi(tr), cap = tr.dataset.cap;
+            const capi = num(c.capi) || 0;
+            const capienza = parseInt(tr.dataset.capienza, 10);
+            perCap[cap] = perCap[cap] || { ins: 0, att: 0, sel: 0, n: 0 };
+            perCap[cap].ins += capi; perCap[cap].att += st.capi; perCap[cap].n += 1;
+            tot += capi; attesi += st.capi;
+
+            c.capi.classList.toggle('cb-cens-diverso', capi !== st.capi);
+            c.giorni.classList.toggle('cb-cens-diverso', num(c.giorni) !== st.giorni);
+            c.peso.classList.toggle('cb-cens-diverso', num(c.peso) !== st.peso);
+
+            const sopra = capi > capienza;
+            c.capi.classList.toggle('bg-warning-subtle', sopra);
+            c.capi.classList.toggle('border-warning', sopra);
+            const diff = tr.querySelector('.cb-cens-diff-box'), d = capi - st.capi;
+            diff.textContent = (d === 0 ? '' : (d > 0 ? '+' : '−') + Math.abs(d)) + (sopra ? ' ⚠' : '');
+            diff.title = sopra ? 'Sopra capienza (max ' + capienza + ')' : '';
+            coloraDiff(diff, d);
+
+            const spuntata = tr.querySelector('.cb-cens-sel').checked;
+            tr.classList.toggle('cb-cens-selezionata', spuntata);
+            if (spuntata) { sel += 1; perCap[cap].sel += 1; }
+        });
+        Object.keys(perCap).forEach(function (cap) {
+            const p = perCap[cap], q = '[data-cap="' + cap + '"]';
+            form.querySelector('.cb-cens-attesi-cap' + q).textContent = p.att;
+            form.querySelector('.cb-cens-inseriti-cap' + q).textContent = p.ins;
+            const d = form.querySelector('.cb-cens-diff-cap' + q);
+            d.textContent = segno(p.ins - p.att);
+            coloraDiff(d, p.ins - p.att);
+            const chk = form.querySelector('.cb-cens-sel-cap' + q);
+            chk.checked = p.sel === p.n;
+            chk.indeterminate = p.sel > 0 && p.sel < p.n;
+        });
+        document.getElementById('cbCensTotale').textContent = tot;
+        document.getElementById('cbCensAttesiTot').textContent = attesi;
+        const dt = document.getElementById('cbCensDiffTot');
+        dt.textContent = segno(tot - attesi);
+        coloraDiff(dt, tot - attesi);
+        document.getElementById('cbCensNumSel').textContent = sel;
+        document.getElementById('cbCensApplica').disabled = sel === 0;
+        document.getElementById('cbCensRimetti').disabled = sel === 0;
+    }
+
+    // ── Campi dei singoli box ──
+    righe.forEach(function (tr) {
+        const c = campi(tr);
+        c.capi.addEventListener('input', function () { c.capi.dataset.mano = '1'; aggiorna(); });
+        c.giorni.addEventListener('input', function () {
+            c.giorni.dataset.mano = '1';
+            if (c.peso.dataset.mano !== '1') {       // il peso segue l'età finché non lo scrivo a mano
+                const p = pesoDaGiorni(num(c.giorni));
+                scrivi(c.peso, p == null ? null : arr1(p));
+            }
+            aggiorna();
+        });
+        c.peso.addEventListener('input', function () {
+            c.peso.dataset.mano = '1';
+            if (c.giorni.dataset.mano !== '1') {
+                scrivi(c.giorni, giorniDaPeso(num(c.peso)));
+            }
+            aggiorna();
+        });
+        tr.querySelector('.cb-cens-sel').addEventListener('change', aggiorna);
+    });
+
+    // ── Selezione ──
+    function seleziona(filtro, valore) {
+        righe.forEach(function (tr) {
+            if (filtro(tr)) tr.querySelector('.cb-cens-sel').checked = valore;
+        });
+        aggiorna();
+    }
+    form.querySelectorAll('.cb-cens-sel-cap').forEach(function (chk) {
+        chk.addEventListener('change', function () {
+            seleziona(function (tr) { return tr.dataset.cap === chk.dataset.cap; }, chk.checked);
+        });
+    });
+    document.getElementById('cbCensSelTutti').addEventListener('click', function (e) {
+        e.preventDefault(); seleziona(function () { return true; }, true);
+    });
+    document.getElementById('cbCensSelNessuno').addEventListener('click', function (e) {
+        e.preventDefault(); seleziona(function () { return true; }, false);
+    });
+    function selezionate() {
+        return righe.filter(function (tr) { return tr.querySelector('.cb-cens-sel').checked; });
+    }
+
+    // ── Età / peso a tutti i box selezionati ──
+    const gGiorni = document.getElementById('cbCensGruppoGiorni');
+    const gPeso = document.getElementById('cbCensGruppoPeso');
+    function applicaGruppo() {
+        const g = num(gGiorni), p = num(gPeso);
+        if (g == null && p == null) { gGiorni.focus(); return; }
+        selezionate().forEach(function (tr) {
+            const c = campi(tr);
+            if (!(num(c.capi) > 0)) return;          // i box vuoti non hanno età né peso
+            const giorni = g != null ? Math.round(g) : giorniDaPeso(p);
+            const calcolato = pesoDaGiorni(g);
+            const peso = p != null ? p : (calcolato == null ? null : arr1(calcolato));
+            scrivi(c.giorni, giorni);
+            scrivi(c.peso, peso);
+            // resta "a mano" solo quello che ho scritto: l'altro continua a seguire la curva
+            if (g != null) c.giorni.dataset.mano = '1'; else delete c.giorni.dataset.mano;
+            if (p != null) c.peso.dataset.mano = '1'; else delete c.peso.dataset.mano;
+        });
+        gGiorni.value = ''; gPeso.value = '';
+        aggiorna();
+    }
+    document.getElementById('cbCensApplica').addEventListener('click', applicaGruppo);
+    [gGiorni, gPeso].forEach(function (i) {
+        i.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); if (selezionate().length) applicaGruppo(); }
+        });
+    });
+    document.getElementById('cbCensRimetti').addEventListener('click', function () {
+        selezionate().forEach(function (tr) { mettiStima(tr, false); });
+        aggiorna();
+    });
+
+    // ── Cambio data: attesi e stima a quel giorno, senza toccare i campi scritti a mano ──
+    const inputData = document.getElementById('cbCensData');
+    const errore = document.getElementById('cbCensErrore');
+    let richiesta = 0;
+    inputData.addEventListener('change', async function () {
+        if (!inputData.value) return;
+        const n = ++richiesta;
+        try {
+            const resp = await fetch(URL_STIMA + '?data=' + encodeURIComponent(inputData.value));
+            const dati = await resp.json();
+            if (n !== richiesta) return;               // è arrivata prima una data più recente
+            if (dati.error) throw new Error(dati.error);
+            STIMA = dati;
+            errore.hidden = true;
+            const [a, m, g] = inputData.value.split('-');
+            document.getElementById('cbCensStimaQuando').textContent =
+                inputData.value >= OGGI ? 'a oggi' : 'al ' + g + '/' + m + '/' + a;
+            righe.forEach(function (tr) { mettiStima(tr, true); });
+            aggiornaRiferimenti();
+            aggiorna();
+        } catch (err) {
+            if (n !== richiesta) return;
+            errore.textContent = 'Non riesco a ricalcolare la stima per questa data (' + err.message +
+                '): attesi e stima sono ancora quelli di prima.';
+            errore.hidden = false;
+        }
+    });
+
+    righe.forEach(function (tr) { mettiStima(tr, false); });
+    aggiornaRiferimenti();
+    aggiorna();
+})();
 </script>
 {% endblock %}

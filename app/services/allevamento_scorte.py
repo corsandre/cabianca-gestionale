@@ -615,7 +615,8 @@ def chiudi_consegne_siero_precedenti(data_chiusura, ora_chiusura=None, escludi_i
             c.ora_esaurimento = ora_chiusura
 
 
-def _punti_curva_accrescimento():
+def punti_curva_accrescimento():
+    """Punti (giorni, kg) della curva di accrescimento, in ordine di età."""
     from app.models import CurvaAccrescimento
     righe = CurvaAccrescimento.query.order_by(CurvaAccrescimento.eta_giorni).all()
     return [(r.eta_giorni, r.peso_kg) for r in righe]
@@ -625,7 +626,7 @@ def peso_da_giorni(giorni):
     """Interpola la curva età→peso per stimare il peso dai giorni di vita.
     Fuori dagli estremi della curva, mantiene il valore del punto più vicino
     (nessuna estrapolazione oltre i dati noti)."""
-    punti = _punti_curva_accrescimento()
+    punti = punti_curva_accrescimento()
     if not punti or giorni is None:
         return None
     if giorni <= punti[0][0]:
@@ -643,7 +644,7 @@ def peso_da_giorni(giorni):
 def giorni_da_peso(peso):
     """Funzione inversa: stima i giorni di vita dal peso, interpolando
     sull'asse peso (la curva è monotona crescente)."""
-    punti = _punti_curva_accrescimento()
+    punti = punti_curva_accrescimento()
     if not punti or peso is None:
         return None
     if peso <= punti[0][1]:

@@ -428,27 +428,62 @@ def spostamenti_annulla(sp_id, azione):
 
 # ── Censimento ─────────────────────────────────────────────────────────────
 
-def _proiezione_giorni_peso(ciclo):
-    """Per ogni box, proietta a oggi i giorni di vita dall'ultimo censimento
-    che li riportava, e ricalcola il peso stimato con la curva di
-    accrescimento (non riusa il peso salvato allora, che nel frattempo è
-    invecchiato)."""
+def _proiezione_giorni_peso(ciclo, al_giorno=None):
+    """Per ogni box, proietta a oggi (o ad al_giorno) i giorni di vita
+    dall'ultimo censimento che li riportava, e ricalcola il peso stimato con
+    la curva di accrescimento (non riusa il peso salvato allora, che nel
+    frattempo è invecchiato)."""
     from app.models import Censimento, CensimentoBox
     from app.services.allevamento_scorte import peso_da_giorni
-    oggi = date.today()
-    righe = (
-        CensimentoBox.query.join(Censimento)
-        .filter(Censimento.ciclo_id == ciclo.id, CensimentoBox.giorni_vita.isnot(None))
-        .order_by(Censimento.data.desc(), Censimento.id.desc())
-        .all()
-    )
+    giorno = al_giorno or date.today()
+    q = CensimentoBox.query.join(Censimento).filter(
+        Censimento.ciclo_id == ciclo.id, CensimentoBox.giorni_vita.isnot(None))
+    if al_giorno:
+        q = q.filter(Censimento.data <= al_giorno)
+    righe = q.order_by(Censimento.data.desc(), Censimento.id.desc()).all()
     risultato = {}
     for cb in righe:
         if cb.box_numero in risultato:
             continue
-        giorni_oggi = cb.giorni_vita + (oggi - cb.censimento.data).days
-        risultato[cb.box_numero] = {"giorni": giorni_oggi, "peso": peso_da_giorni(giorni_oggi)}
+        giorni = cb.giorni_vita + (giorno - cb.censimento.data).days
+        risultato[cb.box_numero] = {"giorni": giorni, "peso": peso_da_giorni(giorni)}
     return risultato
+
+
+def _stima_censimento(ciclo, al_giorno=None):
+    """Quello che serve per compilare un nuovo censimento: per ogni box i dati
+    dell'ultimo censimento (com'erano allora) e la nostra stima a oggi o ad
+    al_giorno — capi dal conteggio live, età proiettata, peso dalla curva."""
+    from app.models import Censimento
+    live = _live_count(ciclo, al_giorno)
+    proiezione = _proiezione_giorni_peso(ciclo, al_giorno)
+    q = Censimento.query.filter_by(ciclo_id=ciclo.id)
+    if al_giorno:
+        q = q.filter(Censimento.data <= al_giorno)
+    ultimo = q.order_by(Censimento.data.desc(), Censimento.id.desc()).first()
+    righe_ultimo = {cb.box_numero: cb for cb in ultimo.conteggi.all()} if ultimo else {}
+
+    box = {}
+    for b in range(1, 55):
+        capi = live.get(b, 0)
+        proj = proiezione.get(b) if capi > 0 else None
+        cb = righe_ultimo.get(b)
+        box[str(b)] = {
+            "ultimo": {
+                "capi": cb.quantita,
+                "giorni": cb.giorni_vita,
+                "peso": round(cb.peso_stimato_kg, 1) if cb.peso_stimato_kg is not None else None,
+            } if cb else None,
+            "stima": {
+                "capi": capi,
+                "giorni": proj["giorni"] if proj else None,
+                "peso": round(proj["peso"], 1) if proj and proj["peso"] is not None else None,
+            },
+        }
+    return {
+        "ultimo_data": ultimo.data.strftime("%d/%m/%Y") if ultimo else None,
+        "box": box,
+    }
 
 
 @bp.route("/censimento")
@@ -460,6 +495,8 @@ def censimento():
     live = _live_count(ciclo) if ciclo else {b: 0 for b in range(1, 55)}
     totale_live = sum(live.values())
     proiezione = _proiezione_giorni_peso(ciclo) if ciclo else {}
+    from app.services.allevamento_scorte import punti_curva_accrescimento
+    stima = _stima_censimento(ciclo) if ciclo else {"ultimo_data": None, "box": {}}
 
     # Tutti i censimenti del ciclo devono restare consultabili, non solo gli ultimi.
     storico = Censimento.query.filter_by(
@@ -474,9 +511,26 @@ def censimento():
                            ciclo=ciclo, live=live, totale_live=totale_live,
                            storico=storico, storico_totali=storico_totali,
                            proiezione=proiezione,
+                           stima=stima, curva=punti_curva_accrescimento(),
                            BOX_PER_CAP=BOX_PER_CAP, CAPANNONI=CAPANNONI,
                            POSTI_PER_BOX_STANDARD=POSTI_PER_BOX_STANDARD,
                            oggi=date.today())
+
+
+@bp.route("/censimento/stima")
+@login_required
+def censimento_stima():
+    """Attesi e stima per box a una certa data: il modal del nuovo censimento
+    la richiede quando si cambia la data."""
+    _check_allevamento()
+    ciclo = _get_ciclo_attivo()
+    if not ciclo:
+        return jsonify(error="Nessun ciclo attivo."), 404
+    try:
+        giorno = date.fromisoformat(request.args.get("data", ""))
+    except ValueError:
+        return jsonify(error="Data non valida."), 400
+    return jsonify(_stima_censimento(ciclo, None if giorno >= date.today() else giorno))
 
 
 @bp.route("/censimento/<int:cid>/dettaglio")
@@ -539,7 +593,10 @@ def censimento_new():
                 peso = None
             # Basta un dato tra i due: l'altro si calcola dalla curva di
             # accrescimento. Se ci sono entrambi, si tengono quelli inseriti.
-            if qty > 0:
+            if qty == 0:
+                # box vuoto: età e peso non hanno senso (e sporcherebbero la stima dei prossimi)
+                giorni = peso = None
+            else:
                 if peso is None and giorni is not None:
                     peso = peso_da_giorni(giorni)
                 elif giorni is None and peso is not None:

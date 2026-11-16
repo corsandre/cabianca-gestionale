@@ -210,3 +210,21 @@ Chiesto da Andrea per l'utente agnese94.
 - Può provare gli scenari (non salvano niente), ma non vede «Salva come standard» né «Impostazioni Soccida»; impostazioni, tabella, anticipi e fatture restano agli amministratori (403 per gli altri).
 - Prova dei permessi: `data/_prova_permessi.py` su `data/_test.db` (amministratore, agnese94 con la sezione, maria senza).
 - Dopo il rilascio va spuntata la casella per agnese94 in produzione.
+
+## 3.0.3 — nuovo censimento da web con ultimo censimento, stima e modifiche di gruppo (16/11/2026)
+
+Chiesto da Andrea: compilare il censimento dal sito senza ricopiare 54 box guardando la pagina sotto.
+- **Modal «Nuovo censimento»** rifatto: una tabella per capannone, una riga per box con l'**ultimo censimento** (capi, età e peso di allora) e la **nostra stima** alla data scelta (capi dal conteggio live, età proiettata, peso dalla curva di accrescimento — gli stessi numeri della pagina Censimento).
+- **Campi già compilati con la stima** (capi, età, peso). Quello che si cambia si colora; per i capi compare lo scarto dall'atteso sul box, sul capannone e sul totale in alto. Resta l'avviso «sopra capienza».
+- **Età ↔ peso collegati**: cambiando l'uno, l'altro si ricalcola dalla curva finché non lo si scrive a mano (stessa interpolazione di `peso_da_giorni` / `giorni_da_peso`, rifatta in JavaScript sui punti della curva passati alla pagina).
+- **Modifica di gruppo**: spunta per box, per capannone, «Tutti / Nessuno»; nella barra in alto si scrive l'età oppure il peso e «Applica» li mette nei box selezionati che hanno capi. «Rimetti la stima» riporta i selezionati ai valori proposti. I capi non si cambiano in gruppo.
+- **Cambio data**: attesi e stima si ricalcolano a quel giorno con la nuova rotta `GET /allevamento/censimento/stima?data=AAAA-MM-GG`; i campi toccati a mano non vengono sovrascritti. La data non può essere futura.
+- Su telefono ultimo censimento e stima stanno in una riga piccola sotto ogni box.
+
+Nel codice: `_stima_censimento(ciclo, al_giorno)` e `_proiezione_giorni_peso(ciclo, al_giorno)` in `app/routes/allevamento.py`; `punti_curva_accrescimento()` (prima privata) in `app/services/allevamento_scorte.py`. I nomi dei campi del modulo (`box_N`, `giorni_N`, `peso_N`) sono gli stessi di prima; nessuna modifica al database, bot Telegram non toccato.
+
+Due comportamenti cambiati:
+- un box salvato con 0 capi non conserva più età e peso (sporcherebbero la stima dei censimenti successivi);
+- salvando senza toccare nulla, età e peso stimati vengono registrati nel censimento (prima restavano vuoti).
+
+Prove: `data/_prova_censimento.py` su `data/_test.db` (stima uguale alla pagina, rotta per data, salvataggio, box vuoto) e il JavaScript del modal in Chromium senza interfaccia (differenze, collegamento età/peso, gruppo, rimetti la stima, cambio data con risposta finta), da PC e a 390 px.
