@@ -1,5 +1,7 @@
 """
-Soccida: pagine della sezione Allevamento (solo amministratori).
+Soccida: pagine della sezione Allevamento.
+La scheda la vedono gli amministratori e gli utenti con la sezione «soccida» (sola lettura: possono provare
+gli scenari ma non salvarli); impostazioni e ogni modifica restano agli amministratori.
 
     /allevamento/soccida                la scheda: esito, probabilità, leve, dati da aggiornare, conto
     /allevamento/soccida/impostazioni   contratto, dati del ciclo, scenario standard, tabella, anticipi
@@ -30,6 +32,13 @@ def _solo_admin():
         abort(403)
 
 
+def _puo_vedere():
+    """La scheda in sola lettura: amministratori e utenti a cui è stata data la sezione «soccida»."""
+    _check_allevamento()
+    if not current_user.has_section("soccida"):
+        abort(403)
+
+
 def _url(nome):
     """Indirizzi delle pagine a cui la scheda rimanda per aggiornare un dato."""
     return url_for({"impostazioni": "allevamento.soccida_impostazioni", "censimento": "allevamento.censimento",
@@ -54,12 +63,13 @@ def _numero(testo, intero=False):
 @bp.route("/soccida")
 @login_required
 def soccida():
-    _solo_admin()
+    _puo_vedere()
+    modifica = current_user.role == "admin"
     ciclo = _get_ciclo_attivo()
     if not ciclo:
-        return render_template("allevamento/soccida.html", s=None)
+        return render_template("allevamento/soccida.html", s=None, modifica=modifica)
     par = D.parametri(ciclo)
-    return render_template("allevamento/soccida.html", s=V.scheda(ciclo, par, request.args, _url), par=par)
+    return render_template("allevamento/soccida.html", s=V.scheda(ciclo, par, request.args, _url), par=par, modifica=modifica)
 
 
 @bp.route("/soccida/scenario", methods=["POST"])

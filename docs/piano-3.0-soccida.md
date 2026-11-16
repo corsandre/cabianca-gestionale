@@ -202,3 +202,11 @@ Chiarito con Andrea: le righe della tabella sono quelle date da Veronesi, ma da 
 - **Indici peggiori dell'ultima riga** (oltre 4,0): prosegue con il passo delle ultime due (−0,83 punti ogni 0,1), mai sotto zero. Prima restava ferma a 9,46: corretto. Lì vince quasi sempre il minimo, ma resa e indice mostrati ora sono quelli veri.
 - In Impostazioni Soccida le righe di Veronesi restano modificabili; sopra e sotto compaiono in grigio le righe calcolate (2,6–2,8 e 4,1–4,2) per far vedere come prosegue.
 La regola 6 in cima a questo piano («sopra 4,0 resta il valore di 4,0») è superata da questa.
+
+## 3.0.2 — scheda Soccida in sola lettura per altri utenti (16/11/2026)
+
+Chiesto da Andrea per l'utente agnese94.
+- Nuova sezione utente «soccida» (Impostazioni → Utenti → «Soccida (sola lettura)»): chi ce l'ha, insieme ad «Allevamento Suini», vede la voce Soccida nel menu e la scheda intera con i calcoli.
+- Può provare gli scenari (non salvano niente), ma non vede «Salva come standard» né «Impostazioni Soccida»; impostazioni, tabella, anticipi e fatture restano agli amministratori (403 per gli altri).
+- Prova dei permessi: `data/_prova_permessi.py` su `data/_test.db` (amministratore, agnese94 con la sezione, maria senza).
+- Dopo il rilascio va spuntata la casella per agnese94 in produzione.

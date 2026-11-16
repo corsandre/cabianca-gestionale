@@ -19,7 +19,7 @@
                         <td>{{ u.display_name }}</td>
                         <td><span class="badge bg-secondary">{{ u.role }}</span></td>
                         <td>
-                            {% for sec in ['finanza', 'allevamento'] %}
+                            {% for sec in ['finanza', 'allevamento', 'soccida'] %}
                             {% if u.has_section(sec) %}
                             <span class="badge" style="background: {% if sec == 'finanza' %}var(--cb-green){% else %}#c2185b{% endif %}">{{ sec }}</span>
                             {% endif %}
@@ -80,6 +80,10 @@
                                             <input class="form-check-input" type="checkbox" name="sections" value="allevamento" id="editsec_allevamento{{ u.id }}" {{ 'checked' if u.has_section('allevamento') }}>
                                             <label class="form-check-label" for="editsec_allevamento{{ u.id }}">Allevamento Suini</label>
                                         </div>
+                                        <div class="form-check" title="Vede la scheda Soccida con i calcoli, senza poter modificare. Serve anche Allevamento Suini.">
+                                            <input class="form-check-input" type="checkbox" name="sections" value="soccida" id="editsec_soccida{{ u.id }}" {{ 'checked' if u.has_section('soccida') }}>
+                                            <label class="form-check-label" for="editsec_soccida{{ u.id }}">Soccida (sola lettura)</label>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -122,6 +126,10 @@
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="sections" value="allevamento" id="sec_allevamento">
                             <label class="form-check-label" for="sec_allevamento">Allevamento Suini</label>
+                        </div>
+                        <div class="form-check" title="Vede la scheda Soccida con i calcoli, senza poter modificare. Serve anche Allevamento Suini.">
+                            <input class="form-check-input" type="checkbox" name="sections" value="soccida" id="sec_soccida">
+                            <label class="form-check-label" for="sec_soccida">Soccida (sola lettura)</label>
                         </div>
                     </div>
                 </div>

@@ -85,12 +85,13 @@
     <div class="d-flex flex-wrap gap-2 align-items-center">
         {% if s and s.ciclo %}<span class="pillola st-dafare">{{ s.ciclo.nome }}</span>
         <span class="nota">Giorno {{ s.giorno_ciclo }} del ciclo · dati al {{ s.oggi.strftime('%d/%m/%Y') }}</span>{% endif %}
-        <a class="bottone bordo" href="{{ url_for('allevamento.soccida_impostazioni') }}"><i class="bi bi-sliders me-1"></i>Impostazioni Soccida</a>
+        {% if modifica %}<a class="bottone bordo" href="{{ url_for('allevamento.soccida_impostazioni') }}"><i class="bi bi-sliders me-1"></i>Impostazioni Soccida</a>
+        {% else %}<span class="pillola st-ipotesi">Sola lettura</span>{% endif %}
     </div>
 </div>
 
 {% if not s %}
-<div class="carta">Nessun ciclo attivo. Crea un ciclo in <a href="{{ url_for('allevamento.impostazioni') }}">Impostazioni</a> per usare la scheda.</div>
+<div class="carta">Nessun ciclo attivo.{% if modifica %} Crea un ciclo in <a href="{{ url_for('allevamento.impostazioni') }}">Impostazioni</a> per usare la scheda.{% endif %}</div>
 {% elif s.errore %}
 <div class="carta">
     <div>La scheda non può ancora fare il conto: {{ s.errore }}</div>
@@ -153,10 +154,11 @@
 {% if s.in_stalla %}
 <section id="scenario" class="carta">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-        <div style="flex:1 1 300px"><h2>Scenario</h2><div class="nota">Cambia un valore per provare: la scheda si ricalcola. Lo scenario standard cambia solo quando lo salvi.</div></div>
+        <div style="flex:1 1 300px"><h2>Scenario</h2><div class="nota">Cambia un valore per provare: la scheda si ricalcola. {{ 'Lo scenario standard cambia solo quando lo salvi.' if modifica else 'Le prove non cambiano lo scenario standard.' }}</div></div>
         <div class="d-flex flex-wrap gap-2 align-items-center">
             <span class="riquadro" style="padding:8px 12px;font-size:13px">{{ s.confronto or 'Stai guardando lo scenario standard' }}</span>
-            {% if s.in_prova %}<a class="bottone" href="{{ url_for('allevamento.soccida') }}#scenario">Torna allo standard</a>
+            {% if s.in_prova %}<a class="bottone" href="{{ url_for('allevamento.soccida') }}#scenario">Torna allo standard</a>{% endif %}
+            {% if s.in_prova and modifica %}
             {# salva lo scenario che si sta guardando: i valori sono quelli già calcolati, non quelli ancora da inviare #}
             <form method="post" action="{{ url_for('allevamento.soccida_scenario') }}" class="m-0">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -273,7 +275,7 @@
             <div><div style="font-size:15px">{{ d.nome }}</div><div><span class="pillola st-{{ d.stato|lower }}">{{ d.stato }}</span></div></div>
             <div><div>{{ d.valore }}</div><div class="nota">{{ d.fonte }}</div></div>
             <div><div>{{ d.peso_testo }}</div></div>
-            <div><div>{{ d.azione }}</div>{% if d.link %}<div><a href="{{ d.link[1] }}">{{ d.link[0] }}</a></div>{% endif %}</div>
+            <div><div>{{ d.azione }}</div>{% if d.link and (modifica or 'soccida/impostazioni' not in d.link[1]) %}<div><a href="{{ d.link[1] }}">{{ d.link[0] }}</a></div>{% endif %}</div>
         </div>{% endfor %}
         {% if s.da_fare %}<div class="dato">
             <div><div style="font-size:15px">Registrazioni</div><div><span class="pillola st-dafare">Da fare</span></div></div>
