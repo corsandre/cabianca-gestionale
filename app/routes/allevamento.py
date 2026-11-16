@@ -82,8 +82,27 @@ def _get_ciclo_attivo():
     return Ciclo.query.filter_by(attivo=True).order_by(Ciclo.data_inizio.desc()).first()
 
 
+# Fino alla 3.0.3 tutti gli eventi del giorno del censimento si applicavano dopo il censimento,
+# anche quelli registrati prima: il censimento del 16/11/2026, fatto alle 14:39 con il box 5 già
+# senza il morto del mattino, lo ha fatto togliere due volte. Da questa data conta l'ora di
+# registrazione; per i censimenti precedenti (ricostruiti a posteriori) resta la regola vecchia,
+# così i conti dei giorni passati non cambiano.
+REGOLA_ORA_CENSIMENTO_DAL = date(2026, 11, 16)
+
+
+def eventi_dopo_censimento(modello, cens):
+    """Condizione per i decessi o gli spostamenti (modello) da applicare a un censimento:
+    quelli dei giorni successivi e, nel giorno del censimento, solo quelli registrati dopo
+    averlo salvato — quelli registrati prima sono già dentro i capi contati."""
+    if cens.data < REGOLA_ORA_CENSIMENTO_DAL or cens.created_at is None:
+        return modello.data >= cens.data
+    return db.or_(modello.data > cens.data,
+                  db.and_(modello.data == cens.data, modello.created_at > cens.created_at))
+
+
 def _live_count(ciclo, al_giorno=None):
-    """Capi per box: ultimo censimento ± mortalità e spostamenti successivi.
+    """Capi per box: ultimo censimento ± mortalità e spostamenti successivi
+    (vedi eventi_dopo_censimento per quelli del giorno stesso).
     Con al_giorno ricostruisce la situazione a quella data (censimento e
     eventi fino a quel giorno incluso), altrimenti ad adesso."""
     from app.models import Censimento, EventoMortalita, Spostamento
@@ -104,7 +123,7 @@ def _live_count(ciclo, al_giorno=None):
     # Lo zero si applica solo al risultato finale.
     morti = EventoMortalita.query.filter(
         EventoMortalita.ciclo_id == ciclo.id,
-        EventoMortalita.data >= ultimo.data,
+        eventi_dopo_censimento(EventoMortalita, ultimo),
         *([EventoMortalita.data <= al_giorno] if al_giorno else []),
     ).all()
     for m in morti:
@@ -121,7 +140,7 @@ def _live_count(ciclo, al_giorno=None):
 
     spostamenti = Spostamento.query.filter(
         Spostamento.ciclo_id == ciclo.id,
-        Spostamento.data >= ultimo.data,
+        eventi_dopo_censimento(Spostamento, ultimo),
         *([Spostamento.data <= al_giorno] if al_giorno else []),
     ).all()
     for s in spostamenti:

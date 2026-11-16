@@ -10,10 +10,12 @@ Usato dal pulsante in Spostamenti e dal controllo delle 6:50 del servizio impian
 from datetime import datetime
 
 
-def _movimenti(ciclo, box, dal):
+def _movimenti(ciclo, box, cens):
+    """Movimenti del box applicati dopo il censimento: gli stessi che usa il conteggio."""
     from app.models import EventoMortalita, Spostamento
+    from app.routes.allevamento import eventi_dopo_censimento
     out = []
-    for s in Spostamento.query.filter(Spostamento.ciclo_id == ciclo.id, Spostamento.data >= dal).filter(
+    for s in Spostamento.query.filter(Spostamento.ciclo_id == ciclo.id, eventi_dopo_censimento(Spostamento, cens)).filter(
             (Spostamento.box_origine == box) | (Spostamento.box_destinazione == box)).all():
         segno = +s.quantita if s.box_destinazione == box else -s.quantita
         if s.tipo == "interno":
@@ -22,7 +24,8 @@ def _movimenti(ciclo, box, dal):
             testo = "entrata" if s.tipo == "entrata" else f"uscita ({s.categoria_uscita or 'uscita'})"
         out.append({"data": s.data, "segno": segno, "testo": testo, "nota": s.motivo or "",
                     "sul_pc": s.pc_alimentazione_data, "chi": s.registrato_da or ""})
-    for m in EventoMortalita.query.filter(EventoMortalita.ciclo_id == ciclo.id, EventoMortalita.data >= dal,
+    for m in EventoMortalita.query.filter(EventoMortalita.ciclo_id == ciclo.id,
+                                          eventi_dopo_censimento(EventoMortalita, cens),
                                           EventoMortalita.box_numero == box).all():
         out.append({"data": m.data, "segno": -m.quantita, "testo": "decesso", "nota": m.causa or "",
                     "sul_pc": m.pc_alimentazione_data, "chi": ""})
@@ -66,7 +69,7 @@ def confronta(lettore=None) -> dict:
         if p is None or g != p:
             esito["differenze"].append({"box": b, "capannone": CAP_PER_BOX.get(b), "gestionale": g, "pc": p,
                                         "diff": (g - p) if p is not None else None,
-                                        "movimenti": _movimenti(ciclo, b, ultimo.data) if ultimo else []})
+                                        "movimenti": _movimenti(ciclo, b, ultimo) if ultimo else []})
     esito["ok"] = True
     return esito
 

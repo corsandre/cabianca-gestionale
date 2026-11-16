@@ -210,6 +210,11 @@ struttura fisica vanno aggiornate in entrambi i file.
 - Età e peso si possono cambiare **in gruppo**: si selezionano dei box (o tutto il capannone), si scrive l'età
   oppure il peso nella barra in alto e l'altro si ricava dalla curva; «Rimetti la stima» annulla le modifiche.
 - Un box con 0 capi viene salvato senza età e senza peso.
+- **Eventi del giorno del censimento**: al conteggio live si applicano i decessi e gli spostamenti dei giorni
+  successivi e, nel giorno stesso, solo quelli **registrati dopo** aver salvato il censimento (quelli registrati
+  prima sono già nei capi contati). Vale per i censimenti dal 16/11/2026 (`REGOLA_ORA_CENSIMENTO_DAL`,
+  `eventi_dopo_censimento` in `app/routes/allevamento.py`); per quelli precedenti restano applicati tutti gli
+  eventi del giorno, così i conti passati non cambiano.
 - I censimenti sono **immutabili** e restano consultabili nello storico paginato, con dettaglio per box.
 
 #### Mortalità (`/allevamento/mortalita`)

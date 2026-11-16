@@ -228,3 +228,11 @@ Due comportamenti cambiati:
 - salvando senza toccare nulla, età e peso stimati vengono registrati nel censimento (prima restavano vuoti).
 
 Prove: `data/_prova_censimento.py` su `data/_test.db` (stima uguale alla pagina, rotta per data, salvataggio, box vuoto) e il JavaScript del modal in Chromium senza interfaccia (differenze, collegamento età/peso, gruppo, rimetti la stima, cambio data con risposta finta), da PC e a 390 px.
+
+## 3.0.4 — il morto del giorno del censimento contato due volte (16/11/2026)
+
+Segnalato da Andrea: dopo il censimento del 16/11 il gestionale aveva un capo in meno del PC (1.776 contro 1.777, box 5: 36 contro 37).
+- **Causa**: il conteggio live applicava al censimento tutti gli eventi con data uguale o successiva. Il decesso del box 5 era stato registrato alle 9:16, il censimento salvato alle 14:39 con il box 5 già a 37: il decesso veniva tolto una seconda volta. La spunta «registrato sul PC» non c'entra, e non è stato perso nessun dato. Il difetto esisteva già prima della 3.0.3 (il vecchio modal proponeva gli stessi capi); è il primo censimento fatto in un giorno con un decesso già registrato.
+- **Correzione**: `eventi_dopo_censimento(modello, cens)` in `app/routes/allevamento.py`, usata da `_live_count` e dai movimenti di «Confronta con il PC». Nel giorno del censimento contano solo gli eventi registrati dopo averlo salvato (`created_at`); dai giorni successivi tutti.
+- **Conti passati invariati**: la regola nuova vale per i censimenti dal 16/11/2026 (`REGOLA_ORA_CENSIMENTO_DAL`). Il censimento ricostruito del 26/06 ha due decessi dello stesso giorno registrati prima di lui: con la regola nuova sarebbero spariti dal conteggio di quel periodo.
+- **Prova** (`data/_prova_conteggio_censimento.py` su una copia del database di produzione): oggi 1.777 invece di 1.776, cambia solo il box 5 (37); i 3 venduti del box 4, registrati dopo il censimento, restano tolti; nessun altro giorno del ciclo cambia.
