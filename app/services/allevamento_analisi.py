@@ -22,9 +22,14 @@ def _capi_per_linea(conteggio, linea_per_box):
 def _entrate(ciclo, censimenti, conteggi, live_count, linea_per_box):
     """Animali entrati: i censimenti che aumentano i capi rispetto al giorno prima (consegne di
     suinetti registrate con un censimento) più gli spostamenti di tipo entrata. Un censimento di
-    riassetto (stesso totale, box diversi) non è un'entrata."""
+    riassetto (stesso totale, box diversi) non è un'entrata. Se nello stesso giorno c'è un'entrata registrata,
+    conta quella e non il censimento (sono gli stessi capi)."""
     entrate = []
+    spostamenti = Spostamento.query.filter_by(ciclo_id=ciclo.id, tipo="entrata").all()
+    giorni_entrate = {s.data for s in spostamenti}
     for c in censimenti:
+        if c.data in giorni_entrate:
+            continue
         dopo = {l: 0 for l in (1, 2, 3)}
         for cb in conteggi[c.id]:
             if cb.box_numero in linea_per_box:
@@ -34,10 +39,14 @@ def _entrate(ciclo, censimenti, conteggi, live_count, linea_per_box):
         if n > 0:
             entrate.append({"data": c.data.isoformat(), "n": n, "origine": "censimento",
                             "L": {l: max(0, dopo[l] - prima[l]) for l in (1, 2, 3)}})
-    for s in Spostamento.query.filter_by(ciclo_id=ciclo.id, tipo="entrata").all():
-        l = linea_per_box.get(s.box_destinazione)
-        entrate.append({"data": s.data.isoformat(), "n": s.quantita, "origine": "entrata",
-                        "L": {x: (s.quantita if x == l else 0) for x in (1, 2, 3)}})
+    for s in spostamenti:
+        per_linea = {x: 0 for x in (1, 2, 3)}
+        righe = [(r.box_numero, r.capi) for r in s.box_svuotati] or [(s.box_destinazione, s.quantita)]
+        tot_righe = sum(n for _, n in righe) or 1
+        for box, n in righe:                # i capi del camion divisi tra le linee come i capi dei box
+            if box in linea_per_box:
+                per_linea[linea_per_box[box]] += round(s.quantita * n / tot_righe)
+        entrate.append({"data": s.data.isoformat(), "n": s.quantita, "origine": "entrata", "L": per_linea})
     return sorted(entrate, key=lambda e: e["data"])
 
 

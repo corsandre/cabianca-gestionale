@@ -113,14 +113,15 @@
                 <td class="text-muted">
                     {% if s.tipo == 'entrata' %}esterno
                     {% else %}
-                        {% if s.box_svuotati %}Box {% for r in s.box_svuotati %}{{ r.box_numero }}{{ '' if r.svuotato else ' (parte)' }}{{ ', ' if not loop.last }}{% endfor %}
+                        {% if s.box_svuotati and s.tipo == 'uscita' %}Box {% for r in s.box_svuotati %}{{ r.box_numero }}{{ '' if r.svuotato else ' (parte)' }}{{ ', ' if not loop.last }}{% endfor %}
                         {% elif s.box_origine %}Box {{ s.box_origine }}{% elif s.capannone_origine %}CAP {{ s.capannone_origine }}{% else %}–{% endif %}
                     {% endif %}
                 </td>
                 <td class="text-muted">
                     {% if s.tipo == 'uscita' %}esterno / macello
                     {% else %}
-                        {% if s.box_destinazione %}Box {{ s.box_destinazione }}{% elif s.capannone_destinazione %}CAP {{ s.capannone_destinazione }}{% else %}–{% endif %}
+                        {% if s.box_svuotati and s.tipo == 'entrata' %}Box {% for r in s.box_svuotati %}{{ r.box_numero }} ({{ r.capi }}){{ ', ' if not loop.last }}{% endfor %}
+                        {% elif s.box_destinazione %}Box {{ s.box_destinazione }}{% elif s.capannone_destinazione %}CAP {{ s.capannone_destinazione }}{% else %}–{% endif %}
                     {% endif %}
                 </td>
                 <td class="fw-bold">{{ s.quantita }}</td>

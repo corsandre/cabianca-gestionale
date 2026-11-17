@@ -226,6 +226,11 @@ struttura fisica vanno aggiornate in entrambi i file.
 - **Entrata** (da esterno), **Uscita** (macello, con categoria: fine ciclo 165-180 kg / scarto-sottopeso /
   Macellati Ca Bianca Agriturismo / Venduti Ca Bianca Agriturismo), **Interno** (box → box). Il box è sempre obbligatorio.
 - Peso medio e foto della bolla per entrate/uscite; contatori capi/kg per categoria di uscita, filtrabili.
+- **Entrate con più box** (3.1.1): come per le uscite, un camion di suinetti è una riga sola e i box in cui sono
+  entrati stanno in `spostamenti_box` (conteggio, Analisi, confronto con il PC e curva teorica li leggono da lì; il
+  modulo di modifica non li tocca). Un'entrata con la stessa data di un censimento precedente al 16/11/2026 è già
+  dentro quel censimento d'arrivo e non si somma. Le entrate del ciclo 05/2026 sono state ricavate dai censimenti
+  d'arrivo (`data/_crea_entrate.py`): bolla e dati mancanti si aggiungono a mano.
 - **Modello 4** per entrate/uscite: documento di più pagine (foto o PDF, anche più file insieme), caricabile
   alla registrazione o dopo dalla tabella (colonna "Modello 4"); la pagina del documento mostra le pagine in
   ordine, permette di aggiungerne o toglierne e di scaricarle tutte in un unico PDF (tabella `modello4_pagine`,

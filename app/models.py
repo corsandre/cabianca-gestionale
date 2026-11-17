@@ -525,7 +525,8 @@ class Spostamento(db.Model):
 
 
 class SpostamentoBox(db.Model):
-    """Box da cui escono i capi di un camion (3.0): l'uscita resta una riga sola in spostamenti_animali
+    """Box da cui escono i capi di un camion (3.0), o in cui entrano i suinetti di un camion in entrata (3.1.1):
+    il camion resta una riga sola in spostamenti_animali
     e qui si elencano i box svuotati, del tutto o in parte, con i capi tolti da ognuno.
     Se una uscita ha righe qui, il conteggio dei capi per box usa queste e non box_origine."""
     __tablename__ = "spostamenti_box"

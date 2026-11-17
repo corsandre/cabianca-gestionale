@@ -15,9 +15,16 @@ def _movimenti(ciclo, box, cens):
     from app.models import EventoMortalita, Spostamento
     from app.routes.allevamento import eventi_dopo_censimento
     out = []
-    for s in Spostamento.query.filter(Spostamento.ciclo_id == ciclo.id, eventi_dopo_censimento(Spostamento, cens)).filter(
-            (Spostamento.box_origine == box) | (Spostamento.box_destinazione == box)).all():
-        segno = +s.quantita if s.box_destinazione == box else -s.quantita
+    for s in Spostamento.query.filter(Spostamento.ciclo_id == ciclo.id, eventi_dopo_censimento(Spostamento, cens)).all():
+        if s.box_svuotati:          # camion da o verso più box: i capi di questo box
+            riga = next((r for r in s.box_svuotati if r.box_numero == box), None)
+            if riga is None:
+                continue
+            segno = riga.capi if s.tipo == "entrata" else -riga.capi
+        elif box in (s.box_origine, s.box_destinazione):
+            segno = +s.quantita if s.box_destinazione == box else -s.quantita
+        else:
+            continue
         if s.tipo == "interno":
             testo = f"{s.box_origine} → {s.box_destinazione}"
         else:

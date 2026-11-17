@@ -95,6 +95,10 @@ def eventi_dopo_censimento(modello, cens):
     quelli dei giorni successivi e, nel giorno del censimento, solo quelli registrati dopo
     averlo salvato — quelli registrati prima sono già dentro i capi contati."""
     if cens.data < REGOLA_ORA_CENSIMENTO_DAL or cens.created_at is None:
+        if hasattr(modello, "tipo"):
+            # entrate dello stesso giorno di un censimento vecchio: il censimento d'arrivo le contiene già
+            # (3.1.1: entrate del ciclo 05/2026 registrate dopo, con la data dei censimenti d'arrivo)
+            return db.or_(modello.data > cens.data, db.and_(modello.data == cens.data, modello.tipo != "entrata"))
         return modello.data >= cens.data
     return db.or_(modello.data > cens.data,
                   db.and_(modello.data == cens.data, modello.created_at > cens.created_at))
@@ -150,7 +154,10 @@ def _live_count(ciclo, al_giorno=None):
             if s.box_destinazione:
                 count[s.box_destinazione] = count.get(s.box_destinazione, 0) + s.quantita
         elif s.tipo == "entrata":
-            if s.box_destinazione:
+            if s.box_svuotati:      # camion di suinetti in più box (3.1.1): i capi di ogni box in spostamenti_box
+                for r in s.box_svuotati:
+                    count[r.box_numero] = count.get(r.box_numero, 0) + r.capi
+            elif s.box_destinazione:
                 count[s.box_destinazione] = count.get(s.box_destinazione, 0) + s.quantita
         elif s.tipo == "uscita":
             if s.box_svuotati:      # camion da più box (3.0): i capi tolti da ogni box sono in spostamenti_box
@@ -873,7 +880,7 @@ def spostamenti_edit(sp_id):
             totale_box = _campi_uscita(s, s.ciclo, s.data, escludi_id=s.id)
             if totale_box:
                 qty = totale_box
-        elif tipo != "uscita":
+        elif tipo == "interno":
             _svuota_campi_uscita(s)
         s.tipo = tipo
         s.quantita = qty
@@ -2439,8 +2446,9 @@ def curva(dal_pc=None):
     if ciclo and terne:
         censimenti = [(c.data, {b.box_numero: (b.quantita, b.giorni_vita) for b in c.conteggi})
                       for c in Censimento.query.filter_by(ciclo_id=ciclo.id).order_by(Censimento.data, Censimento.id)]
-        entrate = [(s.data, s.box_destinazione, s.peso_medio_kg)
-                   for s in Spostamento.query.filter_by(ciclo_id=ciclo.id, tipo="entrata")]
+        entrate = [(s.data, box, s.peso_medio_kg)
+                   for s in Spostamento.query.filter_by(ciclo_id=ciclo.id, tipo="entrata")
+                   for box in ([r.box_numero for r in s.box_svuotati] or [s.box_destinazione])]
         scarti = scarti_censimenti(censimenti, entrate, terne)
     from dataclasses import asdict
     return render_template("allevamento/curva.html", punti=punti, righe=list(zip(punti, righe)),
