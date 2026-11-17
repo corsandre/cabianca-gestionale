@@ -30,11 +30,16 @@
 .cb-curva .legenda { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--ink-2); margin-bottom: 6px; }
 .cb-curva .legenda i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
 .cb-curva .legenda i.barra { height: 10px; }
+.cb-curva .seg { display: inline-flex; flex-wrap: wrap; gap: 2px; background: #f1f2f5; border-radius: 10px; padding: 3px; }
+.cb-curva .seg button { border: 0; background: transparent; padding: 4px 10px; border-radius: 8px; cursor: pointer; font-size: 12.5px; color: var(--ink-2); }
+.cb-curva .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.cb-curva .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cb-curva table td, .cb-curva table th { white-space: nowrap; vertical-align: middle; }
 .cb-curva th.gruppo { text-align: center; font-weight: 500; font-size: 12px; color: var(--ink-2); border-bottom: 0; }
 .cb-curva td.calc { color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
 .cb-curva th.calc { text-align: right; }
 .cb-curva .sep { border-left: 1px solid var(--grid); }
+.cb-curva td.gruppo { white-space: normal; min-width: 170px; max-width: 230px; }
 </style>
 {% endblock %}
 
@@ -125,41 +130,103 @@
 </div>
 {% endif %}
 
-{% if ciclo %}
+{% if ciclo and (scarti or oggi_riga) %}
+{% macro data_breve(d) %}{{ '%02d/%02d'|format(d.day, d.month) }}{% endmacro %}
+{% macro nome_gruppo(g) %}{{ etichetta(g.arrivo) }}{% if g.arrivo.tipo == 'censimento' %}<sup>*</sup>{% endif %}{% endmacro %}
+
+{% if oggi_riga %}
+{% set o = oggi_riga %}
+<div class="cb-card p-3" style="border-left:4px solid #c2185b">
+    <h6 class="mb-1">Oggi: ultimo censimento + aggiornamenti · {{ ciclo.nome }}</h6>
+    <p class="text-muted small mb-2">Capi dal conteggio live, età e peso proiettati dall'ultimo censimento (come nella stima del Censimento),
+        contro la curva teorica (età all'arrivo + giorni passati). Se aggiorni l'età dei box sul PC con «Età oggi», i suini mangiano
+        la razione del loro peso; se la lasci, continuano a seguire la curva teorica.</p>
+    <div class="kpis mb-2">
+        <div class="kpi"><div class="lab">Peso stimato oggi</div><div class="val">{{ num(o.peso) }}<small>kg</small></div>
+            <div class="sub">{{ o.capi }} capi, età {{ num(o.eta) }} gg</div></div>
+        <div class="kpi"><div class="lab">Peso teorico oggi</div><div class="val">{{ num(o.peso_teorico) }}<small>kg</small></div>
+            <div class="sub">curva all'età teorica {{ num(o.eta_teorica) }} gg</div></div>
+        <div class="kpi"><div class="lab">Scarto dalla curva</div><div class="val">{{ segno(o.scarto_kg, 1) }}<small>kg</small></div>
+            <div class="sub">{{ segno(o.scarto_giorni, 1) }} giorni sulla curva</div></div>
+        <div class="kpi"><div class="lab">Mangime in più aggiornando il PC</div>
+            <div class="val">{% if o.mangime_in_piu_kg is not none %}{{ segno(o.mangime_in_piu_kg / 1000, 1) }}<small>t</small>{% else %}–{% endif %}</div>
+            <div class="sub">{% if fine %}da oggi all'ultimo carico previsto ({{ fine.strftime('%d/%m') }}){% else %}manca l'ultimo carico previsto (Impostazioni Soccida){% endif %}</div></div>
+    </div>
+    <div style="overflow-x:auto">
+        <table class="table table-sm mb-0">
+            <thead class="table-light"><tr>
+                <th>Gruppo</th><th class="calc">Capi</th>
+                <th class="calc sep">Età teorica</th><th class="calc">Peso teorico</th>
+                <th class="calc sep">Età oggi<br><span class="fw-normal small">da scrivere sul PC</span></th><th class="calc">Peso stimato</th>
+                <th class="calc sep">Scarto<br><span class="fw-normal small">giorni</span></th><th class="calc">Scarto<br><span class="fw-normal small">kg</span></th>
+                <th class="calc sep">Razione<br><span class="fw-normal small">curva → aggiornata</span></th>
+                <th class="calc">Mangime in più<br><span class="fw-normal small">fino all'uscita</span></th>
+            </tr></thead>
+            <tbody>
+            {% for g in o.gruppi %}
+            <tr>
+                <td class="gruppo">{{ nome_gruppo(g) }}<div class="text-muted small">box {{ g.box|join(', ') }}</div></td>
+                <td class="calc">{{ g.capi }}</td>
+                <td class="calc sep">{{ num(g.eta_teorica) }}</td><td class="calc">{{ num(g.peso_teorico) }}</td>
+                <td class="calc sep fw-semibold">{{ num(g.eta, 0) }}</td><td class="calc">{{ num(g.peso) }}</td>
+                <td class="calc sep fw-semibold">{{ segno(g.scarto_giorni, 1) }}</td><td class="calc fw-semibold">{{ segno(g.scarto_kg, 1) }}</td>
+                <td class="calc sep">{{ num(g.razione_teorica, 2) }} → {{ num(g.razione_aggiornata, 2) }}</td>
+                <td class="calc">{% if g.mangime_in_piu_kg is not none %}{{ segno(g.mangime_in_piu_kg, 0) }} kg{% else %}–{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if grafico %}
+<div class="grafico">
+    <h6>Peso medio: curva teorica e censimenti</h6>
+    <p>Linea grigia: peso della curva all'età teorica (età all'arrivo + giorni passati), tratteggiata dopo oggi. Punti blu: peso dei censimenti;
+        punto vuoto: oggi, proiettato dall'ultimo censimento. Triangoli: camion al macello (peso vivo della bolla). I censimenti con le età solo
+        proiettate, senza un peso stimato o pesato, cadono sulla curva teorica.</p>
+    <div class="seg mb-2" role="group" aria-label="Gruppo">
+        {% for k in grafico.ordine %}<button type="button" data-serie="{{ k }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ grafico.serie[k].nome }}</button>{% endfor %}
+    </div>
+    <div class="legenda"><span><i style="background:var(--ink-2)"></i>Curva teorica</span><span><i style="background:var(--l1)"></i>Censimenti</span>
+        <span><i style="background:var(--farina)"></i>Camion</span></div>
+    <div class="tela" style="height:300px"><canvas id="grCensimenti" role="img" aria-label="Peso medio: curva teorica e censimenti"></canvas></div>
+</div>
+{% endif %}
+
+{% if scarti %}
 <div>
-    <h6 class="text-uppercase text-muted small mb-2">Censimenti contro la curva teorica · {{ ciclo.nome }}</h6>
-    <p class="text-muted small mb-2">Curva teorica = età all'arrivo + giorni passati. L'arrivo di un box è la sua prima entrata negli Spostamenti
-        (età dalla curva al peso d'arrivo) o, se manca, il primo censimento in cui compare. Al censimento l'età si ricava dal peso: la differenza
-        dice di quanti giorni, e kg, i suini sono avanti (+) o indietro (−) sulla curva. Se serve, correggi l'età dei box sul PC.</p>
-    {% if scarti %}
+    <h6 class="text-uppercase text-muted small mb-2">Censimenti contro la curva teorica</h6>
+    <p class="text-muted small mb-2">Al censimento si scrive il peso e l'età si ricava dalla curva: è il punto della curva in cui si trovano. La differenza con
+        la curva teorica dice di quanti giorni, e kg, sono avanti (+) o indietro (−).</p>
     <div class="cb-card p-0" style="overflow-x:auto">
         <table class="table table-sm mb-0">
             <thead class="table-light"><tr>
-                <th>Censimento</th><th class="calc">Capi</th><th class="calc">Età censimento</th><th class="calc">Età teorica</th>
-                <th class="calc">Scarto giorni</th><th class="calc">Scarto kg</th><th></th>
+                <th>Censimento</th><th class="calc">Capi</th>
+                <th class="calc sep">Età teorica</th><th class="calc">Peso teorico</th>
+                <th class="calc sep">Età censimento</th><th class="calc">Peso censimento</th>
+                <th class="calc sep">Scarto giorni</th><th class="calc">Scarto kg</th><th></th>
             </tr></thead>
             <tbody>
-            {% for c in scarti %}
+            {% for c in scarti|reverse %}
+            {% set i = loop.index %}
             <tr>
                 <td class="fw-semibold">{{ c.data.strftime('%d/%m/%Y') }}</td>
                 <td class="calc">{{ c.capi }}</td>
-                <td class="calc">{{ num(c.eta_censimento) }}</td>
-                <td class="calc">{{ num(c.eta_teorica) }}</td>
-                <td class="calc fw-semibold">{{ segno(c.scarto_giorni, 1) }}</td>
-                <td class="calc fw-semibold">{{ segno(c.scarto_kg, 1) }}</td>
-                <td class="text-end">{% if c.gruppi|length > 1 %}<button type="button" class="btn btn-sm btn-outline-secondary py-0" data-gruppi="g{{ loop.index }}" aria-expanded="false">{{ c.gruppi|length }} gruppi</button>{% endif %}</td>
+                <td class="calc sep">{{ num(c.eta_teorica) }}</td><td class="calc">{{ num(c.peso_teorico) }}</td>
+                <td class="calc sep">{{ num(c.eta) }}</td><td class="calc">{{ num(c.peso) }}</td>
+                <td class="calc sep fw-semibold">{{ segno(c.scarto_giorni, 1) }}</td><td class="calc fw-semibold">{{ segno(c.scarto_kg, 1) }}</td>
+                <td class="text-end">{% if c.gruppi|length > 1 %}<button type="button" class="btn btn-sm btn-outline-secondary py-0" data-gruppi="g{{ i }}" aria-expanded="false">{{ c.gruppi|length }} gruppi</button>{% endif %}</td>
             </tr>
             {% if c.gruppi|length > 1 %}
-            {% set i = loop.index %}
             {% for g in c.gruppi %}
             <tr class="g{{ i }} small" hidden>
-                <td class="ps-4 text-muted">arrivo {{ g.arrivo.strftime('%d/%m') }} a {{ num(g.eta_arrivo, 0) }} gg{% if not g.da_entrata %}<sup>*</sup>{% endif %}
-                    <div>box {{ g.box|join(', ') }}</div></td>
+                <td class="ps-4 text-muted gruppo">{{ nome_gruppo(g) }}<div>box {{ g.box|join(', ') }}</div></td>
                 <td class="calc">{{ g.capi }}</td>
-                <td class="calc">{{ num(g.eta_censimento) }}</td>
-                <td class="calc">{{ num(g.eta_teorica) }}</td>
-                <td class="calc">{{ segno(g.scarto_giorni, 1) }}</td>
-                <td class="calc">{{ segno(g.scarto_kg, 1) }}</td>
+                <td class="calc sep">{{ num(g.eta_teorica) }}</td><td class="calc">{{ num(g.peso_teorico) }}</td>
+                <td class="calc sep">{{ num(g.eta) }}</td><td class="calc">{{ num(g.peso) }}</td>
+                <td class="calc sep">{{ segno(g.scarto_giorni, 1) }}</td><td class="calc">{{ segno(g.scarto_kg, 1) }}</td>
                 <td></td>
             </tr>
             {% endfor %}
@@ -168,13 +235,12 @@
             </tbody>
         </table>
     </div>
-    {% if arrivi_da_censimento %}
-    <p class="text-muted small mt-1 mb-0"><sup>*</sup> arrivo dal primo censimento del box: le entrate dei suinetti con il peso non sono registrate negli Spostamenti.</p>
-    {% endif %}
-    {% else %}
-    <div class="cb-card p-3 text-muted small">Nessun censimento con le età in questo ciclo.</div>
-    {% endif %}
 </div>
+{% endif %}
+{% if da_censimento %}
+<p class="text-muted small mb-0"><sup>*</sup> box riempiti con spostamenti tra box non registrati negli Spostamenti: l'età di partenza è quella del primo
+    censimento in cui compaiono. Registrando entrate e spostamenti interni, l'arrivo si ricava da quelli.</p>
+{% endif %}
 {% endif %}
 
 <div>
@@ -333,6 +399,80 @@ document.querySelectorAll("[data-gruppi]").forEach(function (b) {
     ] },
     options: opzioni({ beginAtZero: true }, { beginAtZero: true, max: fuori.length ? INDICE_MAX : undefined }, [0, 2]),
   });
+})();
+</script>
+{% endif %}
+{% if grafico %}
+<script>
+// Grafico «Peso medio: curva teorica e censimenti»: x = giorni dall'inizio del ciclo, mostrati come date.
+(function () {
+  const G = {{ grafico | tojson }};
+  const radice = document.querySelector(".cb-curva");
+  const css = n => getComputedStyle(radice).getPropertyValue(n).trim();
+  const T = { ink: css("--ink"), ink2: css("--ink-2"), muted: css("--muted"), grid: css("--grid"), axis: css("--axis"),
+              surface: css("--surface"), l1: css("--l1"), farina: css("--farina") };
+  const inizio = new Date(G.inizio + "T00:00:00");
+  const data = x => { const d = new Date(inizio); d.setDate(d.getDate() + Math.round(x)); return d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" }); };
+  const it = (v, d) => v == null ? "–" : v.toLocaleString("it-IT", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const pt = a => ({ x: a[0], y: a[1], capi: a[2] });
+  let grafico = null;
+
+  function teoricaAl(serie, x) {
+    const t = serie.teorica.find(p => p[0] === x);
+    return t ? t[1] : null;
+  }
+
+  function disegna(k) {
+    const S = G.serie[k];
+    const ds = [
+      { label: "Curva teorica", data: S.teorica.map(p => ({ x: p[0], y: p[1] })), borderColor: T.ink2, backgroundColor: T.ink2,
+        borderWidth: 2, pointRadius: 0, pointHoverRadius: 0, tension: 0, order: 3,
+        segment: { borderDash: c => c.p0.parsed.x >= G.oggi ? [5, 4] : undefined } },
+      { label: "Censimenti", data: S.censimenti.map(pt), borderColor: T.l1, backgroundColor: T.l1, borderWidth: 2,
+        pointRadius: 4, pointHoverRadius: 6, tension: 0, order: 1 },
+    ];
+    if (S.oggi) ds.push({ label: "Oggi (proiezione)", data: [pt(S.oggi)], borderColor: T.l1, backgroundColor: T.surface,
+                          borderWidth: 2, pointRadius: 6, pointHoverRadius: 8, showLine: false, order: 0 });
+    if (S.camion.length) ds.push({ label: "Camion", data: S.camion.map(pt), borderColor: T.farina, backgroundColor: T.farina,
+                                   pointStyle: "triangle", pointRadius: 6, pointHoverRadius: 8, showLine: false, order: 0 });
+    if (grafico) grafico.destroy();
+    grafico = new Chart(document.getElementById("grCensimenti"), {
+      type: "line", data: { datasets: ds },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
+        interaction: { mode: "nearest", intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            filter: c => c.dataset.label !== "Curva teorica",
+            backgroundColor: T.surface, titleColor: T.ink2, bodyColor: T.ink, borderColor: T.axis, borderWidth: 1,
+            padding: 10, cornerRadius: 8, boxPadding: 4, usePointStyle: true, titleFont: { weight: "400" }, bodyFont: { weight: "600" },
+            callbacks: {
+              title: c => c.length ? data(c[0].parsed.x) : "",
+              label: c => {
+                const teo = teoricaAl(S, c.parsed.x);
+                const r = [" " + c.dataset.label + ": " + it(c.parsed.y, 1) + " kg" + (c.raw.capi ? " (" + c.raw.capi + " capi)" : "")];
+                if (teo != null) r.push(" Teorico " + it(teo, 1) + " kg, scarto " + (c.parsed.y - teo >= 0 ? "+" : "") + it(c.parsed.y - teo, 1) + " kg");
+                return r;
+              },
+            },
+          },
+        },
+        scales: {
+          x: { type: "linear", min: 0, max: Math.max(...S.teorica.map(p => p[0]), G.oggi), grid: { display: false }, border: { color: T.axis },
+               ticks: { color: T.muted, maxRotation: 0, autoSkipPadding: 16, callback: v => data(v) } },
+          y: { grid: { color: T.grid }, border: { display: false }, ticks: { color: T.muted },
+               title: { display: true, text: "kg di peso vivo", color: T.muted } },
+        },
+      },
+    });
+  }
+
+  document.querySelectorAll("[data-serie]").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll("[data-serie]").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+    disegna(b.dataset.serie);
+  }));
+  disegna(G.ordine[0]);
 })();
 </script>
 {% endif %}

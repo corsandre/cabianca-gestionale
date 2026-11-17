@@ -2436,24 +2436,47 @@ def curva(dal_pc=None):
     if current_user.role != "admin":
         abort(403)
     from app.models import CurvaAccrescimento, Censimento, Spostamento
-    from app.services.allevamento_curva import scaglioni, scarti_censimenti
+    from app.services.allevamento_curva import scaglioni, scarti_censimenti, serie_grafico, etichetta, CENSIMENTO
     punti = CurvaAccrescimento.query.order_by(CurvaAccrescimento.eta_giorni).all()
     terne = [(p.eta_giorni, p.peso_kg, p.razione_kg_giorno) for p in punti]
     righe = scaglioni(terne)
-    # censimenti del ciclo attivo contro la curva teorica dall'arrivo (età all'arrivo + giorni passati)
     ciclo = _get_ciclo_attivo()
-    scarti = []
+    scarti, oggi_riga, grafico, fine = [], None, None, None
     if ciclo and terne:
-        censimenti = [(c.data, {b.box_numero: (b.quantita, b.giorni_vita) for b in c.conteggi})
-                      for c in Censimento.query.filter_by(ciclo_id=ciclo.id).order_by(Censimento.data, Censimento.id)]
-        entrate = [(s.data, box, s.peso_medio_kg)
-                   for s in Spostamento.query.filter_by(ciclo_id=ciclo.id, tipo="entrata")
-                   for box in ([r.box_numero for r in s.box_svuotati] or [s.box_destinazione])]
-        scarti = scarti_censimenti(censimenti, entrate, terne)
+        scarti, oggi_riga, grafico, fine = _scarti_curva(ciclo, terne)
     from dataclasses import asdict
     return render_template("allevamento/curva.html", punti=punti, righe=list(zip(punti, righe)),
                            dati_grafici=[asdict(r) for r in righe], dal_pc=dal_pc, ciclo=ciclo, scarti=scarti,
-                           arrivi_da_censimento=any(not g.da_entrata for c in scarti for g in c.gruppi))
+                           oggi_riga=oggi_riga, grafico=grafico, fine=fine, etichetta=etichetta,
+                           da_censimento=any(g.arrivo.tipo == CENSIMENTO for r in scarti + ([oggi_riga] if oggi_riga else [])
+                                             for g in r.gruppi))
+
+
+def _scarti_curva(ciclo, terne):
+    """Censimenti del ciclo contro la curva teorica (età all'arrivo + giorni passati), la riga di oggi
+    (ultimo censimento + aggiornamenti, come la stima della pagina Censimento) e i dati del grafico.
+    Calcolo in services/allevamento_curva.py."""
+    from app.models import Censimento, Spostamento
+    from app.services.allevamento_curva import scarti_censimenti, serie_grafico
+    from app.services import soccida_dati
+    censimenti = [(c.data, {b.box_numero: (b.quantita, b.giorni_vita, b.peso_stimato_kg) for b in c.conteggi})
+                  for c in Censimento.query.filter_by(ciclo_id=ciclo.id).order_by(Censimento.data, Censimento.id)]
+    sposta = Spostamento.query.filter_by(ciclo_id=ciclo.id).order_by(Spostamento.data, Spostamento.id).all()
+    entrate = [(s.data, box, s.peso_medio_kg) for s in sposta if s.tipo == "entrata"
+               for box in ([r.box_numero for r in s.box_svuotati] or [s.box_destinazione])]
+    interni = [(s.data, s.box_origine, s.box_destinazione, s.quantita) for s in sposta if s.tipo == "interno"]
+    uscite = [(s.data, s.peso_medio_kg, {r.box_numero: r.capi for r in s.box_svuotati} or {s.box_origine: s.quantita})
+              for s in sposta if s.tipo == "uscita" and s.categoria_uscita == "fine_ciclo"]
+    oggi = date.today()
+    stima = _stima_censimento(ciclo)["box"]
+    stima_oggi = {int(b): (v["stima"]["capi"], v["stima"]["giorni"], v["stima"]["peso"]) for b, v in stima.items()}
+    par = soccida_dati.parametri(ciclo, crea=False)
+    fine = par.ultimo_carico if par and par.ultimo_carico and par.ultimo_carico > oggi else None
+    scarti, oggi_riga, arr = scarti_censimenti(censimenti, entrate, terne, interni=interni, oggi=oggi,
+                                               stima_oggi=stima_oggi, fine=fine)
+    inizio = min([ciclo.data_inizio] + [a.data for a in arr.values()])
+    grafico = serie_grafico(inizio, fine or oggi, scarti, oggi_riga, arr, terne, uscite)
+    return scarti, oggi_riga, grafico, fine
 
 
 @bp.route("/curva-accrescimento/dal-pc")

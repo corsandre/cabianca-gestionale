@@ -432,6 +432,9 @@ garantito), con che probabilità si arriva a premio e cosa sposta il risultato. 
 - **Stime a ciclo aperto**: quello che manca si prevede dallo *scenario standard* (date del primo e dell'ultimo
   carico, kg in più rispetto alla curva, resa, morti al giorno, premi). Tra primo e ultimo carico i capi escono in
   modo regolare, quindi mangime e siero residui = consumo recente × media dei giorni che mancano ai due carichi.
+  Il peso di uscita viene dall'età media dell'ultimo censimento (che è la posizione sulla curva: si scrive il peso,
+  l'età si ricava) proiettata sulla curva: «kg in più rispetto alla curva» resta a 0, altrimenti lo scarto si conta
+  due volte (17/11/2026, vedi `docs/piano-curva-accrescimento.md`).
 - **Probabilità di premio**: simulazione di 4.000 scenari (seme fisso: a parità di dati il numero non cambia) che
   sposta i dati incerti secondo `Incertezze`. Grafici: distribuzione del margine, probabilità per peso di uscita,
   griglia primo × ultimo carico, leve.
@@ -467,9 +470,13 @@ si lancia senza Flask: `python3 -m unittest discover -s tests`.
   conferma. Per ogni scaglione, dal punto prima: accrescimento in g/giorno, aumento della razione in g/giorno, mangime
   per capo (razione media × giorni) e indice sul peso vivo; più mangime e indice dall'ingresso. Due grafici.
   L'età del censimento è la posizione sulla curva (si scrive il peso, l'età si ricava): le età dei box non si leggono
-  dal PC. **Censimenti contro la curva teorica** (ciclo attivo): età all'arrivo + giorni passati contro l'età del
-  censimento, per gruppi di box arrivati insieme, in giorni e kg (+ avanti, − indietro). L'arrivo è la prima entrata
-  con il peso negli Spostamenti o, se manca, il primo censimento del box. La razione per ora si mostra soltanto; in produzione la colonna è NOT NULL (modulo v1), quindi i punti nuovi
+  dal PC. **Censimenti contro la curva teorica** (ciclo attivo, 3.1.2): età e peso teorici (età all'arrivo + giorni
+  passati, peso della curva a quell'età) contro età e peso del censimento, per gruppi di box arrivati insieme, in giorni
+  e kg (+ avanti, − indietro). In cima la riga **«Oggi»**: ultimo censimento + aggiornamenti (gli stessi numeri della
+  stima del Censimento), con l'età da scrivere sul PC, la razione con l'età teorica e con quella aggiornata e il
+  mangime in più fino all'ultimo carico previsto (Impostazioni Soccida). Grafico del peso medio: curva teorica,
+  censimenti, oggi e camion al macello, per tutti o per gruppo. Arrivo di un box: entrata con il peso; altrimenti
+  spostamento interno registrato da box già arrivati (età media pesata); altrimenti primo censimento del box (*). La razione per ora si mostra soltanto; in produzione la colonna è NOT NULL (modulo v1), quindi i punti nuovi
   la richiedono. Calcolo in `services/allevamento_curva.py`, prove in `tests/test_curva.py`; piano e ragionamento in
   `docs/piano-curva-accrescimento.md`.
 - Medicinali (ml/kg, giorni di somministrazione e sospensione).

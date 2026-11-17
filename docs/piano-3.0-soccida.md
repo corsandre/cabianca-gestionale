@@ -195,6 +195,17 @@ La 3.0.0 è in produzione (commit 60c3f57). Copia del database prima del rilasci
 Impostazioni Soccida compilate: partita IVA Nosari, pagante «LA PELLEGRINA», ultimo giorno pagato 11/05/2026, giacenza iniziale 3.000 kg (ipotesi), 19 suini di Fattoria Ca' Bianca. Anticipi confermati dai bonifici: 45.000 € (13/07 18.000, 19/08, 21/09, 19/10 da 9.000); il bonifico del 22/06 da 29.494,51 € è il saldo del ciclo scorso e resta proposto senza essere un anticipo. Fatture di siero lette: 12, senza messaggi.
 Restano: chiusura del ciclo con fotografia del conto, storico dei cicli dall'Excel, riscontro del macello dal bot Telegram.
 
+## 17/11/2026 — peso contato due volte, curva corretta (vedi docs/piano-curva-accrescimento.md)
+
+- Nel censimento del 16/11 le età sono state ricavate dai pesi scritti, circa 4 kg sopra la curva; lo scenario
+  aggiungeva anche «+4 kg rispetto alla curva». **«Kg in più rispetto alla curva» portato a 0 in produzione**: lo
+  scarto dalla curva sta già nelle età del censimento (regola di Andrea: al censimento si scrive il peso, l'età è la
+  posizione sulla curva). Stima: da +17.800 € (premio 98%) a +10.900 € (89%).
+- Curva del PC corretta da Andrea (0 giorni = 26 kg, coda fino a 204,7 kg a 273 giorni) e copiata nel gestionale con
+  «Aggiorna dal PC» (3.1.0). La stima di oggi non cambia (uscita media a circa 209 giorni); le leve sui ritardi sì:
+  7 giorni in più costano circa 5.500 € invece di 8.800 €.
+- Entrate dei suinetti del ciclo registrate negli Spostamenti (3.1.1).
+
 ## 3.0.1 — tabella di rapporto senza limiti (16/11/2026)
 
 Chiarito con Andrea: le righe della tabella sono quelle date da Veronesi, ma da contratto il miglioramento non ha limite e il conto si fa comunque anche oltre il 4,0.

@@ -95,7 +95,27 @@ frattempo; box come nel censimento). Peso d'ingresso provvisorio dal PC (26,4 / 
 bolle e pesi veri. Con l'arrivo dalle entrate, al 16/11: **+8,8 giorni, +5,8 kg** (19/05 +6,3; 22/05 +6,2; 03/06
 +13,3; 09/06 +7,2). I box riempiti il 26/06 e l'11/09 sono spostamenti interni: per loro resta il primo censimento (*).
 
+## 3.1.2 — peso teorico, riga «Oggi» e grafico (17/11/2026, chiesto da Andrea)
+
+- Tabella dei censimenti: anche **peso teorico** (curva all'età teorica) e **peso del censimento** (quello scritto).
+- **Riga «Oggi»** in cima: ultimo censimento + aggiornamenti, come la stima della pagina Censimento. Per ogni gruppo
+  l'età da scrivere sul PC se si sceglie di aggiornare, la razione con l'età teorica e con quella aggiornata e il mangime
+  in più fino all'ultimo carico previsto. La scelta resta di Andrea: aggiornare il PC (mangiano per il loro peso) o
+  lasciare l'età (seguono la curva).
+- **Grafico** del peso medio: curva teorica (tratteggiata dopo oggi), censimenti, oggi, camion al macello; per tutti o
+  per gruppo d'arrivo.
+- Gruppi senza entrata: non più «arrivo» ma «Dal censimento del…», con la nota giusta. Prossimi cicli: un box riempito
+  con uno spostamento interno registrato eredita l'arrivo dei box da cui vengono i capi.
+- Sulla copia di oggi: stimati 157,2 kg contro 151,4 teorici (+5,8 kg); aggiornando le età sul PC +2,1 t di mangime
+  fino al 19/12, di cui 1 t il gruppo del 3/06.
+
 ## Rimandato (solo se servirà)
+
+- **Rapportino peso** (idea di Andrea, 17/11/2026): un controllo del peso senza rifare la conta dei capi (data, box
+  pesati, capi pesati, peso medio, «pesato» o «stimato»), da fare più spesso dei censimenti. Entrerebbe come punto in
+  più nella tabella e nel grafico, distinto dai censimenti, e direbbe quali pesi sono misurati. Il censimento resta
+  com'è (la conta dei capi è la base di conteggio live, confronto con il PC, mortalità e Soccida). Nella pagina
+  della curva i titoli potrebbero parlare di «pesi ai censimenti»: per ora lasciati così.
 
 - Camion contro curva: peso vivo delle bolle contro il peso della curva dei box svuotati.
 - Grafico consumo reale per capo contro razione della curva × % dei box.

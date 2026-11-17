@@ -88,31 +88,77 @@ class ScartiCensimenti(unittest.TestCase):
     from datetime import date as D
     PUNTI = [(0, 26.0, 1.0), (7, 30.0, 1.3), (14, 34.0, 1.5), (203, 169.1, 3.1), (210, 173.0, 3.1)]
 
-    def test_peso_e_eta_inversi(self):
+    def test_peso_eta_razione(self):
         self.assertAlmostEqual(C.peso_da_eta(self.PUNTI, 3.5), 28.0)
         self.assertAlmostEqual(C.eta_da_peso(self.PUNTI, 28.0), 3.5)
+        self.assertAlmostEqual(C.razione_da_eta(self.PUNTI, 3.5), 1.15)
         self.assertEqual(C.peso_da_eta(self.PUNTI, 300), 173.0)
+        self.assertEqual(C.razione_da_eta(self.PUNTI, 300), 3.1)
         self.assertEqual(C.eta_da_peso(self.PUNTI, 20.0), 0.0)
+        self.assertIsNone(C.razione_da_eta([(0, 26.0, None), (7, 30.0, 1.3)], 3))
 
     def test_arrivo_dal_primo_censimento(self):
         D = self.D
         cens = [(D(2026, 5, 19), {1: (40, 5), 2: (40, 5)}),
-                (D(2026, 6, 2), {1: (40, 19), 2: (40, 21), 3: (30, 7)}),       # box 3 arriva ora
+                (D(2026, 6, 2), {1: (40, 19), 2: (40, 21), 3: (30, 7)}),       # box 3 compare ora
                 (D(2026, 6, 9), {1: (40, 26), 2: (40, 26), 3: (30, 14)})]
-        r = C.scarti_censimenti(cens, [], self.PUNTI)
-        for x, atteso in zip(r, [0.0, 2.0 * 40 / 110, 0.0]):     # box 2 avanti di 2 giorni su 110 capi
-            self.assertAlmostEqual(x.scarto_giorni, atteso)
-        self.assertEqual(len(r[1].gruppi), 2)
-        g = r[1].gruppi[0]
+        righe, oggi, arr = C.scarti_censimenti(cens, [], self.PUNTI)
+        self.assertIsNone(oggi)
+        self.assertEqual(arr[3], C.Arrivo(D(2026, 6, 2), 7.0, C.CENSIMENTO))
+        for r, atteso in zip(righe, [0.0, 2.0 * 40 / 110, 0.0]):     # box 2 avanti di 2 giorni su 110 capi
+            self.assertAlmostEqual(r.scarto_giorni, atteso)
+        g = righe[1].gruppi[0]
         self.assertEqual((g.box, g.capi, g.eta_teorica, g.scarto_giorni), ((1, 2), 80, 19.0, 1.0))
+        self.assertAlmostEqual(g.peso_teorico, C.peso_da_eta(self.PUNTI, 19))
         self.assertAlmostEqual(g.scarto_kg, (C.peso_da_eta(self.PUNTI, 21) - C.peso_da_eta(self.PUNTI, 19)) / 2)
 
-    def test_arrivo_dalle_entrate(self):
+    def test_peso_scritto_nel_censimento(self):
         D = self.D
-        r = C.scarti_censimenti([(D(2026, 5, 26), {1: (40, 9)})], [(D(2026, 5, 19), 1, 26.0)], self.PUNTI)
-        g = r[0].gruppi[0]
-        self.assertTrue(g.da_entrata)
-        self.assertEqual((g.eta_arrivo, g.eta_teorica, g.scarto_giorni), (0.0, 7.0, 2.0))
+        righe, _, _ = C.scarti_censimenti([(D(2026, 5, 26), {1: (40, 9, 33.5)})], [(D(2026, 5, 19), 1, 26.0)], self.PUNTI)
+        g = righe[0].gruppi[0]
+        self.assertEqual(g.arrivo.tipo, C.ENTRATA)
+        self.assertEqual((g.arrivo.eta, g.eta_teorica, g.scarto_giorni, g.peso_teorico), (0.0, 7.0, 2.0, 30.0))
+        self.assertAlmostEqual(g.peso, 33.5)              # il peso scritto, non quello della curva a 9 giorni
+        self.assertAlmostEqual(g.scarto_kg, 3.5)
+
+    def test_arrivo_da_spostamento_interno(self):
+        D = self.D
+        entrate = [(D(2026, 5, 19), 1, 26.0), (D(2026, 5, 22), 2, 30.0)]      # età 0 e 7
+        interni = [(D(2026, 5, 26), 1, 5, 10), (D(2026, 5, 26), 2, 5, 30), (D(2026, 5, 27), 1, 2, 5)]
+        cens = [(D(2026, 5, 26), {1: (30, 7), 2: (10, 11), 5: (40, 9)})]
+        arr = C.arrivi(cens, entrate, interni, self.PUNTI)
+        # box 5: 10 capi dal box 1 (età 7 il 26/05) e 30 dal box 2 (età 11) → 10,0
+        self.assertEqual(arr[5].tipo, C.SPOSTAMENTO)
+        self.assertEqual((arr[5].data, arr[5].eta), (D(2026, 5, 26), 10.0))
+        self.assertEqual(arr[2].tipo, C.ENTRATA)           # già arrivato: lo spostamento del 27 non lo cambia
+
+    def test_oggi_razione_e_mangime(self):
+        D = self.D
+        cens = [(D(2026, 5, 26), {1: (40, 9, 33.5)})]
+        _, oggi, _ = C.scarti_censimenti(cens, [(D(2026, 5, 19), 1, 26.0)], self.PUNTI, oggi=D(2026, 5, 28),
+                                         stima_oggi={1: (39, 11, None)}, fine=D(2026, 5, 30))
+        g = oggi.gruppi[0]
+        self.assertTrue(oggi.oggi)
+        self.assertEqual((g.capi, g.eta_teorica, g.eta), (39, 9.0, 11))
+        self.assertAlmostEqual(g.razione_teorica, C.razione_da_eta(self.PUNTI, 9))
+        self.assertAlmostEqual(g.razione_aggiornata, C.razione_da_eta(self.PUNTI, 11))
+        atteso = 39 * sum(C.razione_da_eta(self.PUNTI, 11 + t) - C.razione_da_eta(self.PUNTI, 9 + t) for t in range(2))
+        self.assertAlmostEqual(g.mangime_in_piu_kg, atteso)
+
+    def test_serie_grafico(self):
+        D = self.D
+        cens = [(D(2026, 5, 26), {1: (40, 9, 33.5)})]
+        righe, oggi, arr = C.scarti_censimenti(cens, [(D(2026, 5, 19), 1, 26.0)], self.PUNTI, oggi=D(2026, 5, 28),
+                                               stima_oggi={1: (39, 11, None)})
+        g = C.serie_grafico(D(2026, 5, 19), D(2026, 5, 30), righe, oggi, arr, self.PUNTI,
+                            uscite=[(D(2026, 5, 29), 35.0, {1: 10, 9: 5})])
+        t = g["serie"]["tutti"]
+        self.assertEqual(t["teorica"][0], [0, 26.0])
+        self.assertEqual(t["teorica"][-1][0], 11)
+        self.assertEqual(t["censimenti"], [[7, 33.5, 40]])
+        self.assertEqual(t["oggi"][0], 9)
+        self.assertEqual(t["camion"], [[10, 35.0, 10]])        # il box 9 non è di nessun gruppo
+        self.assertEqual(len(g["ordine"]), 2)
 
 
 if __name__ == "__main__":
