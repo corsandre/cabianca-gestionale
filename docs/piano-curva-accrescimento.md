@@ -89,6 +89,12 @@ Arrivati il 19 e 22/05 +2 giorni; il 3/06 +12; il 9/06 +6; il 26/06 (box 22, 23,
 coincidono con quelle del PC (186, 173, 167 giorni). I censimenti fino all'11/09 hanno le età proiettate, quindi scarto 0.
 Il gruppo del 3/06 (+12 giorni) è quello da guardare: o crescono davvero di più, o il peso scritto è alto.
 
+**Entrate registrate (3.1.1, 17/11/2026).** Le 4 entrate dei suinetti del ciclo sono negli Spostamenti, un camion per
+censimento d'arrivo: 19/05 600 capi, 22/05 152, 03/06 575, 09/06 550 (capi = aumento del censimento + morti nel
+frattempo; box come nel censimento). Peso d'ingresso provvisorio dal PC (26,4 / 28,2 / 29,3 / 29,3 kg): Andrea aggiunge
+bolle e pesi veri. Con l'arrivo dalle entrate, al 16/11: **+8,8 giorni, +5,8 kg** (19/05 +6,3; 22/05 +6,2; 03/06
++13,3; 09/06 +7,2). I box riempiti il 26/06 e l'11/09 sono spostamenti interni: per loro resta il primo censimento (*).
+
 ## Rimandato (solo se servirà)
 
 - Camion contro curva: peso vivo delle bolle contro il peso della curva dei box svuotati.
