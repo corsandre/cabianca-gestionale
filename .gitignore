@@ -16,3 +16,7 @@ build/
 .DS_Store
 *.log
 *credentials*.json
+
+# Grafo di graphify (rigenerabile)
+graphify-out/
+.claude/settings.json
