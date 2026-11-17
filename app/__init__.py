@@ -316,6 +316,8 @@ def _init_db(app):
         ("spostamenti_animali", "capi_riscontrati", "INTEGER"),
         ("spostamenti_animali", "peso_morto_kg", "REAL"),
         ("spostamenti_animali", "riscontro_path", "VARCHAR(300)"),
+        # 3.0.6: razione della curva (in produzione c'è già dal modulo v1)
+        ("curva_accrescimento", "razione_kg_giorno", "FLOAT"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

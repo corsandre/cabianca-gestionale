@@ -455,7 +455,18 @@ si lancia senza Flask: `python3 -m unittest discover -s tests`.
 
 #### Impostazioni allevamento (`/allevamento/impostazioni`, solo admin)
 - Apertura/chiusura ciclo.
-- Curva di accrescimento (età in giorni → peso in kg).
+- Curva di accrescimento: ha una pagina sua (`/allevamento/curva-accrescimento`, collegata da Impostazioni).
+  È la curva del PC dell'impianto (oggi n. 2 «RICETTA VERONESI LC»): punti età (giorni) → peso vivo (kg) → razione
+  (kg di mangime al giorno per capo). **«Aggiorna dal PC»** legge in sola lettura la curva usata dalla maggior parte
+  dei box con capi (`CurveNEW.DB`, `curvepuntoNEW.db`, `BOX.DB`), mostra i punti diversi e la sostituisce solo dopo
+  conferma. Per ogni scaglione, dal punto prima: accrescimento in g/giorno, aumento della razione in g/giorno, mangime
+  per capo (razione media × giorni) e indice sul peso vivo; più mangime e indice dall'ingresso. Due grafici.
+  L'età del censimento è la posizione sulla curva (si scrive il peso, l'età si ricava): le età dei box non si leggono
+  dal PC. **Censimenti contro la curva teorica** (ciclo attivo): età all'arrivo + giorni passati contro l'età del
+  censimento, per gruppi di box arrivati insieme, in giorni e kg (+ avanti, − indietro). L'arrivo è la prima entrata
+  con il peso negli Spostamenti o, se manca, il primo censimento del box. La razione per ora si mostra soltanto; in produzione la colonna è NOT NULL (modulo v1), quindi i punti nuovi
+  la richiedono. Calcolo in `services/allevamento_curva.py`, prove in `tests/test_curva.py`; piano e ragionamento in
+  `docs/piano-curva-accrescimento.md`.
 - Medicinali (ml/kg, giorni di somministrazione e sospensione).
 - Scorte: capacità silos, soglia di riordino (in pasti, così segue l'aumento dei consumi), quantità per ordine,
   soglia di scarto siero, orari dei 3 pasti.
@@ -469,7 +480,7 @@ si lancia senza Flask: `python3 -m unittest discover -s tests`.
 |---|---|---|
 | `Ciclo` | `cicli_v2` | Periodo produttivo |
 | `Censimento` / `CensimentoBox` | `censimenti` / `censimento_box` | Censimento per box, immutabile |
-| `CurvaAccrescimento` | `curva_accrescimento` | Punti età → peso per interpolare |
+| `CurvaAccrescimento` | `curva_accrescimento` | Punti età → peso (per interpolare) → razione al giorno |
 | `EventoMortalita` | `eventi_mortalita` | Morti per box, con le 3 azioni successive |
 | `Spostamento` | `spostamenti_animali` | Entrata/uscita/interno, categoria uscita, peso, bolla |
 | `SpeditoreSiero` | `speditori_siero` | Anagrafica speditori (azienda, indirizzo, tipo siero, note) |

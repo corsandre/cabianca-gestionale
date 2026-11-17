@@ -175,5 +175,10 @@ class LettoreImpianto:
         """% della razione impostata per ogni box sull'impianto {numero box: %}; {} se non la sa."""
         return {}
 
+    def curva_in_uso(self, box_reali) -> Optional[dict]:
+        """Curva di alimentazione usata dai box {"nr", "nome", "descr", "punti": [(età, peso, razione)]};
+        None se l'impianto non la conosce."""
+        return None
+
     def chiudi(self):
         pass

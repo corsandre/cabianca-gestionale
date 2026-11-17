@@ -23,6 +23,8 @@ RICETTECOMPO_DB = f"{EM2000}/pc/db/new/RICETTECOMPO.DB"   # % di ogni componente
 RICETTE_DB = f"{EM2000}/pc/db/new/Ricette.DB"             # nomi delle ricette
 BOX_DB = f"{EM2000}/pc/db/new/BOX.DB"                     # box: NRSUINI = capi presenti, PERRAZIONE = % razione
 COMPOSOST_DB = f"{EM2000}/pc/db/new/COMPOSOST.DB"         # sostituti di ogni componente quando finisce
+CURVE_DB = f"{EM2000}/pc/db/new/CurveNEW.DB"              # nomi delle curve di alimentazione (TIPO 0 = ingrasso)
+CURVE_PUNTI_DB = f"{EM2000}/pc/db/new/curvepuntoNEW.db"    # punti: una riga per punto, colonne HGEn/HGPn/HGn della curva n
 CONS_GIO_CSV = f"{EM2000}/STORICI/CONSUM/CONS-GIO.CSV"    # consumi per box tra una fotografia e l'altra
 CMD_FOTOGRAFIA = "XAUTHORITY=/root/.Xauthority nice -n 19 xwd -root -display :0 -silent | nice -n 19 gzip -1"
 
@@ -138,6 +140,13 @@ class LettoreEM2000(LettoreImpianto):
         reali: le filtra chi confronta, che conosce i box dell'allevamento."""
         return {int(r["NR"]): int(r.get("NRSUINI") or 0)
                 for r in paradox.leggi(self._leggi_file(BOX_DB)) if r.get("NR")}
+
+    def curva_in_uso(self, box_reali):
+        """La curva di ingrasso usata dalla maggior parte dei box reali con capi (BOX.DB NRCURVA), con i suoi
+        punti: {"nr", "nome", "descr", "punti": [(età, peso kg, razione kg/giorno)]}. Calcolo in allevamento_curva."""
+        from app.services.allevamento_curva import curva_dal_pc
+        return curva_dal_pc(paradox.leggi(self._leggi_file(BOX_DB)), paradox.leggi(self._leggi_file(CURVE_DB)),
+                            paradox.leggi(self._leggi_file(CURVE_PUNTI_DB)), box_reali)
 
     def razione_per_box(self):
         """% della razione per box da BOX.DB (NR, PERRAZIONE), come per i capi anche righe di box non reali."""

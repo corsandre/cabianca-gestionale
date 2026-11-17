@@ -454,11 +454,15 @@ class CensimentoBox(db.Model):
 
 class CurvaAccrescimento(db.Model):
     """Tabella età (giorni) → peso (kg) per stimare l'uno dall'altro
-    al censimento, e per proiettare il peso odierno nel conteggio live."""
+    al censimento, e per proiettare il peso odierno nel conteggio live.
+    La razione (kg di mangime al giorno per capo, colonna «1» della curva di
+    alimentazione del PC) per ora si mostra soltanto: pagina Curva di accrescimento."""
     __tablename__ = "curva_accrescimento"
     id = db.Column(db.Integer, primary_key=True)
     eta_giorni = db.Column(db.Integer, nullable=False, unique=True)
     peso_kg = db.Column(db.Float, nullable=False)
+    # in produzione la colonna esiste dal modulo v1 come NOT NULL: i punti nuovi la devono avere
+    razione_kg_giorno = db.Column(db.Float)
 
 
 class EventoMortalita(db.Model):

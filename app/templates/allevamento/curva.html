@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+{% block title %}Allevamento – Curva di accrescimento{% endblock %}
+{# Curva di accrescimento: punti età → peso → razione, scaglioni calcolati e grafici.
+   Rotte in app/routes/allevamento.py (curva, curva_new, curva_edit, curva_delete);
+   calcolo degli scaglioni in app/services/allevamento_curva.py. #}
+
+{% macro num(v, dec=1) %}{% if v is not none %}{{ ('%.' ~ dec ~ 'f')|format(v)|replace('.', ',') }}{% else %}<span class="text-muted">–</span>{% endif %}{% endmacro %}
+{% macro segno(v, dec=0) %}{% if v is not none %}{% set v = 0.0 if v|abs < 0.5 / 10 ** dec else v %}{{ ('%+.' ~ dec ~ 'f')|format(v)|replace('.', ',')|replace('+0,0', '0,0') if v == 0 else ('%+.' ~ dec ~ 'f')|format(v)|replace('.', ',') }}{% else %}<span class="text-muted">–</span>{% endif %}{% endmacro %}
+
+{% block extra_head %}
+<style>
+.cb-curva {
+  --surface: #ffffff; --ink: #1d1922; --ink-2: #55525c; --muted: #8a8791; --grid: #e7e8ec; --axis: #c9cbd2;
+  --border: rgba(29, 25, 34, 0.08); --accent: #c2185b; --l1: #2a78d6; --farina: #eda100;
+  --shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; color: var(--ink);
+}
+.cb-curva > * { min-width: 0; }   /* la tabella larga scorre dentro la sua scheda, non allarga la pagina */
+.cb-curva .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap: 12px; }
+.cb-curva .kpi { background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--border); padding: 12px 14px 10px; }
+.cb-curva .kpi .lab { font-size: 12.5px; color: var(--ink-2); }
+.cb-curva .kpi .val { font-size: 24px; font-weight: 600; line-height: 1.2; }
+.cb-curva .kpi .val small { font-size: 13px; font-weight: 400; color: var(--ink-2); margin-left: 3px; }
+.cb-curva .kpi .sub { font-size: 12px; color: var(--ink-2); }
+.cb-curva .grafici { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 16px; }
+.cb-curva .grafico { background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--border); padding: 12px 14px; }
+.cb-curva .grafico h6 { margin: 0; font-size: 14px; }
+.cb-curva .grafico p { margin: 2px 0 8px; font-size: 12.5px; color: var(--ink-2); }
+.cb-curva .grafico .tela { position: relative; height: 260px; }
+.cb-curva .legenda { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--ink-2); margin-bottom: 6px; }
+.cb-curva .legenda i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+.cb-curva .legenda i.barra { height: 10px; }
+.cb-curva table td, .cb-curva table th { white-space: nowrap; vertical-align: middle; }
+.cb-curva th.gruppo { text-align: center; font-weight: 500; font-size: 12px; color: var(--ink-2); border-bottom: 0; }
+.cb-curva td.calc { color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+.cb-curva th.calc { text-align: right; }
+.cb-curva .sep { border-left: 1px solid var(--grid); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+    <h4 class="mb-0"><i class="bi bi-graph-up me-2" style="color:#c2185b"></i>Curva di accrescimento</h4>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-sm" style="background:#c2185b;color:#fff" href="{{ url_for('allevamento.curva_dal_pc') }}"><i class="bi bi-pc-display me-1"></i>Aggiorna dal PC</a>
+        <a class="btn btn-sm" style="border:1px solid #c2185b;color:#a3154d" href="{{ url_for('allevamento.impostazioni') }}"><i class="bi bi-arrow-left me-1"></i>Impostazioni allevamento</a>
+    </div>
+</div>
+<p class="text-muted small">Età → peso vivo → razione al giorno per capo, dalla curva di alimentazione del PC. Il peso serve al censimento
+    (basta scrivere età <em>oppure</em> peso), al conteggio live e alla stima della scheda Soccida. La razione per ora si mostra soltanto.
+    Oltre l'ultimo punto la razione resta costante (come sul PC); il peso invece il gestionale lo tiene fermo all'ultimo valore, non lo prolunga.
+    «Aggiorna dal PC» legge la curva usata dai box sull'impianto e la sostituisce a questa solo dopo conferma.</p>
+
+{% if dal_pc %}
+<div class="cb-card p-3 mb-3" style="border-left:4px solid #c2185b">
+    <div class="fw-semibold mb-1"><i class="bi bi-pc-display me-1" style="color:#c2185b"></i>Curva letta dal PC: n. {{ dal_pc.nr }}
+        «{{ dal_pc.nome }}{% if dal_pc.descr %} – {{ dal_pc.descr }}{% endif %}»</div>
+    <div class="text-muted small mb-2">Usata da {{ dal_pc.box }} box · {{ dal_pc.punti|length }} punti, da {{ dal_pc.punti[0][0] }} a {{ dal_pc.punti[-1][0] }} giorni
+        ({{ num(dal_pc.punti[0][1]) }} → {{ num(dal_pc.punti[-1][1]) }} kg).</div>
+    {% if not dal_pc.differenze %}
+    <div class="mb-0"><i class="bi bi-check2-circle me-1 text-success"></i>Uguale a quella del gestionale: niente da aggiornare.</div>
+    {% else %}
+    <div class="mb-2">{{ dal_pc.differenze|length }} punti diversi da quelli del gestionale:</div>
+    <div style="overflow-x:auto" class="mb-2">
+        <table class="table table-sm mb-0" style="max-width:560px">
+            <thead class="table-light"><tr><th>Giorni</th><th class="text-end">Peso gestionale</th><th class="text-end">Peso PC</th><th class="text-end">Razione gestionale</th><th class="text-end">Razione PC</th></tr></thead>
+            <tbody>
+            {% for e, g, p in dal_pc.differenze %}
+            <tr>
+                <td class="fw-semibold">{{ e }}</td>
+                <td class="text-end">{% if g %}{{ num(g[0]) }}{% else %}<span class="text-muted">nuovo</span>{% endif %}</td>
+                <td class="text-end{% if not g or not p or g[0] != p[0] %} fw-semibold{% endif %}">{% if p %}{{ num(p[0]) }}{% else %}<span class="text-muted">tolto</span>{% endif %}</td>
+                <td class="text-end">{% if g %}{{ num(g[1], 2) }}{% endif %}</td>
+                <td class="text-end{% if not g or not p or g[1] != p[1] %} fw-semibold{% endif %}">{% if p %}{{ num(p[1], 2) }}{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <form method="post" action="{{ url_for('allevamento.curva_dal_pc_salva') }}" class="d-flex flex-wrap gap-2"
+          onsubmit="return confirm('Sostituire la curva del gestionale con quella del PC?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="punti" value="{{ dal_pc.json }}">
+        <input type="hidden" name="nome" value="{{ dal_pc.nome }}">
+        <button type="submit" class="btn btn-sm" style="background:#c2185b;color:#fff"><i class="bi bi-arrow-down-circle me-1"></i>Sostituisci con la curva del PC</button>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('allevamento.curva') }}">Annulla</a>
+    </form>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="cb-curva">
+{% if righe %}
+{% set ultimo = righe[-1][1] %}
+{% set primo = righe[0][1] %}
+<div class="kpis">
+    <div class="kpi"><div class="lab">Fine curva</div>
+        <div class="val">{{ num(ultimo.peso_kg) }}<small>kg</small></div>
+        <div class="sub">a {{ ultimo.eta_giorni }} giorni, da {{ num(primo.peso_kg) }} kg all'ingresso</div></div>
+    <div class="kpi"><div class="lab">Accrescimento medio</div>
+        <div class="val">{% if ultimo.eta_giorni > primo.eta_giorni %}{{ num((ultimo.peso_kg - primo.peso_kg) / (ultimo.eta_giorni - primo.eta_giorni) * 1000, 0) }}{% else %}–{% endif %}<small>g/giorno</small></div>
+        <div class="sub">peso vivo, su tutta la curva</div></div>
+    <div class="kpi"><div class="lab">Mangime per capo</div>
+        <div class="val">{{ num(ultimo.mangime_cumulato_kg, 0) }}<small>kg</small></div>
+        <div class="sub">razioni della curva, dall'ingresso alla fine</div></div>
+    <div class="kpi"><div class="lab">Indice teorico</div>
+        <div class="val">{{ num(ultimo.indice_cumulato, 2) }}</div>
+        <div class="sub">kg di mangime per kg di peso vivo guadagnato</div></div>
+</div>
+
+<div class="grafici">
+    <div class="grafico">
+        <h6>Peso e razione per età</h6>
+        <p>Peso vivo (scala a sinistra) e razione al giorno per capo (scala a destra).</p>
+        <div class="legenda"><span><i style="background:var(--accent)"></i>Peso vivo, kg</span><span><i style="background:var(--l1)"></i>Razione, kg/giorno</span></div>
+        <div class="tela"><canvas id="grPeso" role="img" aria-label="Peso vivo e razione per età"></canvas></div>
+    </div>
+    <div class="grafico">
+        <h6>Accrescimento e indice per scaglione</h6>
+        <p>Grammi di peso vivo al giorno (barre) e kg di mangime per kg guadagnato nello scaglione (linea).</p>
+        <div class="legenda"><span><i class="barra" style="background:var(--farina)"></i>Accrescimento, g/giorno</span><span><i style="background:var(--ink-2)"></i>Indice dello scaglione</span></div>
+        <div class="tela"><canvas id="grScaglioni" role="img" aria-label="Accrescimento giornaliero e indice per scaglione"></canvas></div>
+        <p class="mt-2 mb-0" id="fuoriScala" hidden></p>
+    </div>
+</div>
+{% endif %}
+
+{% if ciclo %}
+<div>
+    <h6 class="text-uppercase text-muted small mb-2">Censimenti contro la curva teorica · {{ ciclo.nome }}</h6>
+    <p class="text-muted small mb-2">Curva teorica = età all'arrivo + giorni passati. L'arrivo di un box è la sua prima entrata negli Spostamenti
+        (età dalla curva al peso d'arrivo) o, se manca, il primo censimento in cui compare. Al censimento l'età si ricava dal peso: la differenza
+        dice di quanti giorni, e kg, i suini sono avanti (+) o indietro (−) sulla curva. Se serve, correggi l'età dei box sul PC.</p>
+    {% if scarti %}
+    <div class="cb-card p-0" style="overflow-x:auto">
+        <table class="table table-sm mb-0">
+            <thead class="table-light"><tr>
+                <th>Censimento</th><th class="calc">Capi</th><th class="calc">Età censimento</th><th class="calc">Età teorica</th>
+                <th class="calc">Scarto giorni</th><th class="calc">Scarto kg</th><th></th>
+            </tr></thead>
+            <tbody>
+            {% for c in scarti %}
+            <tr>
+                <td class="fw-semibold">{{ c.data.strftime('%d/%m/%Y') }}</td>
+                <td class="calc">{{ c.capi }}</td>
+                <td class="calc">{{ num(c.eta_censimento) }}</td>
+                <td class="calc">{{ num(c.eta_teorica) }}</td>
+                <td class="calc fw-semibold">{{ segno(c.scarto_giorni, 1) }}</td>
+                <td class="calc fw-semibold">{{ segno(c.scarto_kg, 1) }}</td>
+                <td class="text-end">{% if c.gruppi|length > 1 %}<button type="button" class="btn btn-sm btn-outline-secondary py-0" data-gruppi="g{{ loop.index }}" aria-expanded="false">{{ c.gruppi|length }} gruppi</button>{% endif %}</td>
+            </tr>
+            {% if c.gruppi|length > 1 %}
+            {% set i = loop.index %}
+            {% for g in c.gruppi %}
+            <tr class="g{{ i }} small" hidden>
+                <td class="ps-4 text-muted">arrivo {{ g.arrivo.strftime('%d/%m') }} a {{ num(g.eta_arrivo, 0) }} gg{% if not g.da_entrata %}<sup>*</sup>{% endif %}
+                    <div>box {{ g.box|join(', ') }}</div></td>
+                <td class="calc">{{ g.capi }}</td>
+                <td class="calc">{{ num(g.eta_censimento) }}</td>
+                <td class="calc">{{ num(g.eta_teorica) }}</td>
+                <td class="calc">{{ segno(g.scarto_giorni, 1) }}</td>
+                <td class="calc">{{ segno(g.scarto_kg, 1) }}</td>
+                <td></td>
+            </tr>
+            {% endfor %}
+            {% endif %}
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if arrivi_da_censimento %}
+    <p class="text-muted small mt-1 mb-0"><sup>*</sup> arrivo dal primo censimento del box: le entrate dei suinetti con il peso non sono registrate negli Spostamenti.</p>
+    {% endif %}
+    {% else %}
+    <div class="cb-card p-3 text-muted small">Nessun censimento con le età in questo ciclo.</div>
+    {% endif %}
+</div>
+{% endif %}
+
+<div>
+    <h6 class="text-uppercase text-muted small mb-2">Punti della curva</h6>
+    <p class="text-muted small mb-2">Le colonne «dal punto prima» sono calcolate sullo scaglione che finisce in quella riga. Mangime = razione media dei due punti × giorni.</p>
+    <div class="cb-card p-0" style="overflow-x:auto">
+        <table class="table table-sm mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th colspan="3"></th>
+                    <th colspan="4" class="gruppo sep">dal punto prima</th>
+                    <th colspan="2" class="gruppo sep">dall'ingresso</th>
+                    <th></th>
+                </tr>
+                <tr>
+                    <th>Giorni di vita</th><th>Peso (kg)</th><th>Razione (kg/giorno)</th>
+                    <th class="calc sep">Accrescimento<br><span class="fw-normal small">g/giorno</span></th>
+                    <th class="calc">Razione<br><span class="fw-normal small">g in più al giorno</span></th>
+                    <th class="calc">Mangime<br><span class="fw-normal small">kg/capo</span></th>
+                    <th class="calc">Indice</th>
+                    <th class="calc sep">Mangime<br><span class="fw-normal small">kg/capo</span></th>
+                    <th class="calc">Indice</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p, s in righe %}
+                <tr>
+                    <td class="fw-semibold">{{ p.eta_giorni }}</td>
+                    <td><input type="number" name="peso_kg" form="frm-curva-{{ p.id }}" class="form-control form-control-sm" step="0.1" min="0"
+                               value="{{ p.peso_kg }}" style="width:90px" aria-label="Peso a {{ p.eta_giorni }} giorni"></td>
+                    <td><input type="number" name="razione_kg_giorno" form="frm-curva-{{ p.id }}" class="form-control form-control-sm" step="0.01" min="0"
+                               value="{{ p.razione_kg_giorno if p.razione_kg_giorno is not none else '' }}" style="width:90px" aria-label="Razione a {{ p.eta_giorni }} giorni"></td>
+                    <td class="calc sep">{{ num(s.accrescimento_g, 0) }}</td>
+                    <td class="calc">{{ segno(s.aumento_razione_g) }}</td>
+                    <td class="calc">{{ num(s.mangime_kg) }}</td>
+                    <td class="calc">{{ num(s.indice, 2) }}</td>
+                    <td class="calc sep">{{ num(s.mangime_cumulato_kg, 0) }}</td>
+                    <td class="calc">{{ num(s.indice_cumulato, 2) }}</td>
+                    <td class="text-nowrap">
+                        <button type="submit" form="frm-curva-{{ p.id }}" class="btn btn-sm btn-outline-secondary py-0" title="Salva"><i class="bi bi-check2"></i></button>
+                        <form method="post" action="{{ url_for('allevamento.curva_delete', cid=p.id) }}" class="d-inline" onsubmit="return confirm('Eliminare questo punto della curva?')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn btn-sm btn-outline-danger py-0" title="Elimina"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="10" class="text-muted">Nessun punto: aggiungi il primo qui sotto.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% for p in punti %}
+        <form id="frm-curva-{{ p.id }}" method="post" action="{{ url_for('allevamento.curva_edit', cid=p.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        </form>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="cb-card p-3">
+    <form method="post" action="{{ url_for('allevamento.curva_new') }}" class="row g-2 align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-6 col-md-3">
+            <label class="form-label small" for="nuovo-eta">Giorni di vita</label>
+            <input type="number" id="nuovo-eta" name="eta_giorni" class="form-control form-control-sm" min="0" required>
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small" for="nuovo-peso">Peso (kg)</label>
+            <input type="number" id="nuovo-peso" name="peso_kg" class="form-control form-control-sm" step="0.1" min="0" required>
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small" for="nuovo-razione">Razione (kg/giorno)</label>
+            <input type="number" id="nuovo-razione" name="razione_kg_giorno" class="form-control form-control-sm" step="0.01" min="0" required>
+        </div>
+        <div class="col-6 col-md-3">
+            <button type="submit" class="btn btn-sm" style="background:#c2185b;color:#fff"><i class="bi bi-plus-circle"></i> Aggiungi punto</button>
+        </div>
+    </form>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// righe dei gruppi di box sotto ogni censimento
+document.querySelectorAll("[data-gruppi]").forEach(function (b) {
+  b.addEventListener("click", function () {
+    var aperto = b.getAttribute("aria-expanded") === "true";
+    document.querySelectorAll("tr." + b.dataset.gruppi).forEach(function (r) { r.hidden = aperto; });
+    b.setAttribute("aria-expanded", aperto ? "false" : "true");
+  });
+});
+</script>
+{% if righe %}
+<script>
+(function () {
+  const RIGHE = {{ dati_grafici | tojson }};
+  const radice = document.querySelector(".cb-curva");
+  const css = n => getComputedStyle(radice).getPropertyValue(n).trim();
+  const T = { ink: css("--ink"), ink2: css("--ink-2"), muted: css("--muted"), grid: css("--grid"), axis: css("--axis"),
+              surface: css("--surface"), accent: css("--accent"), l1: css("--l1"), farina: css("--farina") };
+  Chart.defaults.font.family = '"Varela Round", system-ui, sans-serif';
+  Chart.defaults.font.size = 12;
+  Chart.defaults.color = T.muted;
+  const it = (v, d) => v == null ? "–" : v.toLocaleString("it-IT", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+  function opzioni(asse1, asse2, unita) {
+    return {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: T.surface, titleColor: T.ink2, bodyColor: T.ink, borderColor: T.axis, borderWidth: 1,
+          padding: 10, cornerRadius: 8, boxPadding: 4, usePointStyle: true, titleFont: { weight: "400" }, bodyFont: { weight: "600" },
+          callbacks: { title: c => c[0].label + " giorni", label: c => " " + c.dataset.label + ": " + it(c.parsed.y, unita[c.datasetIndex]) },
+        },
+      },
+      scales: {
+        x: { grid: { display: false }, border: { color: T.axis }, ticks: { color: T.muted, maxRotation: 0, autoSkipPadding: 12 },
+             title: { display: true, text: "giorni di vita", color: T.muted } },
+        y: Object.assign({ grid: { color: T.grid }, border: { display: false }, ticks: { color: T.muted } }, asse1),
+        y2: Object.assign({ position: "right", grid: { display: false }, border: { display: false }, ticks: { color: T.muted } }, asse2),
+      },
+    };
+  }
+
+  const eta = RIGHE.map(r => r.eta_giorni);
+  new Chart(document.getElementById("grPeso"), {
+    type: "line",
+    data: { labels: eta, datasets: [
+      { label: "Peso vivo, kg", data: RIGHE.map(r => r.peso_kg), borderColor: T.accent, backgroundColor: T.accent, yAxisID: "y",
+        borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0 },
+      { label: "Razione, kg/giorno", data: RIGHE.map(r => r.razione_kg), borderColor: T.l1, backgroundColor: T.l1, yAxisID: "y2",
+        borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, stepped: false, tension: 0 },
+    ] },
+    options: opzioni({ beginAtZero: true }, { beginAtZero: true }, [1, 2]),
+  });
+
+  const sc = RIGHE.slice(1);
+  // un indice molto alto (es. un ultimo scaglione quasi fermo) schiaccerebbe tutti gli altri: la scala si ferma a INDICE_MAX
+  const INDICE_MAX = 8;
+  const fuori = sc.filter(r => r.indice != null && r.indice > INDICE_MAX);
+  if (fuori.length) {
+    const n = document.getElementById("fuoriScala");
+    n.textContent = "Fuori scala: " + fuori.map(r => "indice " + it(r.indice, 2) + " a " + r.eta_giorni + " giorni").join(", ") + ".";
+    n.hidden = false;
+  }
+  new Chart(document.getElementById("grScaglioni"), {
+    data: { labels: sc.map(r => r.eta_giorni), datasets: [
+      { type: "bar", label: "Accrescimento, g/giorno", data: sc.map(r => r.accrescimento_g), backgroundColor: T.farina, yAxisID: "y",
+        borderRadius: 4, maxBarThickness: 18, order: 2 },
+      { type: "line", label: "Indice dello scaglione", data: sc.map(r => r.indice), borderColor: T.ink2, backgroundColor: T.ink2, yAxisID: "y2",
+        borderWidth: 2, pointRadius: 2, pointHoverRadius: 4, tension: 0, order: 1 },
+    ] },
+    options: opzioni({ beginAtZero: true }, { beginAtZero: true, max: fuori.length ? INDICE_MAX : undefined }, [0, 2]),
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

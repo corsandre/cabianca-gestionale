@@ -2404,7 +2404,117 @@ def medicinali_delete(mid):
     return redirect(url_for("allevamento.impostazioni"))
 
 
-# ── Curva di accrescimento (Impostazioni) ──────────────────────────────────
+# ── Curva di accrescimento (Impostazioni › Curva di accrescimento) ─────────
+
+def _razione_dal_modulo(obbligatoria):
+    """Razione (kg al giorno per capo) dal modulo. In produzione la colonna è NOT NULL
+    (modulo v1): per i punti nuovi è obbligatoria."""
+    testo = (request.form.get("razione_kg_giorno") or "").strip().replace(",", ".")
+    if not testo:
+        if obbligatoria:
+            raise ValueError("Scrivi la razione (kg al giorno per capo).")
+        return None
+    razione = float(testo)
+    if razione < 0:
+        raise ValueError("La razione non può essere negativa.")
+    return razione
+
+
+@bp.route("/curva-accrescimento")
+@login_required
+def curva(dal_pc=None):
+    """Pagina della curva: punti modificabili, scaglioni (accrescimento e razione al giorno,
+    mangime e indice teorici) e grafici. Calcolo in services/allevamento_curva.py."""
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.models import CurvaAccrescimento, Censimento, Spostamento
+    from app.services.allevamento_curva import scaglioni, scarti_censimenti
+    punti = CurvaAccrescimento.query.order_by(CurvaAccrescimento.eta_giorni).all()
+    terne = [(p.eta_giorni, p.peso_kg, p.razione_kg_giorno) for p in punti]
+    righe = scaglioni(terne)
+    # censimenti del ciclo attivo contro la curva teorica dall'arrivo (età all'arrivo + giorni passati)
+    ciclo = _get_ciclo_attivo()
+    scarti = []
+    if ciclo and terne:
+        censimenti = [(c.data, {b.box_numero: (b.quantita, b.giorni_vita) for b in c.conteggi})
+                      for c in Censimento.query.filter_by(ciclo_id=ciclo.id).order_by(Censimento.data, Censimento.id)]
+        entrate = [(s.data, s.box_destinazione, s.peso_medio_kg)
+                   for s in Spostamento.query.filter_by(ciclo_id=ciclo.id, tipo="entrata")]
+        scarti = scarti_censimenti(censimenti, entrate, terne)
+    from dataclasses import asdict
+    return render_template("allevamento/curva.html", punti=punti, righe=list(zip(punti, righe)),
+                           dati_grafici=[asdict(r) for r in righe], dal_pc=dal_pc, ciclo=ciclo, scarti=scarti,
+                           arrivi_da_censimento=any(not g.da_entrata for c in scarti for g in c.gruppi))
+
+
+@bp.route("/curva-accrescimento/dal-pc")
+@login_required
+def curva_dal_pc():
+    """Legge (sola lettura) la curva usata dai box sul PC dell'impianto e mostra le differenze con quella
+    salvata. Si salva solo con «Sostituisci» (curva_dal_pc_salva). Come la «Prova collegamento», è una
+    richiesta esplicita dell'amministratore: ci si collega anche con l'impianto in modalità manuale."""
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    import json
+    from app.models import CurvaAccrescimento
+    from app.services import impianto as I
+    from app.services.allevamento_curva import differenze
+    lettore = I.crea_lettore(ignora_modalita=True)
+    if lettore is None:
+        flash("Collegamento al PC dell'impianto non configurato (Impostazioni › Impianto di alimentazione).", "warning")
+        return redirect(url_for("allevamento.curva"))
+    try:
+        letta = lettore.curva_in_uso(set(CAP_PER_BOX))
+    except Exception as e:
+        flash(f"Lettura della curva dal PC non riuscita: {e}", "danger")
+        return redirect(url_for("allevamento.curva"))
+    finally:
+        lettore.chiudi()
+    if not letta or not letta["punti"]:
+        flash("Sul PC nessun box con capi ha una curva di ingrasso.", "warning")
+        return redirect(url_for("allevamento.curva"))
+    salvati = [(p.eta_giorni, p.peso_kg, p.razione_kg_giorno)
+               for p in CurvaAccrescimento.query.order_by(CurvaAccrescimento.eta_giorni)]
+    letta["differenze"] = differenze(salvati, letta["punti"])
+    letta["json"] = json.dumps(letta["punti"])
+    return curva(dal_pc=letta)
+
+
+@bp.route("/curva-accrescimento/dal-pc", methods=["POST"])
+@login_required
+def curva_dal_pc_salva():
+    """Sostituisce la curva con i punti letti dal PC e mostrati all'amministratore."""
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    import json
+    from app.models import CurvaAccrescimento
+    try:
+        punti = [(int(e), float(p), float(r)) for e, p, r in json.loads(request.form["punti"])]
+        if not punti or any(b[0] <= a[0] for a, b in zip(punti, punti[1:])) or any(p <= 0 or r < 0 for _, p, r in punti):
+            raise ValueError("punti non validi")
+        esistenti = {c.eta_giorni: c for c in CurvaAccrescimento.query.all()}
+        nuove = {e for e, _, _ in punti}
+        for e, c in esistenti.items():
+            if e not in nuove:
+                db.session.delete(c)
+        for e, p, r in punti:
+            c = esistenti.get(e)
+            if c is None:
+                db.session.add(CurvaAccrescimento(eta_giorni=e, peso_kg=p, razione_kg_giorno=r))
+            else:
+                c.peso_kg, c.razione_kg_giorno = p, r
+        db.session.commit()
+        nome = (request.form.get("nome") or "").strip()
+        flash(f"Curva sostituita con quella del PC{' «' + nome + '»' if nome else ''}: {len(punti)} punti, "
+              f"da {punti[0][0]} a {punti[-1][0]} giorni.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Curva non salvata: {e}", "danger")
+    return redirect(url_for("allevamento.curva"))
+
 
 @bp.route("/curva-accrescimento/new", methods=["POST"])
 @login_required
@@ -2416,15 +2526,16 @@ def curva_new():
     try:
         eta = int(request.form["eta_giorni"])
         peso = float(request.form["peso_kg"].strip().replace(",", "."))
+        razione = _razione_dal_modulo(obbligatoria=True)
         if CurvaAccrescimento.query.filter_by(eta_giorni=eta).first():
             raise ValueError(f"Esiste già un punto a {eta} giorni.")
-        db.session.add(CurvaAccrescimento(eta_giorni=eta, peso_kg=peso))
+        db.session.add(CurvaAccrescimento(eta_giorni=eta, peso_kg=peso, razione_kg_giorno=razione))
         db.session.commit()
-        flash(f"Punto {eta}gg → {peso}kg aggiunto.", "success")
+        flash(f"Punto {eta}gg → {peso}kg, razione {razione}kg aggiunto.", "success")
     except Exception as e:
         db.session.rollback()
         flash(f"Errore: {e}", "danger")
-    return redirect(url_for("allevamento.impostazioni"))
+    return redirect(url_for("allevamento.curva"))
 
 
 @bp.route("/curva-accrescimento/<int:cid>/edit", methods=["POST"])
@@ -2437,15 +2548,18 @@ def curva_edit(cid):
     c = db.session.get(CurvaAccrescimento, cid)
     if not c:
         flash("Punto non trovato.", "danger")
-        return redirect(url_for("allevamento.impostazioni"))
+        return redirect(url_for("allevamento.curva"))
     try:
         c.peso_kg = float(request.form["peso_kg"].strip().replace(",", "."))
+        razione = _razione_dal_modulo(obbligatoria=c.razione_kg_giorno is not None)
+        if razione is not None:
+            c.razione_kg_giorno = razione
         db.session.commit()
         flash(f"Punto {c.eta_giorni}gg aggiornato.", "success")
     except Exception as e:
         db.session.rollback()
         flash(f"Errore: {e}", "danger")
-    return redirect(url_for("allevamento.impostazioni"))
+    return redirect(url_for("allevamento.curva"))
 
 
 @bp.route("/curva-accrescimento/<int:cid>/delete", methods=["POST"])
@@ -2460,7 +2574,7 @@ def curva_delete(cid):
         db.session.delete(c)
         db.session.commit()
         flash(f"Punto {c.eta_giorni}gg eliminato.", "success")
-    return redirect(url_for("allevamento.impostazioni"))
+    return redirect(url_for("allevamento.curva"))
 
 
 # ── Impostazioni / Cicli ───────────────────────────────────────────────────
