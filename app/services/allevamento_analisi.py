@@ -76,7 +76,7 @@ def _rapporto_per_giorno(ciclo):
 
 
 def dati_analisi(ciclo):
-    from app.routes.allevamento import _live_count, LINEA_PER_BOX
+    from app.services.allevamento_conteggio import live_count as _live_count, LINEA_PER_BOX
     from app.services.allevamento_scorte import get_setting_float, peso_da_giorni
 
     oggi = date.today()

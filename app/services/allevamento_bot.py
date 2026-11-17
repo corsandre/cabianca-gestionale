@@ -426,7 +426,7 @@ def start_bot(app):
         with app.app_context():
             from app import db
             from app.models import Trattamento, Somministrazione
-            from app.routes.allevamento import _stato_trattamento
+            from app.services.allevamento_trattamenti import stato_trattamento as _stato_trattamento
             t = db.session.get(Trattamento, tid)
             if not t:
                 await q.edit_message_text("⚠️ Trattamento non trovato.")

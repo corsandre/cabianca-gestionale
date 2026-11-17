@@ -76,7 +76,7 @@ def _scarto_al(istante_pc):
 
 def _intervalli(righe):
     """[(inizio, fine, {linea: {comp: q}})] in ora reale, uno per fotografia (dalla precedente)."""
-    from app.routes.allevamento import LINEA_PER_BOX
+    from app.services.allevamento_conteggio import LINEA_PER_BOX
     per_foto = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
     for istante, box, comp, kg in righe:
         if box in LINEA_PER_BOX and comp in COMPONENTI_PC:

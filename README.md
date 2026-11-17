@@ -929,7 +929,9 @@ app/
     cloud_office.py recurring_generator.py export.py               # cassa, ricorrenti, CSV
     backup.py telegram_bot.py                                      # backup e notifiche
     allevamento_scorte.py allevamento_pasti.py allevamento_bot.py  # allevamento
-    allevamento_analisi.py
+    allevamento_analisi.py allevamento_curva.py
+    allevamento_conteggio.py   # struttura della stalla e conteggio dei capi per box (live_count), dalla 3.1.4
+    allevamento_trattamenti.py # trattamenti, marcatori e stato di un corso di cura (stato_trattamento)
     soccida.py soccida_dati.py soccida_scheda.py                   # soccida: calcolo, raccolta dati, scheda
     siero_fatture_pdf.py siero_fatture.py                          # fatture del siero: lettura delle righe, abbinamento alle consegne
     impianto/          # collegamento all'impianto di alimentazione (servizio, lettore EM2000)
@@ -937,10 +939,11 @@ app/
     components/        # sidebar_nav.html, scorta_card.html, …
   static/
     css/style.css      # branding Ca Bianca
+    js/bolla.js        # foto delle bolle: compressione e invio con nuovi tentativi (Consegne, Spostamenti, Modello 4)
     uploads/           # allegati e foto bolle (volume)
   utils/decorators.py  # role_required, admin_required, write_required, section_required
-tests/                 # calcolo della soccida contro l'Excel, lettura delle fatture di siero (python3 -m unittest discover -s tests)
-docs/                  # piano-3.0-soccida.md: decisioni e fasi della 3.0; soccida-dati/: prototipo e dati di partenza
+tests/                 # soccida contro l'Excel, fatture di siero, curva, numero del pasto, conteggio dei capi (python3 -m unittest discover -s tests)
+docs/                  # piani (piano-3.0-soccida.md, piano-curva-accrescimento.md, piano-ottimizzazione-struttura.md); soccida-dati/: prototipo e dati di partenza
 scripts/               # script di manutenzione; em2000_addestra.py costruisce il campionario dello schermo
 Dockerfile  docker-compose.yml  gunicorn.conf.py  setup.sh  requirements.txt
 ```
@@ -955,6 +958,10 @@ Dockerfile  docker-compose.yml  gunicorn.conf.py  setup.sh  requirements.txt
 - Le modifiche di registrazioni già fatte avvengono in un modal con lo stesso layout dell'inserimento.
 - Stima ≠ dato reale: i valori propagati automaticamente sono salvati con `stimato=True` e mostrati in modo
   diverso, mai ricalcolati all'indietro.
+- Calcoli usati da più pagine o servizi stanno in `app/services/`, non nelle route: i servizi non importano dalle
+  route (dalla 3.1.4 il conteggio dei capi è in `allevamento_conteggio.py`; le route lo reimportano con i nomi di
+  sempre, `_live_count`, `_get_ciclo_attivo`). JavaScript comune a più pagine in `app/static/js/`, incluso con
+  `?v={{ versione }}` così i telefoni scaricano quello nuovo a ogni rilascio.
 - Colori: verde `#009d5a` (Finanza), rosa `#c2185b` (Allevamento). Font: Varela Round (testo), Yeseva One (titoli).
 
 ---

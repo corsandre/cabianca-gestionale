@@ -131,7 +131,7 @@ def _linee_attive():
     """Linee (1/2/3) con almeno un animale vivo secondo l'ultimo censimento
     del ciclo attivo. Una linea senza animali non ha bisogno di dati di
     consumo per considerare completo un pasto."""
-    from app.routes.allevamento import _get_ciclo_attivo, _live_count, LINEA_PER_BOX
+    from app.services.allevamento_conteggio import ciclo_attivo as _get_ciclo_attivo, live_count as _live_count, LINEA_PER_BOX
     ciclo = _get_ciclo_attivo()
     if not ciclo:
         return {1, 2, 3}

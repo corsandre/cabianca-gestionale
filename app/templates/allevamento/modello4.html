@@ -58,26 +58,8 @@
 <div class="cb-card p-4 text-center text-muted">Nessuna pagina caricata.</div>
 {% endif %}
 
+<script src="{{ url_for('static', filename='js/bolla.js') }}?v={{ versione }}"></script>
 <script>
-function cbComprimiImmagine(file, maxDim, qualita) {
-    return new Promise(function (resolve) {
-        if (!file.type.startsWith('image/')) { resolve(file); return; }
-        const img = new Image(); const url = URL.createObjectURL(file);
-        img.onload = function () {
-            URL.revokeObjectURL(url);
-            let w = img.width, h = img.height;
-            if (w > maxDim || h > maxDim) { if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; } else { w = Math.round(w * maxDim / h); h = maxDim; } }
-            const c = document.createElement('canvas'); c.width = w; c.height = h;
-            c.getContext('2d').drawImage(img, 0, 0, w, h);
-            c.toBlob(function (blob) {
-                if (!blob || blob.size >= file.size) { resolve(file); return; }
-                resolve(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }));
-            }, 'image/jpeg', qualita);
-        };
-        img.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
-        img.src = url;
-    });
-}
 document.getElementById('formPagine').addEventListener('submit', async function (ev) {
     ev.preventDefault();
     const input = document.getElementById('nuovePagine');

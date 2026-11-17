@@ -86,7 +86,7 @@ def salva_lettura_linea(data, evento, orari_impianto, inizio=None):
 def registra(lettura, operatore="impianto", sovrascrivi_manuali=False):
     """Scrive la lettura in uso_pasti. Restituisce la riga UsoPasto, o None se non scritta."""
     from app.models import UsoPasto, OrarioPastoEffettivo, ImpiantoLinea
-    from app.routes.allevamento import _get_ciclo_attivo
+    from app.services.allevamento_conteggio import ciclo_attivo as _get_ciclo_attivo
     from app.services.allevamento_pasti import registra_pasto
     from app.services.allevamento_scorte import invalida_orari_effettivi
 

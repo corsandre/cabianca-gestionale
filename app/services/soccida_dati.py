@@ -213,7 +213,7 @@ def cabianca_in_stalla(ciclo, par):
 
 def capi_presenti(ciclo, par):
     """Capi di Veronesi in stalla oggi (conteggio per box meno i suini di Fattoria Ca' Bianca)."""
-    from app.routes.allevamento import _live_count
+    from app.services.allevamento_conteggio import live_count as _live_count
     return max(0, sum(_live_count(ciclo).values()) - cabianca_in_stalla(ciclo, par))
 
 

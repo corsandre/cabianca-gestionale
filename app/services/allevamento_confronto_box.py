@@ -13,7 +13,7 @@ from datetime import datetime
 def _movimenti(ciclo, box, cens):
     """Movimenti del box applicati dopo il censimento: gli stessi che usa il conteggio."""
     from app.models import EventoMortalita, Spostamento
-    from app.routes.allevamento import eventi_dopo_censimento
+    from app.services.allevamento_conteggio import eventi_dopo_censimento
     out = []
     for s in Spostamento.query.filter(Spostamento.ciclo_id == ciclo.id, eventi_dopo_censimento(Spostamento, cens)).all():
         if s.box_svuotati:          # camion da o verso più box: i capi di questo box
@@ -42,7 +42,7 @@ def _movimenti(ciclo, box, cens):
 def confronta(lettore=None) -> dict:
     """{"ok", "differenze": [...], "tot_gestionale", "tot_pc", "box", "letto_il", "errore", "censimento"}."""
     from app.models import Censimento, Ciclo
-    from app.routes.allevamento import _live_count, CAP_PER_BOX
+    from app.services.allevamento_conteggio import live_count as _live_count, CAP_PER_BOX
     ciclo = Ciclo.query.filter_by(attivo=True).first()
     esito = {"ok": False, "differenze": [], "tot_gestionale": 0, "tot_pc": 0, "box": 0,
              "letto_il": datetime.now(), "errore": None, "censimento": None}

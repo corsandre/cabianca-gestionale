@@ -11,6 +11,9 @@
   tutto l'allevamento), es. vaccinazioni o trattamenti nella broda (dal 07/11/2026).
 """
 import uuid
+from datetime import date, timedelta
+
+from app.services.allevamento_conteggio import CAPANNONI, live_count
 
 COLORI = ("blu", "nero", "rosso")
 SEGNI = ("pallino", "riga", "s")
@@ -45,13 +48,12 @@ def testo_marcatore(colore, segno):
 def marcatori_in_uso(ciclo_id, box):
     """(colore, segno) dei trattamenti ancora in corso nel box."""
     from app.models import Trattamento
-    from app.routes.allevamento import _stato_trattamento
     if not box:
         return []
     usati = []
     for t in Trattamento.query.filter_by(ciclo_id=ciclo_id, box_numero=box).all():
         m = (t.colore, segno_di(t))
-        if t.colore and not _stato_trattamento(t)["completo"] and m not in usati:
+        if t.colore and not stato_trattamento(t)["completo"] and m not in usati:
             usati.append(m)
     return usati
 
@@ -65,7 +67,6 @@ def marcatore_suggerito(ciclo_id, box):
 def normalizza_ambito(box, cap, caps=None):
     """(box, capannone_numero, capannoni) da salvare. Più capannoni → solo `capannoni` ("1,2,3", in ordine);
     un capannone solo scelto nell'elenco vale come quel capannone intero."""
-    from app.routes.allevamento import CAPANNONI
     if isinstance(caps, str):
         caps = caps.split(",")
     caps = sorted({int(c) for c in caps or [] if str(c).strip()})
@@ -86,7 +87,6 @@ def caps_di(t):
 
 
 def tutto_allevamento(t):
-    from app.routes.allevamento import CAPANNONI
     return sorted(caps_di(t)) == sorted(CAPANNONI)
 
 
@@ -94,8 +94,7 @@ def capi_e_peso(ciclo, boxes):
     """Capi presenti adesso nei box (ultimo censimento ± mortalità e spostamenti) e peso medio a capo
     dall'ultimo censimento di ogni box, pesato sui capi (None se manca)."""
     from app.models import Censimento, CensimentoBox
-    from app.routes.allevamento import _live_count
-    conta = _live_count(ciclo)
+    conta = live_count(ciclo)
     capi = sum(conta.get(b, 0) for b in boxes)
     tot_peso = capi_con_peso = 0
     for b in boxes:
@@ -159,10 +158,9 @@ def da_ripetere_per_animale(ciclo_id):
     [{"chiave", "animale", "colore", "segno", "trattamenti": [(t, stato)], "riga": n}] — riga = il numero del
     segno da fare sulla schiena (la dose successiva)."""
     from app.models import Trattamento
-    from app.routes.allevamento import _stato_trattamento
     gruppi = {}
     for t in Trattamento.query.filter_by(ciclo_id=ciclo_id).order_by(Trattamento.data_inizio, Trattamento.id).all():
-        s = _stato_trattamento(t)
+        s = stato_trattamento(t)
         if not s["da_ripetere"]:
             continue
         chiave = t.gruppo or f"t{t.id}"
@@ -178,3 +176,42 @@ def riga_ordinale(n, segno=None):
     """Quale segno fare sulla schiena il giorno n: '2° pallino', '2ª riga', '2ª S'."""
     segno = segno or "pallino"
     return f"{n}{'ª' if segno in FEMMINILE else '°'} {NOME_SEGNO[segno]}"
+
+
+def stato_trattamento(t):
+    """Progresso di un corso di cura: quante dosi fatte, se ne manca una da
+    fare oggi (è passato almeno un giorno dall'ultima), e — a corso finito —
+    fino a quando resta in sospensione prima del macello."""
+    somm = t.somministrazioni.all()  # già ordinate per numero_giorno (vedi relationship)
+    fatte = len(somm)
+    ultima = somm[-1] if somm else None
+    completo = fatte >= t.giorni_somministrazione or t.chiuso_anticipatamente
+    oggi = date.today()
+    da_ripetere = (not completo) and ultima is not None and oggi > ultima.data
+    data_fine_sospensione = None
+    if completo and ultima and not t.deceduto:   # animale morto: nessuna sospensione prima del macello
+        data_fine_sospensione = ultima.data + timedelta(days=t.giorni_sospensione)
+    # dosi in ml o in g secondo il medicinale (polveri in broda = g): ml_per_kg è "unità per kg al giorno"
+    dose_capo_ml = None        # dose giornaliera a capo
+    dose_totale_ml = None      # dose giornaliera di tutti i capi
+    if t.ml_per_kg and t.peso_medio_kg:
+        dose_capo_ml = t.ml_per_kg * t.peso_medio_kg
+        dose_totale_ml = dose_capo_ml * t.numero_animali
+    giorni_previsti = fatte if t.chiuso_anticipatamente else t.giorni_somministrazione
+    return {
+        "fatte": fatte,
+        "totali": t.giorni_somministrazione,
+        "completo": completo,
+        "chiuso_anticipatamente": t.chiuso_anticipatamente,
+        "deceduto": bool(t.deceduto),
+        "da_ripetere": da_ripetere,
+        "ultima_data": ultima.data if ultima else None,
+        "prossima_data": (ultima.data + timedelta(days=1)) if ultima and not completo else None,
+        "data_fine_sospensione": data_fine_sospensione,
+        "in_sospensione": bool(data_fine_sospensione and oggi < data_fine_sospensione),
+        "dose_capo_ml": dose_capo_ml,
+        "dose_totale_ml": dose_totale_ml,
+        "unita": t.medicinale.unita_dose if t.medicinale else "ml",
+        "dose_trattamento": dose_totale_ml * giorni_previsti if dose_totale_ml is not None else None,
+        "dose_finora": dose_totale_ml * fatte if dose_totale_ml is not None else None,
+    }

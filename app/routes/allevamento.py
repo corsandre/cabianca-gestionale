@@ -34,40 +34,13 @@ def _elimina_bolla(bolla_path):
     except OSError:
         pass
 
-# Struttura fisica fissa
-CAP_PER_BOX = {
-    **{i: 1 for i in range(1, 10)},
-    **{i: 2 for i in range(10, 16)},
-    **{i: 3 for i in range(16, 22)},
-    **{i: 4 for i in range(22, 37)},
-    **{i: 5 for i in range(37, 43)},
-    **{i: 7 for i in range(43, 50)},
-    **{i: 6 for i in range(50, 55)},
-}
-LINEA_PER_BOX = {
-    **{i: 1 for i in range(1, 22)},
-    **{i: 2 for i in range(22, 37)},
-    **{i: 3 for i in range(37, 55)},
-}
-POSTI_PER_BOX_STANDARD = {
-    **{i: 40 for i in range(1, 10)},
-    **{i: 26 for i in range(10, 16)},
-    **{i: 10 for i in range(16, 22)},
-    **{i: 38 for i in range(22, 37)},
-    **{i: 38 for i in range(37, 43)},
-    **{i: 31 for i in range(43, 49)},
-    49: 32,
-    50: 47, 51: 47, 52: 46, 53: 45, 54: 45,
-}
-CAPANNONI = [1, 2, 3, 4, 5, 6, 7]
-# categorie delle uscite al macello (Spostamento.categoria_uscita)
-CATEGORIE_USCITA = ("fine_ciclo", "scarto_sottopeso", "agriturismo", "venduti_agriturismo")
-BOX_PER_CAP = {
-    1: list(range(1, 10)), 2: list(range(10, 16)), 3: list(range(16, 22)),
-    4: list(range(22, 37)), 5: list(range(37, 43)), 7: list(range(43, 50)),
-    6: list(range(50, 55)),
-}
-POSTI_PER_CAP = {cap: sum(POSTI_PER_BOX_STANDARD[b] for b in boxes) for cap, boxes in BOX_PER_CAP.items()}
+# Struttura della stalla e conteggio dei capi: in app/services/allevamento_conteggio.py (3.1.4).
+# Qui restano i nomi di sempre, usati dalle pagine e dai template.
+from app.services.allevamento_conteggio import (  # noqa: E402
+    CAP_PER_BOX, LINEA_PER_BOX, POSTI_PER_BOX_STANDARD, CAPANNONI, CATEGORIE_USCITA, BOX_PER_CAP, POSTI_PER_CAP,
+    REGOLA_ORA_CENSIMENTO_DAL, eventi_dopo_censimento,
+    live_count as _live_count, ciclo_attivo as _get_ciclo_attivo,
+)
 GIORNI_SETTIMANA = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
 
 
@@ -75,98 +48,6 @@ def _check_allevamento():
     if not current_user.has_section("allevamento"):
         flash("Accesso non autorizzato alla sezione allevamento.", "danger")
         abort(403)
-
-
-def _get_ciclo_attivo():
-    from app.models import Ciclo
-    return Ciclo.query.filter_by(attivo=True).order_by(Ciclo.data_inizio.desc()).first()
-
-
-# Fino alla 3.0.3 tutti gli eventi del giorno del censimento si applicavano dopo il censimento,
-# anche quelli registrati prima: il censimento del 16/11/2026, fatto alle 14:39 con il box 5 già
-# senza il morto del mattino, lo ha fatto togliere due volte. Da questa data conta l'ora di
-# registrazione; per i censimenti precedenti (ricostruiti a posteriori) resta la regola vecchia,
-# così i conti dei giorni passati non cambiano.
-REGOLA_ORA_CENSIMENTO_DAL = date(2026, 11, 16)
-
-
-def eventi_dopo_censimento(modello, cens):
-    """Condizione per i decessi o gli spostamenti (modello) da applicare a un censimento:
-    quelli dei giorni successivi e, nel giorno del censimento, solo quelli registrati dopo
-    averlo salvato — quelli registrati prima sono già dentro i capi contati."""
-    if cens.data < REGOLA_ORA_CENSIMENTO_DAL or cens.created_at is None:
-        if hasattr(modello, "tipo"):
-            # entrate dello stesso giorno di un censimento vecchio: il censimento d'arrivo le contiene già
-            # (3.1.1: entrate del ciclo 05/2026 registrate dopo, con la data dei censimenti d'arrivo)
-            return db.or_(modello.data > cens.data, db.and_(modello.data == cens.data, modello.tipo != "entrata"))
-        return modello.data >= cens.data
-    return db.or_(modello.data > cens.data,
-                  db.and_(modello.data == cens.data, modello.created_at > cens.created_at))
-
-
-def _live_count(ciclo, al_giorno=None):
-    """Capi per box: ultimo censimento ± mortalità e spostamenti successivi
-    (vedi eventi_dopo_censimento per quelli del giorno stesso).
-    Con al_giorno ricostruisce la situazione a quella data (censimento e
-    eventi fino a quel giorno incluso), altrimenti ad adesso."""
-    from app.models import Censimento, EventoMortalita, Spostamento
-    q_cens = Censimento.query.filter_by(ciclo_id=ciclo.id)
-    if al_giorno:
-        q_cens = q_cens.filter(Censimento.data <= al_giorno)
-    ultimo = q_cens.order_by(Censimento.data.desc(), Censimento.id.desc()).first()
-    if not ultimo:
-        return {b: 0 for b in range(1, 55)}
-
-    count = {b: 0 for b in range(1, 55)}
-    for cb in ultimo.conteggi.all():
-        count[cb.box_numero] = cb.quantita
-
-    # Decessi e spostamenti si sommano senza fermarsi a zero a metà strada: l'ordine in cui si
-    # applicano non deve contare (prima si applicavano tutti i decessi e poi gli spostamenti, e un
-    # box che scendeva sotto zero perdeva il decesso: 12/10 box 16 contato 3 invece di 2).
-    # Lo zero si applica solo al risultato finale.
-    morti = EventoMortalita.query.filter(
-        EventoMortalita.ciclo_id == ciclo.id,
-        eventi_dopo_censimento(EventoMortalita, ultimo),
-        *([EventoMortalita.data <= al_giorno] if al_giorno else []),
-    ).all()
-    for m in morti:
-        if m.box_numero:
-            count[m.box_numero] = count.get(m.box_numero, 0) - m.quantita
-        else:
-            boxes_cap = BOX_PER_CAP.get(m.capannone_numero, [])
-            if boxes_cap:
-                per_box = m.quantita // len(boxes_cap)
-                resto = m.quantita % len(boxes_cap)
-                for i, b in enumerate(boxes_cap):
-                    sottrai = per_box + (1 if i < resto else 0)
-                    count[b] = count.get(b, 0) - sottrai
-
-    spostamenti = Spostamento.query.filter(
-        Spostamento.ciclo_id == ciclo.id,
-        eventi_dopo_censimento(Spostamento, ultimo),
-        *([Spostamento.data <= al_giorno] if al_giorno else []),
-    ).all()
-    for s in spostamenti:
-        if s.tipo == "interno":
-            if s.box_origine:
-                count[s.box_origine] = count.get(s.box_origine, 0) - s.quantita
-            if s.box_destinazione:
-                count[s.box_destinazione] = count.get(s.box_destinazione, 0) + s.quantita
-        elif s.tipo == "entrata":
-            if s.box_svuotati:      # camion di suinetti in più box (3.1.1): i capi di ogni box in spostamenti_box
-                for r in s.box_svuotati:
-                    count[r.box_numero] = count.get(r.box_numero, 0) + r.capi
-            elif s.box_destinazione:
-                count[s.box_destinazione] = count.get(s.box_destinazione, 0) + s.quantita
-        elif s.tipo == "uscita":
-            if s.box_svuotati:      # camion da più box (3.0): i capi tolti da ogni box sono in spostamenti_box
-                for r in s.box_svuotati:
-                    count[r.box_numero] = count.get(r.box_numero, 0) - r.capi
-            elif s.box_origine:
-                count[s.box_origine] = count.get(s.box_origine, 0) - s.quantita
-
-    return {b: max(0, n) for b, n in count.items()}
 
 
 # ── Dashboard ──────────────────────────────────────────────────────────────
@@ -2013,43 +1894,8 @@ def razione_da_pc():
 
 # ── Trattamenti ────────────────────────────────────────────────────────────
 
-def _stato_trattamento(t):
-    """Progresso di un corso di cura: quante dosi fatte, se ne manca una da
-    fare oggi (è passato almeno un giorno dall'ultima), e — a corso finito —
-    fino a quando resta in sospensione prima del macello."""
-    somm = t.somministrazioni.all()  # già ordinate per numero_giorno (vedi relationship)
-    fatte = len(somm)
-    ultima = somm[-1] if somm else None
-    completo = fatte >= t.giorni_somministrazione or t.chiuso_anticipatamente
-    oggi = date.today()
-    da_ripetere = (not completo) and ultima is not None and oggi > ultima.data
-    data_fine_sospensione = None
-    if completo and ultima and not t.deceduto:   # animale morto: nessuna sospensione prima del macello
-        data_fine_sospensione = ultima.data + timedelta(days=t.giorni_sospensione)
-    # dosi in ml o in g secondo il medicinale (polveri in broda = g): ml_per_kg è "unità per kg al giorno"
-    dose_capo_ml = None        # dose giornaliera a capo
-    dose_totale_ml = None      # dose giornaliera di tutti i capi
-    if t.ml_per_kg and t.peso_medio_kg:
-        dose_capo_ml = t.ml_per_kg * t.peso_medio_kg
-        dose_totale_ml = dose_capo_ml * t.numero_animali
-    giorni_previsti = fatte if t.chiuso_anticipatamente else t.giorni_somministrazione
-    return {
-        "fatte": fatte,
-        "totali": t.giorni_somministrazione,
-        "completo": completo,
-        "chiuso_anticipatamente": t.chiuso_anticipatamente,
-        "deceduto": bool(t.deceduto),
-        "da_ripetere": da_ripetere,
-        "ultima_data": ultima.data if ultima else None,
-        "prossima_data": (ultima.data + timedelta(days=1)) if ultima and not completo else None,
-        "data_fine_sospensione": data_fine_sospensione,
-        "in_sospensione": bool(data_fine_sospensione and oggi < data_fine_sospensione),
-        "dose_capo_ml": dose_capo_ml,
-        "dose_totale_ml": dose_totale_ml,
-        "unita": t.medicinale.unita_dose if t.medicinale else "ml",
-        "dose_trattamento": dose_totale_ml * giorni_previsti if dose_totale_ml is not None else None,
-        "dose_finora": dose_totale_ml * fatte if dose_totale_ml is not None else None,
-    }
+# _stato_trattamento: in app/services/allevamento_trattamenti.py (stato_trattamento, 3.1.4)
+from app.services.allevamento_trattamenti import stato_trattamento as _stato_trattamento  # noqa: E402
 
 
 @bp.route("/box/<int:box_numero>/ultimo-peso")

@@ -429,7 +429,7 @@ class Servizio:
     # ── recupero delle linee non lette ──────────────────────────────────────
     def _recupero(self, adesso):
         from .recupero import recupera, linee_mancanti
-        from app.routes.allevamento import _get_ciclo_attivo
+        from app.services.allevamento_conteggio import ciclo_attivo as _get_ciclo_attivo
         self.ultimo_recupero = adesso
         if modalita() != AUTOMATICO:
             return
