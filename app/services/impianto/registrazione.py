@@ -13,7 +13,8 @@
 - Quantitativi arrotondati a 2 decimali di quintale, come nell'inserimento a mano. Siero sotto 0,15 q
   su una linea = non erogato, spostato nell'acqua (normalizza_siero).
 - Il numero del pasto (1-3) è la posizione dell'orario tra quelli impostati sull'impianto: un pasto
-  rinviato (es. 14:39 invece di 12:50) resta il pasto 2.
+  rinviato (es. 14:39 invece di 12:50) resta il pasto 2; un pasto anticipato fino a un'ora (orario spostato
+  sul PC mentre parte, es. 13:05 con 13:10 in memoria) resta il suo (3.1.3).
 """
 from datetime import datetime, timedelta
 
@@ -47,10 +48,19 @@ def gruppi_orari(orari_impianto):
     return gruppi
 
 
+MINUTI_ANTICIPO = 60        # un pasto può partire fino a un'ora prima dell'orario che il servizio ha in memoria
+
+
 def numero_pasto(orario, orari_impianto):
+    """Numero del pasto (1-3): quanti pasti del PC sono già cominciati all'orario letto sullo schermo, contando
+    anche quelli impostati fino a MINUTI_ANTICIPO dopo. L'orario sul PC può cambiare mentre il pasto parte e il
+    servizio rilegge gli orari ogni 10 minuti: il 17/11/2026 il pasto delle 13:05 è stato letto con gli orari
+    07:55, 13:10, 17:30 in memoria e senza tolleranza era diventato il pasto 1 (sovrascrivendo quello delle 7:55).
+    Un pasto rinviato (14:39 invece di 12:50) resta il pasto 2."""
     if not orari_impianto:
         return None
-    n = sum(1 for g in gruppi_orari(orari_impianto) if g[0] <= orario)
+    minuti = lambda t: t.hour * 60 + t.minute
+    n = sum(1 for g in gruppi_orari(orari_impianto) if minuti(g[0]) <= minuti(orario) + MINUTI_ANTICIPO)
     return max(1, min(3, n))
 
 
