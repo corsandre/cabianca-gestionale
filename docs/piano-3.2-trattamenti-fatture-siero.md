@@ -174,3 +174,27 @@ Dopo ogni modifica al codice: `graphify update .`.
 - Punto 2: per vedere i dati reali dei trattamenti salvati senza marcatore serve leggere il DB di produzione (copia in
   sola lettura dalla VPS); la copia automatica è stata bloccata dai permessi, va autorizzata o fatta a mano.
 - Punto 3: installare il cron dello script sulla VPS (una riga in `crontab -e`, scritta nel README).
+
+---
+
+## Stato dei lavori (20/11/2026)
+
+**Fatto e in produzione.**
+- **3.2.0** (con le correzioni previste per la 3.1.5):
+  - punto 1: dosaggio a 4 decimali e oltre; il limite era nel campo del nuovo medicinale (`step="0.001"` in un
+    campo largo 2 cifre);
+  - punto 2: nel DB di produzione i trattamenti del 15/11 erano stati registrati alle 8:43, prima della correzione
+    2.5.9 delle 9:52 dello stesso giorno, che toglieva la sovrascrittura con il pallino blu. Provato con Chromium in
+    modalità telefono: il marcatore ora si salva in ogni ordine di compilazione. Aggiunti la proposta più robusta e
+    il marcatore nel messaggio verde. Trovato e corretto anche un altro difetto: scegliendo in fretta il box, i capi
+    restavano quelli del capannone (39 invece di 1);
+  - punto 3: stato del server, con il cron installato sulla VPS. La cache di build di Docker occupava 55 GB su 67:
+    pulita, il disco è passato dal 71% al 17%. La pulizia ora fa parte della procedura di rilascio nel README.
+- **3.3.0**: punto 4 completo (numeri, discrepanze con azioni, elenco delle fatture con PDF), provato sui dati veri
+  (6 fatture, 89 carichi, 3 discrepanze).
+
+**Da tenere d'occhio.**
+- La stima di quando il disco sarebbe pieno usa il disco intero solo dopo 7 giorni di storia dello script.
+- In `data/` ci sono 59 copie del DB fatte prima dei rilasci (165 MB): si vedono nel riquadro e si possono sfoltire a mano.
+- Le due righe di maggio (bolle 8509 e 8510, fattura 330) sono carichi di prima dell'inizio del ciclo: se non sono
+  da registrare, la fattura va assegnata al ciclo precedente in Impostazioni Soccida.

@@ -73,28 +73,8 @@
 </ul>
 
 {% if tab == 'siero' %}
-{# Fatture del siero (3.0): riepilogo del confronto con le consegne. Il dettaglio è nella colonna «Fattura». #}
-{% if fatture_siero is not none %}
-<div class="cb-card p-3 mb-3">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-        <div><i class="bi bi-receipt me-1" style="color:#c2185b"></i><strong>Fatture del siero</strong>
-            {% if not fatture_siero.letta_qualcosa %}<span class="text-muted small ms-1">nessuna fattura letta: indica la partita IVA dei fornitori in <a href="{{ url_for('allevamento.soccida_impostazioni') }}#ciclo">Impostazioni Soccida</a></span>
-            {% elif fatture_siero.differenze %}<span class="badge ms-1" style="background:#fbe6ee;color:#1d1922">{{ fatture_siero.differenze }} da controllare</span>
-            {% else %}<span class="text-muted small ms-1">tutto coincide</span>{% endif %}
-            {% if fatture_siero.fatturato_fino_al %}<span class="text-muted small ms-1">· fatturato fino al {{ fatture_siero.fatturato_fino_al.strftime('%d/%m/%Y') }}</span>{% endif %}
-        </div>
-        <form method="post" action="{{ url_for('allevamento.consegne_siero_fatture_leggi') }}" class="d-flex gap-2 m-0">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn btn-sm btn-outline-secondary" title="Lo stesso controllo che gira ogni mattina alle 8:45">Cerca fatture nuove</button>
-            <button class="btn btn-sm btn-outline-secondary" name="rileggi" value="1" title="Rilegge tutte le fatture dei fornitori di siero">Rileggi tutte</button>
-        </form>
-    </div>
-    {% if fatture_siero.senza_consegna %}
-    <div class="small mt-2">In fattura ma non in Consegne:
-        {% for r in fatture_siero.senza_consegna %}<span class="badge text-dark border fw-normal me-1">{{ r.data.strftime('%d/%m') }} · bolla {{ r.ddt }} · {{ '%g'|format(r.tonnellate) }} t · {{ '%.2f'|format(r.importo)|replace('.', ',') }} €</span>{% endfor %}
-    </div>{% endif %}
-</div>
-{% endif %}
+{# Fatture del siero: riquadro espandibile con numeri, discrepanze ed elenco delle fatture (solo admin) #}
+{% if fatture_siero is not none %}{% include "allevamento/_fatture_siero.html" %}{% endif %}
 <div class="cb-card p-0" style="overflow-x:auto">
     {% if siero_list %}
     <table class="table table-sm mb-0">
@@ -104,7 +84,7 @@
         </thead>
         <tbody>
             {% for c in siero_list %}
-            <tr>
+            <tr id="consegna-{{ c.id }}" style="scroll-margin-top:90px">
                 <td>{{ c.data.strftime('%d/%m/%Y') }}</td>
                 <td>{{ c.ora.strftime('%H:%M') if c.ora else '–' }}</td>
                 <td class="fw-bold" style="color:#c2185b">{{ c.quantita_qli }}</td>
@@ -627,6 +607,24 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+// Fatture del siero: porta alla riga della consegna e la evidenzia per qualche secondo
+function cbEvidenzia(id) {
+    const tr = document.getElementById('consegna-' + id);
+    if (!tr) return;
+    tr.classList.add('cb-evidenzia');
+    setTimeout(() => tr.classList.remove('cb-evidenzia'), 3000);
+}
+// «Crea la consegna» da un carico in fattura: apre il modulo della nuova consegna con data, quintali e bolla
+function cbNuovaConsegnaDaFattura(data, qli, bolla) {
+    const m = document.getElementById('modalSiero');
+    if (!m) return;
+    m.querySelector('[name=data]').value = data;
+    m.querySelector('[name=quantita_qli]').value = Math.round(qli * 100) / 100;
+    m.querySelector('[name=lotto]').value = bolla;
+    bootstrap.Modal.getOrCreateInstance(m).show();
+}
+</script>
 <script src="{{ url_for('static', filename='js/bolla.js') }}?v={{ versione }}"></script>
 <script>
 document.getElementById('modalRicalibra').addEventListener('show.bs.modal', function () {

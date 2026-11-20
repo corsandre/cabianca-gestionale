@@ -1,7 +1,7 @@
 import os
 import uuid
 from datetime import date, timedelta
-from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, jsonify, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, jsonify, current_app, send_file
 from flask_login import login_required, current_user
 from app import db
 
@@ -947,8 +947,9 @@ def consegne():
     # righe delle fatture di siero abbinate alle consegne (solo per l'admin: sono importi)
     fatture_siero = None
     if ciclo and tab == "siero" and current_user.role == "admin":
-        from app.services.siero_fatture import controllo
+        from app.services.siero_fatture import controllo, riepilogo
         fatture_siero = controllo(ciclo)
+        fatture_siero["riepilogo"] = riepilogo(ciclo, fatture_siero)
 
     return render_template("allevamento/consegne.html",
                            ciclo=ciclo, tab=tab, fatture_siero=fatture_siero,
@@ -984,6 +985,52 @@ def consegne_siero_fatture_leggi():
         db.session.rollback()
         flash(f"Errore nella lettura delle fatture: {e}", "danger")
     return redirect(url_for("allevamento.consegne", tab="siero"))
+
+
+@bp.route("/consegne/siero/fattura/<int:fid>")
+@login_required
+def consegne_siero_fattura_pdf(fid):
+    """Il PDF di una fattura di siero, aperto nel browser (solo admin, solo fornitori di siero)."""
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.services import siero_fatture as F
+    f = next((x for x in F.fatture_fornitori() if x.id == fid), None)
+    if not f:
+        abort(404)
+    if not f.xml_path or not os.path.exists(f.xml_path):
+        flash(f"Il file della fattura {f.invoice_number} non è disponibile.", "warning")
+        return redirect(url_for("allevamento.consegne", tab="siero"))
+    pdf = f.xml_path.lower().endswith(".pdf")
+    return send_file(f.xml_path, mimetype="application/pdf" if pdf else "application/xml",
+                     download_name=f"fattura-{f.invoice_number}.{'pdf' if pdf else 'xml'}", as_attachment=False)
+
+
+@bp.route("/consegne/siero/fatture/<azione>", methods=["POST"])
+@login_required
+def consegne_siero_fatture_azione(azione):
+    """Azioni sulle discrepanze tra fatture e consegne: abbina (riga + consegna), scollega, bolla."""
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.services import siero_fatture as F
+    try:
+        riga_id = request.form.get("riga_id", type=int)
+        if azione == "abbina":
+            r = F.abbina_manuale(riga_id, request.form.get("consegna_id", type=int))
+            flash(f"Bolla {r.ddt} del {r.data.strftime('%d/%m')} abbinata alla consegna del {r.consegna.data.strftime('%d/%m')}.", "success")
+        elif azione == "scollega":
+            r = F.scollega(riga_id)
+            flash(f"Bolla {r.ddt} del {r.data.strftime('%d/%m')} scollegata: resta da abbinare a mano.", "success")
+        elif azione == "bolla":
+            r = F.scrivi_bolla(riga_id)
+            flash(f"Numero di bolla {r.ddt} scritto nella consegna del {r.consegna.data.strftime('%d/%m')}.", "success")
+        else:
+            abort(404)
+    except ValueError as e:
+        db.session.rollback()
+        flash(str(e), "danger")
+    return redirect(url_for("allevamento.consegne", tab="siero", fatture=1) + "#fatture-siero")
 
 
 @bp.route("/mangime/ricalibra", methods=["POST"])

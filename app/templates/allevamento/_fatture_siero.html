@@ -1,0 +1,190 @@
+{# Fatture del siero (3.3): riquadro che si apre con numeri del ciclo, discrepanze con le azioni ed elenco delle
+   fatture. Dati da siero_fatture.controllo() + riepilogo(); solo admin (sono importi). #}
+{% set R = fatture_siero.riepilogo %}
+{% set N = R.numeri %}
+{% macro eur(v, segno=false) -%}
+{%- if v is none -%}–{%- else -%}
+{{ ('+' if segno and v > 0.005 else '') ~ ('{:,.2f}'.format(v)).replace(',', '§').replace('.', ',').replace('§', '.') }} €
+{%- endif -%}
+{%- endmacro %}
+{% macro ton(v, segno=false) -%}
+{{ ('+' if segno and v > 0.0005 else '') ~ ('{:,.2f}'.format(v)).replace(',', '§').replace('.', ',').replace('§', '.') }} t
+{%- endmacro %}
+{% set NOMI_TIPO = {'quantita': 'Quantità diversa', 'bolla': 'Numero di bolla diverso o mancante',
+                    'senza_consegna': 'In fattura ma non in Consegne', 'non_fatturata': 'In Consegne ma non in fattura'} %}
+{% set aperto = fatture_siero.differenze or request.args.get('fatture') %}
+
+<div class="cb-card mb-3" id="fatture-siero">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 p-3 cb-fs-testa{{ '' if aperto else ' collapsed' }}"
+         role="button" data-bs-toggle="collapse" data-bs-target="#fattureSieroCorpo" aria-expanded="{{ 'true' if aperto else 'false' }}"
+         aria-controls="fattureSieroCorpo">
+        <div><i class="bi bi-chevron-right cb-fs-freccia me-1"></i><i class="bi bi-receipt me-1" style="color:#c2185b"></i><strong>Fatture del siero</strong>
+            {% if not fatture_siero.letta_qualcosa %}<span class="text-muted small ms-1">nessuna fattura letta: indica la partita IVA dei fornitori in <a href="{{ url_for('allevamento.soccida_impostazioni') }}#ciclo">Impostazioni Soccida</a></span>
+            {% elif fatture_siero.differenze %}<span class="badge ms-1" style="background:#fbe6ee;color:#1d1922">{{ fatture_siero.differenze }} da controllare</span>
+            {% else %}<span class="text-muted small ms-1">tutto coincide</span>{% endif %}
+            {% if fatture_siero.fatturato_fino_al %}<span class="text-muted small ms-1">· fatturato fino al {{ fatture_siero.fatturato_fino_al.strftime('%d/%m/%Y') }}</span>{% endif %}
+            {% if N.n_fatture %}<span class="text-muted small ms-1 d-none d-md-inline">· {{ N.n_fatture }} fatture, {{ eur(N.totale) }}</span>{% endif %}
+        </div>
+        <form method="post" action="{{ url_for('allevamento.consegne_siero_fatture_leggi') }}" class="d-flex gap-2 m-0" onclick="event.stopPropagation()">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-secondary" title="Lo stesso controllo che gira ogni mattina alle 8:45">Cerca fatture nuove</button>
+            <button class="btn btn-sm btn-outline-secondary" name="rileggi" value="1" title="Rilegge tutte le fatture dei fornitori di siero (gli abbinamenti fatti a mano restano)">Rileggi tutte</button>
+        </form>
+    </div>
+
+    <div class="collapse{{ ' show' if aperto }}" id="fattureSieroCorpo">
+    <div class="px-3 pb-3">
+
+    {# ── numeri del ciclo ── #}
+    {% if N.n_fatture %}
+    <div class="table-responsive">
+    <table class="table table-sm small mb-1 cb-fs-numeri">
+        <thead><tr><th></th><th class="text-end">Consegne</th><th class="text-end">Fatture</th><th class="text-end">Diff.</th></tr></thead>
+        <tbody>
+            <tr><td>Tonnellate{% if fatture_siero.fatturato_fino_al %} <span class="text-muted d-none d-md-inline">fino al {{ fatture_siero.fatturato_fino_al.strftime('%d/%m') }}</span>{% endif %}</td>
+                <td class="text-end">{{ ton(N.t_consegne) }}</td><td class="text-end">{{ ton(N.t_fatture) }}</td>
+                <td class="text-end fw-semibold" style="color:{{ '#a3154d' if N.t_diff|abs > 0.05 else 'inherit' }}">{{ ton(N.t_diff, true) }}</td></tr>
+            <tr><td>Importo <span class="text-muted d-none d-md-inline">con gasolio e IVA</span></td>
+                <td class="text-end">{{ eur(N.eur_consegne) }}</td><td class="text-end">{{ eur(N.eur_fatture) }}</td>
+                <td class="text-end fw-semibold" style="color:{{ '#a3154d' if N.eur_diff|abs > 1 else 'inherit' }}">{{ eur(N.eur_diff, true) }}</td></tr>
+            <tr><td>€/t</td><td class="text-end text-muted">{% if N.prezzo_ultima %}{{ eur(N.prezzo_ultima) }}<div class="small">ultima, {{ N.prezzo_ultima_data.strftime('%d/%m') }}</div>{% else %}–{% endif %}</td>
+                <td class="text-end">{{ eur(N.eur_t_medio) }}<div class="small text-muted">media</div></td><td></td></tr>
+        </tbody>
+    </table>
+    </div>
+    <div class="small text-muted mb-3">
+        Imponibile {{ eur(N.imponibile) }}, totale {{ eur(N.totale) }}{% if N.extra %}, di cui gasolio e altre voci {{ eur(N.extra) }} + IVA{% endif %}.
+        {{ N.n_carichi }} carichi: {{ N.per_bolla }} abbinati per numero di bolla, {{ N.per_data }} per data e quantità{% if N.a_mano %}, {{ N.a_mano }} a mano{% endif %}.
+        {% if N.in_attesa %}In attesa di fattura: {{ N.in_attesa }} consegne, {{ ton(N.t_attesa) }}{% if N.eur_attesa is not none %} (circa {{ eur(N.eur_attesa) }} al prezzo dell'ultima){% endif %}.{% endif %}
+    </div>
+    {% endif %}
+
+    {# ── discrepanze, con le azioni ── #}
+    {% if R.discrepanze %}
+    <h6 class="small text-uppercase text-muted mb-2">Da controllare</h6>
+    <div class="list-group mb-3 small">
+        {% for d in R.discrepanze %}
+        <div class="list-group-item">
+            <div class="d-flex flex-wrap justify-content-between gap-2">
+                <div>
+                    <span class="badge rounded-pill me-1" style="background:#fbe6ee;color:#1d1922">{{ NOMI_TIPO[d.tipo] }}</span>
+                    <strong>{{ d.data.strftime('%d/%m/%Y') }}</strong>
+                    {% if d.riga %}· bolla {{ d.riga.ddt }}{% endif %}
+                    <div class="text-muted">{{ d.testo }}{% if d.riga %} · fattura {{ d.riga.fattura.invoice_number }}{% endif %}</div>
+                </div>
+                <div class="text-end fw-semibold" style="color:#a3154d" title="{% if d.tipo == 'non_fatturata' %}al prezzo dell'ultima consegna fatturata{% elif d.tipo == 'quantita' %}differenza di tonnellate al prezzo di questo carico{% else %}importo del carico{% endif %}">
+                    {{ eur(d.valore, d.tipo == 'quantita') if d.valore is not none else '' }}</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-2">
+                {% if d.consegna %}
+                <a class="btn btn-sm btn-outline-secondary py-0" href="#consegna-{{ d.consegna.id }}" onclick="cbEvidenzia({{ d.consegna.id }})"><i class="bi bi-arrow-down-circle me-1"></i>Vai alla consegna</a>
+                <button type="button" class="btn btn-sm btn-outline-secondary py-0" data-bs-toggle="modal" data-bs-target="#modalModificaSiero{{ d.consegna.id }}"><i class="bi bi-pencil me-1"></i>Correggi consegna</button>
+                {% endif %}
+                {% if d.tipo == 'bolla' and d.riga.ddt %}
+                <form method="post" action="{{ url_for('allevamento.consegne_siero_fatture_azione', azione='bolla') }}" class="m-0">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="riga_id" value="{{ d.riga.id }}">
+                    <button class="btn btn-sm btn-outline-success py-0"><i class="bi bi-check2 me-1"></i>Scrivi {{ d.riga.ddt }} nel lotto</button>
+                </form>
+                {% endif %}
+                {% if d.riga and d.consegna %}
+                <form method="post" action="{{ url_for('allevamento.consegne_siero_fatture_azione', azione='scollega') }}" class="m-0"
+                      onsubmit="return confirm('Scollegare la bolla {{ d.riga.ddt }} da questa consegna? Poi si abbina a mano.')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="riga_id" value="{{ d.riga.id }}">
+                    <button class="btn btn-sm btn-outline-secondary py-0"><i class="bi bi-scissors me-1"></i>Abbinamento sbagliato: scollega</button>
+                </form>
+                {% endif %}
+                {% if d.tipo == 'senza_consegna' %}
+                    {% if d.candidate %}
+                    <form method="post" action="{{ url_for('allevamento.consegne_siero_fatture_azione', azione='abbina') }}" class="d-flex gap-1 m-0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="riga_id" value="{{ d.riga.id }}">
+                        <select name="consegna_id" class="form-select form-select-sm py-0" required aria-label="Consegna da abbinare">
+                            <option value="">Abbina a una consegna…</option>
+                            {% for c in d.candidate %}<option value="{{ c.id }}">{{ c.data.strftime('%d/%m') }} · {{ '%g'|format(c.quantita_qli) }} q{% if c.lotto %} · lotto {{ c.lotto }}{% endif %}</option>{% endfor %}
+                        </select>
+                        <button class="btn btn-sm btn-outline-success py-0">Abbina</button>
+                    </form>
+                    {% endif %}
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="cbNuovaConsegnaDaFattura('{{ d.riga.data.isoformat() }}', {{ d.riga.tonnellate * 10 }}, '{{ d.riga.ddt }}')">
+                        <i class="bi bi-plus-circle me-1"></i>Crea la consegna</button>
+                {% endif %}
+                {% if d.tipo == 'non_fatturata' and d.candidate %}
+                <form method="post" action="{{ url_for('allevamento.consegne_siero_fatture_azione', azione='abbina') }}" class="d-flex gap-1 m-0">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="consegna_id" value="{{ d.consegna.id }}">
+                    <select name="riga_id" class="form-select form-select-sm py-0" required aria-label="Riga di fattura da abbinare">
+                        <option value="">Abbina a una riga di fattura…</option>
+                        {% for r in d.candidate %}<option value="{{ r.id }}">{{ r.data.strftime('%d/%m') }} · bolla {{ r.ddt }} · {{ ton(r.tonnellate) }}</option>{% endfor %}
+                    </select>
+                    <button class="btn btn-sm btn-outline-success py-0">Abbina</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# ── elenco delle fatture: la riga si apre con i suoi carichi ── #}
+    {% if R.fatture %}
+    <h6 class="small text-uppercase text-muted mb-2">Fatture del ciclo</h6>
+    <div class="table-responsive">
+    <table class="table table-sm small mb-0 align-middle">
+        <thead class="table-light"><tr><th>Fattura</th><th>Data</th><th class="d-none d-md-table-cell">Fornitore</th><th class="text-end d-none d-md-table-cell">Carichi</th>
+            <th class="text-end d-none d-md-table-cell">t</th><th class="text-end d-none d-md-table-cell">Imponibile</th><th class="text-end">Totale</th><th>Esito</th><th></th></tr></thead>
+        {% for x in R.fatture %}{% set f = x.fattura %}
+        <tbody>
+        <tr role="button" data-bs-toggle="collapse" data-bs-target="#fs-carichi-{{ f.id }}" aria-expanded="false" class="cb-fs-fattura">
+            <td class="text-nowrap"><i class="bi bi-chevron-right cb-fs-freccia me-1"></i><span class="d-none d-md-inline">{{ f.invoice_number }}</span><span class="d-md-none">{{ f.invoice_number.split('-')[-1].lstrip('0') }}</span></td>
+            <td class="text-nowrap">{{ f.invoice_date.strftime('%d/%m/%y') if f.invoice_date else '–' }}</td>
+            <td class="d-none d-md-table-cell">{{ f.sender_name }}</td>
+            <td class="text-end d-none d-md-table-cell">{{ x.carichi|length }}</td>
+            <td class="text-end text-nowrap d-none d-md-table-cell">{{ ton(x.tonnellate) }}</td>
+            <td class="text-end text-nowrap d-none d-md-table-cell">{{ eur(f.taxable_amount) }}</td>
+            <td class="text-end text-nowrap">{{ eur(f.total_amount) }}</td>
+            <td class="text-nowrap">{% if not x.letta %}<span class="text-muted">non letta</span>
+                {% elif x.vuota %}<span style="color:#a3154d">nessun carico riconosciuto</span>
+                {% elif x.differenze %}<span style="color:#a3154d"><i class="bi bi-exclamation-circle me-1"></i>{{ x.differenze }}<span class="d-none d-md-inline"> da controllare</span></span>
+                {% else %}<span class="text-success"><i class="bi bi-check2 me-1"></i><span class="d-none d-md-inline">coincide</span></span>{% endif %}</td>
+            <td class="text-end text-nowrap" onclick="event.stopPropagation()">
+                {% if x.pdf %}<a class="btn btn-sm btn-outline-secondary py-0" target="_blank" rel="noopener"
+                   href="{{ url_for('allevamento.consegne_siero_fattura_pdf', fid=f.id) }}" title="Apri la fattura"><i class="bi bi-file-earmark-pdf"></i><span class="d-none d-md-inline ms-1">Vedi</span></a>{% endif %}
+                <a class="btn btn-sm btn-link py-0 d-none d-md-inline-block" href="{{ url_for('fatture.detail', id=f.id) }}" title="Scheda della fattura in Fatture"><i class="bi bi-box-arrow-up-right"></i></a>
+            </td>
+        </tr>
+        <tr class="collapse" id="fs-carichi-{{ f.id }}"><td colspan="9" class="bg-light p-2">
+            {% if x.carichi %}
+            <table class="table table-sm small mb-0 bg-white">
+                <thead><tr><th>Data</th><th>Bolla</th><th class="text-end">t</th><th class="text-end">€</th><th class="d-none d-md-table-cell">Consegna abbinata</th><th>Esito</th></tr></thead>
+                {% for r in x.carichi %}{% set pc = fatture_siero.per_consegna.get(r.consegna_id) if r.consegna_id else none %}
+                <tr>
+                    <td class="text-nowrap">{{ r.data.strftime('%d/%m') }}</td><td>{{ r.ddt }}</td>
+                    <td class="text-end text-nowrap">{{ ton(r.tonnellate) }}</td><td class="text-end text-nowrap">{{ eur(r.importo) }}</td>
+                    <td class="text-nowrap d-none d-md-table-cell">{% if r.consegna %}<a href="#consegna-{{ r.consegna.id }}" onclick="cbEvidenzia({{ r.consegna.id }})">{{ r.consegna.data.strftime('%d/%m') }} · {{ '%g'|format(r.consegna.quantita_qli) }} q{% if r.consegna.lotto %} · lotto {{ r.consegna.lotto }}{% endif %}</a>
+                        <span class="text-muted">({{ {'bolla': 'per bolla', 'data': 'per data', 'manuale': 'a mano'}.get(r.come, r.come) }})</span>
+                        {% elif r.come == 'scollegata' %}<span class="text-muted">scollegata a mano</span>{% else %}<span class="text-muted">–</span>{% endif %}</td>
+                    <td>{% if not r.consegna_id %}<span style="color:#a3154d">non in Consegne</span>
+                        {% elif pc and pc.stato != 'ok' %}<span style="color:#a3154d">{{ pc.testo }}</span>
+                        {% elif pc %}<span class="text-success">coincide</span>{% else %}<span class="text-muted">consegna di un altro ciclo</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+                {% for e in x.extra %}
+                <tr class="text-muted"><td colspan="3">{{ e.descrizione }}</td><td class="text-end text-nowrap">{{ eur(e.importo_netto) }} + IVA</td><td colspan="2"><span class="d-none d-md-inline">diviso tra i carichi</span></td></tr>
+                {% endfor %}
+            </table>
+            {% else %}<span class="text-muted small">Nessun carico letto da questa fattura.</span>{% endif %}
+        </td></tr>
+        </tbody>
+        {% endfor %}
+    </table>
+    </div>
+    {% endif %}
+    </div>
+    </div>
+</div>
+<style>
+.cb-fs-freccia { display: inline-block; transition: transform .15s; font-size: .8em; }
+.cb-fs-testa:not(.collapsed) > div > .cb-fs-freccia, .cb-fs-fattura[aria-expanded="true"] .cb-fs-freccia { transform: rotate(90deg); }
+.cb-fs-testa { cursor: pointer; }
+.cb-fs-numeri td + td, .cb-fs-numeri th { white-space: nowrap; }
+@media (max-width: 767.98px) { .cb-fs-numeri, #fatture-siero .table { font-size: .78rem; } }
+tr.cb-evidenzia > td { background: #fff3cd !important; transition: background .3s; }
+</style>

@@ -289,8 +289,25 @@ si aggiunge quando arriva, e la scheda Soccida passa dalla resa stimata a quella
 **Fatture del siero abbinate alle consegne (dalla 3.0, solo admin).** Nella scheda Siero ogni consegna ha la
 colonna **Fattura**: l'importo del carico (con la sua parte di indicizzazione gasolio e di IVA, così la somma dà il
 totale della fattura) e l'esito del confronto: *coincide*, quantità diversa, numero di bolla diverso, *non è in
-fattura*, oppure *in attesa della fattura* per i carichi successivi all'ultima fattura letta. In alto il riepilogo,
-le righe di fattura senza consegna e i pulsanti «Cerca fatture nuove» e «Rileggi tutte».
+fattura*, oppure *in attesa della fattura* per i carichi successivi all'ultima fattura letta.
+
+In alto il riquadro **Fatture del siero** (dalla 3.3) con «N da controllare» e i pulsanti «Cerca fatture nuove» e
+«Rileggi tutte»; si apre con un clic (da solo se ci sono differenze) e contiene:
+- **numeri del ciclo**: tonnellate e importo delle consegne fino all'ultimo giorno fatturato contro le fatture, con
+  la differenza; €/t medio delle fatture e €/t dell'ultima consegna fatturata; imponibile, totale, gasolio; quanti
+  carichi sono abbinati per bolla, per data o a mano; consegne in attesa di fattura con il loro valore stimato;
+- **da controllare**: ogni discrepanza con il suo valore in euro e le azioni. Quantità diversa = differenza di
+  tonnellate al prezzo di quel carico; carico in fattura senza consegna = il suo importo; consegna non fatturata =
+  le sue tonnellate al **prezzo dell'ultima consegna fatturata**. Azioni: *Vai alla consegna* (scorre alla riga e
+  la evidenzia), *Correggi consegna*, *Scrivi la bolla nel lotto* (un clic), *Abbina a una consegna / a una riga di
+  fattura* (vicine entro 10 giorni), *Crea la consegna* (modulo precompilato con data, quintali e bolla),
+  *Abbinamento sbagliato: scollega*. Niente «accetta la differenza»: una discrepanza sparisce solo correggendo i dati;
+- **fatture del ciclo**: una riga per fattura con esito e pulsante **Vedi** (il PDF nel browser,
+  `/allevamento/consegne/siero/fattura/<id>`); cliccandola si aprono i suoi carichi con la consegna abbinata.
+
+Gli abbinamenti fatti a mano (`come = "manuale"`) e le righe scollegate (`come = "scollegata"`) non vengono toccati
+dall'abbinamento automatico e restano anche con «Rileggi tutte» (si ritrovano per bolla e data). Calcoli in
+`siero_fatture.calcola_riepilogo()`, provati in `tests/test_siero_riepilogo.py`.
 - Le righe si leggono dalla copia PDF della fattura (`pdftotext -layout`): `services/siero_fatture_pdf.py` è la
   sola analisi del testo (provata in `tests/test_siero_fatture.py`), `services/siero_fatture.py` salva le righe in
   `siero_fatture_righe` e le abbina: prima per numero di bolla (DDT = campo «Lotto», entro 5 giorni), poi per
