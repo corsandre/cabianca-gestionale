@@ -1,0 +1,101 @@
+{# Stato del server (3.2.0): disco e memoria della VPS e da cosa sono occupati. Dati da app/services/stato_server.py. #}
+{% set colore_livello = {'ok': '#009d5a', 'attenzione': '#e0a800', 'critico': '#c62828'} %}
+{% macro barra(segmenti, titolo) -%}
+<div class="cb-barra mb-2" role="img" aria-label="{{ titolo }}">
+    {%- for s in segmenti if s.perc >= 0.15 -%}
+    <div style="width:{{ '%.2f'|format(s.perc) }}%;background:{{ s.colore }}" title="{{ s.nome }}: {{ testo_byte(s.byte) }} ({{ '%.1f'|format(s.perc)|replace('.', ',') }}%)"></div>
+    {%- endfor -%}
+</div>
+{%- endmacro %}
+{% macro legenda(segmenti) -%}
+<table class="table table-sm small mb-0 cb-legenda">
+    <tbody>
+    {% for s in segmenti if s.byte > 0 %}
+    <tr{% if s.chiave == 'libero' %} class="text-muted"{% endif %}>
+        <td style="width:18px"><span class="cb-pallino" style="background:{{ s.colore }}"></span></td>
+        <td>{{ s.nome }}
+            {% set c = server.cartelle.get(s.chiave) %}{% if c and c.file %}<span class="text-muted"> · {{ c.file }} file{% if c.ultimi_30 %}, +{{ testo_byte(c.ultimi_30) }} in 30 giorni{% endif %}</span>{% endif %}
+        </td>
+        <td class="text-end text-nowrap">{{ testo_byte(s.byte) }}</td>
+        <td class="text-end text-nowrap text-muted" style="width:56px">{{ '< 0,1' if s.perc < 0.05 else ('%.1f'|format(s.perc))|replace('.', ',') }}%</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{%- endmacro %}
+
+<div class="cb-card p-3 mb-4" id="server">
+    <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-2">
+        <h5 class="mb-0"><i class="bi bi-hdd-rack me-1"></i> Server</h5>
+        <div class="small text-muted">
+            {% if server.carico %}carico {{ ('%.2f'|format(server.carico[0])).replace('.', ',') }} su {{ server.cpu }} processori · {% endif %}
+            acceso da {{ testo_durata(server.acceso_da_s) }}
+            {% if server.script_eta_s is not none %} · dati aggiornati {{ testo_durata(server.script_eta_s) }} fa{% endif %}
+        </div>
+    </div>
+
+    {% for a in server.avvisi %}
+    <div class="alert alert-warning py-2 small mb-2"><i class="bi bi-exclamation-triangle me-1"></i>{{ a }}</div>
+    {% endfor %}
+    {% if not server.script_ok %}
+    <div class="alert alert-secondary py-2 small mb-2"><i class="bi bi-info-circle me-1"></i>
+        {% if server.script_eta_s is none %}Manca lo script della VPS{% else %}I dati della VPS sono vecchi di {{ testo_durata(server.script_eta_s) }}{% endif %}:
+        Docker, memoria dei programmi, ordini e Postiz sono compresi in «Sistema e altro».
+        Lo script è <code>scripts/stato_server.py</code>, da lanciare con cron (vedi README).</div>
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="d-flex flex-wrap justify-content-between column-gap-3 small mb-1">
+                <strong>Disco</strong>
+                <span><strong style="color:{{ colore_livello[server.disco_livello] }}">{{ '%.0f'|format(server.disco_perc) }}% occupato</strong>
+                    · {{ testo_byte(server.disco.usato) }} su {{ testo_byte(server.disco.totale) }}, liberi {{ testo_byte(server.disco.libero) }}</span>
+            </div>
+            {{ barra(server.segmenti_disco, 'Occupazione del disco') }}
+            {{ legenda(server.segmenti_disco) }}
+            {% set cr = server.crescita %}
+            <div class="small text-muted mt-2">
+                Foto, fatture e backup del gestionale: +{{ testo_byte(cr.gestionale_mese) }} negli ultimi 30 giorni.
+                {% if cr.disco_mese is not none %}Disco intero: {{ '+' if cr.disco_mese >= 0 else '−' }}{{ testo_byte(cr.disco_mese|abs) }} al mese
+                    (ultimi {{ cr.giorni_storia }} giorni).{% else %}L'andamento del disco intero si vede dopo una settimana di dati dello script.{% endif %}
+                {% if cr.mesi_al_pieno is not none %}
+                    {% if cr.mesi_al_pieno > 120 %}A questo ritmo il disco basta per più di 10 anni.
+                    {% else %}A questo ritmo il disco è pieno tra circa <strong>{{ '%.0f'|format(cr.mesi_al_pieno) }} mesi</strong>.{% endif %}
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-lg-5">
+            {% if server.segmenti_memoria %}
+            <div class="d-flex flex-wrap justify-content-between column-gap-3 small mb-1">
+                <strong>Memoria</strong>
+                <span><strong style="color:{{ colore_livello[server.memoria_livello] }}">{{ '%.0f'|format(server.memoria_perc) }}% usata</strong>
+                    · {{ testo_byte(server.memoria.totale - server.memoria.disponibile) }} su {{ testo_byte(server.memoria.totale) }}</span>
+            </div>
+            {{ barra(server.segmenti_memoria, 'Uso della memoria') }}
+            {{ legenda(server.segmenti_memoria) }}
+            <div class="small text-muted mt-2">
+                {% if server.memoria.swap_totale %}Swap: {{ testo_byte(server.memoria.swap_usata) }} usati su {{ testo_byte(server.memoria.swap_totale) }}.
+                {% else %}Nessuna swap: se la memoria finisce il sistema chiude un programma.{% endif %}
+            </div>
+            {% endif %}
+            {% if server.container %}
+            <details class="small mt-2">
+                <summary class="text-muted">Programmi in funzione ({{ server.container|length }})</summary>
+                <table class="table table-sm small mb-0 mt-1">
+                    {% for c in server.container %}
+                    <tr><td>{{ c.nome }}</td><td class="text-end text-nowrap">{{ testo_byte(c.memoria) }}</td>
+                        <td class="text-end text-nowrap text-muted">{{ ('%.1f'|format(c.cpu)).replace('.', ',') }}% CPU</td></tr>
+                    {% endfor %}
+                </table>
+            </details>
+            {% endif %}
+        </div>
+    </div>
+</div>
+<style>
+.cb-barra { display: flex; height: 22px; border-radius: 6px; overflow: hidden; background: #e9ecef; }
+.cb-barra > div { height: 100%; min-width: 2px; border-right: 1px solid rgba(255, 255, 255, .6); }
+.cb-barra > div:last-child { border-right: 0; }
+.cb-pallino { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: middle; }
+.cb-legenda td { padding-top: .15rem; padding-bottom: .15rem; }
+</style>

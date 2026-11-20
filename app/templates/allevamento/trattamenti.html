@@ -266,7 +266,7 @@
                     <div class="row g-2 mb-3">
                         <div class="col-4">
                             <label class="form-label small">Dosaggio ({{ t.medicinale.unita_dose }}/kg al giorno)</label>
-                            <input type="number" name="ml_per_kg" class="form-control form-control-sm" step="0.001" min="0" value="{{ t.ml_per_kg if t.ml_per_kg is not none else '' }}">
+                            <input type="number" name="ml_per_kg" class="form-control form-control-sm" step="any" min="0" inputmode="decimal" value="{{ t.ml_per_kg if t.ml_per_kg is not none else '' }}">
                         </div>
                         <div class="col-4">
                             <label class="form-label small">Giorni somm.</label>
@@ -397,7 +397,7 @@
                             </div>
                             <div class="row g-1">
                                 <div class="col-4"><label class="form-label small mb-0"><span class="unita">ml</span>/kg al giorno</label>
-                                    <input type="number" name="ml_per_kg" class="form-control form-control-sm inp-ml" step="0.001" min="0"></div>
+                                    <input type="number" name="ml_per_kg" class="form-control form-control-sm inp-ml" step="any" min="0" inputmode="decimal"></div>
                                 <div class="col-4"><label class="form-label small mb-0">Giorni somm.</label>
                                     <input type="number" name="giorni_somministrazione" class="form-control form-control-sm inp-gs" min="1" required></div>
                                 <div class="col-4"><label class="form-label small mb-0">Giorni sosp.</label>
@@ -489,6 +489,8 @@ async function aggiornaCapi() {
     if (!caps.length) { segnaStimato(qty, 'capiAutoLabel', ''); return; }
     try {
         const dati = await (await fetch('/allevamento/trattamenti/capi?' + caps.map(c => 'cap=' + c).join('&'))).json();
+        // risposta arrivata dopo che è stato scelto un box (o cambiato l'ambito): non vale più
+        if (capannoniScelti().join(',') !== caps.join(',')) return;
         if (dati.capi) { qty.value = dati.capi; segnaStimato(qty, 'capiAutoLabel', '(presenti ora)'); }
         if (dati.peso_stimato_kg != null) { peso.value = dati.peso_stimato_kg; segnaStimato(peso, 'pesoAutoLabel', '(media da censimento)'); }
         aggiornaDoseTotale();
@@ -523,11 +525,12 @@ function aggiungiMedicinale() {
 }
 aggiungiMedicinale();
 
-// come quantita() in Python: g/ml fino a 1000, poi kg/l
+// come quantita() in Python: g/ml fino a 1000, poi kg/l; dosi piccole con più decimali (sotto 1: 3, sotto 10: 2)
 function quantita(v, u) {
     const grande = {g: 'kg', ml: 'l'}[u] || u;
-    return v >= 1000 ? (v / 1000).toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ' + grande
-                     : v.toLocaleString('it-IT', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + ' ' + u;
+    if (v >= 1000) return (v / 1000).toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ' + grande;
+    const dec = v < 1 ? 3 : v < 10 ? 2 : 1;
+    return v.toLocaleString('it-IT', {minimumFractionDigits: dec, maximumFractionDigits: dec}) + ' ' + u;
 }
 function aggiornaDoseTotale() {
     const peso = parseFloat(document.getElementById('inpPeso').value);
@@ -549,7 +552,9 @@ function aggiornaDoseTotale() {
 // marcatore: si propone il primo segno (colore + forma) non ancora usato nel box, ma senza toccare
 // quello scelto a mano prima del box (prima la scelta veniva sovrascritta con il pallino blu)
 let marcatoreScelto = false;
-['selColore', 'selSegno'].forEach(id => document.getElementById(id).addEventListener('change', () => { marcatoreScelto = true; }));
+// anche 'input' e il tocco: su alcuni telefoni 'change' arriva solo alla chiusura del menu
+['selColore', 'selSegno'].forEach(id => ['change', 'input', 'pointerdown'].forEach(ev =>
+    document.getElementById(id).addEventListener(ev, () => { marcatoreScelto = true; })));
 async function aggiornaColori() {
     const box = document.getElementById('selBox').value;
     const info = document.getElementById('coloriInUso');

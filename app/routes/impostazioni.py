@@ -32,11 +32,19 @@ def index():
             reverse=True,
         )
 
+    from app.services import stato_server as SS
+    try:
+        server = SS.stato(current_app)
+    except Exception as e:      # la pagina delle impostazioni non deve mai cadere per questo riquadro
+        current_app.logger.error(f"Stato del server non letto: {e}")
+        server = None
+
     return render_template(
         "impostazioni/index.html",
         users=users,
         backup_settings=backup_settings,
         backup_files=backup_files,
+        server=server, testo_byte=SS.testo_byte, testo_durata=SS.testo_durata,
     )
 
 

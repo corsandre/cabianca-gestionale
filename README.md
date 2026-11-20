@@ -369,7 +369,8 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
 #### Trattamenti (`/allevamento/trattamenti`)
 - Registro dei trattamenti (`Medicinale`, `Trattamento`, `Somministrazione`) per box o intero capannone.
 - Dose per capo e totale = ml/kg × peso medio × numero animali; dosi da ripetere in evidenza; periodo di
-  sospensione prima del macello.
+  sospensione prima del macello. Il dosaggio (ml/kg o g/kg al giorno) accetta 4 decimali e oltre (es. 0,0125);
+  le dosi calcolate piccole si mostrano con più decimali (sotto 1: 3, sotto 10: 2).
 - Modifica, chiusura anticipata con motivazione (accodata alle note) e casella «Deceduto» (animale morto: nessun
   periodo di sospensione), eliminazione.
 - **Più medicinali per lo stesso animale**: nel nuovo trattamento si aggiungono più righe medicinale, ognuna con la
@@ -383,7 +384,8 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
   trattano più animali, ognuno ha il suo segno; il segno si ripete sulla schiena per ogni giorno di trattamento e il
   promemoria dice quale fare («2ª S», «3° pallino»). Nelle pagine il segno è disegnato nel suo colore
   (`components/marcatore.html`); nel bot si sceglie tra i 9 pulsanti. Per un nuovo trattamento viene proposto il primo
-  segno non ancora usato nel box; il marcatore vale per tutti i medicinali dello stesso animale. I trattamenti
+  segno non ancora usato nel box, senza toccare il marcatore già scelto a mano; il messaggio dopo il salvataggio
+  ripete il marcatore registrato («…, 1 capo, riga rossa»). Il marcatore vale per tutti i medicinali dello stesso animale. I trattamenti
   registrati prima del 02/11/2026 hanno solo il colore e valgono come pallino. La procedura è in cima alla pagina.
 - **Promemoria del mattino** (all'orario di Impostazioni → Avvisi giornalieri, default 07:00) nel gruppo
   dell'allevamento, una riga per animale: «box 30, maiale ⚫ nero: Cloxacillina dose 2 di 3; Micospectone dose 2 di 5
@@ -698,6 +700,20 @@ del menu smettono di rispondere dopo la conferma.
 ## Funzionalità trasversali
 
 - **Esportazione CSV** per il commercialista.
+- **Stato del server** (Impostazioni → Server, solo admin, dalla 3.2): barra del disco divisa per voce (foto delle
+  bolle, fatture ricevute ed emesse, allegati, database, copie prima dei rilasci, backup, Docker, ordini, Postiz, log,
+  sistema, libero), barra della memoria per programma, carico, crescita al mese e stima di quando il disco sarebbe
+  pieno, avvisi (disco oltre l'85%, memoria quasi finita, cache di Docker da pulire). Le cartelle del gestionale le
+  misura l'app; Docker, memoria dei container e gli altri servizi arrivano da `scripts/stato_server.py`, che gira
+  sulla VPS con cron ogni 15 minuti e scrive `data/stato_server.json` e `data/stato_server_storia.json` (un punto al
+  giorno). Lo script fa solo letture. Installazione, una volta sola, sulla VPS (`crontab -e`):
+
+  ```
+  */15 * * * * /usr/bin/python3 /home/andrea/cabianca-gestionale/scripts/stato_server.py >/dev/null 2>&1
+  ```
+
+  Senza lo script (o con dati più vecchi di un'ora) il riquadro mostra solo quello che l'app vede da sola, e il resto
+  finisce in «Sistema e altro». Calcoli in `app/services/stato_server.py`, prove in `tests/test_stato_server.py`.
 - **Allegati e foto** in `app/static/uploads/` (volume persistente), max 16 MB per upload.
 - **PWA**: installabile su smartphone.
 - **Multi-utente** con ruoli e accesso per sezione.
@@ -736,6 +752,7 @@ APScheduler gira nel processo dell'app (fuso `Europe/Rome`):
 | 7:10–22:40, ogni 30 minuti | Ordini Amazon dalle mail, abbinamento agli addebiti, domande sul bot Telegram | Solo se configurato IMAP |
 | 08:35, 14:35, 20:35 | Fatture emesse da email (OCR) e abbinamento ai bonifici | Solo se configurati IMAP e `FATTURE_EMESSE_MITTENTE` |
 | 08:45 | Fatture di siero nuove: lettura delle righe, abbinamento alle consegne, riepilogo su Telegram | Fornitori da Impostazioni Soccida |
+| 08:50 | Stato del server: avviso sul canale sistema se il disco supera l'85% o la memoria è quasi finita | Niente messaggio se va tutto bene |
 
 ---
 
@@ -862,6 +879,10 @@ git pull --ff-only
 docker compose build --no-cache   # prima il build: il servizio resta su durante la compilazione
 docker compose down
 docker compose up -d
+#    pulizia: il build è sempre --no-cache, quindi la cache di build e le immagini vecchie non servono più
+#    (a novembre 2026 erano arrivate a 55 GB). Non tocca i container in funzione né i dati.
+docker builder prune -af
+docker image prune -f
 
 # 3. verifica
 docker compose ps

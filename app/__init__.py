@@ -574,7 +574,17 @@ def _init_scheduler(app):
                     db.session.rollback()
                     app.logger.error(f"Errore fatture di siero: {e}")
 
+        def stato_server():
+            with app.app_context():
+                try:
+                    from app.services.stato_server import controllo_giornaliero
+                    controllo_giornaliero(app)
+                except Exception as e:
+                    app.logger.error(f"Errore controllo stato del server: {e}")
+
         scheduler.add_job(generate_recurring, "cron", hour=3, minute=0)
+        # disco quasi pieno o memoria finita: avviso sul canale sistema (dettaglio in Impostazioni › Server)
+        scheduler.add_job(stato_server, "cron", hour=8, minute=50)
         # ogni mattina, dopo lo scarico delle fatture delle 8:30: righe delle fatture di siero e confronto con le consegne
         scheduler.add_job(fatture_siero, "cron", hour=8, minute=45)
         scheduler.add_job(run_backup, "cron", hour=backup_hour, minute=backup_minute, id="backup")

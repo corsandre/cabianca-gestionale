@@ -2027,7 +2027,9 @@ def trattamenti_new():
                                   segno=request.form.get("segno", "").strip() or None, capannoni=caps)
         db.session.commit()
         nomi = ", ".join(t.medicinale.nome for t in creati)
-        flash(f"Trattamento registrato: {nomi}, {qty} capi.", "success")
+        from app.services.allevamento_trattamenti import segno_di, testo_marcatore
+        marc = testo_marcatore(creati[0].colore, segno_di(creati[0])) or "senza marcatore"
+        flash(f"Trattamento registrato: {nomi}, {qty} {'capo' if qty == 1 else 'capi'}, {marc}.", "success")
     except Exception as e:
         db.session.rollback()
         flash(f"Errore: {e}", "danger")
@@ -2112,7 +2114,9 @@ def trattamenti_edit(tid):
                 prima.data = data_inizio
 
         db.session.commit()
-        flash(f"Trattamento aggiornato: {medicinale.nome}, {qty} capi.", "success")
+        from app.services.allevamento_trattamenti import segno_di, testo_marcatore
+        marc = testo_marcatore(t.colore, segno_di(t)) or "senza marcatore"
+        flash(f"Trattamento aggiornato: {medicinale.nome}, {qty} {'capo' if qty == 1 else 'capi'}, {marc}.", "success")
     except Exception as e:
         db.session.rollback()
         flash(f"Errore: {e}", "danger")

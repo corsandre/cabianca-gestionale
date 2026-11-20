@@ -5,6 +5,8 @@
     <h1><i class="bi bi-gear text-cb-green"></i> Impostazioni</h1>
 </div>
 
+{% if server %}{% include "impostazioni/_server.html" %}{% endif %}
+
 <div class="row g-4">
     <!-- USERS -->
     <div class="col-lg-6">

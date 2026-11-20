@@ -24,11 +24,16 @@ FEMMINILE = {"riga", "s"}                       # la riga, la S
 
 
 def quantita(valore, unita):
-    """'6,2 g', '11,07 kg', '0,5 ml', '1,25 l': grammi/ml fino a 1000, poi kg/litri. None → '–'."""
+    """'6,2 g', '11,07 kg', '2,45 ml', '0,032 g', '1,25 l': grammi/ml fino a 1000, poi kg/litri. None → '–'.
+    Le dosi piccole hanno più decimali (sotto 1: 3, sotto 10: 2), così con dosaggi da 0,0125 g/kg non escono «0,0 g»."""
     if valore is None:
         return "–"
     grande = {"g": "kg", "ml": "l"}.get(unita, unita)
-    testo = f"{valore / 1000:,.2f} {grande}" if valore >= 1000 else f"{valore:,.1f} {unita}"
+    if valore >= 1000:
+        testo = f"{valore / 1000:,.2f} {grande}"
+    else:
+        dec = 3 if valore < 1 else 2 if valore < 10 else 1
+        testo = f"{valore:,.{dec}f} {unita}"
     return testo.replace(",", "§").replace(".", ",").replace("§", ".")
 
 
