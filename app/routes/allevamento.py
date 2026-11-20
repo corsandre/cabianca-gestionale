@@ -2131,6 +2131,8 @@ def trattamenti_edit(tid):
         peso_val = request.form.get("peso_medio_kg", "").strip()
         peso_medio_kg = float(peso_val.replace(",", ".")) if peso_val else None
 
+        if t.medicinale_id != medicinale.id:     # cambiato medicinale: dose a capo o per kg come il nuovo
+            t.per_capo = bool(medicinale.per_capo)
         t.medicinale_id = medicinale.id
         t.box_numero = box
         t.capannone_numero = cap
@@ -2239,6 +2241,13 @@ def trattamenti_delete(tid):
 
 # ── Medicinali (Impostazioni) ──────────────────────────────────────────────
 
+def _unita_medicinale():
+    """(unità, per_capo) dal menu del modulo: "ml"/"g" = per kg, "ml_capo"/"g_capo" = dose fissa a capo."""
+    v = request.form.get("unita", "")
+    u, _, base = v.partition("_")
+    return (u, base == "capo") if u in ("ml", "g") and base in ("", "capo") else (None, False)
+
+
 @bp.route("/medicinali/new", methods=["POST"])
 @login_required
 def medicinali_new():
@@ -2255,7 +2264,7 @@ def medicinali_new():
         db.session.add(Medicinale(
             nome=nome, tipo=tipo,
             ml_per_kg=float(ml_val.replace(",", ".")) if ml_val else None,
-            unita=request.form.get("unita") if request.form.get("unita") in ("ml", "g") else None,
+            unita=_unita_medicinale()[0], per_capo=_unita_medicinale()[1],
             giorni_somministrazione=int(request.form.get("giorni_somministrazione") or 1),
             giorni_sospensione=int(request.form.get("giorni_sospensione") or 0),
         ))
@@ -2281,8 +2290,9 @@ def medicinali_edit(mid):
     try:
         ml_val = request.form.get("ml_per_kg", "").strip()
         m.ml_per_kg = float(ml_val.replace(",", ".")) if ml_val else None
-        if request.form.get("unita") in ("ml", "g"):
-            m.unita = request.form["unita"]
+        unita, per_capo = _unita_medicinale()
+        if unita:
+            m.unita, m.per_capo = unita, per_capo
         m.giorni_somministrazione = int(request.form.get("giorni_somministrazione") or 1)
         m.giorni_sospensione = int(request.form.get("giorni_sospensione") or 0)
         db.session.commit()

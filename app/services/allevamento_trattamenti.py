@@ -37,6 +37,21 @@ def quantita(valore, unita):
     return testo.replace(",", "§").replace(".", ",").replace("§", ".")
 
 
+def dose_a_capo(dose, peso, per_capo):
+    """Dose giornaliera a capo: la dose stessa se è a capo (vaccini), altrimenti dose per kg × peso.
+    None se manca la dose, o il peso per una dose per kg."""
+    if not dose:
+        return None
+    if per_capo:
+        return dose
+    return dose * peso if peso else None
+
+
+def base_dose(per_capo):
+    """'capo' o 'kg', per le scritte «ml/capo», «g/kg»."""
+    return "capo" if per_capo else "kg"
+
+
 def segno_di(t):
     return (t.segno or "pallino") if t.colore else None
 
@@ -133,7 +148,8 @@ def crea_trattamenti(ciclo_id, medicinali, box, cap, qty, peso, data_inizio, ope
         t = Trattamento(ciclo_id=ciclo_id, medicinale_id=med.id, box_numero=box, capannone_numero=cap,
                         capannoni=capannoni,
                         numero_animali=qty, peso_medio_kg=peso, data_inizio=data_inizio, operatore=operatore,
-                        note=note, ml_per_kg=ml, giorni_somministrazione=gs, giorni_sospensione=gsosp,
+                        note=note, ml_per_kg=ml, per_capo=bool(med.per_capo),
+                        giorni_somministrazione=gs, giorni_sospensione=gsosp,
                         registrato_da=registrato_da, gruppo=gruppo, colore=colore or None, segno=segno)
         db.session.add(t)
         db.session.flush()
@@ -196,12 +212,10 @@ def stato_trattamento(t):
     data_fine_sospensione = None
     if completo and ultima and not t.deceduto:   # animale morto: nessuna sospensione prima del macello
         data_fine_sospensione = ultima.data + timedelta(days=t.giorni_sospensione)
-    # dosi in ml o in g secondo il medicinale (polveri in broda = g): ml_per_kg è "unità per kg al giorno"
-    dose_capo_ml = None        # dose giornaliera a capo
-    dose_totale_ml = None      # dose giornaliera di tutti i capi
-    if t.ml_per_kg and t.peso_medio_kg:
-        dose_capo_ml = t.ml_per_kg * t.peso_medio_kg
-        dose_totale_ml = dose_capo_ml * t.numero_animali
+    # dosi in ml o in g secondo il medicinale (polveri in broda = g): ml_per_kg è "unità per kg al giorno",
+    # o "unità a capo al giorno" per i medicinali a dose fissa (vaccini, per_capo)
+    dose_capo_ml = dose_a_capo(t.ml_per_kg, t.peso_medio_kg, t.per_capo)   # dose giornaliera a capo
+    dose_totale_ml = dose_capo_ml * t.numero_animali if dose_capo_ml is not None else None   # di tutti i capi
     giorni_previsti = fatte if t.chiuso_anticipatamente else t.giorni_somministrazione
     return {
         "fatte": fatte,

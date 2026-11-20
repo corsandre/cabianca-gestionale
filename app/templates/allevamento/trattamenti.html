@@ -59,7 +59,7 @@
             <tr>
                 <th>Data inizio</th><th>Animale</th><th>Capi</th><th>Peso medio</th>
                 <th>Medicinale</th>
-                <th title="Quantità di medicinale per kg di peso vivo, ogni giorno">Dosaggio</th>
+                <th title="Quantità di medicinale per kg di peso vivo, o a capo (vaccini), ogni giorno">Dosaggio</th>
                 <th title="Dose di un giorno per un capo = dosaggio × peso medio">Al giorno<br><small class="fw-normal">a capo</small></th>
                 <th title="Dose di un giorno per tutti i capi trattati = dose a capo × capi">Al giorno<br><small class="fw-normal">tutti i capi</small></th>
                 <th title="Giorni di somministrazione fatti / previsti">Giorni</th>
@@ -89,7 +89,7 @@
                     {{ t.medicinale.nome }}
                     {% if t.note %}<i class="bi bi-sticky ms-1 text-muted"></i>{% endif %}
                 </td>
-                <td class="text-muted text-nowrap">{{ (('%g' | format(t.ml_per_kg)).replace('.', ',') ~ ' ' ~ s.unita ~ '/kg') if t.ml_per_kg else '–' }}</td>
+                <td class="text-muted text-nowrap">{{ (('%g' | format(t.ml_per_kg)).replace('.', ',') ~ ' ' ~ s.unita ~ ('/capo' if t.per_capo else '/kg')) if t.ml_per_kg else '–' }}</td>
                 <td class="text-muted text-nowrap">{{ quantita(s.dose_capo_ml, s.unita) }}</td>
                 <td class="text-nowrap">{{ quantita(s.dose_totale_ml, s.unita) }}</td>
                 <td>{{ s.fatte }}/{{ s.totali }}</td>
@@ -265,7 +265,7 @@
                     </div>
                     <div class="row g-2 mb-3">
                         <div class="col-4">
-                            <label class="form-label small">Dosaggio ({{ t.medicinale.unita_dose }}/kg al giorno)</label>
+                            <label class="form-label small">Dosaggio ({{ t.medicinale.unita_dose }}/{{ 'capo' if t.per_capo else 'kg' }} al giorno)</label>
                             <input type="number" name="ml_per_kg" class="form-control form-control-sm" step="any" min="0" inputmode="decimal" value="{{ t.ml_per_kg if t.ml_per_kg is not none else '' }}">
                         </div>
                         <div class="col-4">
@@ -396,7 +396,7 @@
                                 <button type="button" class="btn btn-sm btn-outline-secondary py-0 rimuovi" title="Togli questo medicinale"><i class="bi bi-x"></i></button>
                             </div>
                             <div class="row g-1">
-                                <div class="col-4"><label class="form-label small mb-0"><span class="unita">ml</span>/kg al giorno</label>
+                                <div class="col-4"><label class="form-label small mb-0"><span class="unita">ml</span>/<span class="base">kg</span> al giorno</label>
                                     <input type="number" name="ml_per_kg" class="form-control form-control-sm inp-ml" step="any" min="0" inputmode="decimal"></div>
                                 <div class="col-4"><label class="form-label small mb-0">Giorni somm.</label>
                                     <input type="number" name="giorni_somministrazione" class="form-control form-control-sm inp-gs" min="1" required></div>
@@ -430,7 +430,7 @@
 const BOX_PER_CAP = {{ BOX_PER_CAP | tojson }};
 const MEDICINALI = {
     {% for m in medicinali %}
-    "{{ m.id }}": {ml_per_kg: {{ m.ml_per_kg | tojson }}, unita: {{ m.unita_dose | tojson }}, giorni_somministrazione: {{ m.giorni_somministrazione }}, giorni_sospensione: {{ m.giorni_sospensione }}}{{ ',' if not loop.last }}
+    "{{ m.id }}": {ml_per_kg: {{ m.ml_per_kg | tojson }}, unita: {{ m.unita_dose | tojson }}, per_capo: {{ 'true' if m.per_capo else 'false' }}, giorni_somministrazione: {{ m.giorni_somministrazione }}, giorni_sospensione: {{ m.giorni_sospensione }}}{{ ',' if not loop.last }}
     {% endfor %}
 };
 
@@ -508,7 +508,9 @@ function aggiornaRiga(riga) {
         riga.querySelector('.inp-gs').value = m.giorni_somministrazione;
         riga.querySelector('.inp-gsp').value = m.giorni_sospensione;
         riga.querySelector('.unita').textContent = m.unita;
+        riga.querySelector('.base').textContent = m.per_capo ? 'capo' : 'kg';
         riga.dataset.unita = m.unita;
+        riga.dataset.perCapo = m.per_capo ? '1' : '';
     }
     aggiornaDoseTotale();
 }
@@ -537,12 +539,14 @@ function aggiornaDoseTotale() {
     const qty = parseFloat(document.getElementById('inpQty').value);
     document.querySelectorAll('#righeMedicinali .riga-medicinale').forEach(riga => {
         const mlKg = parseFloat(riga.querySelector('.inp-ml').value);
-        const ok = !isNaN(mlKg) && !isNaN(peso) && mlKg > 0 && peso > 0;
+        const perCapo = !!riga.dataset.perCapo;            // vaccini: dose fissa a capo, il peso non serve
+        const base = perCapo ? 1 : peso;
+        const ok = !isNaN(mlKg) && mlKg > 0 && !isNaN(base) && base > 0;
         const u = riga.dataset.unita || 'ml';
         const giorni = parseInt(riga.querySelector('.inp-gs').value) || 0;
-        riga.querySelector('.dose-capo').textContent = ok ? quantita(mlKg * peso, u) : '–';
-        riga.querySelector('.dose-tot').textContent = ok && qty > 0 ? quantita(mlKg * peso * qty, u) : '–';
-        riga.querySelector('.dose-corso').textContent = ok && qty > 0 && giorni > 0 ? quantita(mlKg * peso * qty * giorni, u) : '–';
+        riga.querySelector('.dose-capo').textContent = ok ? quantita(mlKg * base, u) : '–';
+        riga.querySelector('.dose-tot').textContent = ok && qty > 0 ? quantita(mlKg * base * qty, u) : '–';
+        riga.querySelector('.dose-corso').textContent = ok && qty > 0 && giorni > 0 ? quantita(mlKg * base * qty * giorni, u) : '–';
     });
 }
 ['inpPeso', 'inpQty'].forEach(function (id) {

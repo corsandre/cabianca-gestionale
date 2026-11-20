@@ -41,6 +41,20 @@ class Quantita(unittest.TestCase):
         self.assertEqual(T.quantita(None, "g"), "–")
 
 
+class DoseACapo(unittest.TestCase):
+    def test_per_kg_moltiplica_per_il_peso(self):
+        self.assertAlmostEqual(T.dose_a_capo(0.1, 30, False), 3.0)
+        self.assertIsNone(T.dose_a_capo(0.1, None, False))      # per kg senza peso: niente dose
+
+    def test_a_capo_non_serve_il_peso(self):
+        self.assertEqual(T.dose_a_capo(2, None, True), 2)          # vaccino 2 ml/capo
+        self.assertEqual(T.dose_a_capo(2, 150, True), 2)
+
+    def test_senza_dose(self):
+        self.assertIsNone(T.dose_a_capo(None, 30, True))
+        self.assertEqual(T.base_dose(True) + T.base_dose(False), "capokg")
+
+
 class Marcatore(unittest.TestCase):
     def test_accordo_del_colore(self):
         self.assertEqual(T.testo_marcatore("rosso", "riga"), "riga rossa")

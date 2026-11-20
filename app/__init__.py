@@ -310,6 +310,9 @@ def _init_db(app):
         ("trattamenti", "segno", "VARCHAR(10)"),
         ("trattamenti", "capannoni", "VARCHAR(40)"),
         ("medicinali", "unita", "VARCHAR(4)"),
+        # 3.3.1: dose a capo (vaccini) invece che per kg
+        ("medicinali", "per_capo", "BOOLEAN DEFAULT 0"),
+        ("trattamenti", "per_capo", "BOOLEAN DEFAULT 0"),
         # 3.0 Soccida: riscontro del macello sulle uscite (le tabelle soccida_* e spostamenti_box le crea db.create_all())
         ("spostamenti_animali", "numero_bolla", "VARCHAR(50)"),
         ("spostamenti_animali", "riscontro_data", "DATE"),

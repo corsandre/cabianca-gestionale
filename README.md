@@ -386,7 +386,9 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
 #### Trattamenti (`/allevamento/trattamenti`)
 - Registro dei trattamenti (`Medicinale`, `Trattamento`, `Somministrazione`) per box o intero capannone.
 - Dose per capo e totale = ml/kg × peso medio × numero animali; dosi da ripetere in evidenza; periodo di
-  sospensione prima del macello. Il dosaggio (ml/kg o g/kg al giorno) accetta 4 decimali e oltre (es. 0,0125);
+  sospensione prima del macello. Per i medicinali a dose fissa (vaccini) l'unità è **ml/capo** o **g/capo**
+  (`per_capo`): la dose a capo è quella impostata e il peso non serve. Il trattamento copia `per_capo` dal medicinale
+  alla creazione, come la dose. Il dosaggio accetta 4 decimali e oltre (es. 0,0125);
   le dosi calcolate piccole si mostrano con più decimali (sotto 1: 3, sotto 10: 2).
 - Modifica, chiusura anticipata con motivazione (accodata alle note) e casella «Deceduto» (animale morto: nessun
   periodo di sospensione), eliminazione.

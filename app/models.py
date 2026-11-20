@@ -656,6 +656,7 @@ class Medicinale(db.Model):
     tipo = db.Column(db.String(30), default="iniettabile")
     ml_per_kg = db.Column(db.Float)   # dosaggio per kg di peso vivo al giorno, nell'unità `unita` (non sempre ml)
     unita = db.Column(db.String(4))   # "ml" (iniettabili) o "g" (polveri in broda); vuoto = dedotto dal tipo
+    per_capo = db.Column(db.Boolean, default=False)   # dose fissa a capo (es. vaccino 2 ml/capo), non per kg
     giorni_somministrazione = db.Column(db.Integer, nullable=False, default=1)
     giorni_sospensione = db.Column(db.Integer, nullable=False, default=0)
     attivo = db.Column(db.Boolean, default=True)
@@ -687,7 +688,8 @@ class Trattamento(db.Model):
     data_inizio = db.Column(db.Date, nullable=False)
     operatore = db.Column(db.String(100))
     note = db.Column(db.Text)
-    ml_per_kg = db.Column(db.Float)
+    ml_per_kg = db.Column(db.Float)   # dose al giorno per kg, o a capo se per_capo
+    per_capo = db.Column(db.Boolean, default=False)   # copiato dal medicinale alla creazione, come la dose
     giorni_somministrazione = db.Column(db.Integer, nullable=False)
     giorni_sospensione = db.Column(db.Integer, nullable=False)
     chiuso_anticipatamente = db.Column(db.Boolean, default=False)
