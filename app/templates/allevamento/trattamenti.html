@@ -113,7 +113,13 @@
                 <td class="text-muted">{{ t.operatore or '–' }}</td>
                 {% if current_user.role == 'admin' %}
                 <td class="text-nowrap" onclick="event.stopPropagation()">
-                    {% if s.da_ripetere %}
+                    {% if s.da_ripetere and s.saltati %}
+                    {# giorni senza dose dall'ultima: prima di registrare chiede se sono state fatte anche quelle #}
+                    <button type="button" class="btn btn-sm btn-outline-danger py-0" title="Registra somministrazione"
+                            data-bs-toggle="modal" data-bs-target="#modalSaltati{{ t.id }}">
+                        <i class="bi bi-check2-circle"></i>
+                    </button>
+                    {% elif s.da_ripetere %}
                     <form method="post" action="{{ url_for('allevamento.trattamenti_somministra', tid=t.id) }}" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="btn btn-sm btn-outline-danger py-0" title="Registra somministrazione">
@@ -121,6 +127,10 @@
                         </button>
                     </form>
                     {% endif %}
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0" title="Dosi registrate (correggi date)"
+                            data-bs-toggle="modal" data-bs-target="#modalDosi{{ t.id }}">
+                        <i class="bi bi-calendar-check"></i>
+                    </button>
                     {% if not s.completo %}
                     <button type="button" class="btn btn-sm btn-outline-secondary py-0" title="Chiudi trattamento anticipatamente"
                             data-bs-toggle="modal" data-bs-target="#modalChiudi{{ t.id }}">
@@ -195,6 +205,70 @@
     </div>
 </div>
 {% endif %}
+{% endfor %}
+
+{% for t in lista %}
+{% set s = stati[t.id] %}
+{% if s.da_ripetere and s.saltati %}
+{% set giorni_saltati %}{% for d in s.saltati %}{{ d.strftime('%d/%m') }}{{ ', ' if not loop.last }}{% endfor %}{% endset %}
+<div class="modal fade" id="modalSaltati{{ t.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">{{ t.medicinale.nome }}: dose di oggi</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('allevamento.trattamenti_somministra', tid=t.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    L'ultima dose registrata è del <strong>{{ s.ultima_data.strftime('%d/%m') }}</strong>:
+                    hai fatto anche {{ 'quella' if s.saltati | length == 1 else 'quelle' }} del <strong>{{ giorni_saltati }}</strong>?
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" name="recupera" value="0" class="btn btn-sm btn-outline-secondary">No, solo oggi</button>
+                    <button type="submit" name="recupera" value="1" class="btn btn-sm btn-danger">Sì, registra anche il {{ giorni_saltati }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+<div class="modal fade" id="modalDosi{{ t.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#c2185b;color:#fff">
+                <h5 class="modal-title"><i class="bi bi-calendar-check me-2"></i>Dosi: {{ t.medicinale.nome }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('allevamento.trattamenti_dosi', tid=t.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <p class="small text-muted mb-2">Correggi la data di una dose, toglila o aggiungi una dose dimenticata:
+                        le dosi vengono rinumerate in ordine di data ({{ s.fatte }}/{{ s.totali }} registrate).</p>
+                    {% for d in t.somministrazioni %}
+                    <div class="row g-2 align-items-center mb-2">
+                        <div class="col-3 small fw-bold">{{ d.numero_giorno }}ª dose</div>
+                        <div class="col-6"><input type="date" name="data_{{ d.id }}" class="form-control form-control-sm" value="{{ d.data.isoformat() }}" max="{{ oggi.isoformat() }}" required></div>
+                        <div class="col-3"><div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="elimina_{{ d.id }}" value="1" id="el{{ d.id }}">
+                            <label class="form-check-label small" for="el{{ d.id }}">togli</label></div></div>
+                    </div>
+                    {% endfor %}
+                    {% if s.fatte < s.totali %}
+                    <div class="row g-2 align-items-center mt-3">
+                        <div class="col-3 small text-muted">Aggiungi</div>
+                        <div class="col-6"><input type="date" name="nuova_data" class="form-control form-control-sm" max="{{ oggi.isoformat() }}"></div>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn btn-sm" style="background:#c2185b;color:#fff">Salva le dosi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endfor %}
 
 {% for t in lista %}

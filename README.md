@@ -392,6 +392,11 @@ regola 2 lo attribuisce al carico nuovo; con orario effettivo 14:50 cade diretta
   le dosi calcolate piccole si mostrano con più decimali (sotto 1: 3, sotto 10: 2).
 - Modifica, chiusura anticipata con motivazione (accodata alle note) e casella «Deceduto» (animale morto: nessun
   periodo di sospensione), eliminazione.
+- **Dosi dimenticate** (3.3.2): ogni dose registrata ha la data di oggi. Se dall'ultima dose è passato più di un
+  giorno (es. ultima 20/11, oggi 22/11), web e bot chiedono «hai fatto anche quella del 21/11?» e con «Sì»
+  registrano anche i giorni saltati (non oltre i giorni previsti). Il pulsante 📅 **Dosi** permette di
+  correggere le date, togliere o aggiungere dosi: vengono rinumerate in ordine di data (niente date future,
+  niente due dosi nello stesso giorno, almeno una dose).
 - **Più medicinali per lo stesso animale**: nel nuovo trattamento si aggiungono più righe medicinale, ognuna con la
   sua dose (ml/kg), i suoi giorni di somministrazione e di sospensione. Ogni medicinale resta un `Trattamento` a sé,
   quelli dati insieme hanno lo stesso `gruppo` (icona 🔗 nell'elenco); la sospensione prima del macello che conta è la

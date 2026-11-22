@@ -397,28 +397,43 @@ def start_bot(app):
     async def trattamento_somministra_cb(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         q = update.callback_query
         await q.answer()
-        if q.data.startswith("sommg_"):
-            # dose di oggi per tutti i medicinali dello stesso animale
-            chiave = q.data[len("sommg_"):]
+        if q.data.startswith(("sommg_", "sommgS_", "sommgO_")):
+            # dose di oggi per tutti i medicinali dello stesso animale; se dall'ultima dose sono passati giorni
+            # senza dose registrata, prima chiede se sono state fatte (sommgS_ = sì, anche quelle; sommgO_ = solo oggi)
+            prefisso, chiave = q.data.split("_", 1)
             with app.app_context():
                 from app import db
-                from app.models import Ciclo, Somministrazione
-                from app.services.allevamento_trattamenti import da_ripetere_per_animale, riga_ordinale
+                from app.services.allevamento_trattamenti import (da_ripetere_per_animale, riga_ordinale,
+                                                                  registra_dosi, testo_marcatore)
+                from app.models import Ciclo
                 ciclo = Ciclo.query.filter_by(attivo=True).first()
                 g = next((x for x in da_ripetere_per_animale(ciclo.id) if x["chiave"] == chiave), None) if ciclo else None
                 if not g:
                     await q.edit_message_text("Niente da somministrare oggi per questo animale.\n\nUsa /start per continuare.")
                     return ConversationHandler.END
-                fatte = []
+                saltati = sorted({d for _, s in g["trattamenti"] for d in s["saltati"]})
+                if prefisso == "sommg" and saltati:
+                    ultima = max(s["ultima_data"] for _, s in g["trattamenti"])
+                    giorni = ", ".join(d.strftime("%d/%m") for d in saltati)
+                    kb = InlineKeyboardMarkup([
+                        [InlineKeyboardButton(f"✅ Sì, registra anche il {giorni}", callback_data=f"sommgS_{chiave}")],
+                        [InlineKeyboardButton("Solo oggi", callback_data=f"sommgO_{chiave}")],
+                    ])
+                    await q.edit_message_text(
+                        f"{g['animale']}: l'ultima dose registrata è del {ultima.strftime('%d/%m')}.\n"
+                        f"Hai fatto anche {'quella' if len(saltati) == 1 else 'quelle'} del {giorni}?", reply_markup=kb)
+                    return TRATTAMENTO_SOMMINISTRA
+                fatte, riga = [], g["riga"]
                 for t, s in g["trattamenti"]:
-                    db.session.add(Somministrazione(trattamento_id=t.id, numero_giorno=s["fatte"] + 1, data=date.today()))
-                    fatte.append(f"{t.medicinale.nome} {s['fatte'] + 1}/{s['totali']}")
+                    registrate = registra_dosi(t, recupera=prefisso == "sommgS")
+                    n = s["fatte"] + len(registrate)
+                    riga = max(riga, n)
+                    fatte.append(f"{t.medicinale.nome} {n}/{s['totali']}")
                 db.session.commit()
                 testo = f"✅ Registrato per {g['animale']}: " + ", ".join(fatte) + "."
                 if g["colore"]:
-                    from app.services.allevamento_trattamenti import testo_marcatore
                     art = "la" if g["segno"] in ("riga", "s") else "il"
-                    testo += (f"\nRicordati di fare {art} {riga_ordinale(g['riga'], g['segno'])} "
+                    testo += (f"\nRicordati di fare {art} {riga_ordinale(riga, g['segno'])} "
                               f"({testo_marcatore(g['colore'], g['segno'])}).")
             await q.edit_message_text(testo + "\n\nUsa /start per continuare.")
             return ConversationHandler.END

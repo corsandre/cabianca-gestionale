@@ -55,6 +55,38 @@ class DoseACapo(unittest.TestCase):
         self.assertEqual(T.base_dose(True) + T.base_dose(False), "capokg")
 
 
+class GiorniSaltati(unittest.TestCase):
+    from datetime import date as d
+
+    def test_un_giorno_saltato(self):
+        # Dophexine: prima dose 20/11, dose di oggi registrata il 22/11 → manca il 21/11
+        self.assertEqual(T.giorni_saltati(self.d(2026, 11, 20), self.d(2026, 11, 22), 4), [self.d(2026, 11, 21)])
+
+    def test_ieri_nessun_salto(self):
+        self.assertEqual(T.giorni_saltati(self.d(2026, 11, 21), self.d(2026, 11, 22), 4), [])
+
+    def test_non_piu_delle_dosi_che_mancano(self):
+        # mancano 2 dosi: una sola può essere recuperata, l'altra è quella di oggi
+        self.assertEqual(T.giorni_saltati(self.d(2026, 11, 18), self.d(2026, 11, 22), 2), [self.d(2026, 11, 19)])
+        self.assertEqual(T.giorni_saltati(self.d(2026, 11, 18), self.d(2026, 11, 22), 1), [])
+
+
+class ControllaDosi(unittest.TestCase):
+    from datetime import date as d
+
+    def test_ordina_per_data(self):
+        oggi = self.d(2026, 11, 22)
+        self.assertEqual(T.controlla_dosi([self.d(2026, 11, 22), self.d(2026, 11, 20)], 5, oggi),
+                         [self.d(2026, 11, 20), self.d(2026, 11, 22)])
+
+    def test_errori(self):
+        oggi = self.d(2026, 11, 22)
+        for date_dosi, totali in (([], 5), ([oggi, oggi], 5), ([self.d(2026, 11, 23)], 5),
+                                  ([self.d(2026, 11, 20), self.d(2026, 11, 21), oggi], 2)):
+            with self.assertRaises(ValueError):
+                T.controlla_dosi(date_dosi, totali, oggi)
+
+
 class Marcatore(unittest.TestCase):
     def test_accordo_del_colore(self):
         self.assertEqual(T.testo_marcatore("rosso", "riga"), "riga rossa")

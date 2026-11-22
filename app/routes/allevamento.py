@@ -2188,11 +2188,47 @@ def trattamenti_somministra(tid):
         flash("Il corso di cura è già completo.", "warning")
         return redirect(url_for("allevamento.trattamenti"))
 
-    db.session.add(Somministrazione(
-        trattamento_id=t.id, numero_giorno=stato["fatte"] + 1, data=date.today(),
-    ))
+    from app.services.allevamento_trattamenti import registra_dosi
+    registrate = registra_dosi(t, recupera=request.form.get("recupera") == "1")
     db.session.commit()
-    flash(f"Somministrazione {stato['fatte'] + 1}/{stato['totali']} registrata.", "success")
+    fatte = stato["fatte"] + len(registrate)
+    giorni = ", ".join(d.strftime("%d/%m") for d in registrate)
+    piu = len(registrate) > 1
+    flash(f"{t.medicinale.nome}: {'dosi' if piu else 'dose'} del {giorni} {'registrate' if piu else 'registrata'} "
+          f"({fatte}/{stato['totali']}).", "success")
+    return redirect(url_for("allevamento.trattamenti"))
+
+
+@bp.route("/trattamenti/<int:tid>/dosi", methods=["POST"])
+@login_required
+def trattamenti_dosi(tid):
+    """Correzione delle dosi registrate: cambia le date, toglie o aggiunge dosi (rinumerate in ordine di data)."""
+    _check_allevamento()
+    if current_user.role != "admin":
+        abort(403)
+    from app.models import Trattamento
+    from app.services.allevamento_trattamenti import modifica_dosi
+    t = db.session.get(Trattamento, tid)
+    if not t:
+        flash("Trattamento non trovato.", "danger")
+        return redirect(url_for("allevamento.trattamenti"))
+    try:
+        date_dosi = []
+        for s in t.somministrazioni.all():
+            if request.form.get(f"elimina_{s.id}") == "1":
+                continue
+            valore = request.form.get(f"data_{s.id}") or s.data.isoformat()
+            date_dosi.append(date.fromisoformat(valore))
+        for valore in request.form.getlist("nuova_data"):
+            if valore:
+                date_dosi.append(date.fromisoformat(valore))
+        date_dosi = modifica_dosi(t, date_dosi)
+        db.session.commit()
+        flash(f"{t.medicinale.nome}: dosi corrette, ora {len(date_dosi)}/{t.giorni_somministrazione} "
+              f"({', '.join(d.strftime('%d/%m') for d in date_dosi)}).", "success")
+    except ValueError as e:
+        db.session.rollback()
+        flash(str(e) if "isoformat" not in str(e) else "Data non valida.", "danger")
     return redirect(url_for("allevamento.trattamenti"))
 
 

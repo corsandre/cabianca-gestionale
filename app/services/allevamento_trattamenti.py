@@ -193,6 +193,61 @@ def da_ripetere_per_animale(ciclo_id):
     return list(gruppi.values())
 
 
+def giorni_saltati(ultima, oggi, mancano):
+    """Giorni tra l'ultima dose e oggi senza dose registrata (es. ultima 20/11, oggi 22/11 → [21/11]),
+    al massimo quanti ne stanno prima della dose di oggi (mancano = dosi ancora da fare)."""
+    if not ultima or mancano < 2:
+        return []
+    giorni = [ultima + timedelta(days=i) for i in range(1, (oggi - ultima).days)]
+    return giorni[:mancano - 1]
+
+
+def registra_dosi(t, recupera=False, oggi=None):
+    """Registra la dose di oggi (e, con recupera, anche quelle dei giorni saltati). Restituisce le date registrate."""
+    from app import db
+    from app.models import Somministrazione
+    oggi = oggi or date.today()
+    s = stato_trattamento(t)
+    if s["completo"]:
+        return []
+    date_dosi = (s["saltati"] if recupera else []) + [oggi]
+    date_dosi = date_dosi[:s["totali"] - s["fatte"]]
+    for i, d in enumerate(date_dosi):
+        db.session.add(Somministrazione(trattamento_id=t.id, numero_giorno=s["fatte"] + i + 1, data=d))
+    return date_dosi
+
+
+def controlla_dosi(date_dosi, totali, oggi=None):
+    """Date delle dosi in ordine, dopo i controlli (almeno una, nessuna ripetuta, nessuna nel futuro, non più dei giorni previsti)."""
+    oggi = oggi or date.today()
+    date_dosi = sorted(date_dosi)
+    if not date_dosi:
+        raise ValueError("Deve restare almeno una dose: per togliere tutto elimina il trattamento.")
+    if len(set(date_dosi)) != len(date_dosi):
+        raise ValueError("Due dosi nello stesso giorno: controlla le date.")
+    if date_dosi[-1] > oggi:
+        raise ValueError("Una dose ha una data nel futuro.")
+    if len(date_dosi) > totali:
+        raise ValueError(f"Il trattamento prevede {totali} giorni: ci sono {len(date_dosi)} dosi.")
+    return date_dosi
+
+
+def modifica_dosi(t, date_dosi):
+    """Sostituisce le dosi del trattamento con queste date (rinumerate in ordine di data)."""
+    from app import db
+    from app.models import Somministrazione
+    date_dosi = controlla_dosi(date_dosi, t.giorni_somministrazione)
+    righe = sorted(t.somministrazioni.all(), key=lambda x: x.id)
+    for i, d in enumerate(date_dosi):
+        if i < len(righe):
+            righe[i].numero_giorno, righe[i].data = i + 1, d
+        else:
+            db.session.add(Somministrazione(trattamento_id=t.id, numero_giorno=i + 1, data=d))
+    for r in righe[len(date_dosi):]:
+        db.session.delete(r)
+    return date_dosi
+
+
 def riga_ordinale(n, segno=None):
     """Quale segno fare sulla schiena il giorno n: '2° pallino', '2ª riga', '2ª S'."""
     segno = segno or "pallino"
@@ -224,6 +279,9 @@ def stato_trattamento(t):
         "chiuso_anticipatamente": t.chiuso_anticipatamente,
         "deceduto": bool(t.deceduto),
         "da_ripetere": da_ripetere,
+        # giorni senza dose tra l'ultima e oggi: chi registra la dose di oggi può aggiungere anche quelli
+        "saltati": giorni_saltati(ultima.data, oggi, t.giorni_somministrazione - fatte) if da_ripetere else [],
+        "date_dosi": [x.data for x in somm],
         "ultima_data": ultima.data if ultima else None,
         "prossima_data": (ultima.data + timedelta(days=1)) if ultima and not completo else None,
         "data_fine_sospensione": data_fine_sospensione,
