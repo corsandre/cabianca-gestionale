@@ -288,9 +288,9 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - [x] test backup → `tests/test_backup_sqlite.py`; provato end-to-end su DB temporaneo
 
 ### Fase 0b – 3.4.0 (ruoli e container servizi)
-- [ ] RUOLO (web/servizi/impianto/sviluppo), _init_db_nucleo solo con web
+- [x] RUOLO (completo/web/servizi/impianto/sviluppo) → `app/ruoli.py`; `_init_db_nucleo` solo chi migra; gli altri aspettano `Setting schema_nucleo` (`_attendi_schema_nucleo`)
 - [ ] app/servizi.py + servizio compose `servizi`
-- [ ] app/moduli/ registro + MODULI + /salute
+- [x] app/moduli/ registro + MODULI + /salute (`app/routes/salute.py`) + messaggio Telegram `messaggio_avvio_sito` — provato con RUOLO sviluppo e web
 - [ ] scripts/deploy.sh (sito/tutto), tag immagini
 - [ ] Dockerfile librerie WeasyPrint
 - [ ] tests/test_avvio_ruoli.py
@@ -309,7 +309,9 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 
 ### Diario
 - 24/11/2026 – piano approvato, creato il ramo.
+- 24/11/2026 – fase 0b avviata: ruoli, registro moduli, /salute (commit successivo al 3.3.3).
 - 24/11/2026 – fase 0a completata (3.3.3). Ambiente locale: `.venv` (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`), test con `.venv/bin/python -m unittest discover -s tests`.
 
 ### Prossimo passo
-Fase 0b: variabile RUOLO in `app/__init__.py` (`_init_db_nucleo` solo con web, scheduler/bot solo con servizi), poi `app/servizi.py`.
+Fase 0b, da continuare: 1) `app/servizi.py` (`python -m app.servizi`: create_app con RUOLO=servizi, resta in attesa, chiude lo scheduler su SIGTERM); 2) `docker-compose.yml`: RUOLO=web e MODULI per `web`, nuovo servizio `servizi`, porta 127.0.0.1, tag immagine con la versione; 3) Dockerfile con le librerie di WeasyPrint; 4) `scripts/deploy.sh sito|tutto`; 5) `tests/test_avvio_ruoli.py`; 6) README "Moduli"; 7) versione 3.4.0.
+Nota: il default di RUOLO è `completo` (come prima), quindi il codice attuale è retrocompatibile.

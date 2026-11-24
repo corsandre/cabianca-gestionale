@@ -13,8 +13,13 @@ csrf = CSRFProtect()
 
 
 def create_app():
+    """Crea l'app. Cosa avvia dipende da RUOLO (web, servizi, impianto, sviluppo, completo): vedi app/ruoli.py."""
+    from app.ruoli import ruolo_corrente, migra_schema, avvia_servizi, carica_moduli, WEB
+    ruolo = ruolo_corrente()
+
     app = Flask(__name__)
     app.config.from_object("app.config.Config")
+    app.config["RUOLO"] = ruolo
     # Dietro Caddy: IP reale del client e schema https dagli header X-Forwarded-*
     # (la porta è pubblicata solo su 127.0.0.1, quindi gli header arrivano solo dal proxy)
     from werkzeug.middleware.proxy_fix import ProxyFix
@@ -81,6 +86,7 @@ def create_app():
     from app.routes.allevamento import bp as allevamento_bp
     from app.routes import soccida as _soccida  # noqa: F401  (aggiunge le pagine della soccida al blueprint dell'allevamento)
     from app.routes.impianto import bp as impianto_bp
+    from app.routes.salute import bp as salute_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -99,6 +105,7 @@ def create_app():
     app.register_blueprint(ricorrenti_bp)
     app.register_blueprint(allevamento_bp)
     app.register_blueprint(impianto_bp)
+    app.register_blueprint(salute_bp)
 
     # Logging
     logging.basicConfig(level=logging.INFO)
@@ -192,19 +199,66 @@ def create_app():
     def inject_globals():
         current_section = BLUEPRINT_SECTION_MAP.get(request.blueprint, 'finanza')
         from app.version import VERSIONE
-        return {"app_name": "Ca Bianca Gestionale", "current_section": current_section, "versione": VERSIONE}
+        from app import moduli
+        stati = app.extensions.get("moduli", {})
+        return {"app_name": "Ca Bianca Gestionale", "current_section": current_section, "versione": VERSIONE,
+                # moduli caricati senza errori (il menu mostra le loro sezioni) e le loro versioni
+                "moduli_attivi": moduli.attivi(app),
+                "versioni_moduli": {n: s.get("versione") for n, s in stati.items() if s.get("attivo")}}
 
-    # Create tables and seed data on first run
+    # Schema del database: lo aggiorna solo il processo del sito (RUOLO web/sviluppo/completo).
+    # Gli altri (servizi, impianto) aspettano che il sito l'abbia portato alla loro versione.
     with app.app_context():
-        _init_db(app)
+        if migra_schema(ruolo):
+            _init_db_nucleo(app)
+        else:
+            _attendi_schema_nucleo(app)
 
-    # Start scheduler for backups and notifications
-    # il servizio dell'impianto (processo separato) usa l'app solo per il database: niente
-    # scheduler né bot Telegram, che girano già nel processo web
-    if os.environ.get("RUOLO") != "impianto":
+    # Moduli (app/moduli): solo chi migra lo schema aggiorna anche i loro database
+    if carica_moduli(ruolo):
+        from app import moduli
+        moduli.carica(app, migra=migra_schema(ruolo))
+
+    # Scheduler (backup, cassa, email, avvisi...) e bot Telegram: solo RUOLO servizi (o completo)
+    if avvia_servizi(ruolo):
         _init_scheduler(app)
 
+    # Il sito, riavviato da solo con "deploy.sh sito", avvisa su Telegram con la sua versione
+    if ruolo == WEB:
+        from app.services.avvio import messaggio_avvio_sito
+        messaggio_avvio_sito(app)
+
     return app
+
+
+def _attendi_schema_nucleo(app):
+    """Aspetta (max ATTESA_SCHEMA_SECONDI, default 180) che il sito abbia aggiornato gestionale.db.
+
+    Il sito, a fine _init_db_nucleo, scrive la sua versione nel Setting "schema_nucleo". Se è uguale
+    o più nuova di quella di questo processo lo schema va bene (le migrazioni aggiungono soltanto).
+    Allo scadere si parte comunque, con un avviso nel registro: meglio un servizio che forse trova
+    una colonna mancante che un bot fermo.
+    """
+    import time
+    from app.models import Setting
+    from app.ruoli import confronta_versioni
+    from app.version import VERSIONE
+    limite = time.time() + float(os.environ.get("ATTESA_SCHEMA_SECONDI", "180"))
+    while True:
+        try:
+            s = db.session.get(Setting, "schema_nucleo")
+            if s and confronta_versioni(s.value, VERSIONE) >= 0:
+                return
+            trovato = s.value if s else None
+        except Exception:
+            trovato = None
+        finally:
+            db.session.remove()
+        if time.time() >= limite:
+            app.logger.warning(f"Schema del gestionale alla versione {trovato}, questo processo è {VERSIONE}: "
+                               f"parto comunque (il sito non l'ha aggiornato in tempo?)")
+            return
+        time.sleep(3)
 
 
 def _pre_migrate_rename(sqlalchemy):
@@ -251,13 +305,18 @@ def _pre_migrate_rename(sqlalchemy):
         db.session.rollback()
 
 
-def _init_db(app):
+def _init_db_nucleo(app):
+    """Crea/aggiorna lo schema di gestionale.db e i dati iniziali. Solo nel processo del sito (app/ruoli.py).
+
+    Le tabelle dei moduli NON si creano qui: ogni modulo ha il suo database e le sue migrazioni
+    (app/moduli). Per questo create_all è limitato al database principale (bind_key=None).
+    """
     import sqlalchemy
 
     _pre_migrate_rename(sqlalchemy)
 
     try:
-        db.create_all()
+        db.create_all(bind_key=None)
     except sqlalchemy.exc.OperationalError:
         pass  # Tables already exist (race condition with multiple workers)
 
@@ -493,6 +552,14 @@ def _init_db(app):
     for key, value in defaults.items():
         if not Setting.query.get(key):
             db.session.add(Setting(key=key, value=value))
+
+    # Versione dello schema: servizi e impianto aspettano questo valore prima di partire
+    from app.version import VERSIONE
+    s = db.session.get(Setting, "schema_nucleo")
+    if s:
+        s.value = VERSIONE
+    else:
+        db.session.add(Setting(key="schema_nucleo", value=VERSIONE))
     db.session.commit()
 
 

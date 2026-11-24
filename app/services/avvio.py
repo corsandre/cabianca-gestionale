@@ -47,3 +47,36 @@ def messaggio_avvio(app):
         except Exception as e:
             db.session.rollback()
             log.warning("messaggio di avvio non inviato: %s", e)
+
+
+def messaggio_avvio_sito(app):
+    """Messaggio su Telegram quando riparte il solo sito (RUOLO=web, "deploy.sh sito", dalla 3.4.0).
+
+    Il bot vive nel container `servizi` e non riparte: senza questo messaggio un aggiornamento del sito
+    passerebbe inosservato. Inviato in un thread per non rallentare l'avvio.
+    """
+    import threading
+
+    def invia():
+        from app import db
+        from app.models import Setting
+        from app.services.allevamento_scorte import set_setting
+        from app.services.telegram_bot import send_telegram_message
+        from app.version import VERSIONE
+        with app.app_context():
+            try:
+                s = db.session.get(Setting, "versione_sito_avviata")
+                prima = s.value if s else None
+                perche = f"aggiornato dalla versione {prima}" if prima and prima != VERSIONE else "riavviato"
+                moduli = app.extensions.get("moduli", {})
+                righe = "".join(
+                    f"\n· {n} {m.get('versione')}: " + ("attivo" if m.get("attivo") else f"⚠️ spento ({m.get('errore')})")
+                    for n, m in moduli.items())
+                set_setting("versione_sito_avviata", VERSIONE)
+                db.session.commit()
+                send_telegram_message(f"🌐 <b>Sito del gestionale</b> – versione {VERSIONE}\n{perche}{righe}", "sistema")
+            except Exception as e:
+                db.session.rollback()
+                log.warning("messaggio di avvio del sito non inviato: %s", e)
+
+    threading.Thread(target=invia, daemon=True).start()
