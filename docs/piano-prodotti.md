@@ -283,9 +283,9 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 **Ramo:** `sviluppo/moduli-prodotti` (su GitHub, NON in produzione). Produzione ferma a 3.3.2 (`master`).
 
 ### Fase 0a – 3.3.3 (SQLite robusto + backup)
-- [ ] WAL + busy_timeout (evento connect su Engine)
-- [ ] backup con API sqlite3 + integrity_check, tutti i data/*.db, 7 giornalieri + 12 mensili
-- [ ] test backup
+- [x] WAL + busy_timeout (evento connect su Engine) → `app/utils/sqlite.py`
+- [x] backup con API sqlite3 + integrity_check, tutti i data/*.db, 7 giornalieri + 12 mensili, PDF etichette la domenica → `app/services/backup.py`, `backup_sqlite.py`
+- [x] test backup → `tests/test_backup_sqlite.py`; provato end-to-end su DB temporaneo
 
 ### Fase 0b – 3.4.0 (ruoli e container servizi)
 - [ ] RUOLO (web/servizi/impianto/sviluppo), _init_db_nucleo solo con web
@@ -309,6 +309,7 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 
 ### Diario
 - 24/11/2026 – piano approvato, creato il ramo.
+- 24/11/2026 – fase 0a completata (3.3.3). Ambiente locale: `.venv` (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`), test con `.venv/bin/python -m unittest discover -s tests`.
 
 ### Prossimo passo
-Fase 0a: evento connect SQLite in `app/__init__.py` e riscrittura di `app/services/backup.py`.
+Fase 0b: variabile RUOLO in `app/__init__.py` (`_init_db_nucleo` solo con web, scheduler/bot solo con servizi), poi `app/servizi.py`.

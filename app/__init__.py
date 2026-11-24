@@ -31,6 +31,10 @@ def create_app():
         abs_path = os.path.join(app.root_path, "..", db_path)
         app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{os.path.abspath(abs_path)}"
 
+    # WAL + attesa se il DB è occupato (più processi scrivono insieme): vedi app/utils/sqlite.py
+    from app.utils.sqlite import configura_sqlite
+    configura_sqlite()
+
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
