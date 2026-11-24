@@ -287,14 +287,14 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - [x] backup con API sqlite3 + integrity_check, tutti i data/*.db, 7 giornalieri + 12 mensili, PDF etichette la domenica → `app/services/backup.py`, `backup_sqlite.py`
 - [x] test backup → `tests/test_backup_sqlite.py`; provato end-to-end su DB temporaneo
 
-### Fase 0b – 3.4.0 (ruoli e container servizi)
+### Fase 0b – 3.4.0 (ruoli e container servizi) — codice completo, da provare in Docker
 - [x] RUOLO (completo/web/servizi/impianto/sviluppo) → `app/ruoli.py`; `_init_db_nucleo` solo chi migra; gli altri aspettano `Setting schema_nucleo` (`_attendi_schema_nucleo`)
 - [x] app/servizi.py + servizio compose `servizi` (provato: avvio, scheduler, chiusura con SIGTERM); immagini `cabianca-gestionale:web` e `:servizi`
 - [x] app/moduli/ registro + MODULI + /salute (`app/routes/salute.py`) + messaggio Telegram `messaggio_avvio_sito` — provato con RUOLO sviluppo e web
 - [x] scripts/deploy.sh (sito / tutto / indietro), copia pre-deploy che funziona anche con l'immagine vecchia
 - [x] Dockerfile librerie WeasyPrint + requirements (weasyprint 65.1, pydyf 0.13, openpyxl 3.1.5; la 62.3 non funziona con pydyf 0.13)
 - [x] tests/test_avvio_ruoli.py (ruoli, moduli finti buono/guasto, tutte le pagine GET senza 500) — gira solo con `.venv`
-- [ ] README sezione "Moduli"
+- [x] README: architettura, variabili RUOLO/MODULI/ATTESA_SCHEMA_SECONDI, sezione "Moduli e ruoli dei processi", deploy con scripts/deploy.sh, backup e ripristino
 
 ### Fase 0c – 3.4.1 (modulo vuoto)
 - [ ] permesso "prodotti", menu, pagina iniziale, schema_versione v1
@@ -314,4 +314,4 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - 24/11/2026 – fase 0a completata (3.3.3). Ambiente locale: `.venv` (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`), test con `.venv/bin/python -m unittest discover -s tests`.
 
 ### Prossimo passo
-Fase 0b, ultimi punti: README (architettura, variabili RUOLO/MODULI/ATTESA_SCHEMA_SECONDI, sezione "Moduli", deploy con scripts/deploy.sh, backup/ripristino), versione 3.4.0, `graphify update .`. Poi fase 0c (permesso e modulo vuoto).
+Verificare la build Docker (`docker build -t cabianca-test:0b .`), poi fase 0c: permesso "prodotti" (impostazioni/index.html, 3 punti), gruppo PRODOTTI nel menu, pacchetto `app/moduli/prodotti/` con `schema.py` (schema_versione, copia pre-migrazione, guardia) e pagina iniziale.

@@ -23,6 +23,7 @@ per le operazioni quotidiane di stalla. Dalla versione 2.0 può collegarsi al PC
 - [Configurazione (.env)](#configurazione-env)
 - [Installazione](#installazione)
 - [Deploy di un aggiornamento](#deploy-di-un-aggiornamento)
+- [Moduli e ruoli dei processi](#moduli-e-ruoli-dei-processi)
 - [Database e migrazioni](#database-e-migrazioni)
 - [Struttura del progetto](#struttura-del-progetto)
 - [Convenzioni di sviluppo](#convenzioni-di-sviluppo)
@@ -34,15 +35,21 @@ per le operazioni quotidiane di stalla. Dalla versione 2.0 può collegarsi al PC
 ## Architettura e ambienti
 
 ```
-Internet ──HTTPS──▶ Caddy (VPS, certificati automatici) ──▶ 127.0.0.1:8080 ──▶ container Docker "web"
+Internet ──HTTPS──▶ Caddy (VPS, certificati automatici) ──▶ 127.0.0.1:8080 ──▶ container "web"      (RUOLO=web)
                                                                               ├─ Gunicorn (1 worker, 2 thread)
-                                                                              ├─ Flask app
-                                                                              ├─ APScheduler (job notturni)
-                                                                              └─ Bot Telegram allevamento (thread)
-                                                                          container Docker "impianto" (stessa immagine)
+                                                                              ├─ Flask app: sezioni del nucleo
+                                                                              └─ moduli (app/moduli, es. Prodotti)
+                                                                          container "servizi"           (RUOLO=servizi)
+                                                                              ├─ APScheduler (backup, cassa, email, avvisi…)
+                                                                              └─ Bot Telegram allevamento
+                                                                          container "impianto"          (RUOLO=impianto)
                                                                               └─ servizio di sorveglianza ──SSH via ZeroTier──▶ PC impianto (EM2000)
                                                      volumi: data/ (SQLite)  backups/  app/static/uploads/
 ```
+
+Dalla 3.4.0 sito, servizi e impianto sono container separati con lo stesso codice: aggiornare il sito
+(anche un modulo) riavvia solo `web` per pochi secondi, mentre bot, lavori programmati e impianto continuano a
+girare. Vedi [Moduli e ruoli dei processi](#moduli-e-ruoli-dei-processi).
 
 - **Produzione**: VPS Linux (Ubuntu) dietro **Caddy** come reverse proxy HTTPS. Il container pubblica la porta solo
   su `127.0.0.1` (`APP_BIND=127.0.0.1`), perché Docker scrive regole iptables proprie che scavalcano `ufw`: con
@@ -763,7 +770,7 @@ si gestiscono da **Impostazioni → Utenti**.
 
 ## Attività pianificate
 
-APScheduler gira nel processo dell'app (fuso `Europe/Rome`):
+APScheduler gira nel container `servizi` (dalla 3.4.0; prima nel processo del sito), fuso `Europe/Rome`:
 
 | Orario | Job | Note |
 |---|---|---|
@@ -782,13 +789,23 @@ APScheduler gira nel processo dell'app (fuso `Europe/Rome`):
 
 ## Backup e ripristino
 
-- Il job copia il database in `backups/gestionale_backup_AAAAMMGG_HHMMSS.db`, tiene **gli ultimi 7 file**, lo invia
-  come allegato all'indirizzo configurato (SMTP) e manda un messaggio Telegram "Backup completato".
+- Il job (container `servizi`) salva **tutti i database** di `data/` (`gestionale.db`, `prodotti.db` e quelli dei
+  moduli futuri) in `backups/<database>_backup_AAAAMMGG_HHMMSS.db`, li controlla con `PRAGMA integrity_check`, li
+  invia come allegati all'indirizzo configurato (SMTP, fino a 20 MB in totale) e manda un messaggio Telegram
+  "Backup completato" (o "⚠️ Backup con problemi").
+- **Conservazione**: gli ultimi 7 backup e il primo di ogni mese per 12 mesi (il libro lotti è un registro di legge).
+- La **domenica** archivia anche i PDF delle etichette dei lotti (`data/prodotti/etichette`) in
+  `backups/etichette_backup_*.tar.gz`.
+- Dalla 3.3.3 i database sono in **modalità WAL** (`app/utils/sqlite.py`): accanto al `.db` ci sono i file `-wal` e
+  `-shm` e **il database non si copia più con `cp`**: le copie si fanno con l'API di backup di sqlite3
+  (`app/services/backup_sqlite.py`), che usano sia il backup sia `scripts/deploy.sh`.
 - Orario, **frequenza in giorni** e destinatario email si impostano da **Impostazioni → Backup**. Con una frequenza
   maggiore di 1, nelle notti intermedie il log riporta `Backup saltato: eseguito di recente secondo la frequenza
   configurata`: è il comportamento previsto, non un errore.
-- Da **Impostazioni → Backup** l'admin può lanciare subito un backup o ripristinare uno dei file in `backups/`.
-- Prima di un deploy che modifica lo schema conviene fare una copia a mano (vedi sotto).
+- Da **Impostazioni → Backup** l'admin può lanciare subito un backup o ripristinare uno dei file
+  `gestionale_backup_*` in `backups/`. Il ripristino usa l'API di sqlite3 (copiare il file sopra il database
+  aperto, con il WAL, lo corromperebbe) e prima salva lo stato attuale in `backups/gestionale_pre-ripristino_*.db`.
+- `scripts/deploy.sh` fa da solo una copia di tutti i database in `backups/pre-deploy_<data>/` prima di ogni deploy.
 
 ---
 
@@ -851,6 +868,9 @@ Il file `.env` (creato da `setup.sh`, mai committato) contiene:
 | `APP_BIND` | Interfaccia su cui pubblicare la porta: `127.0.0.1` dietro reverse proxy (produzione), `0.0.0.0` (default) in LAN |
 | `COOKIE_SECURE` | `1` (default): cookie solo su HTTPS. `0` solo se l'app è usata in http (LAN senza proxy), altrimenti il login non funziona |
 | `APP_HOST`, `APP_DEBUG` | Opzioni di esecuzione |
+| `RUOLO` | Che cosa fa il processo: `web`, `servizi`, `impianto`, `sviluppo`, `completo` (default). Impostato da `docker-compose.yml`: vedi [Moduli e ruoli dei processi](#moduli-e-ruoli-dei-processi) |
+| `MODULI` | Moduli da caricare: assente o `tutti` = tutti, vuoto = nessuno, oppure elenco (`prodotti`) |
+| `ATTESA_SCHEMA_SECONDI` | Quanto servizi e impianto aspettano all'avvio che il sito abbia aggiornato lo schema (default 180) |
 
 Le impostazioni modificabili dal pannello (backup, scorte, orari pasti, soglie…) stanno invece nella tabella
 `settings` del database.
@@ -885,8 +905,8 @@ Per esporla su Internet dietro Caddy:
 ## Deploy di un aggiornamento
 
 Il codice arriva in produzione passando da GitHub. Prima del commit si aggiorna il numero in `app/version.py`
-(piccole modifiche → terzo numero, gruppi di funzioni → secondo): compare in fondo al menu e nel messaggio di avvio
-su Telegram, che dice «aggiornato dalla versione …».
+(piccole modifiche → terzo numero, gruppi di funzioni → secondo) e, per un modulo, in `app/moduli/<nome>/__init__.py`:
+compaiono in fondo al menu e nei messaggi di avvio su Telegram («aggiornato dalla versione …»).
 
 ```bash
 # 1. in sviluppo
@@ -894,45 +914,48 @@ git push origin master
 
 # 2. sul server di produzione (via SSH), nella cartella del progetto
 cd ~/cabianca-gestionale
-
-#    se il deploy cambia lo schema del DB: copia di sicurezza coerente
-docker exec cabianca-gestionale-web-1 python -c "
-import sqlite3; s=sqlite3.connect('/app/data/gestionale.db'); d=sqlite3.connect('/app/data/gestionale.db.pre-deploy'); s.backup(d)"
-
-git pull --ff-only
-docker compose build --no-cache   # prima il build: il servizio resta su durante la compilazione
-docker compose down
-docker compose up -d
-#    pulizia: il build è sempre --no-cache, quindi la cache di build e le immagini vecchie non servono più
-#    (a novembre 2026 erano arrivate a 55 GB). Non tocca i container in funzione né i dati.
-docker builder prune -af
-docker image prune -f
-
-# 3. verifica
-docker compose ps
-docker compose logs web impianto --tail=50
+scripts/deploy.sh sito      # caso normale: riavvia solo il sito (pochi secondi), bot e impianto non si fermano
+scripts/deploy.sh tutto     # se cambiano bot, scheduler, servizi, impianto, dipendenze o Dockerfile
 ```
 
-Dopo il riavvio è normale vedere per circa un minuto qualche `409 Conflict` del bot: è la connessione della
-vecchia istanza che Telegram non ha ancora chiuso. Se il conflitto continua, c'è un'altra istanza attiva con
-lo stesso token.
+Lo script fa `git pull`, una copia di sicurezza di tutti i database, tiene l'immagine attuale per tornare
+indietro, costruisce la nuova, riavvia e controlla `/salute`. Se con `sito` trova cambiati file usati anche
+da servizi o impianto (`app/services`, `app/models.py`, `requirements.txt`, …) propone da solo `tutto`.
+Dettagli e ritorno indietro: [Moduli e ruoli dei processi](#moduli-e-ruoli-dei-processi).
+
+```bash
+# 3. verifica
+docker compose ps
+docker compose logs web servizi impianto --tail=50
+```
+
+Dopo un deploy `tutto` è normale vedere per circa un minuto qualche `409 Conflict` del bot (nei log di
+`servizi`): è la connessione della vecchia istanza che Telegram non ha ancora chiuso. Se il conflitto continua,
+c'è un'altra istanza attiva con lo stesso token. Con un deploy `sito` il bot non riparte e il 409 non compare.
+
+**Primo passaggio alla 3.4.0** (una volta sola): le immagini cambiano nome (`cabianca-gestionale:web` e
+`:servizi` invece di `:latest`) e nasce il container `servizi`. Si usa `scripts/deploy.sh tutto`; poi
+`docker image rm cabianca-gestionale:latest` per togliere la vecchia. Prima di quel deploy, nel `.env`
+di produzione deve esserci `APP_BIND=127.0.0.1` (come oggi).
 
 **Provare in locale senza toccare la produzione**: copiare il DB di produzione in `data/_test.db` e lanciare uno
 script di prova in un container usa-e-getta, con il bot disattivato:
 
 ```bash
-docker compose build
-docker compose run --rm --no-deps -e PYTHONPATH=/app \
+docker compose build web
+docker compose run --rm --no-deps -e PYTHONPATH=/app -e RUOLO=sviluppo \
   -e DATABASE_URL=sqlite:////app/data/_test.db web python /app/data/_prova.py
 ```
 
-dove lo script, prima di `create_app()`, sostituisce `app.services.allevamento_bot.start_bot` con una funzione
-vuota. Mai usare `docker compose up` su una macchina che non sia la produzione.
+Con `RUOLO=sviluppo` né lo scheduler né il bot partono. Mai usare `docker compose up` su una macchina che non
+sia la produzione. Attenzione: il `.env` di sviluppo può contenere credenziali vere (Telegram, email): un backup
+lanciato a mano in locale manda davvero l'email e il messaggio. I test (`tests/test_avvio_ruoli.py`) le svuotano.
 
 Comandi utili:
 
 ```bash
 docker compose logs -f web      # log in tempo reale del gestionale
+docker compose logs -f servizi  # log di scheduler e bot Telegram
 docker compose logs -f impianto # log del servizio dell'impianto di alimentazione
 docker compose ps               # stato dei container
 docker compose down             # ferma (i dati restano nei volumi)
@@ -940,14 +963,77 @@ docker compose down             # ferma (i dati restano nei volumi)
 
 ---
 
+## Moduli e ruoli dei processi
+
+Dalla 3.4.0 il gestionale è diviso in un **nucleo** (finanza, allevamento, impianto, utenti, menu, stile) e in
+**moduli** indipendenti (il primo è **Prodotti**: ricettario, libro lotti, etichette). Lo scopo è aggiornare una
+parte senza fermare le altre. Piano e motivazioni: `docs/piano-prodotti.md`.
+
+### Ruoli dei processi (`RUOLO`, file `app/ruoli.py`)
+
+| RUOLO | dove | sito | aggiorna lo schema | scheduler + bot | moduli |
+|---|---|---|---|---|---|
+| `web` | container `web` | sì | **sì (unico)** | no | sì |
+| `servizi` | container `servizi` (`python -m app.servizi`) | no | no | **sì** | sì |
+| `impianto` | container `impianto` | no | no | no | no |
+| `sviluppo` | in locale | sì | sì | no | sì |
+| `completo` | default se `RUOLO` manca (installazioni vecchie) | sì | sì | sì | sì |
+
+- Lo schema dei database lo modifica **solo il sito**. A fine aggiornamento scrive la sua versione nel setting
+  `schema_nucleo`; `servizi` e `impianto` all'avvio aspettano quel valore (max `ATTESA_SCHEMA_SECONDI`).
+- `sviluppo` non avvia mai il bot: due bot con lo stesso token si rubano i messaggi.
+- Il sito, quando riparte da solo, manda su Telegram "🌐 Sito del gestionale – versione …" con lo stato dei moduli;
+  il messaggio "🔄 Gestionale avviato" resta quello del bot (container `servizi`).
+- `/salute` (senza login) restituisce versione, ruolo, database e stato dei moduli; risponde 503 se un modulo è
+  spento per errore. Lo usa `scripts/deploy.sh`.
+
+### Regole dei moduli (`app/moduli/`)
+
+- Un modulo è un pacchetto `app/moduli/<nome>/` con codice, template, static, **database proprio**
+  (`data/<nome>.db`) e **versione propria**. Si registra in `MODULI_DISPONIBILI` (`app/moduli/__init__.py`), che è
+  l'unico punto di contatto con il nucleo.
+- Il modulo può importare dal nucleo (`app.models.User`, `Contact`, `app.utils.decorators`, `base.html`, lo stile);
+  il nucleo non importa mai il modulo; i moduli non si importano fra loro.
+- Ogni modulo espone `NOME`, `VERSIONE`, `migra(app)`, `registra(app)`, `stato(app)`.
+- **Migrazioni con numero di versione** (tabella `schema_versione` nel suo database), che **aggiungono soltanto**
+  (niente DROP né RENAME). Prima di applicarle il modulo copia il suo database in `backups/<nome>_pre_v<N>_*.db`.
+  Se trova un database più nuovo del codice (dopo un ritorno indietro) non parte.
+- **Un modulo guasto non ferma il gestionale**: resta spento, l'errore è in `/salute` e arriva un avviso sul canale
+  Telegram "sistema".
+- `MODULI` nel `.env` sceglie quali moduli caricare (vuoto = nessuno): così un modulo si spegne senza toccare il codice.
+- Commit: `prodotti 1.0.1: …` per un modulo, `3.4.1: …` per il nucleo.
+
+### Immagini Docker e deploy
+
+- `cabianca-gestionale:web` la costruisce `docker compose build web`; `cabianca-gestionale:servizi` (usata da
+  `servizi` e `impianto`) è una copia che crea solo `scripts/deploy.sh tutto`. Così un deploy `sito` non cambia il
+  codice di servizi e impianto, nemmeno se ripartono da soli.
+- Prima di ogni deploy lo script salva l'immagine in uso come `:web-precedente` (e `:servizi-precedente`).
+- Un modulo nuovo o aggiornato si pubblica con `scripts/deploy.sh sito`.
+- Se un modulo deve aggiungere lavori programmati, quel codice gira in `servizi`: serve `deploy.sh tutto`.
+
+### Tornare indietro
+
+1. **Solo il codice** (caso normale, sicuro perché le migrazioni aggiungono soltanto):
+   `scripts/deploy.sh indietro sito` (oppure `indietro tutto`).
+2. **Una migrazione di un modulo ha rovinato i dati**: fermare il sito (`docker compose stop web`), copiare
+   `backups/<modulo>_pre_v<N>_*.db` sopra `data/<modulo>.db`, **cancellare** `data/<modulo>.db-wal` e
+   `data/<modulo>.db-shm`, poi `scripts/deploy.sh indietro sito`. Si perdono i dati inseriti dopo il deploy:
+   per questo i moduli si aggiornano quando non si sta producendo.
+3. **Le copie fatte prima del deploy** sono in `backups/pre-deploy_<data>/` (tutti i database).
+
+---
+
 ## Database e migrazioni
 
-- **SQLite** in `data/gestionale.db` (volume).
-- Le tabelle nuove vengono create da `db.create_all()` all'avvio.
+- **SQLite** in `data/gestionale.db` (volume), in modalità WAL; i moduli hanno il loro database (`data/<modulo>.db`)
+  e le loro migrazioni (vedi [Moduli e ruoli dei processi](#moduli-e-ruoli-dei-processi)).
+- Le tabelle nuove del nucleo vengono create da `db.create_all(bind_key=None)` all'avvio del sito
+  (`_init_db_nucleo`, solo con `RUOLO` web/sviluppo/completo).
 - Le colonne aggiunte dopo il primo deploy sono nella lista `_migrate_columns` in `app/__init__.py` (`ALTER TABLE
   … ADD COLUMN`, ignorando l'errore se la colonna esiste già). Non si usa Alembic: la cartella `migrations/` è vuota.
 - Le modifiche che SQLite non supporta con `ALTER TABLE` (es. togliere un vincolo `UNIQUE`) si fanno ricostruendo
-  la tabella, sempre in `_init_db()` e in modo idempotente (es. `speditori_siero`).
+  la tabella, sempre in `_init_db_nucleo()` e in modo idempotente (es. `speditori_siero`).
 - Ogni migrazione deve poter girare a ogni avvio senza effetti se già applicata.
 
 ---
@@ -956,7 +1042,10 @@ docker compose down             # ferma (i dati restano nei volumi)
 
 ```
 app/
-  __init__.py          # factory create_app, init DB e migrazioni, seed, scheduler, avvio bot
+  __init__.py          # factory create_app: ruolo, init DB e migrazioni, seed, moduli, scheduler, avvio bot
+  ruoli.py             # RUOLO: cosa fa ciascun processo (web, servizi, impianto, sviluppo)
+  servizi.py           # processo "servizi": scheduler + bot, senza sito
+  moduli/              # registro dei moduli (__init__.py) e un pacchetto per modulo
   config.py            # configurazione da .env
   models.py            # tutti i modelli SQLAlchemy
   routes/              # un blueprint per area
