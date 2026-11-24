@@ -1,0 +1,25 @@
+{# Gruppo PRODOTTI del menu laterale. Incluso da components/sidebar_nav.html quando il modulo è attivo.
+   Le voci si aggiungono qui man mano che nascono le pagine (vedi LEGGIMI.md del modulo). #}
+{% if current_user.has_section('prodotti') %}
+<li class="cb-nav-divider"></li>
+{% set prod_active = request.blueprint == 'prodotti' %}
+<li class="nav-item">
+    <div class="cb-nav-group-header" data-bs-toggle="collapse" data-bs-target="#nav-prodotti"
+         aria-expanded="{{ 'true' if prod_active else 'false' }}" aria-controls="nav-prodotti">
+        <span>
+            <span class="cb-nav-group-dot" style="background: #a8884a"></span>
+            Prodotti
+        </span>
+        <i class="bi bi-chevron-down cb-nav-group-chevron"></i>
+    </div>
+</li>
+<div class="collapse {% if prod_active %}show{% endif %}" id="nav-prodotti">
+    <ul class="nav flex-column cb-nav" style="padding-top:0">
+        <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'prodotti.index' %}active{% endif %}" href="{{ url_for('prodotti.index') }}">
+                <i class="bi bi-house"></i> Panoramica
+            </a>
+        </li>
+    </ul>
+</div>
+{% endif %}

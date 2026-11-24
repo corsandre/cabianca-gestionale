@@ -1,0 +1,6 @@
+{# Base di tutte le pagine del modulo Prodotti: aggiunge il CSS del modulo al base.html del nucleo. #}
+{% extends "base.html" %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('prodotti.static', filename='prodotti.css') }}">
+{% block prodotti_head %}{% endblock %}
+{% endblock %}

@@ -287,7 +287,7 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - [x] backup con API sqlite3 + integrity_check, tutti i data/*.db, 7 giornalieri + 12 mensili, PDF etichette la domenica → `app/services/backup.py`, `backup_sqlite.py`
 - [x] test backup → `tests/test_backup_sqlite.py`; provato end-to-end su DB temporaneo
 
-### Fase 0b – 3.4.0 (ruoli e container servizi) — codice completo, da provare in Docker
+### Fase 0b – 3.4.0 (ruoli e container servizi) — completa, provata in Docker (web + servizi su dati temporanei: il riavvio del sito non tocca servizi)
 - [x] RUOLO (completo/web/servizi/impianto/sviluppo) → `app/ruoli.py`; `_init_db_nucleo` solo chi migra; gli altri aspettano `Setting schema_nucleo` (`_attendi_schema_nucleo`)
 - [x] app/servizi.py + servizio compose `servizi` (provato: avvio, scheduler, chiusura con SIGTERM); immagini `cabianca-gestionale:web` e `:servizi`
 - [x] app/moduli/ registro + MODULI + /salute (`app/routes/salute.py`) + messaggio Telegram `messaggio_avvio_sito` — provato con RUOLO sviluppo e web
@@ -296,8 +296,13 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - [x] tests/test_avvio_ruoli.py (ruoli, moduli finti buono/guasto, tutte le pagine GET senza 500) — gira solo con `.venv`
 - [x] README: architettura, variabili RUOLO/MODULI/ATTESA_SCHEMA_SECONDI, sezione "Moduli e ruoli dei processi", deploy con scripts/deploy.sh, backup e ripristino
 
-### Fase 0c – 3.4.1 (modulo vuoto)
-- [ ] permesso "prodotti", menu, pagina iniziale, schema_versione v1
+### Fase 0c – 3.4.1 (modulo vuoto) — completa
+- [x] permesso "prodotti" (impostazioni/index.html, 3 punti)
+- [x] menu: il nucleo include `<modulo>/_menu.html` per ogni modulo attivo (il nucleo non conosce le voci)
+- [x] motore migrazioni dei moduli `app/moduli/migrazioni.py` (schema_versione, BEGIN IMMEDIATE, copia pre-migrazione, guardia "DB più nuovo", tutto in una transazione) + `tests/test_moduli_migrazioni.py`
+- [x] bind `prodotti` configurato da `moduli.configura_database` prima di `db.init_app`
+- [x] pacchetto `app/moduli/prodotti/` (schema v1, routes, _base, _menu, prodotti.css tema oro, LEGGIMI.md)
+- [x] provato: anonimo → login, senza permesso → 403 e niente menu, admin → pagina con tema; Docker ok
 
 ### Modulo prodotti 1.0.0
 - [ ] 1. modelli + m001 + CRUD materie prime / prodotti / ricette
@@ -309,9 +314,10 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 
 ### Diario
 - 24/11/2026 – piano approvato, creato il ramo.
+- 25/11/2026 – fasi 0b e 0c completate (3.4.0, 3.4.1).
 - 25/11/2026 – CORRETTO un rischio del WAL: il ripristino da Impostazioni copiava il file sopra il DB (con il -wal aperto lo avrebbe corrotto). Ora `ripristina_sqlite` usa l'API di sqlite3 e salva prima `gestionale_pre-ripristino_*.db`.
 - 24/11/2026 – fase 0b avviata: ruoli, registro moduli, /salute (commit successivo al 3.3.3).
 - 24/11/2026 – fase 0a completata (3.3.3). Ambiente locale: `.venv` (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`), test con `.venv/bin/python -m unittest discover -s tests`.
 
 ### Prossimo passo
-Verificare la build Docker (`docker build -t cabianca-test:0b .`), poi fase 0c: permesso "prodotti" (impostazioni/index.html, 3 punti), gruppo PRODOTTI nel menu, pacchetto `app/moduli/prodotti/` con `schema.py` (schema_versione, copia pre-migrazione, guardia) e pagina iniziale.
+Modulo, passo 1: migrazione 2 in `app/moduli/prodotti/schema.py` (materie_prime, prodotti, ricette, ricette_righe, lotti, lotti_ingredienti, formati_etichetta, stampe_etichette, con trigger anti-cancellazione su lotti/lotti_ingredienti/stampe), `models.py` con `__bind_key__="prodotti"` che rispecchia le tabelle, poi CRUD materie prime → prodotti → ricette (versioni). Allergeni UE: lista fissa in `services/allergeni.py`.

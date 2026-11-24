@@ -1,0 +1,29 @@
+/* Stile delle pagine del modulo Prodotti (tema oro/bronzo, come il punto del menu).
+   Caricato da prodotti/_base.html. Segue lo schema dei temi del nucleo (.theme-allevamento in style.css). */
+:root {
+    --cb-prod: #8a6d3b;        /* testo e pulsanti: abbastanza scuro da leggersi su bianco */
+    --cb-prod-dark: #6b5229;
+    --cb-prod-light: #f5efe3;
+    --cb-prod-mid: #e9dcc2;
+}
+
+.theme-prodotti .cb-topbar { background: var(--cb-prod); }
+.theme-prodotti .cb-nav .nav-link:hover { background: var(--cb-prod-light); color: var(--cb-prod); }
+.theme-prodotti .cb-nav .nav-link.active {
+    background: var(--cb-prod-mid); color: var(--cb-prod-dark); border-left-color: var(--cb-prod);
+}
+.theme-prodotti .btn-cb { background: var(--cb-prod); }
+.theme-prodotti .btn-cb:hover { background: var(--cb-prod-dark); }
+.theme-prodotti .btn-cb-outline { border-color: var(--cb-prod); color: var(--cb-prod); }
+.theme-prodotti .btn-cb-outline:hover { background: var(--cb-prod); color: #fff; }
+.theme-prodotti .form-control:focus,
+.theme-prodotti .form-select:focus { border-color: var(--cb-prod); box-shadow: 0 0 0 .2rem rgba(138,109,59,.2); }
+.theme-prodotti .cb-bottomnav-fab { background: var(--cb-prod); }
+.text-cb-prod { color: var(--cb-prod) !important; }
+
+/* Pulsante grande "Nuovo lotto" della panoramica: comodo anche col telefono e le mani occupate */
+.prod-azione-grande {
+    display: flex; align-items: center; gap: .75rem;
+    padding: 1rem 1.25rem; font-size: 1.15rem; border-radius: .75rem;
+}
+.prod-azione-grande i { font-size: 1.6rem; }

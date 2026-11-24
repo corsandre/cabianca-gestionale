@@ -21,9 +21,9 @@
                         <td>{{ u.display_name }}</td>
                         <td><span class="badge bg-secondary">{{ u.role }}</span></td>
                         <td>
-                            {% for sec in ['finanza', 'allevamento', 'soccida'] %}
+                            {% for sec in ['finanza', 'allevamento', 'soccida', 'prodotti'] %}
                             {% if u.has_section(sec) %}
-                            <span class="badge" style="background: {% if sec == 'finanza' %}var(--cb-green){% else %}#c2185b{% endif %}">{{ sec }}</span>
+                            <span class="badge" style="background: {% if sec == 'finanza' %}var(--cb-green){% elif sec == 'prodotti' %}#a8884a{% else %}#c2185b{% endif %}">{{ sec }}</span>
                             {% endif %}
                             {% endfor %}
                         </td>
@@ -73,7 +73,7 @@
                                 </div>
                                 <div class="mb-2">
                                     <label class="form-label form-label-sm mb-1 text-muted small">Sezioni accessibili</label>
-                                    <div class="d-flex gap-3">
+                                    <div class="d-flex flex-wrap gap-3">
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" name="sections" value="finanza" id="editsec_finanza{{ u.id }}" {{ 'checked' if u.has_section('finanza') }}>
                                             <label class="form-check-label" for="editsec_finanza{{ u.id }}">Finanza</label>
@@ -85,6 +85,10 @@
                                         <div class="form-check" title="Vede la scheda Soccida con i calcoli, senza poter modificare. Serve anche Allevamento Suini.">
                                             <input class="form-check-input" type="checkbox" name="sections" value="soccida" id="editsec_soccida{{ u.id }}" {{ 'checked' if u.has_section('soccida') }}>
                                             <label class="form-check-label" for="editsec_soccida{{ u.id }}">Soccida (sola lettura)</label>
+                                        </div>
+                                        <div class="form-check" title="Ricettario, libro lotti ed etichette dei prodotti trasformati (modulo Prodotti).">
+                                            <input class="form-check-input" type="checkbox" name="sections" value="prodotti" id="editsec_prodotti{{ u.id }}" {{ 'checked' if u.has_section('prodotti') }}>
+                                            <label class="form-check-label" for="editsec_prodotti{{ u.id }}">Prodotti</label>
                                         </div>
                                     </div>
                                 </div>
@@ -120,7 +124,7 @@
                 </div>
                 <div class="col-12">
                     <label class="form-label form-label-sm mb-1 text-muted small">Sezioni accessibili</label>
-                    <div class="d-flex gap-3">
+                    <div class="d-flex flex-wrap gap-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="sections" value="finanza" id="sec_finanza" checked>
                             <label class="form-check-label" for="sec_finanza">Finanza</label>
@@ -132,6 +136,10 @@
                         <div class="form-check" title="Vede la scheda Soccida con i calcoli, senza poter modificare. Serve anche Allevamento Suini.">
                             <input class="form-check-input" type="checkbox" name="sections" value="soccida" id="sec_soccida">
                             <label class="form-check-label" for="sec_soccida">Soccida (sola lettura)</label>
+                        </div>
+                        <div class="form-check" title="Ricettario, libro lotti ed etichette dei prodotti trasformati (modulo Prodotti).">
+                            <input class="form-check-input" type="checkbox" name="sections" value="prodotti" id="sec_prodotti">
+                            <label class="form-check-label" for="sec_prodotti">Prodotti</label>
                         </div>
                     </div>
                 </div>

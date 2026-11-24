@@ -172,6 +172,12 @@
     </div>
     {% endif %}
 
+    {# MODULI (app/moduli): ogni modulo attivo porta il suo gruppo di menu in <nome>/_menu.html.
+       Il nucleo non conosce le voci dei moduli; il permesso lo controlla il _menu.html del modulo. #}
+    {% for nome_modulo in moduli_attivi %}
+    {% include nome_modulo ~ '/_menu.html' ignore missing %}
+    {% endfor %}
+
     <li class="cb-nav-divider"></li>
 
     <!-- IMPOSTAZIONI GENERALI (solo admin, fuori dai gruppi) -->
@@ -182,5 +188,5 @@
         </a>
     </li>
     {% endif %}
-    <li class="nav-item px-3 pt-2 pb-3 small text-muted" title="Versione del gestionale">v{{ versione }}</li>
+    <li class="nav-item px-3 pt-2 pb-3 small text-muted" title="Versione del gestionale e dei moduli">v{{ versione }}{% for n, v in versioni_moduli.items() %} · {{ n }} {{ v }}{% endfor %}</li>
 </ul>

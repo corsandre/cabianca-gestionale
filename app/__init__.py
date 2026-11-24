@@ -36,6 +36,11 @@ def create_app():
         abs_path = os.path.join(app.root_path, "..", db_path)
         app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{os.path.abspath(abs_path)}"
 
+    # Database dei moduli (data/<modulo>.db) come "bind" di SQLAlchemy: vanno dichiarati prima di init_app
+    if carica_moduli(ruolo):
+        from app import moduli as _moduli
+        _moduli.configura_database(app)
+
     # WAL + attesa se il DB è occupato (più processi scrivono insieme): vedi app/utils/sqlite.py
     from app.utils.sqlite import configura_sqlite
     configura_sqlite()
@@ -197,7 +202,9 @@ def create_app():
 
     @app.context_processor
     def inject_globals():
-        current_section = BLUEPRINT_SECTION_MAP.get(request.blueprint, 'finanza')
+        # sezione (= tema colori): nucleo dalla mappa; un modulo usa il suo nome (es. theme-prodotti)
+        current_section = BLUEPRINT_SECTION_MAP.get(request.blueprint) or (
+            request.blueprint if request.blueprint in app.extensions.get("moduli", {}) else 'finanza')
         from app.version import VERSIONE
         from app import moduli
         stati = app.extensions.get("moduli", {})

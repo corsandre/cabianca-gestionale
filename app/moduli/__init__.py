@@ -27,7 +27,9 @@ import threading
 log = logging.getLogger(__name__)
 
 # nome → pacchetto. Aggiungere qui un modulo nuovo.
-MODULI_DISPONIBILI = {}
+MODULI_DISPONIBILI = {
+    "prodotti": "app.moduli.prodotti",     # ricettario, libro lotti, etichette (dalla 3.4.1)
+}
 
 
 def moduli_richiesti():
@@ -39,6 +41,37 @@ def moduli_richiesti():
     if sconosciuti:
         log.warning("MODULI: ignoro i moduli sconosciuti %s", sconosciuti)
     return [n for n in nomi if n in MODULI_DISPONIBILI]
+
+
+def configura_database(app):
+    """Aggiunge a SQLALCHEMY_BINDS il database di ogni modulo richiesto che ne dichiara uno.
+
+    Va chiamata da create_app PRIMA di db.init_app: Flask-SQLAlchemy crea i motori dei database
+    una volta sola, all'init. Il file sta nella stessa cartella di gestionale.db (data/) con il
+    nome dichiarato dal modulo (attributo DATABASE, es. "prodotti.db"); la chiave del bind è il
+    nome del modulo, da usare nei modelli come __bind_key__.
+    Se un modulo non si importa, qui si salta in silenzio: l'errore lo registra carica().
+    """
+    uri = app.config["SQLALCHEMY_DATABASE_URI"]
+    if not uri.startswith("sqlite:///"):
+        return
+    cartella = os.path.dirname(uri[len("sqlite:///"):])
+    binds = dict(app.config.get("SQLALCHEMY_BINDS") or {})
+    for nome in moduli_richiesti():
+        try:
+            mod = importlib.import_module(MODULI_DISPONIBILI[nome])
+        except Exception:
+            continue
+        file_db = getattr(mod, "DATABASE", None)
+        if file_db:
+            binds[nome] = f"sqlite:///{os.path.join(cartella, file_db)}"
+    app.config["SQLALCHEMY_BINDS"] = binds
+
+
+def percorso_database(app, nome):
+    """Percorso del file SQLite del modulo `nome` (per le migrazioni con sqlite3 e i backup)."""
+    uri = (app.config.get("SQLALCHEMY_BINDS") or {}).get(nome, "")
+    return uri[len("sqlite:///"):] if uri.startswith("sqlite:///") else None
 
 
 def carica(app, migra):

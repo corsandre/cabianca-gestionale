@@ -181,7 +181,7 @@ class TestRegistroModuli(TestAvvioRuoli):
         buono = self._modulo_finto("buono")
         self._modulo_finto("rotto", guasto=True)
         with mock.patch.dict(moduli.MODULI_DISPONIBILI,
-                             {"buono": "modulo_finto_buono", "rotto": "modulo_finto_rotto"}), \
+                             {"buono": "modulo_finto_buono", "rotto": "modulo_finto_rotto"}, clear=True), \
                 mock.patch.object(moduli, "_avvisa") as avvisa:
             a, _, _ = self._crea("sviluppo")
             self.assertEqual(moduli.attivi(a), ["buono"])
@@ -197,7 +197,7 @@ class TestRegistroModuli(TestAvvioRuoli):
     def test_servizi_non_migra_i_moduli_e_moduli_vuoto(self):
         from app import moduli
         buono = self._modulo_finto("buono")
-        with mock.patch.dict(moduli.MODULI_DISPONIBILI, {"buono": "modulo_finto_buono"}):
+        with mock.patch.dict(moduli.MODULI_DISPONIBILI, {"buono": "modulo_finto_buono"}, clear=True):
             self._crea("web")
             buono.migrato.clear()
             a, _, _ = self._crea("servizi")
