@@ -33,6 +33,41 @@ class TestCopiaSqlite(unittest.TestCase):
             copia.close()
             self.assertFalse(os.path.exists(dst + ".tmp"))
 
+    def test_ripristino_con_wal_aperto_da_altri(self):
+        """Un altro processo ha scritture nel -wal: il ripristino deve vincere e il DB restare integro."""
+        with tempfile.TemporaryDirectory() as d:
+            attivo, bk, prima = (os.path.join(d, n) for n in ("g.db", "bk.db", "prima.db"))
+            con = sqlite3.connect(attivo)
+            con.execute("PRAGMA journal_mode=WAL")
+            con.execute("CREATE TABLE t (x)")
+            con.execute("INSERT INTO t VALUES ('vecchio')")
+            con.commit()
+            self.assertEqual(bs.copia_sqlite(attivo, bk), "ok")
+            altro = sqlite3.connect(attivo)                 # es. il container servizi
+            altro.execute("PRAGMA wal_autocheckpoint=0")
+            altro.execute("INSERT INTO t VALUES ('scritto dopo il backup')")
+            altro.commit()
+            self.assertEqual(bs.ripristina_sqlite(bk, attivo, copia_prima=prima), "ok")
+            self.assertEqual(altro.execute("SELECT x FROM t").fetchall(), [("vecchio",)])
+            self.assertEqual(altro.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+            altro.close()
+            con.close()
+            nuovo = sqlite3.connect(attivo)
+            self.assertEqual(nuovo.execute("SELECT count(*) FROM t").fetchone()[0], 1)
+            nuovo.close()
+            salvato = sqlite3.connect(prima)                # lo stato prima del ripristino è conservato
+            self.assertEqual(salvato.execute("SELECT count(*) FROM t").fetchone()[0], 2)
+            salvato.close()
+
+    def test_ripristino_rifiuta_backup_rovinato(self):
+        with tempfile.TemporaryDirectory() as d:
+            attivo, bk = os.path.join(d, "g.db"), os.path.join(d, "bk.db")
+            sqlite3.connect(attivo).execute("CREATE TABLE t (x)").connection.commit()
+            with open(bk, "wb") as f:
+                f.write(b"SQLite format 3\x00" + b"\x00" * 200)
+            self.assertNotEqual(bs.ripristina_sqlite(bk, attivo), "ok")
+            self.assertEqual(sqlite3.connect(attivo).execute("SELECT count(*) FROM t").fetchone()[0], 0)
+
     def test_database_da_salvare_esclude_prove(self):
         with tempfile.TemporaryDirectory() as d:
             for f in ("gestionale.db", "prodotti.db", "_test.db", "gestionale.db-wal", "note.txt"):

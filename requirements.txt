@@ -18,3 +18,8 @@ beautifulsoup4==4.12.3
 paramiko==3.5.1
 Pillow==11.1.0
 pypdf==5.1.0
+# Modulo Prodotti (dalla 3.4.0): PDF delle etichette e dei registri, export Excel.
+# Messi già nel nucleo perché cambiare requirements.txt richiede il deploy "tutto" (scripts/deploy.sh).
+weasyprint==65.1
+pydyf==0.13.0
+openpyxl==3.1.5

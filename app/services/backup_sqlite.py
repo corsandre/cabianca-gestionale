@@ -41,6 +41,41 @@ def copia_sqlite(sorgente, destinazione):
     return esito
 
 
+def ripristina_sqlite(backup, database_attivo, copia_prima=None):
+    """Riporta `database_attivo` al contenuto del file `backup`, anche mentre altri processi lo usano.
+
+    NON si deve copiare il file di backup sopra il database (shutil.copy): in modalità WAL le
+    scritture ancora nel file -wal verrebbero riapplicate sopra il database ripristinato e lo
+    corromperebbero. L'API di backup di sqlite3 scrive invece "dentro" SQLite, che avvisa da solo
+    le altre connessioni (sito, servizi, impianto).
+
+    1. controlla che il backup sia integro (altrimenti non tocca niente);
+    2. se `copia_prima` è dato, salva lì lo stato attuale (per poter annullare il ripristino);
+    3. copia il backup nel database attivo.
+    Restituisce "ok" oppure il motivo per cui non ha ripristinato.
+    """
+    src = sqlite3.connect(f"file:{backup}?mode=ro", uri=True, timeout=30)
+    try:
+        try:
+            esito = src.execute("PRAGMA integrity_check").fetchone()[0]
+        except sqlite3.DatabaseError as e:
+            esito = str(e)
+        if esito != "ok":
+            return f"backup non integro: {esito}"
+        if copia_prima:
+            esito_copia = copia_sqlite(database_attivo, copia_prima)
+            if esito_copia != "ok":
+                return f"copia dello stato attuale non riuscita: {esito_copia}"
+        dst = sqlite3.connect(database_attivo, timeout=30)
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+    finally:
+        src.close()
+    return "ok"
+
+
 def database_da_salvare(cartella_dati):
     """Tutti i database del gestionale in data/: gestionale.db, prodotti.db e i futuri moduli.
 

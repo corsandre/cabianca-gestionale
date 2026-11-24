@@ -1,7 +1,18 @@
+# Gestionale Ca' Bianca – tre container con lo stesso codice e ruoli diversi (RUOLO, vedi app/ruoli.py).
+#
+#   web       il sito (gunicorn). Unico che aggiorna lo schema dei database. Carica i moduli (MODULI).
+#   servizi   scheduler (backup, cassa, email, fatture, avvisi) + bot Telegram. Niente sito.
+#   impianto  sorveglianza dell'impianto di alimentazione (app/services/impianto/servizio.py).
+#
+# Immagini separate, così aggiornare il sito non cambia il codice di servizi e impianto nemmeno
+# quando questi ripartono da soli:
+#   cabianca-gestionale:web       la costruisce `docker compose build web`
+#   cabianca-gestionale:servizi   la crea scripts/deploy.sh tutto (copia dell'immagine web)
+# Come aggiornare: scripts/deploy.sh sito | tutto (README, sezione "Moduli").
 services:
   web:
     build: .
-    image: cabianca-gestionale:latest
+    image: cabianca-gestionale:web
     pull_policy: build          # immagine locale: mai scaricarla da internet
     ports:
       - "${APP_BIND:-0.0.0.0}:${APP_PORT:-8080}:8080"
@@ -11,16 +22,31 @@ services:
       - ./app/static/uploads:/app/app/static/uploads
     env_file:
       - .env
+    environment:
+      - RUOLO=web
+      - MODULI=${MODULI:-tutti}
+    restart: unless-stopped
+
+  servizi:
+    image: cabianca-gestionale:servizi
+    pull_policy: never
+    command: python -m app.servizi
+    volumes:
+      - ./data:/app/data
+      - ./backups:/app/backups
+      - ./app/static/uploads:/app/app/static/uploads
+    env_file:
+      - .env
+    environment:
+      - RUOLO=servizi
+      - MODULI=${MODULI:-tutti}
     restart: unless-stopped
 
   # Sorveglianza dell'impianto di alimentazione (vedi app/services/impianto/servizio.py).
   # In modalità "Manuale" (default) non si collega a niente e resta in attesa.
-  # Stessa immagine del gestionale (costruita dal servizio web), parte dopo di lui.
   impianto:
-    image: cabianca-gestionale:latest
+    image: cabianca-gestionale:servizi
     pull_policy: never
-    depends_on:
-      - web
     command: python -m app.services.impianto.servizio
     volumes:
       - ./data:/app/data

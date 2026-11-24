@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user, logout_user
 import bcrypt
@@ -221,8 +220,17 @@ def restore_backup():
         uri = current_app.config["SQLALCHEMY_DATABASE_URI"]
         db_path = uri.replace("sqlite:///", "")
 
+        # Dalla 3.4.0: ripristino con l'API di sqlite3 (in WAL copiare il file corromperebbe il DB)
+        # e copia dello stato attuale in backups/gestionale_pre-ripristino_*.db per poter annullare.
+        from datetime import datetime
+        from app.services.backup_sqlite import ripristina_sqlite
+        db.session.remove()
         db.engine.dispose()
-        shutil.copy2(backup_path, db_path)
+        prima = os.path.join(backup_dir, f"gestionale_pre-ripristino_{datetime.now():%Y%m%d_%H%M%S}.db")
+        esito = ripristina_sqlite(backup_path, db_path, copia_prima=prima)
+        if esito != "ok":
+            flash(f"Ripristino non eseguito: {esito}", "danger")
+            return redirect(url_for("impostazioni.index"))
 
         logout_user()
         flash("Ripristino completato. Effettua nuovamente il login.", "success")

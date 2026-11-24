@@ -289,11 +289,11 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 
 ### Fase 0b – 3.4.0 (ruoli e container servizi)
 - [x] RUOLO (completo/web/servizi/impianto/sviluppo) → `app/ruoli.py`; `_init_db_nucleo` solo chi migra; gli altri aspettano `Setting schema_nucleo` (`_attendi_schema_nucleo`)
-- [ ] app/servizi.py + servizio compose `servizi`
+- [x] app/servizi.py + servizio compose `servizi` (provato: avvio, scheduler, chiusura con SIGTERM); immagini `cabianca-gestionale:web` e `:servizi`
 - [x] app/moduli/ registro + MODULI + /salute (`app/routes/salute.py`) + messaggio Telegram `messaggio_avvio_sito` — provato con RUOLO sviluppo e web
-- [ ] scripts/deploy.sh (sito/tutto), tag immagini
-- [ ] Dockerfile librerie WeasyPrint
-- [ ] tests/test_avvio_ruoli.py
+- [x] scripts/deploy.sh (sito / tutto / indietro), copia pre-deploy che funziona anche con l'immagine vecchia
+- [x] Dockerfile librerie WeasyPrint + requirements (weasyprint 65.1, pydyf 0.13, openpyxl 3.1.5; la 62.3 non funziona con pydyf 0.13)
+- [x] tests/test_avvio_ruoli.py (ruoli, moduli finti buono/guasto, tutte le pagine GET senza 500) — gira solo con `.venv`
 - [ ] README sezione "Moduli"
 
 ### Fase 0c – 3.4.1 (modulo vuoto)
@@ -309,9 +309,9 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 
 ### Diario
 - 24/11/2026 – piano approvato, creato il ramo.
+- 25/11/2026 – CORRETTO un rischio del WAL: il ripristino da Impostazioni copiava il file sopra il DB (con il -wal aperto lo avrebbe corrotto). Ora `ripristina_sqlite` usa l'API di sqlite3 e salva prima `gestionale_pre-ripristino_*.db`.
 - 24/11/2026 – fase 0b avviata: ruoli, registro moduli, /salute (commit successivo al 3.3.3).
 - 24/11/2026 – fase 0a completata (3.3.3). Ambiente locale: `.venv` (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`), test con `.venv/bin/python -m unittest discover -s tests`.
 
 ### Prossimo passo
-Fase 0b, da continuare: 1) `app/servizi.py` (`python -m app.servizi`: create_app con RUOLO=servizi, resta in attesa, chiude lo scheduler su SIGTERM); 2) `docker-compose.yml`: RUOLO=web e MODULI per `web`, nuovo servizio `servizi`, porta 127.0.0.1, tag immagine con la versione; 3) Dockerfile con le librerie di WeasyPrint; 4) `scripts/deploy.sh sito|tutto`; 5) `tests/test_avvio_ruoli.py`; 6) README "Moduli"; 7) versione 3.4.0.
-Nota: il default di RUOLO è `completo` (come prima), quindi il codice attuale è retrocompatibile.
+Fase 0b, ultimi punti: README (architettura, variabili RUOLO/MODULI/ATTESA_SCHEMA_SECONDI, sezione "Moduli", deploy con scripts/deploy.sh, backup/ripristino), versione 3.4.0, `graphify update .`. Poi fase 0c (permesso e modulo vuoto).
