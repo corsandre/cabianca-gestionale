@@ -320,14 +320,19 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
   - [x] pagina «Formati e stili» (`formati.html`): formati modificabili dall'admin con controllo, foglio di calibrazione PDF, prova con etichetta d'esempio, stile attivo, piede, produttore
 - [x] 4. export + richiamo: `routes/esporta.py` (libro lotti PDF orizzontale + Excel «Lotti»/«Ingredienti»; ricettario PDF una ricetta per pagina, anche singola, + Excel), `routes/richiamo.py` + `richiamo.html` (ricerca per materia/lotto fornitore/fornitore/periodo, ritiro in blocco con motivo, PDF); filtri condivisi `lotti_filtrati`
 - [x] 5. import catalogo: `scripts/importa_etichette.py estrai|carica` + bozza `docs/import/catalogo-etichette.json` (70 cartelle → 68 prodotti, ~94 materie prime con allergeni PROPOSTI, tutto «da ricontrollare»; idempotente; sigle uniche). In produzione: dopo il rilascio, `docker compose exec web python scripts/importa_etichette.py carica docs/import/catalogo-etichette.json /app/data/prodotti.db`
-- [ ] 6. test, README, graphify
+- [x] 6. test, README (sezione «Prodotti (modulo)»), `LEGGIMI.md` del modulo completo, `graphify update .`
 
 ### Diario
 - 24/11/2026 – piano approvato, creato il ramo.
+- 25/11/2026 – modulo Prodotti completo sul ramo (passi 1–6), provato con i test e nel browser (Chromium via DevTools). In attesa di: approvazione stile, scelta dei fogli, decisione sul rilascio.
 - 25/11/2026 – fasi 0b e 0c completate (3.4.0, 3.4.1).
 - 25/11/2026 – CORRETTO un rischio del WAL: il ripristino da Impostazioni copiava il file sopra il DB (con il -wal aperto lo avrebbe corrotto). Ora `ripristina_sqlite` usa l'API di sqlite3 e salva prima `gestionale_pre-ripristino_*.db`.
 - 24/11/2026 – fase 0b avviata: ruoli, registro moduli, /salute (commit successivo al 3.3.3).
 - 24/11/2026 – fase 0a completata (3.3.3). Ambiente locale: `.venv` (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`), test con `.venv/bin/python -m unittest discover -s tests`.
 
 ### Prossimo passo
-Passo 6: README (sezione «Prodotti»: flussi d'uso, etichette, export, richiamo, import), `app/moduli/prodotti/LEGGIMI.md` aggiornato con tutti i file, `graphify update .`, build Docker di prova con il modulo completo, copia del piano aggiornato in `~/Desktop/etichette/`. Restano da decidere con Andrea: approvazione dello stile (prova sul Desktop), formati da acquistare, quando rilasciare (fasi 0a → 0b → 0c → modulo).
+Sviluppo completo. Aspettando Andrea:
+1. **Stile**: approvare o correggere `~/Desktop/etichette/prova-stile-etichette-2026.pdf` (modifiche in `templates/prodotti/etichette/stili/base-2026/stile.css`; rigenerare con `scripts/prova_stile_etichette.py`).
+2. **Fogli**: comprare i formati proposti (tabella nel piano), misurarli e correggere in «Formati e stili»; stampare il foglio di calibrazione.
+3. **Rilascio** (solo quando lo chiede): merge su master e deploy a fasi — 0a (3.3.3) con il vecchio metodo; 0b (3.4.0) primo passaggio con `scripts/deploy.sh tutto` (README «Primo passaggio alla 3.4.0»); 0c + modulo con `deploy.sh sito`; poi `importa_etichette.py carica` in produzione.
+Idee rimandate: bollino tondo per il tappo, stampa da una posizione N del foglio, tabella nutrizionale.

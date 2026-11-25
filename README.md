@@ -14,6 +14,7 @@ per le operazioni quotidiane di stalla. Dalla versione 2.0 può collegarsi al PC
   - [Finanza](#finanza-tema-verde)
   - [Allevamento Suini](#allevamento-suini-tema-rosa)
   - [Impianto di alimentazione](#impianto-di-alimentazione-collegamento-al-pc-dalla-20)
+  - [Prodotti (modulo)](#prodotti-modulo-tema-oro--dalla-34)
 - [Bot Telegram](#bot-telegram)
 - [Funzionalità trasversali](#funzionalità-trasversali)
 - [Utenti, ruoli e accesso alle sezioni](#utenti-ruoli-e-accesso-alle-sezioni)
@@ -685,6 +686,49 @@ Stato che il servizio ricorda nelle impostazioni (`settings`): `impianto_vuoto_s
 | `routes/impianto.py` | Impostazioni, chiave, prova, fotografie, approvazione/scarto delle letture |
 
 ---
+
+### Prodotti (modulo, tema oro – dalla 3.4)
+
+Ricettario, libro dei lotti ed etichette dei prodotti trasformati (marmellate, mostarde, conserve, pasta
+ripiena, salumi…), pensato per i controlli NAS/ATS: per ogni lotto si registrano gli ingredienti usati con
+fornitore e lotto del fornitore (rintracciabilità «un passo indietro», Reg. CE 178/2002) e si stampano le
+etichette (Reg. UE 1169/2011). È un modulo a sé (`app/moduli/prodotti/`, database `data/prodotti.db`):
+mappa dei file in `app/moduli/prodotti/LEGGIMI.md`, piano e decisioni in `docs/piano-prodotti.md`.
+Accesso: sezione **Prodotti** in Impostazioni → utenti; il consulente vede ma non modifica.
+
+| Pagina | Cosa si fa |
+|---|---|
+| **Panoramica** | pulsante grande «Nuovo lotto», prodotti fatti di recente da rifare con un tocco, ultimi lotti, avvisi |
+| **Libro lotti** | elenco con filtri (periodo, prodotto, stato, codice) e stato della tracciabilità; **PDF per il controllo** ed Excel |
+| **Scheda lotto** | ingredienti e provenienza, testo in etichetta, **etichette** (anteprima, PDF da stampare, archivio), storico delle correzioni, stato (esaurito / ritirato / annullato con motivo) |
+| **Catalogo** | prodotti con i dati di etichetta (nome, denominazione, peso, formato, scadenza, conservazione, tracce, produttore) |
+| **Ricettario** | ricette con versioni; editor con elenco ingredienti di legge in anteprima; PDF ed Excel |
+| **Materie prime** | ingredienti con nome in etichetta, allergeni, fornitore abituale o produzione propria |
+| **Richiamo** | dato un lotto di materia prima (o un fornitore), i lotti di prodotto che lo contengono; ritiro in blocco; PDF |
+| **Formati e stili** | fogli A4 pretagliati, foglio di calibrazione della stampante, stile delle etichette, piede |
+
+**Nuovo lotto** (finestra in 3 passi, comoda anche dal telefono): 1) il prodotto; 2) data, pezzi, ricetta:
+codice (`L` + GGMMAA + `-SIGLA`, es. `L241126-ZUC`; `-2` se nello stesso giorno c'è già) e scadenza sono
+calcolati, le quantità scalate sui pezzi, fornitore e lotto del fornitore **ripresi dall'ultimo lotto**
+(icona ✨ da ricontrollare); 3) elenco ingredienti in etichetta (automatico, modificabile per il lotto).
+
+**Regole del registro** (garantite dal database, `schema.py`): i lotti e le etichette stampate non si
+cancellano; le correzioni ai lotti sono permesse ma finiscono nello **storico** con chi e quando; una
+ricetta usata in un lotto non cambia più (salvando si crea una nuova versione). Il lotto conserva una copia
+dei dati di etichetta del momento.
+
+**Etichette**: generate in PDF con WeasyPrint dallo stile attivo (`templates/prodotti/etichette/stili/`,
+oggi `base-2026`: sfondo bianco, poco toner). Il testo si adatta da solo all'etichetta (ingrandisce o
+riduce) e c'è un avviso se scende sotto il corpo minimo di legge (altezza della x 1,2 mm ≈ 6,4 pt). Sulle
+etichette piccole si può stampare **fronte e retro** (due etichette per confezione). Stampare sempre in
+dimensione reale (100%). Ogni stampa è archiviata (`data/prodotti/etichette/AAAA/`, con impronta sha256).
+Uno stile nuovo si crea copiando la cartella dello stile (vedi il suo `LEGGIMI.md`) e si prova con
+`scripts/prova_stile_etichette.py`.
+
+**Catalogo iniziale**: `scripts/importa_etichette.py` legge le etichette storiche e prepara la bozza
+`docs/import/catalogo-etichette.json`; dopo il rilascio si carica con
+`docker compose exec web python scripts/importa_etichette.py carica docs/import/catalogo-etichette.json /app/data/prodotti.db`
+(prodotti e materie prime arrivano «da ricontrollare»; le ricette con le quantità si inseriscono a mano).
 
 ## Bot Telegram
 
