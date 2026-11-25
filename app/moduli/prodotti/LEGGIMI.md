@@ -58,3 +58,4 @@ Fuori dalla cartella: `scripts/importa_etichette.py` (catalogo dalle etichette s
 | Versione | Contenuto |
 |---|---|
 | 1.0.0 | catalogo, ricettario con versioni, libro lotti con storico, etichette (stile base-2026), export, richiamo, import |
+| 1.0.1 | etichette disegnate una alla volta (lucchetto su WeasyPrint): due anteprime contemporanee facevano cadere il sito (502, 25/11/2026) |

@@ -15,6 +15,7 @@ l'altezza della x è circa 0,53 volte il corpo: 1,2 mm ≈ 6,5 pt, 0,9 mm ≈ 4,
 """
 import hashlib
 import os
+import threading
 
 PT_PER_MM = 72 / 25.4
 ALTEZZA_X_FIRA = 0.527                 # altezza della x / corpo, per Fira Sans
@@ -61,6 +62,13 @@ def soglia_pt(piccola_confezione=False):
 
 # ---------------------------------------------------------------- WeasyPrint
 
+# WeasyPrint (con Pango, HarfBuzz e fontconfig sotto) NON regge due disegni contemporanei nello stesso processo.
+# Il sito ha 2 thread (gunicorn.conf.py): il 25/11/2026 due anteprime chieste insieme hanno corrotto la memoria
+# ("free(): invalid next size") e fatto cadere il sito con un 502. Per questo ogni uso di WeasyPrint passa da
+# questo lucchetto. È rientrante perché scala_che_ci_sta chiama sborda.
+_WEASYPRINT = threading.RLock()
+
+
 def _documento(html, base_url):
     from weasyprint import HTML
     return HTML(string=html, base_url=base_url).render()
@@ -79,6 +87,11 @@ def _discendenti(box):
 
 def sborda(html, base_url, tolleranza_mm=0.3):
     """True se in qualche elemento .etichetta un testo finisce oltre il bordo inferiore (o destro)."""
+    with _WEASYPRINT:                                  # anche la lettura dei box usa oggetti di Pango
+        return _sborda(html, base_url, tolleranza_mm)
+
+
+def _sborda(html, base_url, tolleranza_mm):
     doc = _documento(html, base_url)
     if len(doc.pages) > 1:
         return True                                    # quel che non ci sta finisce su una pagina in più
@@ -104,6 +117,11 @@ def scala_che_ci_sta(componi_html, base_url, minima=0.5, massima=1.4, passi=6):
     `componi_html(scala)` restituisce l'HTML di UNA etichetta a quella scala. Se nemmeno la minima
     ci sta, restituisce la minima (e chi chiama avvisa).
     """
+    with _WEASYPRINT:                                  # tutta la ricerca in fila: niente misure intrecciate
+        return _scala_che_ci_sta(componi_html, base_url, minima, massima, passi)
+
+
+def _scala_che_ci_sta(componi_html, base_url, minima, massima, passi):
     if not sborda(componi_html(massima), base_url):
         return massima
     basso, alto = minima, massima
@@ -120,7 +138,8 @@ def scala_che_ci_sta(componi_html, base_url, minima=0.5, massima=1.4, passi=6):
 
 def pdf(html, base_url):
     """PDF (bytes) e la sua impronta sha256."""
-    dati = _documento(html, base_url).write_pdf()
+    with _WEASYPRINT:
+        dati = _documento(html, base_url).write_pdf()
     return dati, hashlib.sha256(dati).hexdigest()
 
 
