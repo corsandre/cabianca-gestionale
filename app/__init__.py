@@ -669,6 +669,27 @@ def _init_scheduler(app):
         # ogni mattina, dopo lo scarico delle fatture delle 8:30: righe delle fatture di siero e confronto con le consegne
         scheduler.add_job(fatture_siero, "cron", hour=8, minute=45)
         scheduler.add_job(run_backup, "cron", hour=backup_hour, minute=backup_minute, id="backup")
+
+        # Dalla 3.4.0 lo scheduler vive nel container "servizi", mentre l'orario del backup si cambia
+        # dal sito (Impostazioni › Backup, altro processo): ogni 5 minuti si rilegge dal DB e, se è
+        # cambiato, si sposta il job.
+        orario_backup = {"v": (backup_hour, backup_minute)}
+
+        def aggiorna_orario_backup():
+            with app.app_context():
+                try:
+                    from app.models import Setting
+                    h, m = Setting.query.get("backup_hour"), Setting.query.get("backup_minute")
+                    nuovo = (int(h.value) if h else 2, int(m.value) if m else 0)
+                    db.session.remove()
+                    if nuovo != orario_backup["v"]:
+                        scheduler.reschedule_job("backup", trigger="cron", hour=nuovo[0], minute=nuovo[1])
+                        orario_backup["v"] = nuovo
+                        app.logger.info(f"Orario del backup aggiornato: {nuovo[0]:02d}:{nuovo[1]:02d}")
+                except Exception as e:
+                    app.logger.warning(f"Orario del backup non riletto: {e}")
+
+        scheduler.add_job(aggiorna_orario_backup, "interval", minutes=5)
         if app.config.get("CLOUD_OFFICE_USER") and app.config.get("CLOUD_OFFICE_PASSWORD"):
             scheduler.add_job(sync_cassa, "cron", hour=4, minute=0)
         scheduler.add_job(check_deadlines, "cron", hour=8, minute=0)

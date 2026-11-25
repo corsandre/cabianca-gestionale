@@ -1056,6 +1056,72 @@ parte senza fermare le altre. Piano e motivazioni: `docs/piano-prodotti.md`.
 - Un modulo nuovo o aggiornato si pubblica con `scripts/deploy.sh sito`.
 - Se un modulo deve aggiungere lavori programmati, quel codice gira in `servizi`: serve `deploy.sh tutto`.
 
+### Guida rapida: sviluppi e correzioni futuri
+
+Ricetta passo passo. Vale per Andrea e per chi riprende il codice, anche un'altra sessione di Claude.
+
+**0. Prima di toccare il codice**
+- Lavorare su un ramo: `git switch -c correzione/<cosa>` (oppure `sviluppo/<cosa>` per una funzione nuova). Su
+  `master` va solo ciò che è pronto per la produzione.
+- Capire dove mettere le mani:
+  - **finanza, allevamento, impianto, utenti, menu** → nucleo (`app/routes`, `app/services`, `app/models.py`);
+  - **ricettario, lotti, etichette** → modulo `app/moduli/prodotti/` (mappa in `app/moduli/prodotti/LEGGIMI.md`).
+- Con il grafo: `graphify query "<domanda>"` (vedi `CLAUDE.md`).
+
+**1. Provare in locale (mai con `docker compose up`)**
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt      # una volta sola
+.venv/bin/python -W ignore -m unittest discover -s tests                # tutti i test (devono passare)
+RUOLO=sviluppo TELEGRAM_BOT_TOKEN= SMTP_USER= IMAP_HOST= CLOUD_OFFICE_USER= \
+  DATABASE_URL=sqlite:///$PWD/data/_test.db .venv/bin/flask --app app run --port 5050
+```
+Il `.env` locale ha credenziali vere: per questo vanno svuotate sulla riga di comando. `RUOLO=sviluppo` non avvia
+il bot né lo scheduler. Per provare su dati veri si copia il DB di produzione in `data/_test.db` (comando qui sotto).
+
+**2. Cambiare lo schema dei database**
+- Nucleo: colonne nuove in `_migrate_columns` (`app/__init__.py`), tabelle nuove con il modello in `app/models.py`.
+- Modulo Prodotti: **una nuova voce in fondo a `MIGRAZIONI`** in `app/moduli/prodotti/schema.py`, con il numero
+  successivo. Non si modificano mai le migrazioni già rilasciate e si fa solo ADD (niente DROP o RENAME).
+  Esempio: la migrazione 3 (fogli con margini).
+- Aggiungere un test in `tests/test_prodotti_schema.py`.
+
+**3. Versione e commit**
+- Nucleo: `app/version.py`. Il terzo numero è per le correzioni (3.4.2), il secondo per le funzioni (3.5.0).
+- Modulo: `VERSIONE` in `app/moduli/prodotti/__init__.py` (1.0.1, 1.1.0…) e la tabella delle versioni in `LEGGIMI.md`.
+- Messaggio di commit: `3.4.2: …` oppure `prodotti 1.0.1: …`. Poi merge su `master` e `git push origin master`.
+
+**4. Pubblicare** (sul server: `ssh andrea@<server>`, poi `cd ~/cabianca-gestionale`)
+- Solo modulo Prodotti o pagine del sito → `scripts/deploy.sh sito`. Il sito si ferma 3–5 secondi; bot,
+  scheduler e impianto non si fermano.
+- Bot, scheduler, `app/services`, `app/models.py`, `requirements.txt`, `Dockerfile` → `scripts/deploy.sh tutto`.
+  Lo script se ne accorge da solo e lo propone.
+- Orario consigliato: quando non si sta producendo e dopo il pasto dei maiali.
+- Controlli dopo il deploy:
+  - `docker compose ps`: tre container `Up`;
+  - `curl -s 127.0.0.1:8080/salute`;
+  - `docker compose logs servizi --tail=30`: il bot è partito e non ci sono `409` dopo il primo minuto;
+  - nel menu compare la versione nuova.
+
+**5. Se qualcosa va storto** → [Tornare indietro](#tornare-indietro). In breve: `scripts/deploy.sh indietro sito`
+(o `tutto`). Le copie dei DB fatte prima del deploy sono in `backups/pre-deploy_<data>/`.
+
+**Copia dei dati veri per provare in locale** (sola lettura sul server, copia coerente anche con il WAL):
+```bash
+ssh andrea@<server> 'cd ~/cabianca-gestionale && docker compose exec -T web python -c "
+import sqlite3; s=sqlite3.connect(\"file:/app/data/gestionale.db?mode=ro\",uri=True); t=sqlite3.connect(\"/app/backups/_copia.db\"); s.backup(t)"'
+scp andrea@<server>:cabianca-gestionale/backups/_copia.db data/_test.db
+```
+
+**Cose da sapere**
+- Bot e scheduler girano nel container `servizi`, il sito nel container `web`: **non condividono memoria**. Tutto
+  ciò che il sito deve comunicare ai lavori programmati passa dal database (Setting). Esempio: l'orario del backup
+  viene riletto ogni 5 minuti dal job `aggiorna_orario_backup`.
+- I PDF delle etichette stampate sono in `data/prodotti/etichette/AAAA/` e non vanno mai cancellati (registro di
+  legge). Vengono salvati ogni domenica nel backup.
+- Lo stile delle etichette si aggiorna creando una cartella nuova in
+  `app/moduli/prodotti/templates/prodotti/etichette/stili/` (istruzioni nel suo `LEGGIMI.md`) e scegliendola in
+  «Formati e stili». La prova si fa con `scripts/prova_stile_etichette.py`.
+
 ### Tornare indietro
 
 1. **Solo il codice** (caso normale, sicuro perché le migrazioni aggiungono soltanto):

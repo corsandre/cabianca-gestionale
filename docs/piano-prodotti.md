@@ -280,7 +280,7 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 > Aggiornato a ogni commit. Chi riprende il lavoro (anche un'altra sessione di Claude) parte da qui:
 > leggere "Prossimo passo", poi `git log --oneline sviluppo/moduli-prodotti`.
 
-**Ramo:** `sviluppo/moduli-prodotti` (su GitHub, NON in produzione). Produzione ferma a 3.3.2 (`master`).
+**Ramo:** `sviluppo/moduli-prodotti`, unito a `master` e rilasciato in produzione il 25/11/2026 (3.4.1 + prodotti 1.0.0).
 
 ### Fase 0a – 3.3.3 (SQLite robusto + backup)
 - [x] WAL + busy_timeout (evento connect su Engine) → `app/utils/sqlite.py`
@@ -323,6 +323,9 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - [x] 6. test, README (sezione «Prodotti (modulo)»), `LEGGIMI.md` del modulo completo, `graphify update .`
 
 ### Diario
+- 25/11/2026 sera – RILASCIO in produzione (deciso da Andrea).
+  - Prova generale sulla copia dei dati veri: pagine uguali alla 3.3.2 e fatture del siero lette come prima.
+  - Corretto prima del rilascio: l'orario del backup cambiato dal sito non arrivava allo scheduler, che ora sta in un altro container. Adesso c'è il job `aggiorna_orario_backup`.
 - 24/11/2026 – piano approvato, creato il ramo.
 - 25/11/2026 – PROVA DI STAMPA di Andrea al 100%: etichette tagliate ai bordi (le stampanti non stampano negli ultimi 3–5 mm; ridurre al 96% NON va bene sui fogli pretagliati). DECISIONE: fogli A4 con margini (migrazione 3): Grande Avery L7165 99,1×67,7 (8), Medio L7163 99,1×38,1 (14), Piccolo L7160 63,5×38,1 (21), Salumi L7164 63,5×72 (12, più alto: il salame ora sta a 8,5 pt). I fogli al vivo restano spenti. Aggiunta la prova dei margini della stampante (/prodotti/formati/prova-margini.pdf). Con fronte e retro il sito va sul fronte.
 - 25/11/2026 – modulo Prodotti completo sul ramo (passi 1–6), provato con i test e nel browser (Chromium via DevTools). In attesa di: approvazione stile, scelta dei fogli, decisione sul rilascio.
@@ -332,8 +335,16 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - 24/11/2026 – fase 0a completata (3.3.3). Ambiente locale: `.venv` (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`), test con `.venv/bin/python -m unittest discover -s tests`.
 
 ### Prossimo passo
-Sviluppo completo. Aspettando Andrea:
-1. **Stile**: approvare o correggere `~/Desktop/etichette/prova-stile-etichette-2026.pdf` (modifiche in `templates/prodotti/etichette/stili/base-2026/stile.css`; rigenerare con `scripts/prova_stile_etichette.py`).
-2. **Fogli**: comprare i formati proposti (tabella nel piano), misurarli e correggere in «Formati e stili»; stampare il foglio di calibrazione.
-3. **Rilascio** (solo quando lo chiede): merge su master e deploy a fasi — 0a (3.3.3) con il vecchio metodo; 0b (3.4.0) primo passaggio con `scripts/deploy.sh tutto` (README «Primo passaggio alla 3.4.0»); 0c + modulo con `deploy.sh sito`; poi `importa_etichette.py carica` in produzione.
+**IN PRODUZIONE dal 25/11/2026 (sera)**: gestionale 3.4.1 + prodotti 1.0.0, con un unico `scripts/deploy.sh tutto`. Andrea ha chiesto di rilasciare tutto insieme invece che a fasi separate. Prima del rilascio è stata fatta una prova generale su una copia del DB di produzione:
+- tutte le pagine sono identiche alla 3.3.2, a parte il menu;
+- il job delle fatture del siero, che legge le fatture della finanza e le passa all'allevamento, rilegge una fattura con lo stesso risultato nel ruolo `servizi`;
+- le tabelle di `gestionale.db` sono invariate.
+
+Restano da fare con Andrea:
+1. **Margini della stampante**: dalla scansione (`~/Desktop/etichette/Scan25112026193949.pdf`) sopra e a sinistra la stampa arriva al bordo, a destra e in basso sembra mancare circa 5–9 mm, ma in parte la taglia lo scanner. Bisogna leggere i numeri sul foglio stampato e poi regolare lo spostamento X/Y in «Formati e stili».
+2. **Fogli**: comprare L7165, L7163, L7160, L7164 (o equivalenti), misurarli e stampare il foglio di calibrazione.
+3. **Catalogo importato** (68 prodotti «da verificare»): ricontrollare i prodotti e inserire le ricette con le quantità.
+4. Osservare per qualche giorno bot, avvisi, backup notturno (ora con `prodotti.db`), cassa ed email fatture nel container `servizi`.
+
 Idee rimandate: bollino tondo per il tappo, stampa da una posizione N del foglio, tabella nutrizionale.
+Per sviluppi e correzioni futuri: README, «Guida rapida: sviluppi e correzioni futuri».
