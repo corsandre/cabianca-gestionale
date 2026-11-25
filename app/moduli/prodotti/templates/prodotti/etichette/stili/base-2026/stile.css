@@ -53,7 +53,8 @@
   text-align: center; padding-right: 2.4mm; border-right: 0.3mm solid var(--oro); }
 .orizzontale .col-testo { width: {{ '%.2f' | format(w_testo) }}mm; box-sizing: border-box; flex: none; padding-left: 2.6mm;
   display: flex; flex-direction: column; }
-.orizzontale .col-marchio .logo { height: {{ '%.1f' | format(15 * k) }}mm; margin-bottom: {{ '%.1f' | format(1.5 * k) }}mm; }
+/* margin auto: WeasyPrint non centra le immagini con align-items del flexbox */
+.orizzontale .col-marchio .logo { height: {{ '%.1f' | format(15 * k) }}mm; margin: 0 auto {{ '%.1f' | format(1.5 * k) }}mm auto; }
 .orizzontale .col-marchio .nome { font-size: {{ fisso((15 * k + 1) * n) }}; }
 .orizzontale .col-marchio .sottotitolo { font-size: {{ fisso(6) }}; margin-top: 1mm; }
 .orizzontale .col-marchio .peso-voce { font-size: {{ fisso(5.8) }}; }
