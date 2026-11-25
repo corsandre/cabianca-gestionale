@@ -25,7 +25,8 @@ from app.utils.decorators import write_required
 
 CARTELLA_STILI = "prodotti/etichette/stili"
 PIEDE_PREDEFINITO = "www.cabianca.eu · @cabianca.eu"
-MODALITA = {"unica": "Un'etichetta per confezione", "fronte_retro": "Fronte e retro (due etichette per confezione)"}
+MODALITA = {"unica": "Un'etichetta per confezione", "fronte_retro": "Fronte e retro (due etichette per confezione)",
+            "piegata": "Piegata sul cordino (salumi: fronte e retro sulla stessa etichetta)"}
 
 
 # ---------------------------------------------------------------- aiuti
@@ -93,7 +94,47 @@ def componi(e, formato, stile, scala=1.0, modo="singola", parte="unica", pagine=
 
 
 def parti_per(modalita):
-    return ["fronte", "retro"] if modalita == "fronte_retro" else ["unica"]
+    return ["fronte", "retro"] if modalita in ("fronte_retro", "piegata") else ["unica"]
+
+
+def formato_parti(formato, modalita):
+    """Misure su cui si disegnano le parti: con «piegata» fronte e retro sono le due metà dell'etichetta
+    (services/etichette.formato_meta), altrimenti l'etichetta intera."""
+    return motore.formato_meta(formato) if modalita == "piegata" else formato
+
+
+def etichette_per_confezione(modalita):
+    """Quante etichette del foglio servono per una confezione (fronte e retro separati = 2)."""
+    return 2 if modalita == "fronte_retro" else 1
+
+
+def pdf_fogli(e, formato, stile, modalita, n_confezioni, guide=False):
+    """PDF dei fogli A4 per `n_confezioni` confezioni: ogni parte si disegna UNA volta e si copia in tutte le
+    posizioni (services/etichette.foglio_da_etichette). Una sola scala per tutto (la più piccola), così fronte
+    e retro hanno caratteri coerenti. Con `guide` sotto c'è il contorno tratteggiato delle etichette (prove su
+    carta normale). Restituisce (pdf, sha256, fogli, n_etichette, misura)."""
+    m = misura(e, formato, stile, modalita)
+    scale = m[0]
+    scala, fp = min(scale.values()), formato_parti(formato, modalita)
+    disegni = {p: motore.pdf(componi(e, fp, stile, scala, "singola", p), _cartella_modulo())[0] for p in scale}
+    if modalita == "piegata":
+        disegni = {"unica": motore.piega(disegni["fronte"], disegni["retro"], formato)}
+    parti = list(disegni)
+    elenco = [p for _ in range(n_confezioni) for p in parti]
+    posti, per_foglio = motore.posizioni(formato), len(motore.posizioni(formato))
+    pagine = [[(x, y, parte) for (x, y), parte in zip(posti, elenco[i:i + per_foglio])]
+              for i in range(0, len(elenco), per_foglio)]
+    sotto = motore.pdf(html_guide(formato), _cartella_modulo())[0] if guide else None
+    dati, impronta = motore.foglio_da_etichette(disegni, pagine, formato, sotto=sotto)
+    return dati, impronta, len(pagine), len(elenco), m
+
+
+def html_guide(formato):
+    """Pagina A4 con il contorno tratteggiato di ogni etichetta del foglio (per le prove su carta normale)."""
+    w, h = formato["larghezza_mm"], formato["altezza_mm"]
+    caselle = "".join(f'<div style="position:absolute;left:{x}mm;top:{y}mm;width:{w}mm;height:{h}mm;'
+                      f'box-sizing:border-box;border:0.2mm dashed #999"></div>' for x, y in motore.posizioni(formato))
+    return f'<!doctype html><html><head><style>@page{{size:A4;margin:0}}</style></head><body style="margin:0">{caselle}</body></html>'
 
 
 # Misure già fatte (la ricerca della scala richiede ~10 disegni): l'anteprima e poi la stampa dello stesso
@@ -132,7 +173,8 @@ def parametri_stile(stile):
 
 def _misura(e, formato, stile, modalita):
     base = _cartella_modulo()
-    scale = {p: motore.scala_che_ci_sta(lambda s, p=p: componi(e, formato, stile, s, "singola", p), base)
+    fp = formato_parti(formato, modalita)
+    scale = {p: motore.scala_che_ci_sta(lambda s, p=p: componi(e, fp, stile, s, "singola", p), base)
              for p in parti_per(modalita)}
     ps = parametri_stile(stile)
     corpo = round(ps["corpo_pt"] * min(scale.values()), 1)
@@ -153,12 +195,37 @@ def _lotto_e_formato(id, d):
     fid = numero(d.get("formato_id"), intero=True) or l.etichetta_dati.get("formato_etichetta_id") \
         or l.prodotto.formato_etichetta_id
     f = db.session.get(FormatoEtichetta, fid or 0) or FormatoEtichetta.query.filter_by(attivo=True).first()
-    modalita = d.get("modalita") if d.get("modalita") in MODALITA else (
-        "fronte_retro" if f.layout == "compatto" else "unica")
+    modalita = d.get("modalita") if d.get("modalita") in MODALITA else modalita_proposta(f, l.prodotto)
     return l, f, modalita
 
 
+def modalita_proposta(formato, prodotto=None):
+    """Salumi: piegata sul cordino; etichette piccole: fronte e retro; le altre: un'etichetta."""
+    if prodotto is not None and (prodotto.categoria or "") == "Salumi":
+        return "piegata"
+    return "fronte_retro" if formato.layout == "compatto" else "unica"
+
+
 # ---------------------------------------------------------------- anteprima e stampa
+
+def immagini_anteprima(e, fd, stile, modalita, scale, dpi=220):
+    """PNG di ogni parte (dritta, per leggerla); con «piegata» anche l'etichetta intera come si stampa."""
+    fp = formato_parti(fd, modalita)
+    immagini, pdf_parti = [], {}
+    for parte, scala in scale.items():
+        pdf, _ = motore.pdf(componi(e, fp, stile, scala, "singola", parte), _cartella_modulo())
+        pdf_parti[parte] = pdf
+        immagini.append({"parte": parte, "src": "data:image/png;base64,"
+                         + base64.b64encode(motore.png_anteprima(pdf, dpi=dpi)).decode()})
+    if modalita == "piegata":
+        # stessa scala per le due metà, come nella stampa
+        scala = min(scale.values())
+        pdf_parti = {p: motore.pdf(componi(e, fp, stile, scala, "singola", p), _cartella_modulo())[0] for p in scale}
+        intera = motore.piega(pdf_parti["fronte"], pdf_parti["retro"], fd)
+        immagini.append({"parte": "come si stampa (piega al centro, sul cordino)", "src": "data:image/png;base64,"
+                         + base64.b64encode(motore.png_anteprima(intera, dpi=int(dpi * 0.7))).decode()})
+    return immagini
+
 
 @bp.route("/lotti/<int:id>/etichette/prova", methods=["POST"])
 def prova_etichetta(id):
@@ -168,13 +235,9 @@ def prova_etichetta(id):
     stile = d.get("stile") if d.get("stile") in stili_disponibili() else stile_attivo()
     e, fd = dati_stampa(l), formato_dict(f)
     scale, corpo, soglia, avviso = misura(e, fd, stile, modalita)
-    immagini = []
-    for parte, scala in scale.items():
-        pdf, _ = motore.pdf(componi(e, fd, stile, scala, "singola", parte), _cartella_modulo())
-        png = motore.png_anteprima(pdf, dpi=220)
-        immagini.append({"parte": parte, "src": "data:image/png;base64," + base64.b64encode(png).decode()})
+    immagini = immagini_anteprima(e, fd, stile, modalita, scale)
     n = numero(d.get("n_confezioni"), intero=True) or l.pezzi_prodotti or f.per_foglio
-    n_etichette = n * len(scale)
+    n_etichette = n * etichette_per_confezione(modalita)
     return jsonify(ok=True, immagini=immagini, scala=min(scale.values()), corpo_pt=corpo, soglia_pt=soglia,
                    avviso=avviso, formato=f.descrizione, modalita=modalita, n_etichette=n_etichette,
                    fogli=motore.fogli_necessari(n_etichette, f.per_foglio), stile=stile,
@@ -197,19 +260,7 @@ def stampa_etichette(id):
     problemi = motore.controlla_formato(fd)
     if problemi:
         return errore("Formato non valido: " + "; ".join(problemi))
-    scale, corpo, soglia, avviso = misura(e, fd, stile, modalita)
-
-    # etichette in fila: per ogni confezione le sue parti (fronte, retro), poi a pagine
-    elenco = [p for _ in range(n_confezioni) for p in scale]
-    posti, per_foglio = motore.posizioni(fd), f.per_foglio
-    pagine = [[(x, y, e, parte) for (x, y), parte in zip(posti, elenco[i:i + per_foglio])]
-              for i in range(0, len(elenco), per_foglio)]
-    # una sola scala per tutto il foglio (la più piccola), così fronte e retro hanno caratteri coerenti.
-    # Ogni parte si disegna UNA volta e si copia in tutte le posizioni (services/etichette.foglio_da_etichette).
-    scala = min(scale.values())
-    disegni = {p: motore.pdf(componi(e, fd, stile, scala, "singola", p), _cartella_modulo())[0] for p in scale}
-    dati_pdf, impronta = motore.foglio_da_etichette(
-        disegni, [[(x, y, parte) for x, y, _e, parte in pagina] for pagina in pagine], fd)
+    dati_pdf, impronta, n_fogli, n_etichette, (scale, corpo, soglia, avviso) = pdf_fogli(e, fd, stile, modalita, n_confezioni)
 
     anno = l.data_produzione[:4]
     cartella = os.path.join(cartella_pdf(), anno)
@@ -219,7 +270,7 @@ def stampa_etichette(id):
     if not os.path.exists(percorso):                    # stesso contenuto = stesso file: mai sovrascrivere
         with open(percorso, "wb") as fh:
             fh.write(dati_pdf)
-    s = StampaEtichetta(lotto_id=l.id, formato_id=f.id, stile=stile, n_etichette=len(elenco),
+    s = StampaEtichetta(lotto_id=l.id, formato_id=f.id, stile=stile, n_etichette=n_etichette,
                         pdf_path=f"{anno}/{nome}", sha256=impronta, creato_da=utente(),
                         dati=json.dumps({"etichetta": e, "formato": fd, "modalita": modalita,
                                          "n_confezioni": n_confezioni, "scala": min(scale.values()),
@@ -227,7 +278,7 @@ def stampa_etichette(id):
                                         ensure_ascii=False))
     db.session.add(s)
     db.session.commit()
-    return jsonify(ok=True, url=f"/prodotti/etichette/{s.id}.pdf", fogli=len(pagine), n_etichette=len(elenco),
+    return jsonify(ok=True, url=f"/prodotti/etichette/{s.id}.pdf", fogli=n_fogli, n_etichette=n_etichette,
                    avviso=avviso)
 
 
@@ -337,11 +388,7 @@ def prova_formato(id):
              piede=Impostazione.leggi("piede_etichette", PIEDE_PREDEFINITO))
     fd = formato_dict(f)
     scale, corpo, soglia, avviso = misura(e, fd, stile, modalita)
-    immagini = []
-    for parte, scala in scale.items():
-        pdf, _ = motore.pdf(componi(e, fd, stile, scala, "singola", parte), _cartella_modulo())
-        immagini.append({"parte": parte, "src": "data:image/png;base64,"
-                         + base64.b64encode(motore.png_anteprima(pdf, dpi=200)).decode()})
+    immagini = immagini_anteprima(e, fd, stile, modalita, scale, dpi=200)
     return jsonify(ok=True, immagini=immagini, corpo_pt=corpo, soglia_pt=soglia, avviso=avviso)
 
 

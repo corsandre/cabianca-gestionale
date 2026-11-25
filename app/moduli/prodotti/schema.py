@@ -229,4 +229,15 @@ MIGRAZIONI = [
         " ('Piccolo', 'vasetti 100–106 ml, sacchettini', 'Avery L7160', 63.5, 38.1, 3, 7, 15.15, 7.25, 66.0, 38.1, 'compatto'),"
         " ('Salumi', 'salami, pancetta, cotechini (etichetta alta: c''è più testo)', 'Avery L7164', 63.5, 72.0, 3, 4, 4.5, 7.25, 66.0, 72.0, 'compatto')",
     ]),
+    # 26/11/2026, Andrea: i salumi si etichettano con un'etichetta piegata a metà sul cordino (modalità
+    # «piegata» su Grande: ogni faccia 67,7×49,5) e l'etichetta singola usa anch'essa un formato già in uso.
+    # Così il foglio L7164 non serve più: 3 formati da comprare invece di 4.
+    (4, "salumi sul foglio Grande (etichetta piegata sul cordino), foglio Salumi spento", [
+        "UPDATE prodotti SET formato_etichetta_id = (SELECT id FROM formati_etichetta WHERE codice_foglio = 'Avery L7165' AND attivo = 1) "
+        "WHERE formato_etichetta_id IN (SELECT id FROM formati_etichetta WHERE codice_foglio = 'Avery L7164') "
+        "AND EXISTS (SELECT 1 FROM formati_etichetta WHERE codice_foglio = 'Avery L7165' AND attivo = 1)",
+        "UPDATE formati_etichetta SET attivo = 0 WHERE codice_foglio = 'Avery L7164'",
+        "UPDATE formati_etichetta SET uso = uso || '; salumi (anche piegata sul cordino: ogni faccia 67,7×49,5 mm)' "
+        "WHERE codice_foglio = 'Avery L7165' AND attivo = 1 AND uso NOT LIKE '%salumi%'",
+    ]),
 ]

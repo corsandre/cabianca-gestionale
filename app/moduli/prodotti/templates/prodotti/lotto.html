@@ -198,8 +198,11 @@ async function stampaEtichette(bottone) {
 document.addEventListener('DOMContentLoaded', function () {
     const formato = document.getElementById('etFormato');
     const modalita = document.getElementById('etModalita');
-    // sulle etichette piccole si propone fronte e retro (più spazio per il testo)
-    const proponi = function () { modalita.value = formato.selectedOptions[0].dataset.layout === 'compatto' ? 'fronte_retro' : 'unica'; };
+    // salumi: etichetta piegata sul cordino; etichette piccole: fronte e retro (più spazio per il testo)
+    const salumi = {{ ((l.prodotto.categoria or '') == 'Salumi') | tojson }};
+    const proponi = function () {
+        modalita.value = salumi ? 'piegata' : (formato.selectedOptions[0].dataset.layout === 'compatto' ? 'fronte_retro' : 'unica');
+    };
     proponi();
     formato.addEventListener('change', function () { proponi(); anteprimaEtichette(); });
     modalita.addEventListener('change', anteprimaEtichette);

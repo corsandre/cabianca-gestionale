@@ -729,7 +729,7 @@ stile lo dichiara in `stile.json`). Velocità:
   confezioni richiedono circa 2 s;
 - il logo è un PNG (`static/img/logo-etichette.png`);
 - WeasyPrint disegna una cosa alla volta (lucchetto), perché non regge due disegni insieme. Sulle
-etichette piccole si può stampare **fronte e retro** (due etichette per confezione). Stampare sempre in
+etichette piccole si può stampare **fronte e retro** (due etichette per confezione). I **salumi** si etichettano «piegata sul cordino»: un'etichetta del foglio Grande si piega a metà sul cordino e si incolla su sé stessa. Fronte nella metà sinistra e retro nella destra, ruotati con il lato alto verso la piega, così appesa si legge dritta da tutte e due le parti (ogni faccia 67,7×49,5 mm). Stampare sempre in
 dimensione reale (100%). Ogni stampa è archiviata (`data/prodotti/etichette/AAAA/`, con impronta sha256).
 Uno stile nuovo si crea copiando la cartella dello stile (vedi il suo `LEGGIMI.md`) e si prova con
 `scripts/prova_stile_etichette.py`.

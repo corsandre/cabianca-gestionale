@@ -323,6 +323,7 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - [x] 6. test, README (sezione «Prodotti (modulo)»), `LEGGIMI.md` del modulo completo, `graphify update .`
 
 ### Diario
+- 26/11/2026 – prodotti 1.2.0. I salumi si etichettano con l'etichetta **piegata sul cordino**, sul foglio Grande L7165 (ogni faccia 67,7×49,5 mm). Il foglio Salumi L7164 è spento (migrazione 4): **da comprare solo L7165, L7163, L7160**.
 - 25/11/2026 sera – prodotti 1.1.0.
   - Nuovo stile «classico-giallo», che ricrea le etichette storiche con sfondo crema.
   - Indicatore di attesa con i secondi.

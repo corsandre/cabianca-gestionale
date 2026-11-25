@@ -210,6 +210,21 @@ class TestFlussoCompleto(ProdottiAppBase):
         self.assertTrue(c.get(st2["url"]).data.startswith(b"%PDF"))
         self.post("/prodotti/formati/impostazioni", {"stile": "base-2026", "piede": "www.cabianca.eu"})
 
+        # salumi: etichetta piegata sul cordino (fronte e retro sulla stessa etichetta del foglio Grande)
+        pieg = self.post(f"/prodotti/lotti/{salvato['id']}/etichette/prova", {"formato_id": 5, "modalita": "piegata",
+                                                                              "n_confezioni": 10}, op)
+        self.assertEqual([i["parte"] for i in pieg["immagini"]][:2], ["fronte", "retro"])
+        self.assertEqual(len(pieg["immagini"]), 3)                       # + l'etichetta intera come si stampa
+        self.assertEqual((pieg["n_etichette"], pieg["fogli"]), (10, 2))   # una etichetta per confezione
+        st3 = self.post(f"/prodotti/lotti/{salvato['id']}/etichette/stampa", {"n_confezioni": 10, "formato_id": 5,
+                                                                              "modalita": "piegata"}, op)
+        self.assertEqual((st3["n_etichette"], st3["fogli"]), (10, 2))
+        from io import BytesIO
+        from pypdf import PdfReader
+        pdf3 = PdfReader(BytesIO(c.get(st3["url"]).data))
+        self.assertEqual(len(pdf3.pages), 2)
+        self.assertAlmostEqual(float(pdf3.pages[0].mediabox.width), 595.28, places=1)   # A4
+
         # export: libro lotti e ricettario in PDF ed Excel, richiamo
         for url in ("/prodotti/lotti/esporta.pdf?dal=2026-01-01", "/prodotti/ricettario/esporta.pdf",
                     f"/prodotti/ricettario/esporta.pdf?ricetta={ric['id']}",

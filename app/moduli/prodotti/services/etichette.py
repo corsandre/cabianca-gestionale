@@ -144,11 +144,45 @@ def pdf(html, base_url):
     return dati, hashlib.sha256(dati).hexdigest()
 
 
-def foglio_da_etichette(etichette_pdf, pagine, formato):
+def formato_meta(formato):
+    """Misure di UNA metà dell'etichetta piegata sul cordino (vedi piega): larga quanto l'etichetta è alta,
+    alta mezza etichetta. Es. Grande 99,1×67,7 → ogni faccia del cartellino 67,7×49,55."""
+    return dict(formato, larghezza_mm=formato["altezza_mm"], altezza_mm=round(formato["larghezza_mm"] / 2, 2),
+                layout="compatto")
+
+
+def piega(fronte_pdf, retro_pdf, formato):
+    """Etichetta da piegare a metà sul cordino (salumi): PDF grande quanto l'etichetta del foglio con il fronte
+    nella metà sinistra e il retro nella metà destra, tutti e due con il lato alto verso la piega centrale.
+
+    Il cordino passa nella piega (linea verticale a metà etichetta) e il cartellino pende sotto: così, appeso,
+    si leggono dritti sia il fronte sia il retro (girando il cartellino). Le due metà si incollano fra loro.
+    `fronte_pdf` / `retro_pdf`: PDF di una metà, grandi quanto formato_meta(formato).
+    """
+    from io import BytesIO
+    from pypdf import PdfReader, PdfWriter, Transformation
+    mm = PT_PER_MM
+    W, H = formato["larghezza_mm"] * mm, formato["altezza_mm"] * mm
+    meta = W / 2                                       # altezza di una metà (= metà larghezza dell'etichetta)
+    fronte = PdfReader(BytesIO(fronte_pdf)).pages[0]
+    retro = PdfReader(BytesIO(retro_pdf)).pages[0]
+    w = PdfWriter()
+    pagina = w.add_blank_page(width=W, height=H)
+    # fronte a sinistra, ruotato in senso orario: il suo lato alto finisce sulla piega (x = W/2)
+    pagina.merge_transformed_page(fronte, Transformation().rotate(-90).translate(0, H))
+    # retro a destra, ruotato in senso antiorario: anche il suo lato alto finisce sulla piega
+    pagina.merge_transformed_page(retro, Transformation().rotate(90).translate(meta + meta, 0))
+    out = BytesIO()
+    w.write(out)
+    return out.getvalue()
+
+
+def foglio_da_etichette(etichette_pdf, pagine, formato, sotto=None):
     """PDF dei fogli A4 ottenuto «timbrando» l'etichetta già disegnata in ogni posizione del foglio.
 
     `etichette_pdf`: {parte: PDF di UNA etichetta grande quanto l'etichetta} (es. {"fronte": …, "retro": …});
-    `pagine`: lista di pagine, ognuna lista di (x_mm, y_mm, parte).
+    `pagine`: lista di pagine, ognuna lista di (x_mm, y_mm, parte);
+    `sotto`: PDF di una pagina A4 da mettere sotto ogni foglio (es. il contorno delle etichette per le prove).
     Perché: tutte le etichette di un lotto sono uguali. Impaginare con WeasyPrint 24 copie per foglio costava
     circa 4 secondi a foglio (il layout flex si rifà per ogni copia); così l'etichetta si impagina una volta sola
     e le copie sono le stesse istruzioni vettoriali spostate (stessa qualità, pochi decimi di secondo).
@@ -157,9 +191,12 @@ def foglio_da_etichette(etichette_pdf, pagine, formato):
     from pypdf import PdfReader, PdfWriter, Transformation
     mm = PT_PER_MM
     sorgenti = {p: PdfReader(BytesIO(d)).pages[0] for p, d in etichette_pdf.items()}
+    sfondo = PdfReader(BytesIO(sotto)).pages[0] if sotto else None
     w = PdfWriter()
     for pagina in pagine:
         foglio = w.add_blank_page(width=A4[0] * mm, height=A4[1] * mm)
+        if sfondo is not None:
+            foglio.merge_page(sfondo)
         for x, y, parte in pagina:
             # nel PDF l'origine è in basso a sinistra: y va contato dal fondo del foglio
             dy = (A4[1] - y - formato["altezza_mm"]) * mm
