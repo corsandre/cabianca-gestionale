@@ -11,7 +11,7 @@ sotto il bordo dell'etichetta né su una pagina in più): con poco testo i carat
 tanto testo si riducono. Il corpo minimo del testo che ne risulta si
 confronta con il minimo di legge (Reg. UE 1169/2011, art. 13 e allegato IV: altezza della "x" di almeno
 1,2 mm, oppure 0,9 mm se la superficie maggiore della confezione è sotto gli 80 cm²). Per Fira Sans
-l'altezza della x è circa 0,53 volte il corpo: 1,2 mm ≈ 6,4 pt, 0,9 mm ≈ 4,8 pt.
+l'altezza della x è circa 0,53 volte il corpo: 1,2 mm ≈ 6,5 pt, 0,9 mm ≈ 4,8 pt.
 """
 import hashlib
 import os

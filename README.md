@@ -719,7 +719,7 @@ dei dati di etichetta del momento.
 
 **Etichette**: generate in PDF con WeasyPrint dallo stile attivo (`templates/prodotti/etichette/stili/`,
 oggi `base-2026`: sfondo bianco, poco toner). Il testo si adatta da solo all'etichetta (ingrandisce o
-riduce) e c'è un avviso se scende sotto il corpo minimo di legge (altezza della x 1,2 mm ≈ 6,4 pt). Sulle
+riduce) e c'è un avviso se scende sotto il corpo minimo di legge (altezza della x 1,2 mm ≈ 6,5 pt). Sulle
 etichette piccole si può stampare **fronte e retro** (due etichette per confezione). Stampare sempre in
 dimensione reale (100%). Ogni stampa è archiviata (`data/prodotti/etichette/AAAA/`, con impronta sha256).
 Uno stile nuovo si crea copiando la cartella dello stile (vedi il suo `LEGGIMI.md`) e si prova con
