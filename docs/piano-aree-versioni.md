@@ -7,7 +7,7 @@ Richiesta di Andrea (25/11/2026, sera):
 - il messaggio di avvio su Telegram parla solo di Prodotti;
 - il bot dovrebbe essere a parte, e l'impianto fa parte dell'allevamento.
 
-Stato: **PIANO, da approvare**. Non è ancora stato toccato niente.
+Stato: **SOSPESO** (25/11/2026, Andrea: «per ora lasciamo stare»). Niente è stato modificato: il piano resta qui per quando servirà.
 
 ## Com'è oggi (dal codice)
 
