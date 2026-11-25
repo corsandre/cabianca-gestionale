@@ -347,7 +347,13 @@ Restano da fare con Andrea:
    - Il 25/11 sono state create anche **67 ricette «dalle etichette»** (`importa_etichette.py ricette`), con gli ingredienti nell'ordine dell'etichetta e le **quantità a 0**: le etichette dei lotti vecchi si possono già stampare.
    - Manca solo la Mostarda di zucca cedrina: c'era soltanto il fronte, senza ingredienti.
    - Corretto il grano saraceno: non ha glutine, ed è stato rimesso il 30% sulla taragna.
-   - Da completare in ogni prodotto: la **durata** (nessuno ce l'ha, quindi senza durata l'etichetta esce senza scadenza), la **conservazione** (testi importati sporchi) e il **peso** (manca in 10 prodotti).
+   - Il 25/11 sera il catalogo è stato **pulito** con `scripts/pulizia_catalogo_20261125.py`; le scelte e le loro fonti sono scritte nel docstring dello script. Copia di prima: `backups/prodotti_pre_pulizia_20261125.db`.
+     - Durate prese dalle etichette vecchie: 58 prodotti.
+     - Conservazione e modalità d'uso pulite, categorie e formati assegnati.
+     - Ricette della pasta riallineate all'etichetta del 24/11/2026.
+     - Nomi di legge delle materie prime.
+   - Restano senza durata, e la data si scrive nel lotto: salumi (la decide il laboratorio), pesto, torta di rose e focaccia.
+   - Senza peso restano i salumi (a peso variabile), la torta di rose, la focaccia e la mostarda di zucca cedrina.
    - Le quantità delle ricette si inseriscono con calma.
    - Copia del database prima dell'import delle ricette: `backups/prodotti_pre_ricette_20261125.db`.
 4. Osservare per qualche giorno bot, avvisi, backup notturno (ora con `prodotti.db`), cassa ed email fatture nel container `servizi`.
