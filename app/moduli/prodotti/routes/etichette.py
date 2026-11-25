@@ -305,6 +305,14 @@ def prova_formato(id):
     return jsonify(ok=True, immagini=immagini, corpo_pt=corpo, soglia_pt=soglia, avviso=avviso)
 
 
+@bp.route("/formati/prova-margini.pdf")
+def prova_margini():
+    """Foglio per misurare i margini che la stampante non stampa (vedi services/etichette.html_prova_margini)."""
+    from io import BytesIO
+    dati, _ = motore.pdf(motore.html_prova_margini(), _cartella_modulo())
+    return send_file(BytesIO(dati), mimetype="application/pdf", download_name="prova_margini_stampante.pdf")
+
+
 @bp.route("/formati/<int:id>/calibrazione.pdf")
 def calibrazione(id):
     """Foglio di calibrazione: contorni e centri di tutte le etichette, da stampare su carta normale.

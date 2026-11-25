@@ -216,4 +216,17 @@ MIGRAZIONI = [
     ]
     + _storico("lotti", _COLONNE_LOTTI)
     + _storico("lotti_ingredienti", _COLONNE_LOTTI_ING)),
+
+    # 25/11/2026: la prova di Andrea al 100% è uscita tagliata ai bordi. Le stampanti da ufficio non stampano
+    # negli ultimi 3–5 mm del foglio, e i fogli "al vivo" (etichette fino al bordo) ci finiscono dentro.
+    # Si passa ai fogli A4 CON MARGINI (serie Avery L71xx); quelli al vivo restano, spenti e rinominati.
+    (3, "fogli A4 con margini al posto di quelli al vivo", [
+        "UPDATE formati_etichetta SET nome = nome || ' (al vivo)', attivo = 0 WHERE nome IN ('Grande','Medio','Piccolo','Salumi')",
+        "INSERT INTO formati_etichetta (nome, uso, codice_foglio, larghezza_mm, altezza_mm, colonne, righe,"
+        " margine_sup_mm, margine_sx_mm, passo_orizz_mm, passo_vert_mm, layout) VALUES"
+        " ('Grande', 'vasetti 250–314 ml, passata 750 ml, buste pasta 500 g, farine', 'Avery L7165', 99.1, 67.7, 2, 4, 13.1, 4.65, 101.6, 67.7, 'orizzontale'),"
+        " ('Medio', 'vasetti 150–156 ml', 'Avery L7163', 99.1, 38.1, 2, 7, 15.15, 4.65, 101.6, 38.1, 'orizzontale'),"
+        " ('Piccolo', 'vasetti 100–106 ml, sacchettini', 'Avery L7160', 63.5, 38.1, 3, 7, 15.15, 7.25, 66.0, 38.1, 'compatto'),"
+        " ('Salumi', 'salami, pancetta, cotechini (etichetta alta: c''è più testo)', 'Avery L7164', 63.5, 72.0, 3, 4, 4.5, 7.25, 66.0, 72.0, 'compatto')",
+    ]),
 ]

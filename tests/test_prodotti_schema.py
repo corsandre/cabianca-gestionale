@@ -48,7 +48,10 @@ class TestSchemaProdotti(unittest.TestCase):
             self.c.execute(sql)
 
     def test_dati_iniziali(self):
-        self.assertEqual(self.c.execute("SELECT count(*) FROM formati_etichetta").fetchone()[0], 4)
+        # migrazione 3: 4 formati con margini attivi, i 4 "al vivo" spenti
+        self.assertEqual(self.c.execute("SELECT count(*) FROM formati_etichetta").fetchone()[0], 8)
+        attivi = [r[0] for r in self.c.execute("SELECT codice_foglio FROM formati_etichetta WHERE attivo ORDER BY id")]
+        self.assertEqual(attivi, ["Avery L7165", "Avery L7163", "Avery L7160", "Avery L7164"])
         self.assertIn("Fattoria Ca' Bianca", self.c.execute("SELECT prodotto_da FROM prodotti").fetchone()[0])
         imp = dict(self.c.execute("SELECT chiave, valore FROM impostazioni"))
         self.assertEqual(imp["stile_etichette"], "base-2026")

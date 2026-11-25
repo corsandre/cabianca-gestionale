@@ -195,6 +195,7 @@ class TestFlussoCompleto(ProdottiAppBase):
                                               "colonne": 3, "righe": 4, "margine_sup_mm": 15, "margine_sx_mm": 10,
                                               "passo_orizz_mm": 65, "passo_vert_mm": 67, "layout": "compatto"})
         self.assertTrue(self.client().get("/prodotti/formati/1/calibrazione.pdf").data.startswith(b"%PDF"))
+        self.assertTrue(self.client().get("/prodotti/formati/prova-margini.pdf").data.startswith(b"%PDF"))
         self.assertIn("immagini", self.post("/prodotti/formati/2/prova", {}, op))
         self.post("/prodotti/formati/impostazioni", {"stile": "base-2026", "piede": "www.cabianca.eu"})
 

@@ -75,3 +75,4 @@
 .fronte .sottotitolo { font-size: {{ fisso(6.2) }}; margin-top: 0.6mm; }
 .fronte .peso { font-size: {{ fisso(H * 0.3) }}; margin-top: 1mm; }
 .fronte .peso-voce { font-size: {{ fisso(6) }}; }
+.fronte .piede-fronte { text-align: center; margin-top: 1.2mm; font-size: {{ fisso(5.8) }}; }

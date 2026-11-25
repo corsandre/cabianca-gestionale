@@ -28,6 +28,8 @@
       <div class="nome">{{ e.nome }}</div>
       {% if e.sottotitolo %}<div class="sottotitolo">{{ e.sottotitolo }}</div>{% endif %}
       {% if e.peso %}<div class="peso"><span class="peso-voce">{{ e.dicitura_peso }}</span> {{ e.peso }}</div>{% endif %}
+      {# con fronte e retro il sito sta sul fronte (spazio libero): il retro tiene lo spazio per i testi obbligatori #}
+      {% if e.piede %}<div class="piede piede-fronte">{{ e.piede }}</div>{% endif %}
     </div>
   {% elif formato.layout == 'orizzontale' and parte == 'unica' %}
     <div class="col-marchio">
@@ -58,7 +60,7 @@
       {{ testi(e) }}
       <div class="spinta"></div>
       {{ riquadro(e) }}
-      {% if e.piede %}<div class="piede">{{ e.piede }}</div>{% endif %}
+      {% if e.piede and parte == 'unica' %}<div class="piede">{{ e.piede }}</div>{% endif %}
     </div>
   {% endif %}
 </div>

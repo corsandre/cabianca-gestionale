@@ -324,6 +324,7 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 
 ### Diario
 - 24/11/2026 – piano approvato, creato il ramo.
+- 25/11/2026 – PROVA DI STAMPA di Andrea al 100%: etichette tagliate ai bordi (le stampanti non stampano negli ultimi 3–5 mm; ridurre al 96% NON va bene sui fogli pretagliati). DECISIONE: fogli A4 con margini (migrazione 3): Grande Avery L7165 99,1×67,7 (8), Medio L7163 99,1×38,1 (14), Piccolo L7160 63,5×38,1 (21), Salumi L7164 63,5×72 (12, più alto: il salame ora sta a 8,5 pt). I fogli al vivo restano spenti. Aggiunta la prova dei margini della stampante (/prodotti/formati/prova-margini.pdf). Con fronte e retro il sito va sul fronte.
 - 25/11/2026 – modulo Prodotti completo sul ramo (passi 1–6), provato con i test e nel browser (Chromium via DevTools). In attesa di: approvazione stile, scelta dei fogli, decisione sul rilascio.
 - 25/11/2026 – fasi 0b e 0c completate (3.4.0, 3.4.1).
 - 25/11/2026 – CORRETTO un rischio del WAL: il ripristino da Impostazioni copiava il file sopra il DB (con il -wal aperto lo avrebbe corrotto). Ora `ripristina_sqlite` usa l'API di sqlite3 e salva prima `gestionale_pre-ripristino_*.db`.

@@ -138,3 +138,37 @@ def png_anteprima(dati_pdf, dpi=200):
             raise RuntimeError(r.stderr.decode(errors="replace")[:300])
         with open(radice + ".png", "rb") as f:
             return f.read()
+
+
+def html_prova_margini():
+    """Foglio A4 con righelli dai 4 bordi (0–20 mm): stampato al 100%, il primo numero che si vede su
+    ogni lato è il margine che la stampante non riesce a stampare. Serve per scegliere i fogli di etichette
+    (i fogli "al vivo" vanno bene solo se la stampante stampa fino al bordo)."""
+    segni = []
+    for mm in range(0, 21):
+        lungo = mm % 5 == 0
+        for lato in ("top", "bottom"):              # righelli sui lati corti, a 1/4 e 3/4 della larghezza
+            for x in (52.5, 157.5):
+                segni.append(f'<div class="t" style="{lato}:{mm}mm;left:{x - (6 if lungo else 3)}mm;'
+                             f'width:{12 if lungo else 6}mm"></div>'
+                             # numeri sfalsati su 3 colonne: a 1 mm l'uno dall'altro si sovrapporrebbero
+                             f'<div class="n" style="{lato}:{mm - 0.8}mm;left:{x + 7 + (mm % 3) * 4.5}mm">{mm}</div>')
+        for lato in ("left", "right"):              # righelli sui lati lunghi, a 1/4 e 3/4 dell'altezza
+            for y in (74.25, 222.75):
+                segni.append(f'<div class="t v" style="{lato}:{mm}mm;top:{y - (6 if lungo else 3)}mm;'
+                             f'height:{12 if lungo else 6}mm"></div>'
+                             f'<div class="n" style="{lato}:{mm - 0.8}mm;top:{y + 7 + (mm % 3) * 2.6}mm">{mm}</div>')
+    return f"""<!doctype html><html><head><meta charset="utf-8"><style>
+@page {{ size: A4; margin: 0; }} body {{ margin: 0; font-family: sans-serif; }}
+.t {{ position: absolute; border-top: 0.25mm solid #000; height: 0; }}
+.t.v {{ border-top: 0; border-left: 0.25mm solid #000; width: 0; }}
+.n {{ position: absolute; font-size: 4.6pt; line-height: 1; }}
+.testo {{ position: absolute; left: 30mm; right: 30mm; top: 110mm; text-align: center; font-size: 11pt; line-height: 1.5; }}
+.cornice {{ position: absolute; left: 0; top: 0; width: 210mm; height: 297mm; box-sizing: border-box; border: 0.6mm solid #009d5a; }}
+</style></head><body><div class="cornice"></div>{''.join(segni)}
+<div class="testo"><b>Prova dei margini della stampante</b><br>
+Stampare su carta normale in <b>dimensione reale (100%)</b>, senza «adatta alla pagina».<br>
+Su ogni lato contare le tacche che mancano dal bordo (una ogni millimetro, quelle lunghe ogni 5 mm; i numeri
+aiutano): sono i millimetri che la stampante non raggiunge (di solito 3–5). La cornice verde è sul bordo esatto del foglio: se non si vede, è normale.<br><br>
+I fogli di etichette «al vivo» (etichette fino al bordo) vanno bene solo se tutti i lati segnano 0.
+Altrimenti usare fogli con margini più larghi di questi numeri.</div></body></html>"""
