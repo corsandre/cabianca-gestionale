@@ -323,6 +323,10 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - [x] 6. test, README (sezione «Prodotti (modulo)»), `LEGGIMI.md` del modulo completo, `graphify update .`
 
 ### Diario
+- 25/11/2026, 22:39 – 502 durante le prove di Agnese.
+  - Causa: due anteprime delle etichette chieste insieme. Il sito ha 2 thread e WeasyPrint non regge due disegni in parallelo (`free(): invalid next size`), quindi il processo è caduto ed è ripartito da solo.
+  - Corretto in prodotti 1.0.1 con un lucchetto in `services/etichette.py` e il test `tests/test_prodotti_etichette_thread.py`, che senza lucchetto riproduce il crash.
+  - Rilasciato con `deploy.sh sito`: servizi e impianto non si sono fermati.
 - 25/11/2026 sera – RILASCIO in produzione (deciso da Andrea).
   - Prova generale sulla copia dei dati veri: pagine uguali alla 3.3.2 e fatture del siero lette come prima.
   - Corretto prima del rilascio: l'orario del backup cambiato dal sito non arrivava allo scheduler, che ora sta in un altro container. Adesso c'è il job `aggiorna_orario_backup`.
