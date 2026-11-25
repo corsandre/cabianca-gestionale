@@ -1,6 +1,12 @@
-{# Base di tutte le pagine del modulo Prodotti: aggiunge il CSS del modulo al base.html del nucleo. #}
+{# Base di tutte le pagine del modulo Prodotti: aggiunge CSS e JavaScript del modulo al base.html del nucleo.
+   Il token CSRF sta in un meta: prodotti.js lo manda con ogni salvataggio fatto dalle finestre. #}
 {% extends "base.html" %}
 {% block extra_head %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <link rel="stylesheet" href="{{ url_for('prodotti.static', filename='prodotti.css') }}">
 {% block prodotti_head %}{% endblock %}
+{% endblock %}
+{% block extra_js %}
+<script src="{{ url_for('prodotti.static', filename='prodotti.js') }}"></script>
+{% block prodotti_js %}{% endblock %}
 {% endblock %}

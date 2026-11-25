@@ -305,7 +305,13 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - [x] provato: anonimo → login, senza permesso → 403 e niente menu, admin → pagina con tema; Docker ok
 
 ### Modulo prodotti 1.0.0
-- [ ] 1. modelli + m001 + CRUD materie prime / prodotti / ricette
+- [~] 1. modelli + schema + CRUD materie prime / prodotti / ricette — IN CORSO
+  - [x] schema v2 (`schema.py`) con trigger: lotti/stampe non cancellabili, storico automatico delle modifiche, ricette usate bloccate (DECISIONE 25/11: i lotti si possono correggere ma ogni modifica resta in `storico`, invece di "lotti di rettifica")
+  - [x] `models.py` + test modelli = tabelle (`tests/test_prodotti_app.py`)
+  - [x] servizi puri: `services/allergeni.py`, `ingredienti.py` (ordine per peso, grassetto MAIUSCOLE, sigle DOP/EVO escluse, composti), `lotti.py` (codice, sigla, scadenza, scala) + test
+  - [x] route in cartella `routes/` (comune, panoramica, catalogo, ricette); JS `static/prodotti.js` e `ricette.js`; finestre `_modale_materia`, `_modale_prodotto`, `_modale_ricetta`; pagine materie_prime, catalogo, prodotto
+  - [ ] pagina ricettario.html, panoramica aggiornata, voci di menu
+  - [ ] PROVARE nel browser/test client (non ancora provato!)
 - [ ] 2. libro lotti + finestra Nuovo lotto
 - [ ] 3. motore etichette (prova stile da approvare)
 - [ ] 4. export + richiamo
@@ -320,4 +326,4 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - 24/11/2026 – fase 0a completata (3.3.3). Ambiente locale: `.venv` (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`), test con `.venv/bin/python -m unittest discover -s tests`.
 
 ### Prossimo passo
-Modulo, passo 1: migrazione 2 in `app/moduli/prodotti/schema.py` (materie_prime, prodotti, ricette, ricette_righe, lotti, lotti_ingredienti, formati_etichetta, stampe_etichette, con trigger anti-cancellazione su lotti/lotti_ingredienti/stampe), `models.py` con `__bind_key__="prodotti"` che rispecchia le tabelle, poi CRUD materie prime → prodotti → ricette (versioni). Allergeni UE: lista fissa in `services/allergeni.py`.
+Scrivere `templates/prodotti/ricettario.html`, aggiornare `index.html` e `_menu.html`, poi `routes/lotti.py` (almeno `lotti` e `lotto`, perché `prodotto.html` li collega già) e provare tutto con il test client (`tests/test_prodotti_app.py`).

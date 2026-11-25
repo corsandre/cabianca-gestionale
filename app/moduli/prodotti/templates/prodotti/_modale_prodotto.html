@@ -1,0 +1,120 @@
+{# Finestra "prodotto" (dati che vanno in etichetta). Si apre con ModaleProdotto.apri(prodotto).
+   Serve: categorie, formati, tipi_scadenza, produttore_predefinito (routes/catalogo._dati_modale_prodotto). #}
+<div class="modal fade" id="modaleProdotto" tabindex="-1" data-produttore="{{ produttore_predefinito }}">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Prodotto</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form action="{{ url_for('prodotti.salva_prodotto') }}" data-url-sigla="{{ url_for('prodotti.proponi_sigla_api') }}"
+            onsubmit="event.preventDefault(); ModaleProdotto.salva(this.closest('.modal').querySelector('.prod-salva'))">
+        <input type="hidden" name="id">
+        <div class="modal-body">
+          <h6 class="text-cb-prod">Nome e confezione</h6>
+          <div class="row g-2 mb-3">
+            <div class="col-md-6">
+              <label class="form-label form-label-sm mb-1">Nome in etichetta *</label>
+              <input name="nome" class="form-control form-control-lg" placeholder="es. Tortelli di zucca" required
+                     oninput="clearTimeout(this._t); this._t = setTimeout(function(){ ModaleProdotto.proponiSigla(); }, 400)">
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label form-label-sm mb-1">Sigla lotto *</label>
+              <input name="sigla" class="form-control form-control-lg text-uppercase" maxlength="8" placeholder="ZUC"
+                     oninput="this.form.dataset.siglaManuale = '1'">
+              <div class="form-text">Lotto: L<i>ggmmaa</i>-<b>SIGLA</b></div>
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label form-label-sm mb-1">Peso netto</label>
+              <div class="input-group input-group-lg">
+                <input name="peso_netto" class="form-control" inputmode="decimal" placeholder="500">
+                <select name="unita" class="form-select" style="max-width:5.5rem">
+                  <option value="g">g</option><option value="ml">ml</option><option value="kg">kg</option><option value="l">l</option>
+                </select>
+              </div>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label form-label-sm mb-1">Denominazione di vendita / sottotitolo</label>
+              <input name="sottotitolo" class="form-control" placeholder="es. Pasta artigianale ripiena all'uovo – prodotto congelato">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label form-label-sm mb-1">Categoria</label>
+              <input name="categoria" class="form-control" list="prod_categorie">
+              <datalist id="prod_categorie">{% for c in categorie %}<option value="{{ c }}">{% endfor %}</datalist>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label form-label-sm mb-1">Formato etichetta (foglio pretagliato)</label>
+              <select name="formato_etichetta_id" class="form-select">
+                <option value="">—</option>
+                {% for f in formati %}<option value="{{ f.id }}">{{ f.descrizione }} · {{ f.uso }}</option>{% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <h6 class="text-cb-prod">Scadenza e conservazione</h6>
+          <div class="row g-2 mb-3">
+            <div class="col-md-7">
+              <label class="form-label form-label-sm mb-1">Dicitura</label>
+              <select name="tipo_scadenza" class="form-select">
+                {% for k, v in tipi_scadenza.items() %}<option value="{{ k }}">{{ v }}… {% if k == 'tmc' %}(TMC: conserve, marmellate, pasta congelata){% else %}(deperibili){% endif %}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label form-label-sm mb-1">Durata dalla produzione</label>
+              <div class="input-group">
+                <input name="durata_giorni" class="form-control" inputmode="numeric" placeholder="es. 90">
+                <span class="input-group-text">giorni</span>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label form-label-sm mb-1">Conservazione</label>
+              <textarea name="conservazione" class="form-control" rows="2" placeholder="es. Conservare in congelatore a -18 °C. Una volta scongelato non ricongelare."></textarea>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label form-label-sm mb-1">Modalità d'uso</label>
+              <textarea name="modalita_uso" class="form-control" rows="2" placeholder="es. Cuocere da congelati in acqua bollente salata per circa 5 minuti."></textarea>
+            </div>
+            <div class="col-12">
+              <label class="form-label form-label-sm mb-1">Tracce (contaminazione crociata)</label>
+              <input name="tracce" class="form-control" placeholder="es. FRUTTA A GUSCIO  →  «Può contenere tracce di FRUTTA A GUSCIO.»">
+            </div>
+          </div>
+
+          <h6 class="text-cb-prod">Produttore e altre diciture</h6>
+          <div class="row g-2">
+            <div class="col-12">
+              <label class="form-label form-label-sm mb-1">Prodotto da</label>
+              <input name="prodotto_da" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label form-label-sm mb-1">Lavorato da (se diverso, es. laboratorio con bollo CE)</label>
+              <input name="lavorato_da" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label form-label-sm mb-1">Diciture aggiuntive</label>
+              <input name="dichiarazioni_extra" class="form-control" placeholder="es. Frutta utilizzata: 60 g per 100 g">
+            </div>
+            <div class="col-12">
+              <label class="form-label form-label-sm mb-1">Note interne (non vanno in etichetta)</label>
+              <input name="note" class="form-control">
+            </div>
+            <div class="col-12 d-flex flex-wrap gap-3">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="attivo" id="prod_attivo" checked>
+                <label class="form-check-label" for="prod_attivo">In produzione</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="da_verificare" id="prod_verificare">
+                <label class="form-check-label" for="prod_verificare">Da ricontrollare (dati importati dalle etichette vecchie)</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+          <button type="submit" class="btn btn-cb prod-salva"><i class="bi bi-check-lg"></i> Salva</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

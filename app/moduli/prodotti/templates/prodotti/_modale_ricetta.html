@@ -1,0 +1,95 @@
+{# Editor delle ricette. Si apre con EditorRicetta.nuova(prodotto_id) o EditorRicetta.modifica(ricetta_id)
+   (static/ricette.js). Serve: dati di routes/ricette.dati_editor() (materie_json, prodotti_scelta,
+   unita_ricetta) e, per "＋ nuova materia prima", anche _modale_materia.html nella stessa pagina. #}
+<div class="modal fade" id="modaleRicetta" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable modal-fullscreen-md-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Ricetta</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning py-2 small d-none" id="ricettaUsata">
+          <i class="bi bi-lock"></i> Questa versione è già stata usata in un lotto e non si modifica: salvando
+          si crea una <b>nuova versione</b>; i lotti già fatti restano legati a quella vecchia.
+        </div>
+        <div class="row g-3">
+          <div class="col-lg-7">
+            <div class="row g-2 mb-2">
+              <div class="col-md-7">
+                <label class="form-label form-label-sm mb-1">Prodotto *</label>
+                <select id="ricProdotto" class="form-select">
+                  <option value="">— scegliere —</option>
+                  {% for p in prodotti_scelta %}<option value="{{ p.id }}">{{ p.nome }}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="col-md-5">
+                <label class="form-label form-label-sm mb-1">Nome della versione (facoltativo)</label>
+                <input id="ricNome" class="form-control" placeholder="es. meno zucchero">
+              </div>
+            </div>
+
+            <label class="form-label form-label-sm mb-1 d-flex justify-content-between">
+              <span>Ingredienti per una produzione</span>
+              <span class="text-muted small">quantità · unità</span>
+            </label>
+            <div class="prod-righe" id="ricRighe"></div>
+            <datalist id="ricMaterie"></datalist>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="EditorRicetta.aggiungiRiga(); EditorRicetta.focusUltima()">
+                <i class="bi bi-plus"></i> Riga
+              </button>
+              {% if current_user.role != 'consulente' %}
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="EditorRicetta.nuovaMateria()">
+                <i class="bi bi-box-seam"></i> Nuova materia prima
+              </button>
+              {% endif %}
+              <span class="small text-muted align-self-center">Totale: <b id="ricTotale">0</b></span>
+            </div>
+
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label form-label-sm mb-1">Resa: pezzi</label>
+                <input id="ricResaPezzi" class="form-control" inputmode="numeric" placeholder="es. 40 vasetti">
+              </div>
+              <div class="col-6">
+                <label class="form-label form-label-sm mb-1">Resa: kg di prodotto finito</label>
+                <input id="ricResaKg" class="form-control" inputmode="decimal" placeholder="es. 10">
+              </div>
+              <div class="col-12 form-text mt-0">Con la resa in pezzi, nel nuovo lotto le quantità si ricalcolano da sole in base ai pezzi da fare.</div>
+            </div>
+          </div>
+
+          <div class="col-lg-5">
+            <label class="form-label form-label-sm mb-1">Elenco ingredienti in etichetta (anteprima)</label>
+            <div class="prod-anteprima-ingredienti mb-1" id="ricAnteprima"><span class="text-muted">Aggiungere gli ingredienti…</span></div>
+            <div class="small mb-3" id="ricAllergeni"></div>
+            <label class="form-label form-label-sm mb-1">Procedimento</label>
+            <textarea id="ricProcedimento" class="form-control mb-2" rows="5" placeholder="Passaggi della lavorazione…"></textarea>
+            <label class="form-label form-label-sm mb-1">Note HACCP (punti critici, temperature, tempi)</label>
+            <textarea id="ricHaccp" class="form-control" rows="3" placeholder="es. pastorizzazione 85 °C per 20 minuti; abbattimento a -18 °C entro 4 ore"></textarea>
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" id="ricPredefinita">
+              <label class="form-check-label" for="ricPredefinita">Ricetta proposta per i nuovi lotti di questo prodotto</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+        {% if current_user.role != 'consulente' %}
+        <button type="button" class="btn btn-cb" id="ricSalva" onclick="EditorRicetta.salva(this)"><i class="bi bi-check-lg"></i> Salva ricetta</button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  window.PROD_URL = Object.assign(window.PROD_URL || {}, {
+    ricettaDati: "{{ url_for('prodotti.ricetta_dati', id=0) }}".replace(/0$/, ''),
+    ricettaSalva: "{{ url_for('prodotti.salva_ricetta') }}",
+    ricettaAnteprima: "{{ url_for('prodotti.anteprima_ingredienti') }}",
+  });
+  window.PROD_MATERIE = {{ materie_json | tojson }};
+  window.PROD_UNITA = {{ unita_ricetta | tojson }};
+</script>

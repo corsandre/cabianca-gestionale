@@ -27,3 +27,34 @@
     padding: 1rem 1.25rem; font-size: 1.15rem; border-radius: .75rem;
 }
 .prod-azione-grande i { font-size: 1.6rem; }
+
+/* Avvisi in alto a destra (prodAvviso) */
+.prod-avvisi { position: fixed; top: 4.5rem; right: 1rem; z-index: 2000; max-width: 380px; }
+
+/* Allergeni: caselle a "chip" cliccabili nelle finestre, etichette piccole negli elenchi */
+.prod-allergeni { display: flex; flex-wrap: wrap; gap: .35rem; }
+.prod-allergeni .btn-check + label { border-radius: 999px; font-size: .8rem; padding: .15rem .6rem; }
+.prod-badge-allergene { background: #fff3cd; color: #7a5a00; border: 1px solid #f0d88a; font-weight: normal; }
+
+/* Elenco ingredienti di legge (anteprima): come in etichetta */
+.prod-anteprima-ingredienti { background: #fff; border: 1px dashed var(--cb-prod-mid); border-radius: .5rem;
+    padding: .6rem .8rem; font-size: .9rem; min-height: 2.5rem; }
+.prod-anteprima-ingredienti strong { font-weight: 700; }
+
+/* Righe dell'editor delle ricette */
+.prod-righe .prod-riga { display: grid; grid-template-columns: 1fr 110px 80px 36px; gap: .4rem; margin-bottom: .4rem; }
+.prod-righe .prod-perc { font-size: .75rem; color: #888; }
+@media (max-width: 576px) {
+    .prod-righe .prod-riga { grid-template-columns: 1fr 90px 64px 32px; }
+}
+
+/* Schede prodotto nel catalogo */
+.prod-scheda { display: block; color: inherit; text-decoration: none; border-left: 4px solid var(--cb-prod-mid); }
+.prod-scheda:hover { border-left-color: var(--cb-prod); background: var(--cb-prod-light); }
+.prod-sigla { font-family: monospace; font-size: .8rem; background: var(--cb-prod-light); color: var(--cb-prod-dark);
+    border-radius: .25rem; padding: 0 .35rem; }
+.prod-codice-lotto { font-family: monospace; font-weight: 700; letter-spacing: .02em; }
+
+/* Finestra materia prima aperta SOPRA l'editor della ricetta: deve stare davanti (anche il suo sfondo scuro) */
+#modaleMateria { z-index: 1065; }
+.modal-backdrop + .modal-backdrop { z-index: 1060; }

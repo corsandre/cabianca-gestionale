@@ -1,0 +1,85 @@
+{# Finestra "materia prima". Si apre con ModaleMateria.apri(materia, dopo) (static/prodotti.js).
+   Serve: allergeni (services/allergeni.ALLERGENI), fornitori (Contact). #}
+<div class="modal fade" id="modaleMateria" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Materia prima</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form action="{{ url_for('prodotti.salva_materia') }}" onsubmit="event.preventDefault(); ModaleMateria.salva(this.closest('.modal').querySelector('.prod-salva'))">
+        <input type="hidden" name="id">
+        <div class="modal-body">
+          <div class="row g-2">
+            <div class="col-md-5">
+              <label class="form-label form-label-sm mb-1">Nome interno *</label>
+              <input name="nome" class="form-control" placeholder="es. Farina 00" required>
+            </div>
+            <div class="col-md-7">
+              <label class="form-label form-label-sm mb-1">Come compare in etichetta</label>
+              <input name="nome_etichetta" class="form-control" placeholder="es. farina di GRANO tenero tipo 00">
+              <div class="form-text">Scrivere in MAIUSCOLO la parola dell'allergene (GRANO, UOVA, LATTE…): verrà in grassetto.</div>
+            </div>
+            <div class="col-12">
+              <label class="form-label form-label-sm mb-1">Allergeni contenuti</label>
+              <div class="prod-allergeni">
+                {% for codice, descrizione in allergeni.items() %}
+                <input type="checkbox" class="btn-check" name="allergeni" value="{{ codice }}" id="mat_all_{{ codice }}" autocomplete="off">
+                <label class="btn btn-outline-warning" for="mat_all_{{ codice }}" title="{{ descrizione }}">{{ descrizione.split(' (')[0] }}</label>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="col-md-9">
+              <label class="form-label form-label-sm mb-1">Ingredienti tra parentesi (se è un ingrediente composto)</label>
+              <input name="composta" class="form-control" placeholder="es. per la mostarda: frutta, zucchero, essenza di SENAPE">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label form-label-sm mb-1">Unità nelle ricette</label>
+              <select name="unita" class="form-select">
+                <option value="g">grammi (g)</option><option value="kg">chili (kg)</option>
+                <option value="ml">millilitri (ml)</option><option value="l">litri (l)</option>
+                <option value="pz">pezzi (pz)</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <div class="form-check form-switch mt-1">
+                <input class="form-check-input" type="checkbox" name="produzione_propria" id="mat_propria" onchange="ModaleMateria.aggiornaFornitore()">
+                <label class="form-check-label" for="mat_propria">Produzione propria (zucche, uova, carne… dell'azienda)</label>
+              </div>
+            </div>
+            <div class="col-12 prod-fornitore">
+              <div class="row g-2">
+                <div class="col-md-6">
+                  <label class="form-label form-label-sm mb-1">Fornitore abituale</label>
+                  <select name="fornitore_id" class="form-select">
+                    <option value="">—</option>
+                    {% for f in fornitori %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}
+                  </select>
+                  <div class="form-text">Proposto in automatico quando si crea un lotto.</div>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label form-label-sm mb-1">…oppure nuovo fornitore</label>
+                  <input name="nuovo_fornitore" class="form-control" placeholder="Nome (finisce in Anagrafica)">
+                </div>
+              </div>
+            </div>
+            <div class="col-12">
+              <label class="form-label form-label-sm mb-1">Note</label>
+              <input name="note" class="form-control">
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="attiva" id="mat_attiva" checked>
+                <label class="form-check-label" for="mat_attiva">In uso (togliere la spunta per nasconderla dagli elenchi)</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+          <button type="submit" class="btn btn-cb prod-salva"><i class="bi bi-check-lg"></i> Salva</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
