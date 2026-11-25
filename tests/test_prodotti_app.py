@@ -163,6 +163,29 @@ class TestFlussoCompleto(ProdottiAppBase):
         self.post(f"/prodotti/lotti/{salvato['id']}/stato", {"stato": "ritirato"}, op, atteso=400)
         self.post(f"/prodotti/lotti/{salvato['id']}/stato", {"stato": "ritirato", "motivo": "richiamo farina"}, op)
 
+        # etichette: anteprima, stampa archiviata, download; il consulente vede ma non stampa
+        prova = self.post(f"/prodotti/lotti/{salvato['id']}/etichette/prova", {"modalita": "unica"}, op)
+        self.assertTrue(prova["immagini"][0]["src"].startswith("data:image/png;base64,"))
+        self.assertEqual(prova["fogli"], 5)                        # 38 confezioni, 8 per foglio (Grande)
+        self.post(f"/prodotti/lotti/{salvato['id']}/etichette/stampa", {"n_confezioni": 10}, self.consulente_id, atteso=403)
+        st = self.post(f"/prodotti/lotti/{salvato['id']}/etichette/stampa", {"n_confezioni": 10, "formato_id": 3,
+                                                                               "modalita": "fronte_retro"}, op)
+        self.assertEqual((st["n_etichette"], st["fogli"]), (20, 1))     # Piccolo: 24 per foglio
+        pdf = c.get(st["url"])
+        self.assertEqual(pdf.status_code, 200)
+        self.assertTrue(pdf.data.startswith(b"%PDF"))
+        from app import db
+        from app.moduli.prodotti.models import StampaEtichetta
+        with self.app.app_context():
+            s = StampaEtichetta.query.one()
+            import hashlib
+            self.assertEqual(hashlib.sha256(pdf.data).hexdigest(), s.sha256)
+            self.assertTrue(os.path.exists(os.path.join(self.cartella, "prodotti", "etichette", "2026", os.path.basename(s.pdf_path))))
+            with self.assertRaises(Exception):                     # archivio intoccabile
+                db.session.delete(s)
+                db.session.commit()
+            db.session.rollback()
+
         # tutte le pagine si aprono, per operatore e consulente
         for uid in (op, self.consulente_id):
             cl = self.client(uid)

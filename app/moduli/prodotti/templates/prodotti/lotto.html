@@ -13,7 +13,7 @@
     </div>
     <div class="d-flex flex-wrap gap-2">
         {% if scrive %}
-        {% if etichette_attive %}<a href="#etichette" class="btn btn-cb"><i class="bi bi-printer"></i> Etichette</a>{% endif %}
+        <a href="#etichette" class="btn btn-cb"><i class="bi bi-printer"></i> Etichette</a>
         <button class="btn btn-cb-outline" onclick="FinestraLotto.modifica(LOTTO)"><i class="bi bi-pencil"></i> Correggi</button>
         <div class="dropdown">
             <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Stato</button>
@@ -70,7 +70,60 @@
         </div>
     </div>
 
-    {# qui arriva la sezione Etichette (stampa e archivio) con il motore delle etichette #}
+    <div class="col-12" id="etichette">
+        <div class="cb-card p-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                <h6 class="text-cb-prod mb-0"><i class="bi bi-printer"></i> Etichette</h6>
+                <span class="small text-muted">Stile: {{ stile_etichette }}</span>
+            </div>
+            <div class="row g-3">
+                <div class="col-lg-4">
+                    <label class="form-label form-label-sm mb-1">Foglio pretagliato</label>
+                    <select id="etFormato" class="form-select mb-2">
+                        {% for f in formati %}<option value="{{ f.id }}" data-layout="{{ f.layout }}" {{ 'selected' if f.id == formato_lotto }}>{{ f.descrizione }}{% if f.codice_foglio %} ({{ f.codice_foglio }}){% endif %}</option>{% endfor %}
+                    </select>
+                    <label class="form-label form-label-sm mb-1">Etichette per confezione</label>
+                    <select id="etModalita" class="form-select mb-2">
+                        {% for k, v in modalita_etichette.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                    </select>
+                    <label class="form-label form-label-sm mb-1">Confezioni da etichettare</label>
+                    <input id="etConfezioni" class="form-control mb-2" inputmode="numeric" value="{{ l.pezzi_prodotti or '' }}">
+                    <div class="small text-muted mb-2" id="etFogli"></div>
+                    {% if scrive %}
+                    <button class="btn btn-cb w-100" id="etStampa" onclick="stampaEtichette(this)"><i class="bi bi-file-earmark-pdf"></i> Genera il PDF da stampare</button>
+                    <div class="small text-muted mt-2"><i class="bi bi-info-circle"></i> Stampare in <b>dimensione reale (100%)</b>, senza «adatta alla pagina», sui fogli pretagliati. Il PDF resta archiviato qui sotto.</div>
+                    {% endif %}
+                </div>
+                <div class="col-lg-8">
+                    <div class="prod-anteprima-etichetta" id="etAnteprima"><span class="text-muted small">Anteprima in preparazione…</span></div>
+                    <div class="small mt-1" id="etInfo"></div>
+                </div>
+            </div>
+            {% if l.stampe %}
+            <h6 class="small text-muted text-uppercase mt-3">Archivio delle stampe</h6>
+            <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead><tr><th>Data</th><th>Foglio</th><th class="text-end">Etichette</th><th>Stile</th><th>Da</th><th></th></tr></thead>
+                <tbody>
+                {% for s in l.stampe %}
+                <tr>
+                    <td>{{ s.creato_il | data_it }} {{ s.creato_il[11:16] }}</td>
+                    <td>{{ s.formato.nome if s.formato else '—' }}</td>
+                    <td class="text-end">{{ s.n_etichette }}</td>
+                    <td class="small">{{ s.stile }}</td>
+                    <td class="small">{{ s.creato_da or '' }}</td>
+                    <td class="text-end text-nowrap">
+                        <a href="{{ url_for('prodotti.scarica_etichette', id=s.id) }}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i> Apri</a>
+                        <a href="{{ url_for('prodotti.scarica_etichette', id=s.id, scarica=1) }}" class="btn btn-sm btn-outline-secondary" title="Scarica"><i class="bi bi-download"></i></a>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% endif %}
+        </div>
+    </div>
 
     {% if storico %}
     <div class="col-12">
@@ -97,6 +150,50 @@
 <script src="{{ url_for('prodotti.static', filename='lotti.js') }}"></script>
 <script>
 const LOTTO = {{ lotto_json | tojson }};
+/* ---- etichette: anteprima automatica (e quando si cambia scelta), stampa archiviata ---- */
+function sceltaEtichette() {
+    return { formato_id: document.getElementById('etFormato').value, modalita: document.getElementById('etModalita').value,
+             n_confezioni: document.getElementById('etConfezioni').value };
+}
+async function anteprimaEtichette() {
+    const box = document.getElementById('etAnteprima');
+    box.classList.add('opacity-50');
+    try {
+        const j = await prodPost("{{ url_for('prodotti.prova_etichetta', id=l.id) }}", sceltaEtichette());
+        box.innerHTML = j.immagini.map(function (i) {
+            return '<figure class="mb-2"><img src="' + i.src + '" alt="anteprima">' +
+                   (i.parte !== 'unica' ? '<figcaption class="small text-muted">' + i.parte + '</figcaption>' : '') + '</figure>';
+        }).join('');
+        document.getElementById('etFogli').textContent = j.n_etichette + ' etichette = ' + j.fogli + (j.fogli === 1 ? ' foglio' : ' fogli');
+        document.getElementById('etInfo').innerHTML = (j.avviso
+            ? '<div class="alert alert-warning py-2 mb-0"><i class="bi bi-exclamation-triangle"></i> ' + prodEsc(j.avviso) + '</div>'
+            : '<span class="text-success"><i class="bi bi-check-circle"></i> Testo a ' + String(j.corpo_pt).replace('.', ',') +
+              ' pt: leggibile (minimo ' + String(j.soglia_pt).replace('.', ',') + ' pt).</span>') +
+            (j.problemi_formato.length ? '<div class="text-danger">' + prodEsc(j.problemi_formato.join('; ')) + '</div>' : '');
+    } catch (e) { box.innerHTML = '<span class="text-danger small">' + prodEsc(e.message) + '</span>'; }
+    box.classList.remove('opacity-50');
+}
+async function stampaEtichette(bottone) {
+    const finestra = window.open('', '_blank');        // aperta subito: i browser bloccano le finestre aperte dopo un'attesa
+    try {
+        const j = await prodInCorso(bottone, prodPost("{{ url_for('prodotti.stampa_etichette', id=l.id) }}", sceltaEtichette()));
+        if (finestra) finestra.location = j.url; else location.href = j.url;
+        prodAvviso('PDF pronto: ' + j.n_etichette + ' etichette su ' + j.fogli + ' fogli. Archiviato nel lotto.', j.avviso ? 'warning' : 'success');
+        setTimeout(function () { location.reload(); }, 1500);
+    } catch (e) { if (finestra) finestra.close(); prodAvviso(e.message, 'danger'); }
+}
+document.addEventListener('DOMContentLoaded', function () {
+    const formato = document.getElementById('etFormato');
+    const modalita = document.getElementById('etModalita');
+    // sulle etichette piccole si propone fronte e retro (più spazio per il testo)
+    const proponi = function () { modalita.value = formato.selectedOptions[0].dataset.layout === 'compatto' ? 'fronte_retro' : 'unica'; };
+    proponi();
+    formato.addEventListener('change', function () { proponi(); anteprimaEtichette(); });
+    modalita.addEventListener('change', anteprimaEtichette);
+    document.getElementById('etConfezioni').addEventListener('change', anteprimaEtichette);
+    anteprimaEtichette();
+});
+
 async function cambiaStato(stato) {
     let motivo = '';
     if (stato === 'ritirato' || stato === 'annullato') {

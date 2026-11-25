@@ -174,7 +174,10 @@ def lotto(id):
     cancellate = Storico.query.filter_by(tabella="lotti_ingredienti", azione="cancellazione").all()
     storico += [s for s in cancellate if json.loads(s.prima).get("lotto_id") == id and s not in storico]
     storico.sort(key=lambda s: s.id, reverse=True)
+    from app.moduli.prodotti.routes.etichette import MODALITA, stile_attivo
+    formato_lotto = l.etichetta_dati.get("formato_etichetta_id") or l.prodotto.formato_etichetta_id
     return render_template("prodotti/lotto.html", l=l, storico=storico, json=json,
+                           modalita_etichette=MODALITA, stile_etichette=stile_attivo(), formato_lotto=formato_lotto,
                            ingredienti_html=ing.testo_html(l.ingredienti_testo or ""),
                            allergeni_testo=descrivi(l.allergeni_lista), stati=Lotto.STATI,
                            lotto_json=lotto_json(l), **dati_finestra_lotto())

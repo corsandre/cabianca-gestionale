@@ -314,7 +314,10 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
   - [x] provato con il test client: flusso completo in `tests/test_prodotti_app.py` (TestFlussoCompleto)
   - [ ] da provare a mano nel browser (finestre JS: editor ricetta, nuovo lotto) — in locale con RUOLO=sviluppo
 - [x] 2. libro lotti + finestra Nuovo lotto (`routes/lotti.py`, `static/lotti.js`, `_modale_lotto.html`, `lotti.html`, `lotto.html`): 3 passi, provenienza ripresa dall'ultimo lotto, codice -2 se doppio, correzioni con storico, stati (ritirato/annullato con motivo)
-- [ ] 3. motore etichette (prova stile da approvare)
+- [~] 3. motore etichette
+  - [x] `services/etichette.py`, stile `base-2026` (orizzontale/compatto, fronte/retro), font OFL, `routes/etichette.py` (anteprima PNG, stampa archiviata con sha256 + JSON, download), sezione Etichette nella scheda lotto; provato nel browser e nei test
+  - [x] PROVA DELLO STILE per Andrea: `~/Desktop/etichette/prova-stile-etichette-2026.pdf` (testi veri: tortelli, marubini, mostarda 150 g, marmellata 100 g fronte/retro, salame) — IN ATTESA DI APPROVAZIONE
+  - [ ] pagina «Formati e stili» (modifica formati, foglio di calibrazione, stile attivo, piede, produttore predefinito)
 - [ ] 4. export + richiamo
 - [ ] 5. import catalogo dalle etichette
 - [ ] 6. test, README, graphify
@@ -327,4 +330,4 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - 24/11/2026 – fase 0a completata (3.3.3). Ambiente locale: `.venv` (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`), test con `.venv/bin/python -m unittest discover -s tests`.
 
 ### Prossimo passo
-Passo 3, motore etichette: `services/etichette.py` (griglia del foglio in mm, adattamento del testo con WeasyPrint), stile `templates/prodotti/etichette/stili/base-2026/` (etichetta.html + stile.css, sfondo bianco), font OFL in `static/fonts/`, route `routes/etichette.py` (anteprima, genera PDF → `data/prodotti/etichette/AAAA/`, archivio in `stampe_etichette`, scarica), sezione Etichette in `lotto.html` (segnaposto già presente), pagina Formati con foglio di calibrazione. PRIMA una prova dello stile da far approvare ad Andrea (PDF sul Desktop/etichette).
+Pagina «Formati e stili» (`routes/etichette.py` + `templates/prodotti/formati.html`, solo admin per le modifiche): elenco formati modificabili con controllo `controlla_formato`, foglio di calibrazione (PDF con guide e croci), scelta stile attivo, testo del piede e produttore predefinito. Poi passo 4: export libro lotti/ricettario (PDF WeasyPrint + Excel openpyxl) e pagina Richiamo; nei template `lotti.html`/`ricettario.html` i pulsanti export aspettano le variabili `export_lotti`/`export_ricettario` (da togliere: mettere i pulsanti fissi quando esistono le route).
