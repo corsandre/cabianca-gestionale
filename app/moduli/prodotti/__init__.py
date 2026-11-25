@@ -11,7 +11,7 @@ Interfaccia verso il nucleo (usata da app/moduli/__init__.py):
 import os
 
 NOME = "prodotti"
-VERSIONE = "1.0.1"
+VERSIONE = "1.1.0"
 DATABASE = "prodotti.db"          # in data/, accanto a gestionale.db
 
 

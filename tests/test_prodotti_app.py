@@ -197,6 +197,17 @@ class TestFlussoCompleto(ProdottiAppBase):
         self.assertTrue(self.client().get("/prodotti/formati/1/calibrazione.pdf").data.startswith(b"%PDF"))
         self.assertTrue(self.client().get("/prodotti/formati/prova-margini.pdf").data.startswith(b"%PDF"))
         self.assertIn("immagini", self.post("/prodotti/formati/2/prova", {}, op))
+        # stile classico (sfondo crema, Yeseva One): compare tra gli stili e ha il suo minimo di legge (6,8 pt)
+        from app.moduli.prodotti.routes.etichette import parametri_stile, stili_disponibili
+        self.assertEqual(stili_disponibili(), ["base-2026", "classico-giallo"])
+        self.assertEqual(parametri_stile("classico-giallo")["altezza_x"], 0.5)
+        self.assertEqual(parametri_stile("base-2026")["corpo_pt"], 6.8)
+        classico = self.post("/prodotti/formati/5/prova", {"stile": "classico-giallo"}, op)
+        self.assertTrue(classico["immagini"][0]["src"].startswith("data:image/png;base64,"))
+        self.post("/prodotti/formati/impostazioni", {"stile": "classico-giallo", "piede": "www.cabianca.eu"})
+        st2 = self.post(f"/prodotti/lotti/{salvato['id']}/etichette/stampa", {"n_confezioni": 30, "formato_id": 5}, op)
+        self.assertEqual(st2["fogli"], 4)                                # 30 etichette, 8 per foglio
+        self.assertTrue(c.get(st2["url"]).data.startswith(b"%PDF"))
         self.post("/prodotti/formati/impostazioni", {"stile": "base-2026", "piede": "www.cabianca.eu"})
 
         # export: libro lotti e ricettario in PDF ed Excel, richiamo

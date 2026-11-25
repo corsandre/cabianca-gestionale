@@ -59,3 +59,4 @@ Fuori dalla cartella: `scripts/importa_etichette.py` (catalogo dalle etichette s
 |---|---|
 | 1.0.0 | catalogo, ricettario con versioni, libro lotti con storico, etichette (stile base-2026), export, richiamo, import |
 | 1.0.1 | etichette disegnate una alla volta (lucchetto su WeasyPrint): due anteprime contemporanee facevano cadere il sito (502, 25/11/2026) |
+| 1.1.0 | stile «classico-giallo» (le etichette storiche, sfondo crema); PDF ~10 volte più veloci (logo PNG, etichetta disegnata una volta e copiata nel foglio, misure riusate); indicatore di attesa con secondi; `stile.json` per il minimo di legge di ogni stile |

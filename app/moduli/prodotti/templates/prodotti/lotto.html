@@ -155,11 +155,20 @@ function sceltaEtichette() {
     return { formato_id: document.getElementById('etFormato').value, modalita: document.getElementById('etModalita').value,
              n_confezioni: document.getElementById('etConfezioni').value };
 }
-async function anteprimaEtichette() {
+let _anteprimaN = 0, _anteprimaT = null;
+function anteprimaEtichette() {
+    // più scelte cambiate di fila: si chiede solo l'ultima anteprima (il server ne disegna una alla volta)
+    clearTimeout(_anteprimaT);
+    _anteprimaT = setTimeout(_anteprimaEtichette, 300);
+}
+async function _anteprimaEtichette() {
     const box = document.getElementById('etAnteprima');
-    box.classList.add('opacity-50');
+    const n = ++_anteprimaN;
+    box.querySelectorAll('.prod-attesa').forEach(function (v) { v.remove(); });
+    const fine = prodAttesa(box, 'Preparo l’anteprima dell’etichetta…');
     try {
         const j = await prodPost("{{ url_for('prodotti.prova_etichetta', id=l.id) }}", sceltaEtichette());
+        if (n !== _anteprimaN) return;                   // nel frattempo è stata chiesta un'altra anteprima
         box.innerHTML = j.immagini.map(function (i) {
             return '<figure class="mb-2"><img src="' + i.src + '" alt="anteprima">' +
                    (i.parte !== 'unica' ? '<figcaption class="small text-muted">' + i.parte + '</figcaption>' : '') + '</figure>';
@@ -170,17 +179,21 @@ async function anteprimaEtichette() {
             : '<span class="text-success"><i class="bi bi-check-circle"></i> Testo a ' + String(j.corpo_pt).replace('.', ',') +
               ' pt: leggibile (minimo ' + String(j.soglia_pt).replace('.', ',') + ' pt).</span>') +
             (j.problemi_formato.length ? '<div class="text-danger">' + prodEsc(j.problemi_formato.join('; ')) + '</div>' : '');
-    } catch (e) { box.innerHTML = '<span class="text-danger small">' + prodEsc(e.message) + '</span>'; }
-    box.classList.remove('opacity-50');
+    } catch (e) {
+        if (n === _anteprimaN) box.innerHTML = '<span class="text-danger small">' + prodEsc(e.message) + '</span>';
+    } finally { fine(); }
 }
 async function stampaEtichette(bottone) {
     const finestra = window.open('', '_blank');        // aperta subito: i browser bloccano le finestre aperte dopo un'attesa
+    if (finestra) finestra.document.write('<p style="font-family:sans-serif;padding:2rem">Preparo il PDF delle etichette…</p>');
+    const fine = prodAttesa(document.getElementById('etAnteprima'), 'Genero il PDF da stampare…');
     try {
         const j = await prodInCorso(bottone, prodPost("{{ url_for('prodotti.stampa_etichette', id=l.id) }}", sceltaEtichette()));
         if (finestra) finestra.location = j.url; else location.href = j.url;
         prodAvviso('PDF pronto: ' + j.n_etichette + ' etichette su ' + j.fogli + ' fogli. Archiviato nel lotto.', j.avviso ? 'warning' : 'success');
         setTimeout(function () { location.reload(); }, 1500);
     } catch (e) { if (finestra) finestra.close(); prodAvviso(e.message, 'danger'); }
+    finally { fine(); }
 }
 document.addEventListener('DOMContentLoaded', function () {
     const formato = document.getElementById('etFormato');

@@ -103,6 +103,28 @@ function prodLeggi(form) {
 }
 
 /* Pulsante "in corso": disattivato con rotellina finché la promessa non finisce. */
+/* Indicatore di attesa dentro un riquadro (anteprime, PDF): rotella, messaggio, secondi che passano e barra
+   animata. Il server non sa quanto manca, quindi la barra non ha percentuale: i secondi fanno vedere che la
+   pagina non è bloccata. Restituisce la funzione che lo toglie.
+   uso:  const fine = prodAttesa(box, 'Preparo l’anteprima…');  …  fine();                                 */
+function prodAttesa(box, testo) {
+    const v = document.createElement('div');
+    v.className = 'prod-attesa';
+    v.setAttribute('role', 'status');
+    v.innerHTML = '<div class="spinner-border text-cb-prod" aria-hidden="true"></div>' +
+        '<div class="prod-attesa-testo"></div><div class="small text-muted prod-attesa-secondi">&nbsp;</div>' +
+        '<div class="progress prod-attesa-barra"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:100%"></div></div>';
+    v.querySelector('.prod-attesa-testo').textContent = testo || 'Un momento…';
+    box.classList.add('prod-in-attesa');
+    box.appendChild(v);
+    const inizio = Date.now();
+    const t = setInterval(function () {
+        const s = Math.round((Date.now() - inizio) / 1000);
+        v.querySelector('.prod-attesa-secondi').textContent = s >= 2 ? s + ' s' + (s >= 15 ? ' – quasi fatto, non chiudere la pagina' : '') : ' ';
+    }, 500);
+    return function () { clearInterval(t); v.remove(); if (!box.querySelector('.prod-attesa')) box.classList.remove('prod-in-attesa'); };
+}
+
 async function prodInCorso(bottone, promessa) {
     const html = bottone.innerHTML;
     bottone.disabled = true;

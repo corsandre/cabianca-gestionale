@@ -22,7 +22,11 @@ bordeaux, testi in Fira Sans e un riquadro verde con lotto e scadenza.
 
 ## Creare uno stile nuovo (es. per il 2027)
 
-1. Copiare questa cartella con un nome nuovo, es. `stili/vivace-2027/`, e modificarla.
+1. Copiare questa cartella con un nome nuovo, es. `stili/vivace-2027/`, e modificarla. Se i testi usano un
+   carattere diverso da Fira Sans, aggiungere `stile.json` con `corpo_pt` e `altezza_x`. `corpo_pt` è il corpo dei
+   testi a scala 1, come in `stile.css`; `altezza_x` è l'altezza della x divisa per il corpo (OS/2 sxHeight / unitsPerEm).
+   Il motore li usa per controllare il minimo di legge. Esempio: `../classico-giallo/stile.json`. Senza il file
+   valgono 6,8 pt e 0,527 (Fira Sans).
 2. Provarla dalla pagina **Formati e stili** del modulo (anteprima con dati veri).
 3. Sceglierla come stile attivo in **Formati e stili**.
 

@@ -139,16 +139,19 @@ async function provaFormato() {
     const sel = document.getElementById('provaFormatoId');
     if (!sel.value) return;
     const box = document.getElementById('provaImmagini');
-    box.classList.add('opacity-50');
+    const n = provaFormato.n = (provaFormato.n || 0) + 1;
+    box.querySelectorAll('.prod-attesa').forEach(function (v) { v.remove(); });
+    const fine = prodAttesa(box, 'Preparo l’etichetta d’esempio…');
     try {
         const stile = document.querySelector('#formImpostazioni [name=stile]').value;
         const j = await prodPost("{{ url_for('prodotti.prova_formato', id=0) }}".replace(/0\/prova$/, sel.value + '/prova'), { stile: stile });
+        if (n !== provaFormato.n) return;                // nel frattempo è stata scelta un'altra prova
         box.innerHTML = j.immagini.map(function (i) { return '<figure><img src="' + i.src + '" alt=""></figure>'; }).join('');
         document.getElementById('provaInfo').innerHTML = j.avviso
             ? '<span class="text-warning">' + prodEsc(j.avviso) + '</span>'
             : '<span class="text-success">Testo a ' + String(j.corpo_pt).replace('.', ',') + ' pt.</span>';
-    } catch (e) { box.textContent = e.message; }
-    box.classList.remove('opacity-50');
+    } catch (e) { if (n === provaFormato.n) box.textContent = e.message; }
+    finally { fine(); }
 }
 document.addEventListener('DOMContentLoaded', provaFormato);
 </script>

@@ -54,10 +54,11 @@ def fogli_necessari(n_etichette, per_foglio):
     return max(1, -(-int(n_etichette) // int(per_foglio)))
 
 
-def soglia_pt(piccola_confezione=False):
-    """Corpo minimo (pt) che rispetta l'altezza della x di legge con Fira Sans."""
+def soglia_pt(piccola_confezione=False, altezza_x=ALTEZZA_X_FIRA):
+    """Corpo minimo (pt) che rispetta l'altezza della x di legge; `altezza_x` = altezza della x / corpo del
+    carattere dei testi (lo dichiara ogni stile in stile.json: Fira Sans 0,527, Yeseva One 0,5)."""
     mm = 0.9 if piccola_confezione else 1.2
-    return round(mm / ALTEZZA_X_FIRA * PT_PER_MM, 1)
+    return round(mm / altezza_x * PT_PER_MM, 1)
 
 
 # ---------------------------------------------------------------- WeasyPrint
@@ -140,6 +141,33 @@ def pdf(html, base_url):
     """PDF (bytes) e la sua impronta sha256."""
     with _WEASYPRINT:
         dati = _documento(html, base_url).write_pdf()
+    return dati, hashlib.sha256(dati).hexdigest()
+
+
+def foglio_da_etichette(etichette_pdf, pagine, formato):
+    """PDF dei fogli A4 ottenuto «timbrando» l'etichetta già disegnata in ogni posizione del foglio.
+
+    `etichette_pdf`: {parte: PDF di UNA etichetta grande quanto l'etichetta} (es. {"fronte": …, "retro": …});
+    `pagine`: lista di pagine, ognuna lista di (x_mm, y_mm, parte).
+    Perché: tutte le etichette di un lotto sono uguali. Impaginare con WeasyPrint 24 copie per foglio costava
+    circa 4 secondi a foglio (il layout flex si rifà per ogni copia); così l'etichetta si impagina una volta sola
+    e le copie sono le stesse istruzioni vettoriali spostate (stessa qualità, pochi decimi di secondo).
+    """
+    from io import BytesIO
+    from pypdf import PdfReader, PdfWriter, Transformation
+    mm = PT_PER_MM
+    sorgenti = {p: PdfReader(BytesIO(d)).pages[0] for p, d in etichette_pdf.items()}
+    w = PdfWriter()
+    for pagina in pagine:
+        foglio = w.add_blank_page(width=A4[0] * mm, height=A4[1] * mm)
+        for x, y, parte in pagina:
+            # nel PDF l'origine è in basso a sinistra: y va contato dal fondo del foglio
+            dy = (A4[1] - y - formato["altezza_mm"]) * mm
+            foglio.merge_transformed_page(sorgenti[parte], Transformation().translate(x * mm, dy))
+    w.compress_identical_objects()
+    out = BytesIO()
+    w.write(out)
+    dati = out.getvalue()
     return dati, hashlib.sha256(dati).hexdigest()
 
 

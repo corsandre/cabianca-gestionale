@@ -323,6 +323,11 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - [x] 6. test, README (sezione «Prodotti (modulo)»), `LEGGIMI.md` del modulo completo, `graphify update .`
 
 ### Diario
+- 25/11/2026 sera – prodotti 1.1.0.
+  - Nuovo stile «classico-giallo», che ricrea le etichette storiche con sfondo crema.
+  - Indicatore di attesa con i secondi.
+  - PDF molto più veloci: 60 confezioni passano da circa 45 s a circa 2 s in produzione, perché il logo ora è un PNG e l'etichetta si disegna una volta e si copia nel foglio.
+  - Il minimo di legge ora dipende dallo stile (`stile.json`).
 - 25/11/2026, 22:39 – 502 durante le prove di Agnese.
   - Causa: due anteprime delle etichette chieste insieme. Il sito ha 2 thread e WeasyPrint non regge due disegni in parallelo (`free(): invalid next size`), quindi il processo è caduto ed è ripartito da solo.
   - Corretto in prodotti 1.0.1 con un lucchetto in `services/etichette.py` e il test `tests/test_prodotti_etichette_thread.py`, che senza lucchetto riproduce il crash.

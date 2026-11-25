@@ -10,6 +10,7 @@
 import base64
 import json
 import os
+from collections import OrderedDict
 from datetime import datetime
 
 from flask import abort, current_app, jsonify, render_template, request, send_file
@@ -82,7 +83,9 @@ def _ingredienti_html(testo):
 def componi(e, formato, stile, scala=1.0, modo="singola", parte="unica", pagine=None, guide=False):
     """HTML del documento delle etichette con lo stile indicato."""
     fonts = os.path.join(_cartella_modulo(), "static", "fonts")
-    logo = os.path.join(current_app.root_path, "static", "img", "logo.svg")
+    # logo in PNG (600 dpi, trasparente, ricavato da app/static/img/logo.svg con WeasyPrint + pdftocairo -transp):
+    # l'SVG è un disegno complesso che WeasyPrint ridisegna in ogni etichetta, e rendeva i PDF 5-10 volte più lenti
+    logo = os.path.join(_cartella_modulo(), "static", "img", "logo-etichette.png")
     return render_template(f"{CARTELLA_STILI}/{stile}/foglio.html", cartella_stile=f"{CARTELLA_STILI}/{stile}",
                            e=e, formato=formato, scala=scala, modo=modo, parte=parte, pagine=pagine or [],
                            guide=guide, logo_url="file://" + logo,
@@ -93,19 +96,53 @@ def parti_per(modalita):
     return ["fronte", "retro"] if modalita == "fronte_retro" else ["unica"]
 
 
+# Misure già fatte (la ricerca della scala richiede ~10 disegni): l'anteprima e poi la stampa dello stesso
+# lotto, o due anteprime uguali, la riusano. La chiave contiene tutti i dati dell'etichetta, quindi una
+# modifica qualsiasi rifà la misura.
+_MISURE = OrderedDict()
+
+
 def misura(e, formato, stile, modalita):
     """Scala che fa stare il testo, per ogni parte; corpo del testo risultante e avviso di legge."""
+    chiave = json.dumps([e, formato, stile, modalita], sort_keys=True, default=str)
+    if chiave in _MISURE:
+        _MISURE.move_to_end(chiave)
+        return _MISURE[chiave]
+    risultato = _misura(e, formato, stile, modalita)
+    _MISURE[chiave] = risultato
+    while len(_MISURE) > 200:
+        _MISURE.popitem(last=False)
+    return risultato
+
+
+PARAMETRI_STILE_PREDEFINITI = {"corpo_pt": 6.8, "altezza_x": motore.ALTEZZA_X_FIRA}
+
+
+def parametri_stile(stile):
+    """Misure del testo dichiarate dallo stile in stile.json (facoltativo):
+    corpo_pt = corpo dei testi a scala 1 (come in stile.css), altezza_x = altezza della x / corpo del carattere
+    dei testi. Servono per il controllo del minimo di legge."""
+    p = dict(PARAMETRI_STILE_PREDEFINITI)
+    percorso = os.path.join(_cartella_modulo(), "templates", CARTELLA_STILI, stile, "stile.json")
+    if os.path.exists(percorso):
+        with open(percorso, encoding="utf-8") as f:
+            p.update({k: v for k, v in json.load(f).items() if k in p})
+    return p
+
+
+def _misura(e, formato, stile, modalita):
     base = _cartella_modulo()
     scale = {p: motore.scala_che_ci_sta(lambda s, p=p: componi(e, formato, stile, s, "singola", p), base)
              for p in parti_per(modalita)}
-    corpo = round(6.8 * min(scale.values()), 1)          # 6.8 pt = corpo del testo a scala 1 (stile.css)
-    soglia = motore.soglia_pt()
+    ps = parametri_stile(stile)
+    corpo = round(ps["corpo_pt"] * min(scale.values()), 1)
+    soglia = motore.soglia_pt(altezza_x=ps["altezza_x"])
     avviso = None
     if corpo < soglia:
         avviso = (f"Testo piccolo: corpo {corpo} pt, sotto i {soglia} pt richiesti (altezza della x 1,2 mm). "
                   f"Scegliere un formato più grande, «fronte e retro», o accorciare i testi. "
-                  f"Il minimo è 0,9 mm (≈{motore.soglia_pt(True)} pt) solo se la superficie maggiore della "
-                  f"confezione è sotto gli 80 cm².")
+                  f"Il minimo è 0,9 mm (≈{motore.soglia_pt(True, ps['altezza_x'])} pt) solo se la superficie "
+                  f"maggiore della confezione è sotto gli 80 cm².")
     return scale, corpo, soglia, avviso
 
 
@@ -167,9 +204,12 @@ def stampa_etichette(id):
     posti, per_foglio = motore.posizioni(fd), f.per_foglio
     pagine = [[(x, y, e, parte) for (x, y), parte in zip(posti, elenco[i:i + per_foglio])]
               for i in range(0, len(elenco), per_foglio)]
-    # una sola scala per tutto il foglio (la più piccola), così fronte e retro hanno caratteri coerenti
-    html = componi(e, fd, stile, min(scale.values()), "foglio", pagine=pagine)
-    dati_pdf, impronta = motore.pdf(html, _cartella_modulo())
+    # una sola scala per tutto il foglio (la più piccola), così fronte e retro hanno caratteri coerenti.
+    # Ogni parte si disegna UNA volta e si copia in tutte le posizioni (services/etichette.foglio_da_etichette).
+    scala = min(scale.values())
+    disegni = {p: motore.pdf(componi(e, fd, stile, scala, "singola", p), _cartella_modulo())[0] for p in scale}
+    dati_pdf, impronta = motore.foglio_da_etichette(
+        disegni, [[(x, y, parte) for x, y, _e, parte in pagina] for pagina in pagine], fd)
 
     anno = l.data_produzione[:4]
     cartella = os.path.join(cartella_pdf(), anno)

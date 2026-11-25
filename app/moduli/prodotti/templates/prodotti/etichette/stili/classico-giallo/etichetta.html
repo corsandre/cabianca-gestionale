@@ -1,0 +1,65 @@
+{#- UNA etichetta (stile classico-giallo, come le etichette storiche fatte in Illustrator).
+    Variabili: e, formato, parte ('unica' | 'fronte' | 'retro'), logo_url.
+    Impaginazioni: formato.layout 'orizzontale' (marchio a sinistra, testi a destra) o 'compatto' (in colonna). -#}
+{%- macro testi(e) -%}
+  <div class="testi">
+    {% if e.ingredienti_html %}<p class="ingredienti">{{ e.ingredienti_html | safe }}</p>{% endif %}
+    {% if e.tracce %}<p class="voce">Può contenere tracce di {{ e.tracce | trim('.') }}.</p>{% endif %}
+    {% if e.dichiarazioni_extra %}<p class="voce">{{ e.dichiarazioni_extra }}</p>{% endif %}
+    {% if e.conservazione %}<p class="voce"><b>Conservazione:</b> {{ e.conservazione }}</p>{% endif %}
+    {% if e.modalita_uso %}<p class="voce"><b>Modalità d'uso:</b> {{ e.modalita_uso }}</p>{% endif %}
+    {% if e.prodotto_da %}<p class="voce"><b>Prodotto da:</b> {{ e.prodotto_da }}</p>{% endif %}
+    {% if e.lavorato_da %}<p class="voce"><b>Lavorato da:</b> {{ e.lavorato_da }}</p>{% endif %}
+  </div>
+{%- endmacro -%}
+{#- in fondo: lotto e scadenza a sinistra (come «Lotto: 21112024 / Consumare pref. entro: …»), peso grande a destra -#}
+{%- macro fondo(e, con_peso) -%}
+  <div class="fondo">
+    <div class="dati">
+      <div class="d-riga"><span class="d-voce">Lotto:</span> <span class="d-valore">{{ e.lotto }}</span></div>
+      {% if e.scadenza %}
+      <div class="d-riga"><span class="d-voce">{{ e.dicitura_scadenza }}:</span> <span class="d-valore">{{ e.scadenza }}</span></div>
+      {% endif %}
+    </div>
+    {% if con_peso and e.peso %}<div class="peso">{{ e.peso | replace(' ', '') }}</div>{% endif %}
+  </div>
+{%- endmacro -%}
+<div class="etichetta {{ formato.layout }} parte-{{ parte }}">
+  {% if parte == 'fronte' %}
+    <div class="fronte">
+      <img class="logo" src="{{ logo_url }}" alt="">
+      <div class="nome">{{ e.nome }}</div>
+      {% if e.sottotitolo %}<div class="sottotitolo">{{ e.sottotitolo }}</div>{% endif %}
+      {% if e.peso %}<div class="peso">{{ e.peso | replace(' ', '') }}</div>{% endif %}
+      {% if e.piede %}<div class="piede">{{ e.piede }}</div>{% endif %}
+    </div>
+  {% elif formato.layout == 'orizzontale' and parte == 'unica' %}
+    <div class="col-marchio">
+      <img class="logo" src="{{ logo_url }}" alt="">
+      <div class="nome">{{ e.nome }}</div>
+      {% if e.sottotitolo %}<div class="sottotitolo">{{ e.sottotitolo }}</div>{% endif %}
+    </div>
+    <div class="col-testo">
+      {{ testi(e) }}
+      <div class="spinta"></div>
+      {{ fondo(e, true) }}
+      {% if e.piede %}<div class="piede">{{ e.piede }}</div>{% endif %}
+    </div>
+  {% else %}
+    {# compatto 'unica' oppure 'retro' (di qualunque impaginazione) #}
+    <div class="colonna">
+      {% if parte == 'unica' %}
+      <div class="testata">
+        <img class="logo" src="{{ logo_url }}" alt="">
+        <div class="nome">{{ e.nome }}</div>
+      </div>
+      {% else %}
+      <div class="testata-retro">{{ e.nome }}</div>
+      {% endif %}
+      {{ testi(e) }}
+      <div class="spinta"></div>
+      {{ fondo(e, parte == 'unica') }}
+      {% if e.piede and parte == 'unica' %}<div class="piede">{{ e.piede }}</div>{% endif %}
+    </div>
+  {% endif %}
+</div>

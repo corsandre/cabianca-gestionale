@@ -717,9 +717,18 @@ cancellano; le correzioni ai lotti sono permesse ma finiscono nello **storico** 
 ricetta usata in un lotto non cambia più (salvando si crea una nuova versione). Il lotto conserva una copia
 dei dati di etichetta del momento.
 
-**Etichette**: generate in PDF con WeasyPrint dallo stile attivo (`templates/prodotti/etichette/stili/`,
-oggi `base-2026`: sfondo bianco, poco toner). Il testo si adatta da solo all'etichetta (ingrandisce o
-riduce) e c'è un avviso se scende sotto il corpo minimo di legge (altezza della x 1,2 mm ≈ 6,5 pt). Sulle
+**Etichette**: generate in PDF con WeasyPrint dallo stile attivo (`templates/prodotti/etichette/stili/`),
+che si sceglie in «Formati e stili»:
+- `base-2026`: sfondo bianco, poco toner;
+- `classico-giallo`: le etichette storiche con sfondo crema e Yeseva One.
+
+Il testo si adatta da solo all'etichetta (ingrandisce o riduce). Compare un avviso se scende sotto il corpo
+minimo di legge, cioè un'altezza della x di 1,2 mm: circa 6,5 pt con Fira Sans e 6,8 pt con Yeseva One (ogni
+stile lo dichiara in `stile.json`). Velocità:
+- l'etichetta si impagina una volta sola e poi si copia in tutte le posizioni del foglio con pypdf, quindi 60
+  confezioni richiedono circa 2 s;
+- il logo è un PNG (`static/img/logo-etichette.png`);
+- WeasyPrint disegna una cosa alla volta (lucchetto), perché non regge due disegni insieme. Sulle
 etichette piccole si può stampare **fronte e retro** (due etichette per confezione). Stampare sempre in
 dimensione reale (100%). Ogni stampa è archiviata (`data/prodotti/etichette/AAAA/`, con impronta sha256).
 Uno stile nuovo si crea copiando la cartella dello stile (vedi il suo `LEGGIMI.md`) e si prova con
