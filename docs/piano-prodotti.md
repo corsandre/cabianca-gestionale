@@ -346,5 +346,13 @@ Restano da fare con Andrea:
 3. **Catalogo importato** (68 prodotti «da verificare»): ricontrollare i prodotti e inserire le ricette con le quantità.
 4. Osservare per qualche giorno bot, avvisi, backup notturno (ora con `prodotti.db`), cassa ed email fatture nel container `servizi`.
 
+Esito del rilascio:
+- `/salute` ok, 24 pagine principali ok in produzione;
+- bot connesso senza 409, impianto in Automatico;
+- PDF ed etichette generati sul server;
+- catalogo caricato (68 prodotti, 94 materie prime).
+
+Ritorno alla 3.3.2 (solo per questo primo rilascio): `:web-precedente` non esiste. Servono l'immagine `cabianca-gestionale:latest`, tenuta apposta (da togliere dopo qualche giorno di osservazione con `docker image rm cabianca-gestionale:latest`), il `docker-compose.yml` di 90d4e6c e le copie in `backups/pre-deploy_20261125_195138/`.
+
 Idee rimandate: bollino tondo per il tappo, stampa da una posizione N del foglio, tabella nutrizionale.
 Per sviluppi e correzioni futuri: README, «Guida rapida: sviluppi e correzioni futuri».
