@@ -186,11 +186,23 @@ class TestFlussoCompleto(ProdottiAppBase):
                 db.session.commit()
             db.session.rollback()
 
+        # formati: solo l'admin li modifica; un formato che esce dal foglio è rifiutato; calibrazione in PDF
+        self.post("/prodotti/formati/salva", {"id": 1, "nome": "Grande", "larghezza_mm": 105, "altezza_mm": 74,
+                                              "colonne": 2, "righe": 4}, op, atteso=403)
+        self.post("/prodotti/formati/salva", {"nome": "Rotto", "larghezza_mm": 110, "altezza_mm": 74,
+                                              "colonne": 2, "righe": 4}, atteso=400)
+        self.post("/prodotti/formati/salva", {"nome": "Tondo 60", "larghezza_mm": 60, "altezza_mm": 60,
+                                              "colonne": 3, "righe": 4, "margine_sup_mm": 15, "margine_sx_mm": 10,
+                                              "passo_orizz_mm": 65, "passo_vert_mm": 67, "layout": "compatto"})
+        self.assertTrue(self.client().get("/prodotti/formati/1/calibrazione.pdf").data.startswith(b"%PDF"))
+        self.assertIn("immagini", self.post("/prodotti/formati/2/prova", {}, op))
+        self.post("/prodotti/formati/impostazioni", {"stile": "base-2026", "piede": "www.cabianca.eu"})
+
         # tutte le pagine si aprono, per operatore e consulente
         for uid in (op, self.consulente_id):
             cl = self.client(uid)
             for url in ("/prodotti/", "/prodotti/lotti", f"/prodotti/lotti/{salvato['id']}", "/prodotti/catalogo",
-                        f"/prodotti/catalogo/{p['id']}", "/prodotti/ricettario", "/prodotti/materie-prime",
+                        f"/prodotti/catalogo/{p['id']}", "/prodotti/ricettario", "/prodotti/materie-prime", "/prodotti/formati",
                         f"/prodotti/lotti?nuovo={p['id']}", "/prodotti/lotti?stato=ritirato&dal=2026-01-01"):
                 self.assertEqual(cl.get(url).status_code, 200, url)
 

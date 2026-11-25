@@ -202,3 +202,134 @@ def scarica_etichette(id):
     scarica = request.args.get("scarica") == "1"
     return send_file(percorso, mimetype="application/pdf", as_attachment=scarica,
                      download_name=os.path.basename(s.pdf_path))
+
+
+# ---------------------------------------------------------------- formati, stili, impostazioni (pagina «Formati e stili»)
+
+# Dati d'esempio per provare formati e stili senza un lotto (testi veri dei tortelli di zucca)
+ESEMPIO = {
+    "nome": "Tortelli di zucca", "sottotitolo": "Pasta artigianale ripiena all'uovo – prodotto congelato",
+    "peso": "500 g", "dicitura_peso": "Peso netto",
+    "ingredienti_html": "<b>Ingredienti:</b> farina di <strong>GRANO</strong> tenero tipo 00, semola di "
+                        "<strong>GRANO</strong> duro, zucca, mostarda (frutta, zucchero, essenza di <strong>SENAPE</strong>), "
+                        "Grana Padano DOP (<strong>LATTE</strong>, sale, caglio, conservante: lisozima da <strong>UOVO</strong>), "
+                        "amaretti (contengono <strong>UOVA</strong>), <strong>UOVA</strong>, sale, pepe, olio extravergine di oliva.",
+    "tracce": "FRUTTA A GUSCIO", "conservazione": "Conservare in congelatore a -18 °C. Una volta scongelato non ricongelare.",
+    "modalita_uso": "Cuocere da congelati in acqua bollente salata per circa 5 minuti.", "dichiarazioni_extra": "",
+    "prodotto_da": "", "lavorato_da": "", "lotto": "L241126-ZUC",
+    "dicitura_scadenza": "Da consumarsi preferibilmente entro il", "scadenza": "24/02/2027", "piede": "",
+}
+
+
+@bp.route("/formati")
+def formati():
+    elenco = FormatoEtichetta.query.order_by(FormatoEtichetta.id).all()
+    return render_template("prodotti/formati.html", formati=elenco, stili=stili_disponibili(), stile=stile_attivo(),
+                           piede=Impostazione.leggi("piede_etichette", PIEDE_PREDEFINITO),
+                           produttore=Impostazione.leggi("produttore", ""),
+                           problemi={f.id: motore.controlla_formato(formato_dict(f)) for f in elenco},
+                           formati_json=[formato_dict(f) for f in elenco])
+
+
+@bp.route("/formati/salva", methods=["POST"])
+@write_required
+def salva_formato():
+    from flask_login import current_user
+    if current_user.role != "admin":                       # JSON, non la pagina 403 di admin_required
+        return errore("Solo l'amministratore modifica i formati.", 403)
+    d = dati_richiesta()
+    f = db.session.get(FormatoEtichetta, int(d["id"])) if d.get("id") else FormatoEtichetta()
+    if f is None:
+        return errore("Formato non trovato.", 404)
+    nome = (d.get("nome") or "").strip()
+    if not nome:
+        return errore("Il nome è obbligatorio.")
+    misure = {}
+    for c in ("larghezza_mm", "altezza_mm", "margine_sup_mm", "margine_sx_mm", "passo_orizz_mm", "passo_vert_mm",
+              "offset_x_mm", "offset_y_mm"):
+        misure[c] = numero(d.get(c))
+    for c in ("colonne", "righe"):
+        misure[c] = numero(d.get(c), intero=True)
+    if not all(misure[c] and misure[c] > 0 for c in ("larghezza_mm", "altezza_mm", "colonne", "righe")):
+        return errore("Misure, colonne e righe devono essere maggiori di zero.")
+    for c in ("margine_sup_mm", "margine_sx_mm", "offset_x_mm", "offset_y_mm"):
+        misure[c] = misure[c] or 0
+    problemi = motore.controlla_formato(misure)
+    if problemi:
+        return errore("Formato non valido: " + "; ".join(problemi))
+    for c, v in misure.items():
+        setattr(f, c, v)
+    f.nome, f.uso = nome, (d.get("uso") or "").strip() or None
+    f.codice_foglio = (d.get("codice_foglio") or "").strip() or None
+    f.layout = d.get("layout") if d.get("layout") in ("orizzontale", "compatto") else "orizzontale"
+    f.attivo = str(d.get("attivo", True)).lower() not in ("false", "0", "")
+    db.session.add(f)
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@bp.route("/formati/impostazioni", methods=["POST"])
+@write_required
+def salva_impostazioni_etichette():
+    from flask_login import current_user
+    if current_user.role != "admin":
+        return errore("Solo l'amministratore modifica le impostazioni.", 403)
+    d = dati_richiesta()
+    if d.get("stile") not in stili_disponibili():
+        return errore("Stile sconosciuto.")
+    Impostazione.scrivi("stile_etichette", d["stile"])
+    Impostazione.scrivi("piede_etichette", (d.get("piede") or "").strip())
+    if (d.get("produttore") or "").strip():
+        Impostazione.scrivi("produttore", d["produttore"].strip())
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@bp.route("/formati/<int:id>/prova", methods=["POST"])
+def prova_formato(id):
+    """Anteprima di un formato con uno stile (anche non attivo), sui dati d'esempio."""
+    f = db.session.get(FormatoEtichetta, id) or abort(404)
+    d = dati_richiesta()
+    stile = d.get("stile") if d.get("stile") in stili_disponibili() else stile_attivo()
+    modalita = d.get("modalita") if d.get("modalita") in MODALITA else (
+        "fronte_retro" if f.layout == "compatto" else "unica")
+    e = dict(ESEMPIO, prodotto_da=Impostazione.leggi("produttore", ""),
+             piede=Impostazione.leggi("piede_etichette", PIEDE_PREDEFINITO))
+    fd = formato_dict(f)
+    scale, corpo, soglia, avviso = misura(e, fd, stile, modalita)
+    immagini = []
+    for parte, scala in scale.items():
+        pdf, _ = motore.pdf(componi(e, fd, stile, scala, "singola", parte), _cartella_modulo())
+        immagini.append({"parte": parte, "src": "data:image/png;base64,"
+                         + base64.b64encode(motore.png_anteprima(pdf, dpi=200)).decode()})
+    return jsonify(ok=True, immagini=immagini, corpo_pt=corpo, soglia_pt=soglia, avviso=avviso)
+
+
+@bp.route("/formati/<int:id>/calibrazione.pdf")
+def calibrazione(id):
+    """Foglio di calibrazione: contorni e centri di tutte le etichette, da stampare su carta normale.
+
+    Sovrapponendolo controluce a un foglio pretagliato si vede di quanto la stampante sposta la stampa:
+    quei millimetri vanno in "spostamento X/Y" del formato (positivi = verso destra / verso il basso).
+    """
+    f = db.session.get(FormatoEtichetta, id) or abort(404)
+    fd = formato_dict(f)
+    posti = motore.posizioni(fd)
+    w, h = f.larghezza_mm, f.altezza_mm
+    caselle = "".join(
+        f'<div class="c" style="left:{x}mm;top:{y}mm"><div class="n">{i + 1}</div>'
+        f'<div class="h"></div><div class="v"></div></div>' for i, (x, y) in enumerate(posti))
+    html = f"""<!doctype html><html><head><meta charset="utf-8"><style>
+@page {{ size: A4; margin: 0; }} body {{ margin: 0; font-family: sans-serif; }}
+.c {{ position: absolute; width: {w}mm; height: {h}mm; box-sizing: border-box; border: 0.2mm solid #000; }}
+.n {{ position: absolute; left: 1.5mm; top: 1mm; font-size: 7pt; color: #555; }}
+.h {{ position: absolute; left: {w / 2 - 4}mm; top: {h / 2}mm; width: 8mm; border-top: 0.2mm solid #000; }}
+.v {{ position: absolute; left: {w / 2}mm; top: {h / 2 - 4}mm; height: 8mm; border-left: 0.2mm solid #000; }}
+.t {{ position: absolute; left: 0; right: 0; top: {min(posti[0][1] + h / 2 + 6, 140)}mm; text-align: center; font-size: 8pt; color: #333; }}
+</style></head><body>{caselle}
+<div class="t">Foglio di calibrazione – {f.descrizione} – spostamento attuale X {f.offset_x_mm:g} mm, Y {f.offset_y_mm:g} mm.<br>
+Stampare al 100% su carta normale, sovrapporre al foglio pretagliato controluce e misurare lo scarto.</div>
+</body></html>"""
+    dati, _ = motore.pdf(html, _cartella_modulo())
+    from io import BytesIO
+    return send_file(BytesIO(dati), mimetype="application/pdf", download_name=f"calibrazione_{f.nome}.pdf")

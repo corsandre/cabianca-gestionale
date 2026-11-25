@@ -314,10 +314,10 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
   - [x] provato con il test client: flusso completo in `tests/test_prodotti_app.py` (TestFlussoCompleto)
   - [ ] da provare a mano nel browser (finestre JS: editor ricetta, nuovo lotto) — in locale con RUOLO=sviluppo
 - [x] 2. libro lotti + finestra Nuovo lotto (`routes/lotti.py`, `static/lotti.js`, `_modale_lotto.html`, `lotti.html`, `lotto.html`): 3 passi, provenienza ripresa dall'ultimo lotto, codice -2 se doppio, correzioni con storico, stati (ritirato/annullato con motivo)
-- [~] 3. motore etichette
+- [x] 3. motore etichette (stile in attesa di approvazione di Andrea)
   - [x] `services/etichette.py`, stile `base-2026` (orizzontale/compatto, fronte/retro), font OFL, `routes/etichette.py` (anteprima PNG, stampa archiviata con sha256 + JSON, download), sezione Etichette nella scheda lotto; provato nel browser e nei test
   - [x] PROVA DELLO STILE per Andrea: `~/Desktop/etichette/prova-stile-etichette-2026.pdf` (testi veri: tortelli, marubini, mostarda 150 g, marmellata 100 g fronte/retro, salame) — IN ATTESA DI APPROVAZIONE
-  - [ ] pagina «Formati e stili» (modifica formati, foglio di calibrazione, stile attivo, piede, produttore predefinito)
+  - [x] pagina «Formati e stili» (`formati.html`): formati modificabili dall'admin con controllo, foglio di calibrazione PDF, prova con etichetta d'esempio, stile attivo, piede, produttore
 - [ ] 4. export + richiamo
 - [ ] 5. import catalogo dalle etichette
 - [ ] 6. test, README, graphify
@@ -330,4 +330,4 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - 24/11/2026 – fase 0a completata (3.3.3). Ambiente locale: `.venv` (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`), test con `.venv/bin/python -m unittest discover -s tests`.
 
 ### Prossimo passo
-Pagina «Formati e stili» (`routes/etichette.py` + `templates/prodotti/formati.html`, solo admin per le modifiche): elenco formati modificabili con controllo `controlla_formato`, foglio di calibrazione (PDF con guide e croci), scelta stile attivo, testo del piede e produttore predefinito. Poi passo 4: export libro lotti/ricettario (PDF WeasyPrint + Excel openpyxl) e pagina Richiamo; nei template `lotti.html`/`ricettario.html` i pulsanti export aspettano le variabili `export_lotti`/`export_ricettario` (da togliere: mettere i pulsanti fissi quando esistono le route).
+Passo 4: `routes/esporta.py` con libro lotti (PDF per il controllo con WeasyPrint, una riga per lotto + dettaglio ingredienti/provenienza; Excel con openpyxl, due fogli: lotti e ingredienti) e ricettario (PDF una ricetta per pagina; Excel). Pulsanti in `lotti.html` (variabile `export_lotti`) e `ricettario.html` (`export_ricettario`): renderli fissi. Poi pagina Richiamo (`/prodotti/richiamo`): cerca per materia prima + lotto fornitore, o fornitore + periodo; elenco lotti coinvolti, «segna ritirati» in blocco con motivo, export PDF.
