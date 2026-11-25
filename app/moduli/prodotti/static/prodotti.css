@@ -66,3 +66,17 @@
 .prod-magia { position: absolute; right: .4rem; top: 50%; transform: translateY(-50%); pointer-events: none; }
 .prod-tab-ingredienti td { padding: .2rem .25rem; }
 #modaleProdotto { z-index: 1065; }   /* può aprirsi sopra la finestra Nuovo lotto */
+
+/* Telefono: ogni ingrediente del lotto diventa una scheda a due colonne invece di una riga larga */
+@media (max-width: 767.98px) {
+    .prod-tab-ingredienti thead { display: none; }
+    .prod-tab-ingredienti, .prod-tab-ingredienti tbody { display: block; }
+    .prod-tab-ingredienti tr { display: grid; grid-template-columns: 1fr 1fr; gap: .35rem .5rem; position: relative;
+        border: 1px solid #e3e3e3; border-radius: .5rem; padding: .5rem 2.6rem .6rem .6rem; margin-bottom: .5rem; }
+    .prod-tab-ingredienti td { display: block; border: 0; padding: 0; }
+    .prod-tab-ingredienti td[data-etichetta]::before { content: attr(data-etichetta); display: block; font-size: .7rem; color: #888; }
+    .prod-tab-ingredienti td[data-etichetta="Ingrediente"] { grid-column: 1 / -1; }
+    .prod-tab-ingredienti td[data-etichetta="Propria"] { text-align: left !important; }
+    .prod-tab-ingredienti .prod-togli { position: absolute; top: .45rem; right: .45rem; }
+    .prod-tab-ingredienti .form-control-sm, .prod-tab-ingredienti .input-group-sm > * { font-size: 1rem; }   /* niente zoom di iOS */
+}

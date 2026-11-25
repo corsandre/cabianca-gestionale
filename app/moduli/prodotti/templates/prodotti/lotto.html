@@ -51,14 +51,14 @@
             <div class="p-3 pb-2"><h6 class="text-cb-prod mb-0">Ingredienti e provenienza</h6></div>
             <div class="table-responsive">
             <table class="table table-sm align-middle mb-0">
-                <thead><tr><th>Ingrediente</th><th class="text-end">Quantità</th><th>Provenienza</th><th>Lotto fornitore</th><th>Documento</th></tr></thead>
+                <thead><tr><th>Ingrediente</th><th class="text-end">Quantità</th><th>Provenienza</th><th>Lotto / rif.</th><th>Documento</th></tr></thead>
                 <tbody>
                 {% for r in l.ingredienti %}
                 <tr>
                     <td>{{ r.nome }}</td>
                     <td class="text-end text-nowrap">{% if r.quantita %}{{ r.quantita | round(1) | string | replace('.0', '') }} {{ r.unita }}{% endif %}</td>
                     <td>{% if r.produzione_propria %}<i class="bi bi-house-heart text-success"></i> produzione propria{% else %}{{ r.fornitore_nome or '—' }}{% endif %}</td>
-                    <td class="prod-codice-lotto small">{% if r.produzione_propria %}—{% elif r.lotto_fornitore %}{{ r.lotto_fornitore }}{% else %}<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> mancante</span>{% endif %}</td>
+                    <td class="prod-codice-lotto small">{% if r.produzione_propria %}{{ r.lotto_fornitore or '—' }}{% elif r.lotto_fornitore %}{{ r.lotto_fornitore }}{% else %}<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> mancante</span>{% endif %}</td>
                     <td class="small">{{ r.rif_documento or '' }}</td>
                 </tr>
                 {% else %}

@@ -65,7 +65,8 @@ def righe_da_ricetta(ricetta, pezzi):
                 "precompilato": False}
         ultima = ultima_provenienza(m.id)
         if ultima:
-            riga.update(ultima, precompilato=True)
+            # l'icona "ripreso dall'ultimo lotto" ha senso solo se c'è davvero un codice da ricontrollare
+            riga.update(ultima, precompilato=bool(ultima["lotto_fornitore"]))
         out.append(riga)
     return out
 
@@ -227,6 +228,7 @@ def salva_lotto():
                       "lotto_fornitore": (r.get("lotto_fornitore") or "").strip() or None,
                       "rif_documento": (r.get("rif_documento") or "").strip() or None,
                       "produzione_propria": propria, "ordine": i})
+    # per la produzione propria il "lotto" è un riferimento interno facoltativo: non manca mai
     mancanti = [r["nome"] for r in righe if not r["produzione_propria"] and not r["lotto_fornitore"]]
 
     l.codice, l.prodotto_id = codice, p.id

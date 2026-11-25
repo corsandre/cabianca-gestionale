@@ -162,16 +162,17 @@ const FinestraLotto = {
     aggiungiRiga: function (r) {
         const tr = document.createElement('tr');
         tr.dataset.materiaId = r.materia_prima_id || '';
+        // data-etichetta: su telefono le celle diventano una scheda con il nome del campo (prodotti.css)
         tr.innerHTML =
-            '<td><input class="form-control form-control-sm l-nome" list="lotMaterie" placeholder="Ingrediente"></td>' +
-            '<td><div class="input-group input-group-sm"><input class="form-control l-q" inputmode="decimal">' +
+            '<td data-etichetta="Ingrediente"><input class="form-control form-control-sm l-nome" list="lotMaterie" placeholder="Ingrediente"></td>' +
+            '<td data-etichetta="Quantità"><div class="input-group input-group-sm"><input class="form-control l-q" inputmode="decimal">' +
             '<span class="input-group-text l-unita"></span></div></td>' +
-            '<td class="text-center"><input type="checkbox" class="form-check-input l-propria" title="Produzione propria"></td>' +
-            '<td><input class="form-control form-control-sm l-forn" list="lotFornitori" placeholder="Fornitore"></td>' +
-            '<td><div class="position-relative"><input class="form-control form-control-sm l-lotto" placeholder="Lotto">' +
+            '<td data-etichetta="Propria" class="text-center"><input type="checkbox" class="form-check-input l-propria" title="Produzione propria"></td>' +
+            '<td data-etichetta="Fornitore"><input class="form-control form-control-sm l-forn" list="lotFornitori" placeholder="Fornitore"></td>' +
+            '<td data-etichetta="Lotto"><div class="position-relative"><input class="form-control form-control-sm l-lotto" placeholder="Lotto">' +
             (r.precompilato ? '<i class="bi bi-magic text-cb-prod prod-magia" title="Ripreso dall\'ultimo lotto"></i>' : '') + '</div></td>' +
-            '<td><input class="form-control form-control-sm l-doc" placeholder="DDT n°…"></td>' +
-            '<td><button type="button" class="btn btn-sm btn-outline-secondary" title="Togli"><i class="bi bi-x"></i></button></td>';
+            '<td data-etichetta="DDT/fattura"><input class="form-control form-control-sm l-doc" placeholder="DDT n°…"></td>' +
+            '<td class="prod-togli"><button type="button" class="btn btn-sm btn-outline-secondary" title="Togli"><i class="bi bi-x"></i></button></td>';
         tr.querySelector('.l-nome').value = r.nome || '';
         tr.querySelector('.l-q').value = r.quantita != null ? String(r.quantita).replace('.', ',') : '';
         tr.querySelector('.l-unita').textContent = r.unita || 'g';
@@ -180,8 +181,11 @@ const FinestraLotto = {
         tr.querySelector('.l-lotto').value = r.lotto_fornitore || '';
         tr.querySelector('.l-doc').value = r.rif_documento || '';
         const propria = tr.querySelector('.l-propria');
+        // produzione propria: niente fornitore né DDT; il lotto resta come riferimento interno facoltativo
+        // (es. "raccolta 10/11 campo nord"), utile per la tracciabilità
         const aggiorna = function () {
-            ['.l-forn', '.l-lotto', '.l-doc'].forEach(function (c) { tr.querySelector(c).disabled = propria.checked; });
+            ['.l-forn', '.l-doc'].forEach(function (c) { tr.querySelector(c).disabled = propria.checked; });
+            tr.querySelector('.l-lotto').placeholder = propria.checked ? 'rif. interno (facolt.)' : 'Lotto';
         };
         propria.addEventListener('change', aggiorna);
         aggiorna();
