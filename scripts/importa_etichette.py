@@ -12,8 +12,13 @@ Due passi, da lanciare a mano:
        python3 scripts/importa_etichette.py carica docs/import/catalogo-etichette.json data/prodotti.db
        (in Docker: docker compose exec web python scripts/importa_etichette.py carica ... /app/data/prodotti.db)
    Crea i prodotti con «da ricontrollare» acceso e le materie prime trovate negli elenchi ingredienti
-   (con gli allergeni riconosciuti dalle parole in MAIUSCOLO). Non crea ricette: le etichette non hanno
-   le quantità. Si può rilanciare: salta i prodotti (stesso nome e peso) e le materie prime già presenti.
+   (con gli allergeni riconosciuti dalle parole in MAIUSCOLO). Si può rilanciare: salta i prodotti (stesso
+   nome e peso) e le materie prime già presenti.
+
+3. RICETTE (dopo CARICA; fatto in produzione il 25/11/2026: 67 ricette):
+       python3 scripts/importa_etichette.py ricette docs/import/catalogo-etichette.json data/prodotti.db
+   Per ogni prodotto senza ricette crea la versione 1 «dalle etichette» con gli ingredienti nell'ordine
+   dell'etichetta e quantità 0 (le etichette non le hanno), così si stampano subito le etichette dei lotti.
 """
 import json
 import os

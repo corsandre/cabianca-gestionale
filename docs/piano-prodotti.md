@@ -343,7 +343,13 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 Restano da fare con Andrea:
 1. **Margini della stampante**: dalla scansione (`~/Desktop/etichette/Scan25112026193949.pdf`) sopra e a sinistra la stampa arriva al bordo, a destra e in basso sembra mancare circa 5–9 mm, ma in parte la taglia lo scanner. Bisogna leggere i numeri sul foglio stampato e poi regolare lo spostamento X/Y in «Formati e stili».
 2. **Fogli**: comprare L7165, L7163, L7160, L7164 (o equivalenti), misurarli e stampare il foglio di calibrazione.
-3. **Catalogo importato** (68 prodotti «da verificare»): ricontrollare i prodotti e inserire le ricette con le quantità.
+3. **Catalogo importato** (68 prodotti «da verificare»).
+   - Il 25/11 sono state create anche **67 ricette «dalle etichette»** (`importa_etichette.py ricette`), con gli ingredienti nell'ordine dell'etichetta e le **quantità a 0**: le etichette dei lotti vecchi si possono già stampare.
+   - Manca solo la Mostarda di zucca cedrina: c'era soltanto il fronte, senza ingredienti.
+   - Corretto il grano saraceno: non ha glutine, ed è stato rimesso il 30% sulla taragna.
+   - Da completare in ogni prodotto: la **durata** (nessuno ce l'ha, quindi senza durata l'etichetta esce senza scadenza), la **conservazione** (testi importati sporchi) e il **peso** (manca in 10 prodotti).
+   - Le quantità delle ricette si inseriscono con calma.
+   - Copia del database prima dell'import delle ricette: `backups/prodotti_pre_ricette_20261125.db`.
 4. Osservare per qualche giorno bot, avvisi, backup notturno (ora con `prodotti.db`), cassa ed email fatture nel container `servizi`.
 
 Esito del rilascio:
