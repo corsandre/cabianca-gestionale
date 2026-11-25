@@ -16,6 +16,8 @@ def index():
     da_verificare = Prodotto.query.filter_by(da_verificare=True, attivo=True).count()
     senza_ricetta = (Prodotto.query.filter_by(attivo=True)
                      .filter(~Prodotto.id.in_(db.session.query(Ricetta.prodotto_id))).count())
+    from app.moduli.prodotti.routes.lotti import dati_finestra_lotto
     return render_template("prodotti/index.html", ultimi_lotti=ultimi_lotti, recenti=[p for p in recenti if p],
                            da_verificare=da_verificare, senza_ricetta=senza_ricetta,
-                           n_prodotti=Prodotto.query.filter_by(attivo=True).count(), n_lotti=Lotto.query.count())
+                           n_prodotti=Prodotto.query.filter_by(attivo=True).count(), n_lotti=Lotto.query.count(),
+                           **dati_finestra_lotto())

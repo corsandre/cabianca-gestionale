@@ -15,11 +15,20 @@
 </li>
 <div class="collapse {% if prod_active %}show{% endif %}" id="nav-prodotti">
     <ul class="nav flex-column cb-nav" style="padding-top:0">
+        {% set voci = [
+            ('prodotti.index', ['prodotti.index'], 'house', 'Panoramica'),
+            ('prodotti.lotti', ['prodotti.lotti', 'prodotti.lotto'], 'journal-check', 'Libro lotti'),
+            ('prodotti.catalogo', ['prodotti.catalogo', 'prodotti.scheda_prodotto'], 'grid', 'Catalogo'),
+            ('prodotti.ricettario', ['prodotti.ricettario'], 'journal-text', 'Ricettario'),
+            ('prodotti.materie_prime', ['prodotti.materie_prime'], 'box-seam', 'Materie prime'),
+        ] %}
+        {% for endpoint, attivi, icona, testo in voci %}
         <li class="nav-item">
-            <a class="nav-link {% if request.endpoint == 'prodotti.index' %}active{% endif %}" href="{{ url_for('prodotti.index') }}">
-                <i class="bi bi-house"></i> Panoramica
+            <a class="nav-link {% if request.endpoint in attivi %}active{% endif %}" href="{{ url_for(endpoint) }}">
+                <i class="bi bi-{{ icona }}"></i> {{ testo }}
             </a>
         </li>
+        {% endfor %}
     </ul>
 </div>
 {% endif %}

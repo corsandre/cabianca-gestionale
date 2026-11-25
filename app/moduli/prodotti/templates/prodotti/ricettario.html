@@ -1,0 +1,69 @@
+{% extends "prodotti/_base.html" %}
+{% block title %}Ricettario - Prodotti{% endblock %}
+{% set scrive = current_user.role != 'consulente' %}
+{% block content %}
+<div class="cb-page-header flex-wrap gap-2">
+    <h1><i class="bi bi-journal-text text-cb-prod"></i> Ricettario</h1>
+    <div class="d-flex flex-wrap gap-2">
+        {% if export_ricettario %}
+        <a href="{{ url_for('prodotti.esporta_ricettario', formato='pdf') }}" class="btn btn-cb-outline"><i class="bi bi-filetype-pdf"></i> PDF</a>
+        <a href="{{ url_for('prodotti.esporta_ricettario', formato='xlsx') }}" class="btn btn-cb-outline"><i class="bi bi-filetype-xlsx"></i> Excel</a>
+        {% endif %}
+        {% if scrive %}<button class="btn btn-cb" onclick="EditorRicetta.nuova()"><i class="bi bi-plus-lg"></i> Nuova ricetta</button>{% endif %}
+    </div>
+</div>
+
+<div class="cb-filters">
+    <input type="search" id="cerca" class="form-control form-control-sm" style="max-width:22rem" placeholder="Cerca prodotto o ingrediente…" autocomplete="off">
+</div>
+
+<div id="elenco">
+{% for p in prodotti %}
+<div class="cb-card p-3 mb-2" data-cerca="{{ p.nome }} {% for r in p.ricette %}{% for x in r.righe %}{{ x.materia_prima.nome }} {% endfor %}{% endfor %}">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+            <a href="{{ url_for('prodotti.scheda_prodotto', id=p.id) }}" class="fw-bold text-decoration-none">{{ p.nome_completo }}</a>
+            <span class="prod-sigla ms-1">{{ p.sigla }}</span>
+        </div>
+    </div>
+    {% for r in p.ricette %}
+    <div class="d-flex justify-content-between align-items-start border-top pt-2 mt-2 {{ 'opacity-50' if not r.attiva }}">
+        <div class="small">
+            <b>{{ r.etichetta }}</b>
+            {% if p.ricetta_default_id == r.id %}<span class="badge bg-success">proposta</span>{% endif %}
+            {% if r.id in usate %}<span class="badge bg-light text-dark border"><i class="bi bi-lock"></i> usata</span>{% endif %}
+            {% if r.resa_pezzi %}<span class="text-muted"> · resa {{ r.resa_pezzi }} pz</span>{% endif %}
+            <div>{% for x in r.righe %}{{ x.materia_prima.nome }}{{ ', ' if not loop.last }}{% endfor %}</div>
+            {% set allerg = [] %}{% for x in r.righe %}{% for a in x.materia_prima.allergeni_lista %}{% set _ = allerg.append(a) %}{% endfor %}{% endfor %}
+            {% if allerg %}<div class="text-muted"><i class="bi bi-exclamation-triangle text-warning"></i> {{ descrivi_allergeni(allerg) }}</div>{% endif %}
+        </div>
+        <button class="btn btn-sm btn-outline-secondary text-nowrap" onclick="EditorRicetta.modifica({{ r.id }})">
+            <i class="bi bi-{{ 'eye' if not scrive else ('files' if r.id in usate else 'pencil') }}"></i>
+            {{ 'Apri' if not scrive else ('Nuova versione' if r.id in usate else 'Modifica') }}
+        </button>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="cb-card p-4 text-center text-muted">Nessuna ricetta ancora.</div>
+{% endfor %}
+
+{% if senza %}
+<h6 class="mt-4 text-muted small text-uppercase">Prodotti senza ricetta</h6>
+<div class="d-flex flex-wrap gap-2">
+    {% for p in senza %}
+    <button class="btn btn-sm btn-outline-secondary" data-cerca="{{ p.nome }}" {{ 'disabled' if not scrive }} onclick="EditorRicetta.nuova({{ p.id }})">
+        <i class="bi bi-plus"></i> {{ p.nome_completo }}
+    </button>
+    {% endfor %}
+</div>
+{% endif %}
+</div>
+
+{% include "prodotti/_modale_materia.html" %}
+{% include "prodotti/_modale_ricetta.html" %}
+{% endblock %}
+{% block prodotti_js %}
+<script src="{{ url_for('prodotti.static', filename='ricette.js') }}"></script>
+<script>prodCerca(document.getElementById('cerca'), document.getElementById('elenco'));</script>
+{% endblock %}

@@ -1,0 +1,115 @@
+{# Finestra "Nuovo lotto" in 3 passi (static/lotti.js): FinestraLotto.apri(prodottoId) / FinestraLotto.modifica(lotto).
+   Serve: routes/lotti.dati_finestra_lotto() (prodotti_lotto, fornitori, materie_lotto + dati della finestra
+   prodotto) e, per "＋ Nuovo prodotto", _modale_prodotto.html nella stessa pagina. #}
+<div class="modal fade" id="modaleLotto" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable modal-fullscreen-md-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Nuovo lotto</h5>
+        <div class="prod-passi ms-3 small d-none d-md-flex">
+          <span data-passo="1">1 Prodotto</span><span data-passo="2">2 Produzione</span><span data-passo="3">3 Etichetta e conferma</span>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+
+        {# ---------------- passo 1: prodotto ---------------- #}
+        <div data-pannello="1">
+          <div class="d-flex gap-2 mb-3">
+            <input type="search" class="form-control form-control-lg" id="lotCerca" placeholder="Cerca il prodotto…" autocomplete="off">
+            <button type="button" class="btn btn-outline-secondary text-nowrap" onclick="FinestraLotto.nuovoProdotto()"><i class="bi bi-plus-lg"></i> Nuovo prodotto</button>
+          </div>
+          <div class="row g-2" id="lotProdotti"></div>
+        </div>
+
+        {# ---------------- passo 2: produzione ---------------- #}
+        <div data-pannello="2" class="d-none">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div><span class="text-muted small">Prodotto</span><div class="fs-5 fw-bold" id="lotNomeProdotto"></div></div>
+            <button type="button" class="btn btn-sm btn-link" onclick="FinestraLotto.passo(1)">cambia</button>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6 col-md-3">
+              <label class="form-label form-label-sm mb-1">Data di produzione</label>
+              <input type="date" class="form-control" id="lotData">
+            </div>
+            <div class="col-6 col-md-2">
+              <label class="form-label form-label-sm mb-1">Pezzi prodotti</label>
+              <input class="form-control" id="lotPezzi" inputmode="numeric" placeholder="es. 40">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label form-label-sm mb-1">Ricetta</label>
+              <select class="form-select" id="lotRicetta"></select>
+            </div>
+            <div class="col-6 col-md-2">
+              <label class="form-label form-label-sm mb-1">Codice lotto</label>
+              <input class="form-control prod-codice-lotto text-uppercase" id="lotCodice">
+            </div>
+            <div class="col-6 col-md-2">
+              <label class="form-label form-label-sm mb-1">Scadenza</label>
+              <input type="date" class="form-control" id="lotScadenza">
+            </div>
+          </div>
+          <div class="alert alert-light border small py-2 d-none" id="lotSenzaRicetta">
+            <i class="bi bi-info-circle"></i> Questo prodotto non ha una ricetta: aggiungere gli ingredienti a mano qui sotto (o crearla nel Ricettario).
+          </div>
+
+          <label class="form-label form-label-sm mb-1">Ingredienti usati e loro provenienza
+            <span class="text-muted">— <i class="bi bi-magic"></i> = ripreso dall'ultimo lotto, controllare che sia ancora quello</span></label>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle prod-tab-ingredienti mb-1">
+              <thead><tr><th style="min-width:9rem">Ingrediente</th><th style="width:7rem">Quantità</th>
+                <th style="width:5rem">Propria</th><th style="min-width:10rem">Fornitore</th>
+                <th style="min-width:8rem">Lotto fornitore</th><th style="min-width:7rem">DDT/fattura</th><th></th></tr></thead>
+              <tbody id="lotRighe"></tbody>
+            </table>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="FinestraLotto.aggiungiRiga({})"><i class="bi bi-plus"></i> Ingrediente</button>
+          <datalist id="lotFornitori">{% for f in fornitori %}<option value="{{ f.name }}">{% endfor %}</datalist>
+          <datalist id="lotMaterie">{% for m in materie_lotto %}<option value="{{ m.nome }}">{% endfor %}</datalist>
+        </div>
+
+        {# ---------------- passo 3: etichetta e conferma ---------------- #}
+        <div data-pannello="3" class="d-none">
+          <div class="row g-3">
+            <div class="col-lg-6">
+              <label class="form-label form-label-sm mb-1 d-flex justify-content-between">
+                <span>Elenco ingredienti in etichetta <span class="text-muted">(**grassetto** per gli allergeni)</span></span>
+                <button type="button" class="btn btn-link btn-sm p-0" onclick="FinestraLotto.ripristinaTesto()">ripristina dalla ricetta</button>
+              </label>
+              <textarea class="form-control mb-2" id="lotTesto" rows="5"></textarea>
+              <div class="prod-anteprima-ingredienti mb-1" id="lotAnteprima"></div>
+              <div class="small mb-3" id="lotAllergeni"></div>
+              <label class="form-label form-label-sm mb-1">Note del lotto (non vanno in etichetta)</label>
+              <textarea class="form-control" id="lotNote" rows="2" placeholder="es. vasetti nuovi, pastorizzazione prolungata…"></textarea>
+            </div>
+            <div class="col-lg-6">
+              <div class="cb-card p-3 bg-light">
+                <h6 class="text-cb-prod">Riepilogo</h6>
+                <dl class="row small mb-0" id="lotRiepilogo"></dl>
+              </div>
+              <div class="small text-muted mt-2"><i class="bi bi-printer"></i> Dopo il salvataggio, dalla scheda del lotto si stampano le etichette.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary me-auto" id="lotIndietro" onclick="FinestraLotto.passo(FinestraLotto.attuale - 1)">Indietro</button>
+        <button type="button" class="btn btn-cb" id="lotAvanti" onclick="FinestraLotto.avanti()">Avanti <i class="bi bi-arrow-right"></i></button>
+        <button type="button" class="btn btn-cb d-none" id="lotSalva" onclick="FinestraLotto.salva(this)"><i class="bi bi-check-lg"></i> Crea lotto</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  window.PROD_URL = Object.assign(window.PROD_URL || {}, {
+    lottoPrepara: "{{ url_for('prodotti.prepara_lotto') }}",
+    lottoSalva: "{{ url_for('prodotti.salva_lotto') }}",
+    lottoTesto: "{{ url_for('prodotti.testo_ingredienti_lotto') }}",
+    lottoAnteprimaTesto: "{{ url_for('prodotti.anteprima_testo') }}",
+  });
+  window.PROD_PRODOTTI_LOTTO = {{ prodotti_lotto | tojson }};
+  window.PROD_FORNITORI = {{ fornitori | map(attribute='name') | list | tojson }};
+  window.PROD_FORNITORI_ID = {{ fornitori | map(attribute='id') | list | tojson }};
+  window.PROD_MATERIE_LOTTO = {{ materie_lotto | tojson }};
+</script>

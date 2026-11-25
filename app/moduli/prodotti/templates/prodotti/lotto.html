@@ -1,0 +1,112 @@
+{% extends "prodotti/_base.html" %}
+{% block title %}Lotto {{ l.codice }} - Prodotti{% endblock %}
+{% set scrive = current_user.role != 'consulente' %}
+{% set et = l.etichetta_dati %}
+{% block content %}
+<div class="cb-page-header flex-wrap gap-2">
+    <div>
+        <a href="{{ url_for('prodotti.lotti') }}" class="small text-muted text-decoration-none"><i class="bi bi-arrow-left"></i> Libro lotti</a>
+        <h1 class="mb-0"><span class="prod-codice-lotto">{{ l.codice }}</span></h1>
+        <div><a href="{{ url_for('prodotti.scheda_prodotto', id=l.prodotto_id) }}">{{ l.prodotto.nome_completo }}</a>
+            · {% if l.stato == 'attivo' %}<span class="badge bg-success">attivo</span>{% elif l.stato == 'ritirato' %}<span class="badge bg-danger">ritirato</span>{% else %}<span class="badge bg-secondary">{{ stati[l.stato] }}</span>{% endif %}
+            {% if l.stato_motivo %}<span class="small text-muted">— {{ l.stato_motivo }}</span>{% endif %}</div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        {% if scrive %}
+        {% if etichette_attive %}<a href="#etichette" class="btn btn-cb"><i class="bi bi-printer"></i> Etichette</a>{% endif %}
+        <button class="btn btn-cb-outline" onclick="FinestraLotto.modifica(LOTTO)"><i class="bi bi-pencil"></i> Correggi</button>
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Stato</button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                {% for k, v in stati.items() if k != l.stato %}
+                <li><a class="dropdown-item" href="#" onclick="cambiaStato('{{ k }}'); return false">{{ v }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="cb-card p-3 h-100">
+            <h6 class="text-cb-prod">Produzione</h6>
+            <dl class="row small mb-0">
+                <dt class="col-5">Data di produzione</dt><dd class="col-7">{{ l.data_produzione | data_it }}</dd>
+                <dt class="col-5">{{ et.dicitura_scadenza or 'Scadenza' }}</dt><dd class="col-7">{{ l.data_scadenza | data_it or '—' }}</dd>
+                <dt class="col-5">Pezzi prodotti</dt><dd class="col-7">{{ l.pezzi_prodotti or '—' }}{% if et.peso %} da {{ et.peso }}{% endif %}</dd>
+                <dt class="col-5">Ricetta</dt><dd class="col-7">{% if l.ricetta %}{{ l.ricetta.etichetta }}{% else %}—{% endif %}</dd>
+                <dt class="col-5">Registrato</dt><dd class="col-7">{{ l.creato_il | data_it }} {{ l.creato_il[11:16] }}{% if l.creato_da %} da {{ l.creato_da }}{% endif %}</dd>
+                {% if l.modificato_il %}<dt class="col-5">Ultima correzione</dt><dd class="col-7">{{ l.modificato_il | data_it }} {{ l.modificato_il[11:16] }}{% if l.modificato_da %} da {{ l.modificato_da }}{% endif %}</dd>{% endif %}
+                {% if l.note %}<dt class="col-5">Note</dt><dd class="col-7">{{ l.note }}</dd>{% endif %}
+            </dl>
+            <h6 class="text-cb-prod mt-3">In etichetta</h6>
+            <div class="prod-anteprima-ingredienti small">{{ ingredienti_html | safe }}</div>
+            {% if allergeni_testo %}<div class="small mt-1"><i class="bi bi-exclamation-triangle text-warning"></i> Allergeni: <b>{{ allergeni_testo }}</b></div>{% endif %}
+            {% if et.tracce %}<div class="small">Può contenere tracce di: {{ et.tracce }}</div>{% endif %}
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="cb-card p-0 h-100">
+            <div class="p-3 pb-2"><h6 class="text-cb-prod mb-0">Ingredienti e provenienza</h6></div>
+            <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead><tr><th>Ingrediente</th><th class="text-end">Quantità</th><th>Provenienza</th><th>Lotto fornitore</th><th>Documento</th></tr></thead>
+                <tbody>
+                {% for r in l.ingredienti %}
+                <tr>
+                    <td>{{ r.nome }}</td>
+                    <td class="text-end text-nowrap">{% if r.quantita %}{{ r.quantita | round(1) | string | replace('.0', '') }} {{ r.unita }}{% endif %}</td>
+                    <td>{% if r.produzione_propria %}<i class="bi bi-house-heart text-success"></i> produzione propria{% else %}{{ r.fornitore_nome or '—' }}{% endif %}</td>
+                    <td class="prod-codice-lotto small">{% if r.produzione_propria %}—{% elif r.lotto_fornitore %}{{ r.lotto_fornitore }}{% else %}<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> mancante</span>{% endif %}</td>
+                    <td class="small">{{ r.rif_documento or '' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="text-muted text-center py-3">Nessun ingrediente registrato.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+
+    {# qui arriva la sezione Etichette (stampa e archivio) con il motore delle etichette #}
+
+    {% if storico %}
+    <div class="col-12">
+        <div class="cb-card p-3">
+            <h6 class="text-cb-prod"><i class="bi bi-clock-history"></i> Storico delle correzioni</h6>
+            <p class="small text-muted">Registrato in automatico dal database: per ogni correzione, i valori com'erano <b>prima</b>.</p>
+            <ul class="small mb-0">
+            {% for s in storico %}
+                {% set prima = json.loads(s.prima) %}
+                <li><b>{{ s.quando | data_it }} {{ s.quando[11:16] }}</b>{% if s.chi %} · {{ s.chi }}{% endif %} ·
+                    {{ 'ingrediente' if s.tabella == 'lotti_ingredienti' else 'lotto' }} {{ s.azione }}:
+                    <span class="text-muted">{% if s.tabella == 'lotti_ingredienti' %}{{ prima.nome }}{% if prima.lotto_fornitore %} (lotto {{ prima.lotto_fornitore }}){% endif %}{% if prima.quantita %}, {{ prima.quantita }} {{ prima.unita }}{% endif %}{% else %}codice {{ prima.codice }}, pezzi {{ prima.pezzi_prodotti }}, scadenza {{ prima.data_scadenza | data_it }}, stato {{ prima.stato }}{% endif %}</span></li>
+            {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% include "prodotti/_modale_prodotto.html" %}
+{% include "prodotti/_modale_lotto.html" %}
+{% endblock %}
+{% block prodotti_js %}
+<script src="{{ url_for('prodotti.static', filename='lotti.js') }}"></script>
+<script>
+const LOTTO = {{ lotto_json | tojson }};
+async function cambiaStato(stato) {
+    let motivo = '';
+    if (stato === 'ritirato' || stato === 'annullato') {
+        motivo = prompt(stato === 'ritirato' ? 'Motivo del ritiro (es. richiamo del fornitore, controllo):' : 'Motivo dell\'annullamento (es. lotto registrato per errore):');
+        if (!motivo) return;
+    }
+    try {
+        await prodPost("{{ url_for('prodotti.stato_lotto', id=l.id) }}", { stato: stato, motivo: motivo });
+        location.reload();
+    } catch (e) { prodAvviso(e.message, 'danger'); }
+}
+</script>
+{% endblock %}

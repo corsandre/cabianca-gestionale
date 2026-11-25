@@ -305,14 +305,15 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - [x] provato: anonimo → login, senza permesso → 403 e niente menu, admin → pagina con tema; Docker ok
 
 ### Modulo prodotti 1.0.0
-- [~] 1. modelli + schema + CRUD materie prime / prodotti / ricette — IN CORSO
+- [x] 1. modelli + schema + CRUD materie prime / prodotti / ricette
   - [x] schema v2 (`schema.py`) con trigger: lotti/stampe non cancellabili, storico automatico delle modifiche, ricette usate bloccate (DECISIONE 25/11: i lotti si possono correggere ma ogni modifica resta in `storico`, invece di "lotti di rettifica")
   - [x] `models.py` + test modelli = tabelle (`tests/test_prodotti_app.py`)
   - [x] servizi puri: `services/allergeni.py`, `ingredienti.py` (ordine per peso, grassetto MAIUSCOLE, sigle DOP/EVO escluse, composti), `lotti.py` (codice, sigla, scadenza, scala) + test
   - [x] route in cartella `routes/` (comune, panoramica, catalogo, ricette); JS `static/prodotti.js` e `ricette.js`; finestre `_modale_materia`, `_modale_prodotto`, `_modale_ricetta`; pagine materie_prime, catalogo, prodotto
-  - [ ] pagina ricettario.html, panoramica aggiornata, voci di menu
-  - [ ] PROVARE nel browser/test client (non ancora provato!)
-- [ ] 2. libro lotti + finestra Nuovo lotto
+  - [x] pagina ricettario.html, panoramica aggiornata, voci di menu
+  - [x] provato con il test client: flusso completo in `tests/test_prodotti_app.py` (TestFlussoCompleto)
+  - [ ] da provare a mano nel browser (finestre JS: editor ricetta, nuovo lotto) — in locale con RUOLO=sviluppo
+- [x] 2. libro lotti + finestra Nuovo lotto (`routes/lotti.py`, `static/lotti.js`, `_modale_lotto.html`, `lotti.html`, `lotto.html`): 3 passi, provenienza ripresa dall'ultimo lotto, codice -2 se doppio, correzioni con storico, stati (ritirato/annullato con motivo)
 - [ ] 3. motore etichette (prova stile da approvare)
 - [ ] 4. export + richiamo
 - [ ] 5. import catalogo dalle etichette
@@ -326,4 +327,4 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - 24/11/2026 – fase 0a completata (3.3.3). Ambiente locale: `.venv` (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`), test con `.venv/bin/python -m unittest discover -s tests`.
 
 ### Prossimo passo
-Scrivere `templates/prodotti/ricettario.html`, aggiornare `index.html` e `_menu.html`, poi `routes/lotti.py` (almeno `lotti` e `lotto`, perché `prodotto.html` li collega già) e provare tutto con il test client (`tests/test_prodotti_app.py`).
+Passo 3, motore etichette: `services/etichette.py` (griglia del foglio in mm, adattamento del testo con WeasyPrint), stile `templates/prodotti/etichette/stili/base-2026/` (etichetta.html + stile.css, sfondo bianco), font OFL in `static/fonts/`, route `routes/etichette.py` (anteprima, genera PDF → `data/prodotti/etichette/AAAA/`, archivio in `stampe_etichette`, scarica), sezione Etichette in `lotto.html` (segnaposto già presente), pagina Formati con foglio di calibrazione. PRIMA una prova dello stile da far approvare ad Andrea (PDF sul Desktop/etichette).

@@ -1,0 +1,66 @@
+{% extends "prodotti/_base.html" %}
+{% block title %}Libro lotti - Prodotti{% endblock %}
+{% block content %}
+<div class="cb-page-header flex-wrap gap-2">
+    <h1><i class="bi bi-journal-check text-cb-prod"></i> Libro lotti</h1>
+    <div class="d-flex flex-wrap gap-2">
+        {% if export_lotti %}
+        <a href="{{ url_for('prodotti.esporta_lotti', formato='pdf', **filtri) }}" class="btn btn-cb-outline"><i class="bi bi-filetype-pdf"></i> PDF per il controllo</a>
+        <a href="{{ url_for('prodotti.esporta_lotti', formato='xlsx', **filtri) }}" class="btn btn-cb-outline"><i class="bi bi-filetype-xlsx"></i> Excel</a>
+        {% endif %}
+        {% if current_user.role != 'consulente' %}
+        <button class="btn btn-cb" onclick="FinestraLotto.apri()"><i class="bi bi-plus-circle"></i> Nuovo lotto</button>
+        {% endif %}
+    </div>
+</div>
+
+<div class="cb-filters">
+    <form method="GET" class="row g-2 align-items-end">
+        <div class="col-6 col-md-2"><label class="form-label small mb-0">Dal</label><input type="date" name="dal" value="{{ filtri.dal }}" class="form-control form-control-sm"></div>
+        <div class="col-6 col-md-2"><label class="form-label small mb-0">Al</label><input type="date" name="al" value="{{ filtri.al }}" class="form-control form-control-sm"></div>
+        <div class="col-md-3"><label class="form-label small mb-0">Prodotto</label>
+            <select name="prodotto" class="form-select form-select-sm"><option value="">Tutti</option>
+                {% for p in prodotti %}<option value="{{ p.id }}" {{ 'selected' if filtri.prodotto == p.id|string }}>{{ p.nome_completo }}</option>{% endfor %}
+            </select></div>
+        <div class="col-6 col-md-2"><label class="form-label small mb-0">Stato</label>
+            <select name="stato" class="form-select form-select-sm"><option value="">Tutti</option>
+                {% for k, v in stati.items() %}<option value="{{ k }}" {{ 'selected' if filtri.stato == k }}>{{ v }}</option>{% endfor %}
+            </select></div>
+        <div class="col-6 col-md-2"><label class="form-label small mb-0">Codice</label><input name="q" value="{{ filtri.q }}" class="form-control form-control-sm" placeholder="L2411…"></div>
+        <div class="col-auto"><button class="btn btn-sm btn-cb">Filtra</button> <a href="{{ url_for('prodotti.lotti') }}" class="btn btn-sm btn-link">azzera</a></div>
+    </form>
+</div>
+
+<div class="cb-card p-0">
+    <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+        <thead><tr><th>Codice</th><th>Prodotto</th><th>Produzione</th><th>Scadenza</th><th class="text-end">Pezzi</th><th>Tracciabilità</th><th>Stato</th></tr></thead>
+        <tbody>
+        {% for l in lotti %}
+        {% set senza = l.ingredienti | rejectattr('produzione_propria') | rejectattr('lotto_fornitore') | list %}
+        <tr onclick="location.href='{{ url_for('prodotti.lotto', id=l.id) }}'" style="cursor:pointer" class="{{ 'text-muted' if l.stato == 'annullato' }}">
+            <td class="prod-codice-lotto">{{ l.codice }}</td>
+            <td>{{ l.prodotto.nome_completo }}</td>
+            <td>{{ l.data_produzione | data_it }}</td>
+            <td>{{ l.data_scadenza | data_it }}</td>
+            <td class="text-end">{{ l.pezzi_prodotti or '' }}</td>
+            <td class="small">{% if not l.ingredienti %}<span class="text-danger">nessun ingrediente</span>
+                {% elif senza %}<span class="text-warning" title="{{ senza | map(attribute='nome') | join(', ') }}"><i class="bi bi-exclamation-triangle"></i> {{ senza | length }} senza lotto</span>
+                {% else %}<span class="text-success"><i class="bi bi-check-circle"></i> completa</span>{% endif %}</td>
+            <td>{% if l.stato == 'attivo' %}<span class="badge bg-success">attivo</span>{% elif l.stato == 'ritirato' %}<span class="badge bg-danger">ritirato</span>{% else %}<span class="badge bg-secondary">{{ l.stato }}</span>{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">Nessun lotto{{ ' con questi filtri' if filtri.values() | select | list }}.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+{% include "prodotti/_modale_prodotto.html" %}
+{% include "prodotti/_modale_lotto.html" %}
+{% endblock %}
+{% block prodotti_js %}
+<script src="{{ url_for('prodotti.static', filename='lotti.js') }}"></script>
+{% if apri_nuovo %}<script>document.addEventListener('DOMContentLoaded', function () { FinestraLotto.apri({{ apri_nuovo | int or 'null' }}); });</script>{% endif %}
+{% endblock %}

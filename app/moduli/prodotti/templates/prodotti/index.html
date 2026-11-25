@@ -1,12 +1,65 @@
 {% extends "prodotti/_base.html" %}
 {% block title %}Prodotti - Ca Bianca Gestionale{% endblock %}
+{% set scrive = current_user.role != 'consulente' %}
 {% block content %}
 <div class="cb-page-header">
     <h1><i class="bi bi-basket2 text-cb-prod"></i> Prodotti</h1>
 </div>
 
-<div class="cb-card p-4">
-    <p class="mb-1">Ricettario, libro dei lotti ed etichette dei prodotti trasformati.</p>
-    <p class="text-muted small mb-0">Il modulo è in costruzione: le pagine arriveranno nelle prossime versioni.</p>
+<div class="row g-3 mb-3">
+    {% if scrive %}
+    <div class="col-md-6">
+        <button class="btn btn-cb w-100 prod-azione-grande" onclick="FinestraLotto.apri()">
+            <i class="bi bi-plus-circle"></i>
+            <span class="text-start"><b>Nuovo lotto</b><br><small>registra una produzione e stampa le etichette</small></span>
+        </button>
+    </div>
+    {% endif %}
+    <div class="col-md-6">
+        <div class="cb-card p-3 h-100 d-flex align-items-center gap-4">
+            <div><div class="fs-3 fw-bold">{{ n_lotti }}</div><div class="small text-muted">lotti nel libro</div></div>
+            <div><div class="fs-3 fw-bold">{{ n_prodotti }}</div><div class="small text-muted">prodotti in catalogo</div></div>
+        </div>
+    </div>
 </div>
+
+{% if da_verificare or senza_ricetta %}
+<div class="alert alert-light border small">
+    {% if da_verificare %}<div><i class="bi bi-exclamation-triangle text-warning"></i> {{ da_verificare }} prodotti importati da ricontrollare: <a href="{{ url_for('prodotti.catalogo') }}">catalogo</a>.</div>{% endif %}
+    {% if senza_ricetta %}<div><i class="bi bi-journal-x text-muted"></i> {{ senza_ricetta }} prodotti senza ricetta: <a href="{{ url_for('prodotti.ricettario') }}">ricettario</a>.</div>{% endif %}
+</div>
+{% endif %}
+
+{% if recenti and scrive %}
+<h6 class="text-muted small text-uppercase">Rifai un prodotto recente</h6>
+<div class="d-flex flex-wrap gap-2 mb-3">
+    {% for p in recenti %}
+    <button class="btn btn-outline-secondary" onclick="FinestraLotto.apri({{ p.id }})"><i class="bi bi-arrow-repeat"></i> {{ p.nome_completo }}</button>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="cb-card p-0">
+    <div class="p-3 pb-2 d-flex justify-content-between"><h6 class="text-cb-prod mb-0">Ultimi lotti</h6><a href="{{ url_for('prodotti.lotti') }}" class="small">tutto il libro lotti →</a></div>
+    <div class="table-responsive">
+    <table class="table table-hover table-sm align-middle mb-0">
+        <tbody>
+        {% for l in ultimi_lotti %}
+        <tr onclick="location.href='{{ url_for('prodotti.lotto', id=l.id) }}'" style="cursor:pointer">
+            <td class="prod-codice-lotto ps-3">{{ l.codice }}</td><td>{{ l.prodotto.nome_completo }}</td>
+            <td>{{ l.data_produzione | data_it }}</td><td class="text-end pe-3">{{ l.pezzi_prodotti or '' }} pz</td>
+        </tr>
+        {% else %}
+        <tr><td class="text-muted text-center py-4">Nessun lotto ancora. Il primo si crea con «Nuovo lotto».</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+{% include "prodotti/_modale_prodotto.html" %}
+{% include "prodotti/_modale_lotto.html" %}
+{% endblock %}
+{% block prodotti_js %}
+<script src="{{ url_for('prodotti.static', filename='lotti.js') }}"></script>
 {% endblock %}

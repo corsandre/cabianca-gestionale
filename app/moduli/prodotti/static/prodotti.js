@@ -144,8 +144,12 @@ const ModaleMateria = {
 
 /* ------------------------------------------------------------------ finestra prodotto */
 const ModaleProdotto = {
+    _dopo: null,
     el: function () { return document.getElementById('modaleProdotto'); },
-    apri: function (prodotto) {
+    /* dopoSalvataggio(prodotto): se indicato si resta nella pagina (es. finestra Nuovo lotto),
+       altrimenti si va alla scheda del prodotto. */
+    apri: function (prodotto, dopoSalvataggio) {
+        this._dopo = dopoSalvataggio || null;
         const el = this.el();
         const form = el.querySelector('form');
         const nuovo = !(prodotto && prodotto.id);
@@ -169,7 +173,7 @@ const ModaleProdotto = {
             const r = await prodInCorso(bottone, prodPost(form.action, prodLeggi(form)));
             bootstrap.Modal.getInstance(this.el()).hide();
             prodAvviso('Prodotto salvato: ' + r.prodotto.nome_completo);
-            location.href = r.url;
+            if (this._dopo) this._dopo(r.prodotto); else location.href = r.url;
         } catch (e) { prodAvviso(e.message, 'danger'); }
     },
 };

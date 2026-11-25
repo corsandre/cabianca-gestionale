@@ -40,4 +40,4 @@ def data_it(valore):
 
 
 # Le pagine si registrano sul blueprint quando i file vengono importati (in fondo, per evitare import circolari)
-from app.moduli.prodotti.routes import panoramica, catalogo, ricette  # noqa: E402,F401
+from app.moduli.prodotti.routes import panoramica, catalogo, ricette, lotti  # noqa: E402,F401
