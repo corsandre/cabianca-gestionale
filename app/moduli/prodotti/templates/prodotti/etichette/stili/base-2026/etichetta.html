@@ -1,0 +1,64 @@
+{#- UNA etichetta (stile base-2026). Variabili: e, formato, parte ('unica' | 'fronte' | 'retro'), logo_url.
+    Impaginazioni: formato.layout 'orizzontale' (marchio a sinistra, testi a destra) o 'compatto'
+    (tutto in colonna, per le etichette piccole). 'fronte' e 'retro': due etichette per confezione. -#}
+{%- macro testi(e) -%}
+  <div class="testi">
+    {% if e.ingredienti_html %}<p class="ingredienti">{{ e.ingredienti_html | safe }}</p>{% endif %}
+    {% if e.tracce %}<p>Può contenere tracce di {{ e.tracce | trim('.') }}.</p>{% endif %}
+    {% if e.dichiarazioni_extra %}<p>{{ e.dichiarazioni_extra }}</p>{% endif %}
+    {% if e.conservazione %}<p><b>Conservazione:</b> {{ e.conservazione }}</p>{% endif %}
+    {% if e.modalita_uso %}<p><b>Modalità d'uso:</b> {{ e.modalita_uso }}</p>{% endif %}
+    {% if e.prodotto_da %}<p><b>Prodotto da:</b> {{ e.prodotto_da }}</p>{% endif %}
+    {% if e.lavorato_da %}<p><b>Lavorato da:</b> {{ e.lavorato_da }}</p>{% endif %}
+  </div>
+{%- endmacro -%}
+{%- macro riquadro(e) -%}
+  <div class="riquadro">
+    <div class="r-riga"><span class="r-voce">Lotto:</span><span class="r-valore">{{ e.lotto }}</span></div>
+    {% if e.scadenza %}
+    <div class="r-riga"><span class="r-voce">{{ e.dicitura_scadenza }}:</span><span class="r-valore">{{ e.scadenza }}</span></div>
+    {% endif %}
+  </div>
+{%- endmacro -%}
+<div class="etichetta {{ formato.layout }} parte-{{ parte }}">
+  <div class="fascia"></div>
+  {% if parte == 'fronte' %}
+    <div class="fronte">
+      <img class="logo" src="{{ logo_url }}" alt="">
+      <div class="nome">{{ e.nome }}</div>
+      {% if e.sottotitolo %}<div class="sottotitolo">{{ e.sottotitolo }}</div>{% endif %}
+      {% if e.peso %}<div class="peso"><span class="peso-voce">{{ e.dicitura_peso }}</span> {{ e.peso }}</div>{% endif %}
+    </div>
+  {% elif formato.layout == 'orizzontale' and parte == 'unica' %}
+    <div class="col-marchio">
+      <img class="logo" src="{{ logo_url }}" alt="">
+      <div class="nome">{{ e.nome }}</div>
+      {% if e.sottotitolo %}<div class="sottotitolo">{{ e.sottotitolo }}</div>{% endif %}
+      <div class="spinta"></div>
+      {% if e.peso %}<div class="peso-voce">{{ e.dicitura_peso }}</div><div class="peso">{{ e.peso }}</div>{% endif %}
+    </div>
+    <div class="col-testo">
+      {{ testi(e) }}
+      <div class="spinta"></div>
+      {{ riquadro(e) }}
+      {% if e.piede %}<div class="piede">{{ e.piede }}</div>{% endif %}
+    </div>
+  {% else %}
+    {# compatto 'unica' oppure 'retro' (di qualunque impaginazione) #}
+    <div class="colonna">
+      {% if parte == 'unica' %}
+      <div class="testata">
+        <img class="logo" src="{{ logo_url }}" alt="">
+        <div class="nome">{{ e.nome }}</div>
+        {% if e.peso %}<div class="peso">{{ e.peso }}</div>{% endif %}
+      </div>
+      {% else %}
+      <div class="testata-retro">{{ e.nome }}{% if e.peso %} · {{ e.peso }}{% endif %}</div>
+      {% endif %}
+      {{ testi(e) }}
+      <div class="spinta"></div>
+      {{ riquadro(e) }}
+      {% if e.piede %}<div class="piede">{{ e.piede }}</div>{% endif %}
+    </div>
+  {% endif %}
+</div>

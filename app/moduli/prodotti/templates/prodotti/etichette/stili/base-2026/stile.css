@@ -1,0 +1,76 @@
+{#- CSS dello stile base-2026 (modello Jinja, incluso da foglio.html).
+    s = scala dei caratteri scelta dal motore (1 = misure di progetto; si riduce se il testo non ci sta).
+    k = altezza dell'etichetta rispetto a 74 mm: logo e nome si rimpiccioliscono sulle etichette basse. -#}
+{%- set s = scala or 1 -%}
+{%- set W = formato.larghezza_mm -%}
+{%- set H = formato.altezza_mm -%}
+{%- set k = [H / 74, 1] | min -%}
+{#- larghezze esplicite in mm: in WeasyPrint una colonna flessibile non va a capo da sola -#}
+{%- set interno = W - 6 -%}
+{%- set w_marchio = interno * 0.34 -%}
+{%- set w_testo = interno - w_marchio -%}
+{#- n = riduzione del nome se è lungo (il nome del prodotto NON segue la scala del testo: resta grande) -#}
+{%- set lung = (e.nome or '') | length -%}
+{%- set n = 1 if lung <= 16 else (0.85 if lung <= 24 else (0.72 if lung <= 34 else 0.6)) -%}
+{%- macro pt(v) -%}{{ '%.2f' | format(v * s) }}pt{%- endmacro -%}
+{%- macro fisso(v) -%}{{ '%.2f' | format(v) }}pt{%- endmacro -%}
+
+/* colori: verde e oro del marchio; bordeaux per il nome come nelle etichette storiche */
+.etichetta { --verde: #009d5a; --oro: #c6a96f; --bordeaux: #8e1f3f; }
+
+.etichetta {
+  position: relative; box-sizing: border-box; overflow: hidden;
+  width: {{ W }}mm; height: {{ H }}mm;
+  padding: {{ '%.2f' | format(2.6 * k + 0.6) }}mm 3mm 2.2mm 3mm;
+  background: #fff; color: #1d1922;
+  font-family: "Fira Sans Condensed", "Fira Sans", sans-serif; font-size: {{ pt(6.8) }}; line-height: 1.22;
+  display: flex;
+}
+/* fascia sottile in alto: verde con filo oro (poco inchiostro, ma riconoscibile) */
+.fascia { position: absolute; top: 0; left: 0; right: 0; height: 1mm; background: var(--verde);
+  border-bottom: 0.35mm solid var(--oro); }
+
+.logo { display: block; }
+.nome { font-family: "Yeseva One", serif; color: var(--bordeaux); line-height: 1.02; }
+.sottotitolo { color: var(--verde); font-family: "Fira Sans"; font-weight: 500; line-height: 1.15; }
+.peso { font-family: "Yeseva One", serif; color: #1d1922; line-height: 1; }
+.peso-voce { font-family: "Fira Sans"; color: #666; }
+.spinta { flex: 1 1 auto; min-height: 0.8mm; }
+
+.testi p { margin: 0 0 {{ pt(1.6) }} 0; }
+.testi b { font-weight: 700; color: #1d1922; }
+.testi .ingredienti strong { font-weight: 700; }
+
+.riquadro { border: 0.35mm solid var(--verde); border-radius: 1.4mm; padding: 0.9mm 1.6mm;
+  font-family: "Fira Sans"; font-size: {{ pt(6.6) }}; }
+.r-riga { display: flex; justify-content: space-between; align-items: baseline; gap: 2mm; }
+.r-voce { color: #444; }
+.r-valore { font-weight: 700; font-size: {{ pt(8.2) }}; white-space: nowrap; }
+.piede { margin-top: 0.8mm; text-align: right; color: var(--verde); font-family: "Fira Sans"; font-size: {{ pt(5.6) }}; }
+
+/* ---- orizzontale: marchio a sinistra, testi a destra (105×74, 105×42) ---- */
+.orizzontale .col-marchio { width: {{ '%.2f' | format(w_marchio) }}mm; box-sizing: border-box; flex: none; display: flex; flex-direction: column; align-items: center;
+  text-align: center; padding-right: 2.4mm; border-right: 0.3mm solid var(--oro); }
+.orizzontale .col-testo { width: {{ '%.2f' | format(w_testo) }}mm; box-sizing: border-box; flex: none; padding-left: 2.6mm;
+  display: flex; flex-direction: column; }
+.orizzontale .col-marchio .logo { height: {{ '%.1f' | format(15 * k) }}mm; margin-bottom: {{ '%.1f' | format(1.5 * k) }}mm; }
+.orizzontale .col-marchio .nome { font-size: {{ fisso((15 * k + 1) * n) }}; }
+.orizzontale .col-marchio .sottotitolo { font-size: {{ fisso(6) }}; margin-top: 1mm; }
+.orizzontale .col-marchio .peso-voce { font-size: {{ fisso(5.8) }}; }
+.orizzontale .col-marchio .peso { font-size: {{ fisso(15 * k + 2) }}; }
+
+/* ---- compatto / retro: tutto in colonna (70×37, 70×42 e retro delle confezioni piccole) ---- */
+.colonna { width: {{ '%.2f' | format(interno) }}mm; flex: none; display: flex; flex-direction: column; }
+.testata { display: flex; align-items: center; gap: 1.6mm; margin-bottom: 1mm; }
+.testata .logo { height: {{ '%.1f' | format(8 * k + 1) }}mm; flex: none; }
+.testata .nome { font-size: {{ fisso((10.5 * k + 1) * n) }}; flex: 1 1 auto; }
+.testata .peso { font-size: {{ fisso(10 * k + 1) }}; flex: none; }
+.testata-retro { font-family: "Fira Sans"; font-weight: 700; color: var(--bordeaux); font-size: {{ pt(7) }}; margin-bottom: 0.8mm; }
+
+/* ---- fronte: solo marchio, nome e peso, centrati ---- */
+.fronte { width: {{ '%.2f' | format(interno) }}mm; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.fronte .logo { height: {{ '%.1f' | format(H * 0.34) }}mm; margin: 0 auto 1mm auto; }
+.fronte .nome { font-size: {{ fisso(H * 0.36 * n) }}; }
+.fronte .sottotitolo { font-size: {{ fisso(6.2) }}; margin-top: 0.6mm; }
+.fronte .peso { font-size: {{ fisso(H * 0.3) }}; margin-top: 1mm; }
+.fronte .peso-voce { font-size: {{ fisso(6) }}; }

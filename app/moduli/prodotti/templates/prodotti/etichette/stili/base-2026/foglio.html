@@ -1,0 +1,50 @@
+{#- Documento delle etichette, stile base-2026 (vedi LEGGIMI.md).
+    modo = "foglio": pagine A4 con le etichette nelle posizioni del foglio pretagliato (`pagine`: lista di
+           pagine, ognuna lista di (x_mm, y_mm, e, parte));
+    modo = "singola": una pagina grande quanto un'etichetta (anteprima e misura del testo).
+    cartella_stile: "prodotti/etichette/stili/<stile>" (i file si includono da lì: copiando la cartella
+    si ottiene uno stile nuovo senza cambiare questi percorsi). -#}
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<style>
+@font-face { font-family: "Fira Sans"; src: url("{{ font_url('FiraSans-Regular.ttf') }}"); font-weight: 400; }
+@font-face { font-family: "Fira Sans"; src: url("{{ font_url('FiraSans-Medium.ttf') }}"); font-weight: 500; }
+@font-face { font-family: "Fira Sans"; src: url("{{ font_url('FiraSans-Bold.ttf') }}"); font-weight: 700; }
+@font-face { font-family: "Fira Sans Condensed"; src: url("{{ font_url('FiraSansCondensed-Regular.ttf') }}"); font-weight: 400; }
+@font-face { font-family: "Fira Sans Condensed"; src: url("{{ font_url('FiraSansCondensed-Bold.ttf') }}"); font-weight: 700; }
+@font-face { font-family: "Yeseva One"; src: url("{{ font_url('YesevaOne-Regular.ttf') }}"); }
+{% if modo == 'singola' %}
+@page { size: {{ formato.larghezza_mm }}mm {{ formato.altezza_mm }}mm; margin: 0; }
+{% else %}
+@page { size: A4; margin: 0; }
+{% endif %}
+html, body { margin: 0; padding: 0; }
+.pagina { position: relative; width: 210mm; height: 297mm; page-break-after: always; overflow: hidden; }
+.pagina:last-child { page-break-after: auto; }
+.posto { position: absolute; }
+{% if guide %}
+/* foglio di calibrazione / prova su carta normale: contorno delle etichette */
+.posto { outline: 0.2mm dashed #999; }
+{% endif %}
+{% include cartella_stile ~ "/stile.css" %}
+</style>
+</head>
+<body>
+{% if modo == 'singola' %}
+  {% set parte = parte or 'unica' %}
+  {% include cartella_stile ~ "/etichetta.html" %}
+{% else %}
+  {% for pagina in pagine %}
+  <div class="pagina">
+    {% for x, y, e, parte in pagina %}
+    <div class="posto" style="left: {{ x }}mm; top: {{ y }}mm;">
+      {% include cartella_stile ~ "/etichetta.html" %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+{% endif %}
+</body>
+</html>
