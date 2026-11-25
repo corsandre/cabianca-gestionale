@@ -28,6 +28,35 @@ class TestImporta(unittest.TestCase):
         self.assertEqual(imp.allergeni_di("farina di grano tenero"), ["glutine"])
         self.assertEqual(imp.allergeni_di("mortadella", "con PISTACCHI"), ["frutta_guscio"])
         self.assertEqual(imp.evidenzia("farina di grano tenero"), "farina di GRANO tenero")
+        # il grano saraceno non ha glutine
+        self.assertEqual(imp.allergeni_di("grano Saraceno"), [])
+        self.assertEqual(imp.evidenzia("grano Saraceno"), "grano Saraceno")
+
+    def test_ricette_dalle_etichette(self):
+        """Ricetta v1 con gli ingredienti dell'etichetta, quantità 0, nell'ordine dell'etichetta; rilanciabile."""
+        import json, sqlite3, tempfile
+        spec = importlib.util.spec_from_file_location("schema_p", os.path.join(
+            os.path.dirname(__file__), "..", "app", "moduli", "prodotti", "schema.py"))
+        schema = importlib.util.module_from_spec(spec); spec.loader.exec_module(schema)
+        spec = importlib.util.spec_from_file_location("migr", os.path.join(
+            os.path.dirname(__file__), "..", "app", "moduli", "migrazioni.py"))
+        migr = importlib.util.module_from_spec(spec); spec.loader.exec_module(migr)
+        with tempfile.TemporaryDirectory() as d:
+            db, bozza = os.path.join(d, "p.db"), os.path.join(d, "b.json")
+            migr.applica(db, schema.MIGRAZIONI, "prodotti", os.path.join(d, "bk"), copia=lambda a, b: None)
+            with open(bozza, "w") as f:
+                json.dump({"prodotti": [
+                    {"nome": "Marmellata di fichi", "peso_netto": 212, "ingredienti": "fichi freschi e zucchero."},
+                    {"nome": "Senza ingredienti", "peso_netto": None, "ingredienti": ""}]}, f)
+            imp.carica(bozza, db)
+            imp.ricette(bozza, db)
+            imp.ricette(bozza, db)                              # la seconda volta non fa niente
+            c = sqlite3.connect(db)
+            righe = c.execute("SELECT m.nome, rr.quantita FROM ricette_righe rr JOIN materie_prime m "
+                              "ON m.id = rr.materia_prima_id ORDER BY rr.ordine").fetchall()
+            self.assertEqual(righe, [("Fichi freschi", 0), ("Zucchero", 0)])
+            self.assertEqual(c.execute("SELECT count(*) FROM ricette").fetchone()[0], 1)
+            self.assertIsNotNone(c.execute("SELECT ricetta_default_id FROM prodotti WHERE nome LIKE 'Marm%'").fetchone()[0])
 
     def test_sigla(self):
         self.assertEqual(imp.proponi_sigla("Cacciatorino"), "CAC")

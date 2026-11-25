@@ -203,8 +203,10 @@ def separa_ingredienti(testo):
 
 
 def allergeni_di(*testi):
-    """Allergeni dalle parole in MAIUSCOLO (certi) e da quelle di PAROLE_SUGGERITE (proposti)."""
+    """Allergeni dalle parole in MAIUSCOLO (certi) e da quelle di PAROLE_SUGGERITE (proposti).
+    Il grano saraceno NON è un cereale con glutine: "grano saraceno" non conta come grano."""
     trovati = set()
+    testi = [re.sub(r"\bgrano\s+saraceno\b", "saraceno", t or "", flags=re.I) for t in testi]
     for t in testi:
         for parola in re.findall(r"\b[A-ZÀ-Ý]{3,}\b", t or ""):
             if parola in PAROLE_ALLERGENI:
@@ -217,7 +219,8 @@ def allergeni_di(*testi):
 
 def evidenzia(nome):
     """'farina di grano tenero' → 'farina di GRANO tenero' (le parole allergene in maiuscolo)."""
-    return re.sub(r"\b(" + "|".join(PAROLE_DA_EVIDENZIARE) + r")\b", lambda m: m.group(1).upper(), nome, flags=re.I)
+    return re.sub(r"\b(" + "|".join(PAROLE_DA_EVIDENZIARE) + r")\b(?!\s+saraceno)", lambda m: m.group(1).upper(),
+                  nome, flags=re.I)
 
 
 def carica(file_bozza, percorso_db):
@@ -270,11 +273,76 @@ def carica(file_bozza, percorso_db):
     print(f"Caricati {nuovi_p} prodotti e {nuove_m} materie prime (tutti «da ricontrollare»).")
 
 
+NOME_RICETTA_ETICHETTA = "dalle etichette – quantità da inserire"
+
+
+def nome_materia(nome):
+    """Nome interno della materia prima come lo crea carica() (per ritrovarla)."""
+    nome = re.sub(r"\s*:\s*", " ", nome).strip()
+    if not re.search(r"[a-zà-ÿ]", nome, re.I):
+        return None
+    return nome[:1].upper() + nome[1:]
+
+
+def ricette(file_bozza, percorso_db):
+    """Per ogni prodotto importato SENZA ricette crea la versione 1 con gli ingredienti dell'etichetta vecchia,
+    nello stesso ordine e con quantità 0 (le etichette non le hanno), e la imposta come predefinita.
+
+    Con le quantità a 0 il testo dell'etichetta segue l'ordine delle righe, cioè quello dell'etichetta
+    vecchia, quindi si possono stampare subito le etichette dei lotti. Quando si inseriscono le quantità
+    (Ricettario › Modifica) si crea una versione nuova se la ricetta è già stata usata in un lotto.
+    Si può rilanciare: salta i prodotti che hanno già una ricetta."""
+    with open(file_bozza, encoding="utf-8") as f:
+        bozza = json.load(f)
+    con = sqlite3.connect(percorso_db)
+    con.execute("PRAGMA busy_timeout=10000")
+    fatte, saltate = 0, []
+    for v in bozza["prodotti"]:
+        if v.get("salta") or not v.get("ingredienti"):
+            continue
+        p = con.execute("SELECT id FROM prodotti WHERE lower(nome)=lower(?) AND coalesce(peso_netto,0)=coalesce(?,0)",
+                        (v["nome"], v.get("peso_netto"))).fetchone()
+        if not p:
+            saltate.append(f"{v['nome']}: prodotto non trovato")
+            continue
+        if con.execute("SELECT 1 FROM ricette WHERE prodotto_id=?", (p[0],)).fetchone():
+            continue                                    # ha già una ricetta (importata o fatta a mano)
+        righe = []
+        for nome, _composta in separa_ingredienti(v["ingredienti"]):
+            interno = nome_materia(nome)
+            if not interno:
+                continue
+            m = con.execute("SELECT id, unita FROM materie_prime WHERE lower(nome)=lower(?)", (interno,)).fetchone()
+            if not m:
+                saltate.append(f"{v['nome']}: materia prima «{interno}» non trovata")
+                righe = None
+                break
+            righe.append(m)
+        if not righe:
+            continue
+        cur = con.execute("INSERT INTO ricette (prodotto_id, versione, nome, procedimento, creato_da) VALUES (?,1,?,?,?)",
+                          (p[0], NOME_RICETTA_ETICHETTA,
+                           f"Ricavata dall'etichetta del {v.get('data_etichetta') or '?'} ({v.get('file')}). "
+                           "Inserire quantità, resa e procedimento.", "import"))
+        for i, (mp_id, unita) in enumerate(righe):
+            con.execute("INSERT INTO ricette_righe (ricetta_id, materia_prima_id, quantita, unita, ordine) "
+                        "VALUES (?,?,0,?,?)", (cur.lastrowid, mp_id, unita or "g", i))
+        con.execute("UPDATE prodotti SET ricetta_default_id=? WHERE id=?", (cur.lastrowid, p[0]))
+        fatte += 1
+    con.commit()
+    con.close()
+    print(f"Create {fatte} ricette dalle etichette (quantità da inserire).")
+    for s in saltate:
+        print("  saltata:", s)
+
+
 if __name__ == "__main__":
     if len(sys.argv) == 4 and sys.argv[1] == "estrai":
         estrai(sys.argv[2], sys.argv[3])
     elif len(sys.argv) == 4 and sys.argv[1] == "carica":
         carica(sys.argv[2], sys.argv[3])
+    elif len(sys.argv) == 4 and sys.argv[1] == "ricette":
+        ricette(sys.argv[2], sys.argv[3])
     else:
         print(__doc__)
         sys.exit(2)
