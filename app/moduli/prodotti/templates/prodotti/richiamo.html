@@ -1,0 +1,79 @@
+{% extends "prodotti/_base.html" %}
+{% block title %}Richiamo - Prodotti{% endblock %}
+{% block content %}
+<div class="cb-page-header flex-wrap gap-2">
+    <h1><i class="bi bi-exclamation-octagon text-cb-prod"></i> Richiamo</h1>
+    {% if risultati %}
+    <a class="btn btn-cb-outline" target="_blank" href="{{ url_for('prodotti.esporta_richiamo', **f) }}"><i class="bi bi-filetype-pdf"></i> PDF</a>
+    {% endif %}
+</div>
+<p class="text-muted small">Se un fornitore richiama un suo lotto (o c'è un'allerta), qui si trovano tutti i lotti di prodotto che lo contengono.</p>
+
+<div class="cb-filters">
+    <form method="GET" class="row g-2 align-items-end">
+        <div class="col-md-3"><label class="form-label small mb-0">Materia prima</label>
+            <select name="materia" class="form-select form-select-sm"><option value="">—</option>
+                {% for m in materie %}<option value="{{ m.id }}" {{ 'selected' if f.materia == m.id|string }}>{{ m.nome }}</option>{% endfor %}
+            </select></div>
+        <div class="col-md-2"><label class="form-label small mb-0">Lotto del fornitore</label>
+            <input name="lotto" value="{{ f.lotto }}" class="form-control form-control-sm" placeholder="anche solo una parte"></div>
+        <div class="col-md-3"><label class="form-label small mb-0">Fornitore</label>
+            <select name="fornitore" class="form-select form-select-sm"><option value="">—</option>
+                {% for c in fornitori %}<option value="{{ c.id }}" {{ 'selected' if f.fornitore == c.id|string }}>{{ c.name }}</option>{% endfor %}
+            </select></div>
+        <div class="col-6 col-md-2"><label class="form-label small mb-0">Prodotti dal</label><input type="date" name="dal" value="{{ f.dal }}" class="form-control form-control-sm"></div>
+        <div class="col-6 col-md-2"><label class="form-label small mb-0">al</label><input type="date" name="al" value="{{ f.al }}" class="form-control form-control-sm"></div>
+        <div class="col-12"><button class="btn btn-cb btn-sm"><i class="bi bi-search"></i> Cerca</button></div>
+    </form>
+</div>
+
+{% if risultati is none %}
+<div class="cb-card p-4 text-muted text-center">Indicare almeno una materia prima, un lotto del fornitore o un fornitore.</div>
+{% else %}
+<div class="cb-card p-0">
+    <div class="p-3 pb-2 d-flex justify-content-between flex-wrap gap-2 align-items-center">
+        <div><b>{{ risultati | length }} {{ 'lotto coinvolto' if risultati | length == 1 else 'lotti coinvolti' }}</b>{% if pezzi %} · {{ pezzi }} pezzi prodotti{% endif %}
+            <div class="small text-muted">{{ criteri }}</div></div>
+        {% if risultati and current_user.role != 'consulente' %}
+        <button class="btn btn-sm btn-outline-danger" onclick="ritira(this)"><i class="bi bi-sign-stop"></i> Segna come ritirati i lotti selezionati</button>
+        {% endif %}
+    </div>
+    <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+        <thead><tr><th><input type="checkbox" class="form-check-input" checked onchange="document.querySelectorAll('.sel').forEach(c => c.checked = this.checked)"></th>
+            <th>Lotto</th><th>Prodotto</th><th>Produzione</th><th>Scadenza</th><th class="text-end">Pezzi</th><th>Stato</th><th>Ingrediente coinvolto</th></tr></thead>
+        <tbody>
+        {% for l, righe in risultati %}
+        <tr>
+            <td><input type="checkbox" class="form-check-input sel" value="{{ l.id }}" {{ 'checked' if l.stato == 'attivo' }}></td>
+            <td class="prod-codice-lotto"><a href="{{ url_for('prodotti.lotto', id=l.id) }}">{{ l.codice }}</a></td>
+            <td>{{ l.prodotto.nome_completo }}</td>
+            <td>{{ l.data_produzione | data_it }}</td><td>{{ l.data_scadenza | data_it }}</td>
+            <td class="text-end">{{ l.pezzi_prodotti or '' }}</td>
+            <td>{% if l.stato == 'ritirato' %}<span class="badge bg-danger">ritirato</span>{% else %}<span class="badge bg-secondary">{{ l.stato }}</span>{% endif %}</td>
+            <td class="small">{% for r in righe %}{{ r.nome }} – {{ 'propria' if r.produzione_propria else (r.fornitore_nome or '?') }}{% if r.lotto_fornitore %}, lotto <b>{{ r.lotto_fornitore }}</b>{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-4">Nessun lotto contiene quell'ingrediente.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+{% block prodotti_js %}
+<script>
+async function ritira(bottone) {
+    const ids = [...document.querySelectorAll('.sel:checked')].map(c => c.value);
+    if (!ids.length) { prodAvviso('Nessun lotto selezionato.', 'warning'); return; }
+    const motivo = prompt('Motivo del ritiro (resta nel libro lotti), es. «richiamo fornitore Molino Rossi, lotto MR-2611»:');
+    if (!motivo) return;
+    try {
+        const j = await prodInCorso(bottone, prodPost("{{ url_for('prodotti.ritira_lotti') }}", { ids: ids, motivo: motivo }));
+        prodAvviso(j.n + ' lotti segnati come ritirati.');
+        setTimeout(() => location.reload(), 900);
+    } catch (e) { prodAvviso(e.message, 'danger'); }
+}
+</script>
+{% endblock %}

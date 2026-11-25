@@ -7,6 +7,7 @@ Le route sono divise per argomento, un file ciascuno:
     lotti.py        /prodotti/lotti (libro lotti), finestra "Nuovo lotto", richiamo
     etichette.py    generazione e archivio dei PDF delle etichette, formati
     esporta.py      export PDF/Excel di libro lotti e ricettario
+    richiamo.py     /prodotti/richiamo: lotti che contengono un lotto di materia prima
 comune.py contiene gli aiuti condivisi (utente, fornitori, risposte JSON).
 
 Accesso: utente collegato e con la sezione "prodotti" (Impostazioni → utenti), controllato qui per
@@ -40,4 +41,4 @@ def data_it(valore):
 
 
 # Le pagine si registrano sul blueprint quando i file vengono importati (in fondo, per evitare import circolari)
-from app.moduli.prodotti.routes import panoramica, catalogo, ricette, lotti, etichette  # noqa: E402,F401
+from app.moduli.prodotti.routes import panoramica, catalogo, ricette, lotti, etichette, esporta, richiamo  # noqa: E402,F401,I001

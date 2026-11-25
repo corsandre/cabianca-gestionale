@@ -1,0 +1,46 @@
+{#- Libro dei lotti in PDF (da mostrare in un controllo NAS/ATS). Variabili: lotti, filtri_testo, stati, testo_html. -#}
+{% extends "prodotti/stampe/_base.html" %}
+{% block stile %}
+.lotto { border: 0.25mm solid #bbb; border-left: 1.2mm solid #009d5a; border-radius: 1mm; padding: 1.5mm 2.5mm; }
+.lotto.ritirato { border-left-color: #c0392b; } .lotto.annullato { border-left-color: #999; color: #666; }
+.testa { display: flex; flex-wrap: wrap; gap: 1mm 6mm; margin-bottom: 1mm; }
+.testa .codice { font-size: 10.5pt; }
+.ingredienti-testo { margin: 1mm 0; font-size: 7.8pt; }
+{% endblock %}
+{% block contenuto %}
+<p class="piccolo">{{ filtri_testo }} – {{ lotti | length }} {{ 'lotto' if lotti | length == 1 else 'lotti' }}. Per ogni lotto: ingredienti usati e loro provenienza
+(fornitore, lotto del fornitore, documento di acquisto), come richiesto per la rintracciabilità (Reg. CE 178/2002, art. 18).</p>
+{% for l in lotti %}
+<div class="blocco lotto {{ l.stato }}">
+  <div class="testa">
+    <span class="codice">{{ l.codice }}</span>
+    <span><b>{{ l.prodotto.nome_completo }}</b></span>
+    <span>Prodotto il {{ l.data_produzione | data_it }}</span>
+    {% if l.data_scadenza %}<span>Scadenza {{ l.data_scadenza | data_it }}</span>{% endif %}
+    {% if l.pezzi_prodotti %}<span>{{ l.pezzi_prodotti }} pezzi</span>{% endif %}
+    {% if l.ricetta %}<span>Ricetta {{ l.ricetta.etichetta }}</span>{% endif %}
+    <span>Stato: <b>{{ stati[l.stato] }}</b>{% if l.stato_motivo %} ({{ l.stato_motivo }}){% endif %}</span>
+  </div>
+  <table>
+    <thead><tr><th style="width:28%">Ingrediente</th><th class="num" style="width:11%">Quantità</th><th style="width:25%">Provenienza</th><th style="width:18%">Lotto fornitore / rif.</th><th>Documento</th></tr></thead>
+    <tbody>
+    {% for r in l.ingredienti %}
+    <tr>
+      <td>{{ r.nome }}</td>
+      <td class="num">{% if r.quantita %}{{ '%g' | format(r.quantita) }} {{ r.unita }}{% endif %}</td>
+      <td>{{ 'Produzione propria' if r.produzione_propria else (r.fornitore_nome or '—') }}</td>
+      <td>{% if r.lotto_fornitore %}{{ r.lotto_fornitore }}{% elif not r.produzione_propria %}<span class="attenzione">non indicato</span>{% else %}—{% endif %}</td>
+      <td>{{ r.rif_documento or '' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="attenzione">Nessun ingrediente registrato.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if l.ingredienti_testo %}<div class="ingredienti-testo">In etichetta: {{ testo_html(l.ingredienti_testo) | safe }}</div>{% endif %}
+  <div class="piccolo">Registrato il {{ l.creato_il | data_it }}{% if l.creato_da %} da {{ l.creato_da }}{% endif %}{% if l.modificato_il %} · ultima correzione {{ l.modificato_il | data_it }}{% if l.modificato_da %} da {{ l.modificato_da }}{% endif %} (storico delle correzioni nel gestionale){% endif %}{% if l.stampe %} · etichette stampate: {{ l.stampe | length }} volte{% endif %}{% if l.note %} · Note: {{ l.note }}{% endif %}</div>
+</div>
+{% else %}
+<p>Nessun lotto nel periodo indicato.</p>
+{% endfor %}
+{% endblock %}

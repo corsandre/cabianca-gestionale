@@ -126,9 +126,15 @@ def anteprima_testo():
 
 # ---------------------------------------------------------------- libro lotti
 
-@bp.route("/lotti")
-def lotti():
-    f = {k: (request.args.get(k) or "").strip() for k in ("dal", "al", "prodotto", "stato", "q")}
+FILTRI_LOTTI = ("dal", "al", "prodotto", "stato", "q")
+
+
+def filtri_lotti(args):
+    return {k: (args.get(k) or "").strip() for k in FILTRI_LOTTI}
+
+
+def lotti_filtrati(f, limite=None):
+    """Lotti secondo i filtri del libro (stessi per la pagina, il PDF e l'Excel), dal più recente."""
     query = Lotto.query.join(Prodotto)
     if f["dal"]:
         query = query.filter(Lotto.data_produzione >= f["dal"])
@@ -140,8 +146,14 @@ def lotti():
         query = query.filter(Lotto.stato == f["stato"])
     if f["q"]:
         query = query.filter(db.or_(Lotto.codice.ilike(f"%{f['q']}%"), Prodotto.nome.ilike(f"%{f['q']}%")))
-    elenco = query.order_by(Lotto.data_produzione.desc(), Lotto.id.desc()).limit(500).all()
-    return render_template("prodotti/lotti.html", lotti=elenco, filtri=f,
+    query = query.order_by(Lotto.data_produzione.desc(), Lotto.id.desc())
+    return query.limit(limite).all() if limite else query.all()
+
+
+@bp.route("/lotti")
+def lotti():
+    f = filtri_lotti(request.args)
+    return render_template("prodotti/lotti.html", lotti=lotti_filtrati(f, 500), filtri=f,
                            prodotti=Prodotto.query.order_by(Prodotto.nome).all(), stati=Lotto.STATI,
                            apri_nuovo=request.args.get("nuovo"), **dati_finestra_lotto())
 

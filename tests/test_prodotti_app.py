@@ -198,11 +198,29 @@ class TestFlussoCompleto(ProdottiAppBase):
         self.assertIn("immagini", self.post("/prodotti/formati/2/prova", {}, op))
         self.post("/prodotti/formati/impostazioni", {"stile": "base-2026", "piede": "www.cabianca.eu"})
 
+        # export: libro lotti e ricettario in PDF ed Excel, richiamo
+        for url in ("/prodotti/lotti/esporta.pdf?dal=2026-01-01", "/prodotti/ricettario/esporta.pdf",
+                    f"/prodotti/ricettario/esporta.pdf?ricetta={ric['id']}",
+                    f"/prodotti/richiamo/esporta.pdf?materia={farina['id']}"):
+            r = c.get(url)
+            self.assertTrue(r.data.startswith(b"%PDF"), url)
+        import io
+        from openpyxl import load_workbook
+        wb = load_workbook(io.BytesIO(c.get("/prodotti/lotti/esporta.xlsx").data))
+        self.assertEqual(wb.sheetnames, ["Lotti", "Ingredienti"])
+        self.assertEqual(wb["Ingredienti"]["I2"].value, "MR-2611")               # lotto fornitore della farina
+        wb = load_workbook(io.BytesIO(c.get("/prodotti/ricettario/esporta.xlsx").data))
+        self.assertEqual(wb["Ricette"].max_row, 3)                               # intestazione + v1 + v2
+        pagina = c.get(f"/prodotti/richiamo?lotto=MR-26").get_data(as_text=True)
+        self.assertIn("1 lotto coinvolto", pagina)
+        self.post("/prodotti/richiamo/ritira", {"ids": [salvato["id"]]}, op, atteso=400)   # serve il motivo
+        self.assertEqual(self.post("/prodotti/richiamo/ritira", {"ids": [salvato["id"]], "motivo": "prova"}, op)["n"], 1)
+
         # tutte le pagine si aprono, per operatore e consulente
         for uid in (op, self.consulente_id):
             cl = self.client(uid)
             for url in ("/prodotti/", "/prodotti/lotti", f"/prodotti/lotti/{salvato['id']}", "/prodotti/catalogo",
-                        f"/prodotti/catalogo/{p['id']}", "/prodotti/ricettario", "/prodotti/materie-prime", "/prodotti/formati",
+                        f"/prodotti/catalogo/{p['id']}", "/prodotti/ricettario", "/prodotti/materie-prime", "/prodotti/formati", "/prodotti/richiamo",
                         f"/prodotti/lotti?nuovo={p['id']}", "/prodotti/lotti?stato=ritirato&dal=2026-01-01"):
                 self.assertEqual(cl.get(url).status_code, 200, url)
 

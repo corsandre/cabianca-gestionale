@@ -318,7 +318,7 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
   - [x] `services/etichette.py`, stile `base-2026` (orizzontale/compatto, fronte/retro), font OFL, `routes/etichette.py` (anteprima PNG, stampa archiviata con sha256 + JSON, download), sezione Etichette nella scheda lotto; provato nel browser e nei test
   - [x] PROVA DELLO STILE per Andrea: `~/Desktop/etichette/prova-stile-etichette-2026.pdf` (testi veri: tortelli, marubini, mostarda 150 g, marmellata 100 g fronte/retro, salame) — IN ATTESA DI APPROVAZIONE
   - [x] pagina «Formati e stili» (`formati.html`): formati modificabili dall'admin con controllo, foglio di calibrazione PDF, prova con etichetta d'esempio, stile attivo, piede, produttore
-- [ ] 4. export + richiamo
+- [x] 4. export + richiamo: `routes/esporta.py` (libro lotti PDF orizzontale + Excel «Lotti»/«Ingredienti»; ricettario PDF una ricetta per pagina, anche singola, + Excel), `routes/richiamo.py` + `richiamo.html` (ricerca per materia/lotto fornitore/fornitore/periodo, ritiro in blocco con motivo, PDF); filtri condivisi `lotti_filtrati`
 - [ ] 5. import catalogo dalle etichette
 - [ ] 6. test, README, graphify
 
@@ -330,4 +330,4 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 - 24/11/2026 – fase 0a completata (3.3.3). Ambiente locale: `.venv` (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`), test con `.venv/bin/python -m unittest discover -s tests`.
 
 ### Prossimo passo
-Passo 4: `routes/esporta.py` con libro lotti (PDF per il controllo con WeasyPrint, una riga per lotto + dettaglio ingredienti/provenienza; Excel con openpyxl, due fogli: lotti e ingredienti) e ricettario (PDF una ricetta per pagina; Excel). Pulsanti in `lotti.html` (variabile `export_lotti`) e `ricettario.html` (`export_ricettario`): renderli fissi. Poi pagina Richiamo (`/prodotti/richiamo`): cerca per materia prima + lotto fornitore, o fornitore + periodo; elenco lotti coinvolti, «segna ritirati» in blocco con motivo, export PDF.
+Passo 5: import del catalogo dalle etichette esistenti in `~/Desktop/etichette/Etichette prodotti` (circa 70 cartelle). Script `scripts/importa_etichette.py`: per cartella l'etichetta più recente (PDF o .ai), `pdftotext`, estrae nome/peso/ingredienti/conservazione; scrive una bozza JSON (`docs/import-etichette-bozza.json`?) da ricontrollare; poi carica prodotti con `da_verificare=1` (e materie prime trovate?) in un `prodotti.db`. Attenzione: in produzione il DB non c'è ancora: lo script deve poter caricare la bozza su qualsiasi `prodotti.db` (anche dopo il rilascio), in modo idempotente.

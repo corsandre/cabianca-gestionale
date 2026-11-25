@@ -1,0 +1,41 @@
+{#- Ricettario in PDF: una ricetta per pagina. Variabili: ricette (lista di dict preparati da routes/esporta.py). -#}
+{% extends "prodotti/stampe/_base.html" %}
+{% block stile %}
+.ricetta { page-break-after: always; }
+.ricetta:last-child { page-break-after: auto; }
+.dati { display: flex; flex-wrap: wrap; gap: 1mm 6mm; margin-bottom: 3mm; color: #444; }
+.sezione { margin-top: 4mm; }
+.sezione h3 { font-size: 9pt; font-weight: 700; color: #009d5a; margin: 0 0 1mm 0; text-transform: uppercase; letter-spacing: .03em; }
+.testo { white-space: pre-wrap; }
+.etichetta { border: 0.25mm dashed #c6a96f; padding: 1.5mm 2.5mm; border-radius: 1mm; }
+{% endblock %}
+{% block contenuto %}
+{% for r in ricette %}
+<div class="ricetta">
+  <h2>{{ r.prodotto }} – ricetta {{ r.versione }}</h2>
+  <div class="dati">
+    <span>Sigla lotti: <b>{{ r.sigla }}</b></span>
+    {% if r.resa_pezzi %}<span>Resa: <b>{{ r.resa_pezzi }} pezzi</b></span>{% endif %}
+    {% if r.resa_kg %}<span>Resa: <b>{{ '%g' | format(r.resa_kg) }} kg</b></span>{% endif %}
+    <span>{{ 'In uso' if r.attiva else 'Non più in uso' }}{% if r.predefinita %} · proposta per i nuovi lotti{% endif %}</span>
+    <span>Creata il {{ r.creato_il | data_it }}{% if r.creato_da %} da {{ r.creato_da }}{% endif %}</span>
+    {% if r.n_lotti %}<span>Usata in {{ r.n_lotti }} lotti</span>{% endif %}
+  </div>
+  <table>
+    <thead><tr><th>Materia prima</th><th>In etichetta</th><th class="num">Quantità</th><th class="num">%</th><th>Allergeni</th><th>Fornitore abituale</th></tr></thead>
+    <tbody>
+    {% for x in r.righe %}
+    <tr><td>{{ x.nome }}</td><td>{{ x.etichetta }}</td><td class="num">{{ x.quantita }}</td><td class="num">{{ x.percentuale }}</td>
+        <td>{{ x.allergeni }}</td><td>{{ x.fornitore }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <div class="sezione"><h3>Elenco ingredienti in etichetta</h3><div class="etichetta">{{ r.ingredienti_html | safe }}</div>
+    {% if r.allergeni %}<div class="piccolo">Allergeni: <b>{{ r.allergeni }}</b></div>{% endif %}</div>
+  <div class="sezione"><h3>Procedimento</h3><div class="testo">{{ r.procedimento or '—' }}</div></div>
+  <div class="sezione"><h3>Note HACCP</h3><div class="testo">{{ r.note_haccp or '—' }}</div></div>
+</div>
+{% else %}
+<p>Nessuna ricetta.</p>
+{% endfor %}
+{% endblock %}

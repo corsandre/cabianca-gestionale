@@ -1,0 +1,43 @@
+{#- Base dei documenti PDF del modulo (libro lotti, ricettario, richiamo): intestazione, numeri di pagina, font.
+    Variabili: titolo, sottotitolo, generato (data e ora), utente, font_url(), logo_url, orizzontale (bool). -#}
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<style>
+@font-face { font-family: "Fira Sans"; src: url("{{ font_url('FiraSans-Regular.ttf') }}"); font-weight: 400; }
+@font-face { font-family: "Fira Sans"; src: url("{{ font_url('FiraSans-Medium.ttf') }}"); font-weight: 500; }
+@font-face { font-family: "Fira Sans"; src: url("{{ font_url('FiraSans-Bold.ttf') }}"); font-weight: 700; }
+@font-face { font-family: "Yeseva One"; src: url("{{ font_url('YesevaOne-Regular.ttf') }}"); }
+@page {
+  size: A4 {{ 'landscape' if orizzontale else 'portrait' }}; margin: 16mm 12mm 14mm 12mm;
+  @top-left { content: "Fattoria Ca' Bianca – {{ titolo }}"; font: 8pt "Fira Sans"; color: #555; }
+  @top-right { content: "{{ sottotitolo }}"; font: 8pt "Fira Sans"; color: #555; }
+  @bottom-left { content: "Generato il {{ generato }}{% if utente %} da {{ utente }}{% endif %} – gestionale Fattoria Ca' Bianca"; font: 7pt "Fira Sans"; color: #777; }
+  @bottom-right { content: "Pagina " counter(page) " di " counter(pages); font: 7pt "Fira Sans"; color: #777; }
+}
+body { font-family: "Fira Sans", sans-serif; font-size: 8.5pt; color: #1d1922; }
+h1 { font-family: "Yeseva One", serif; color: #8e1f3f; font-weight: normal; font-size: 18pt; margin: 0 0 1mm 0; }
+h2 { font-family: "Yeseva One", serif; color: #8e1f3f; font-weight: normal; font-size: 13pt; margin: 0 0 1mm 0; }
+.intestazione { display: flex; align-items: center; gap: 4mm; border-bottom: 0.6mm solid #009d5a; padding-bottom: 2mm; margin-bottom: 4mm; }
+.intestazione img { height: 14mm; }
+.piccolo { font-size: 7.5pt; color: #555; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-weight: 500; color: #555; border-bottom: 0.3mm solid #999; padding: 1mm 1.2mm; font-size: 7.5pt; }
+td { padding: 0.9mm 1.2mm; vertical-align: top; border-bottom: 0.15mm solid #ddd; }
+.num { text-align: right; white-space: nowrap; }
+.codice { font-weight: 700; white-space: nowrap; }
+.blocco { page-break-inside: avoid; margin-bottom: 3mm; }
+.attenzione { color: #a15c00; }
+strong { font-weight: 700; }
+{% block stile %}{% endblock %}
+</style>
+</head>
+<body>
+<div class="intestazione">
+  <img src="{{ logo_url }}" alt="">
+  <div><h1>{{ titolo }}</h1><div class="piccolo">{{ sottotitolo }}</div></div>
+</div>
+{% block contenuto %}{% endblock %}
+</body>
+</html>
