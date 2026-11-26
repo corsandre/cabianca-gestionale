@@ -1,5 +1,5 @@
 {# Finestra "prodotto" (dati che vanno in etichetta). Si apre con ModaleProdotto.apri(prodotto).
-   Serve: categorie, formati, tipi_scadenza, produttore_predefinito (routes/catalogo._dati_modale_prodotto). #}
+   Serve: categorie, tipi_scadenza, produttore_predefinito (routes/catalogo._dati_modale_prodotto). #}
 <div class="modal fade" id="modaleProdotto" tabindex="-1" data-produttore="{{ produttore_predefinito }}">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
@@ -11,7 +11,7 @@
             onsubmit="event.preventDefault(); ModaleProdotto.salva(this.closest('.modal').querySelector('.prod-salva'))">
         <input type="hidden" name="id">
         <div class="modal-body">
-          <h6 class="text-cb-prod">Nome e confezione</h6>
+          <h6 class="text-cb-prod">Nome e categoria</h6>
           <div class="row g-2 mb-3">
             <div class="col-md-6">
               <label class="form-label form-label-sm mb-1">Nome in etichetta *</label>
@@ -24,15 +24,6 @@
                      oninput="this.form.dataset.siglaManuale = '1'">
               <div class="form-text">Lotto: L<i>ggmmaa</i>-<b>SIGLA</b></div>
             </div>
-            <div class="col-6 col-md-3">
-              <label class="form-label form-label-sm mb-1">Peso netto</label>
-              <div class="input-group input-group-lg">
-                <input name="peso_netto" class="form-control" inputmode="decimal" placeholder="500">
-                <select name="unita" class="form-select" style="max-width:5.5rem">
-                  <option value="g">g</option><option value="ml">ml</option><option value="kg">kg</option><option value="l">l</option>
-                </select>
-              </div>
-            </div>
             <div class="col-md-8">
               <label class="form-label form-label-sm mb-1">Denominazione di vendita / sottotitolo</label>
               <input name="sottotitolo" class="form-control" placeholder="es. Pasta artigianale ripiena all'uovo – prodotto congelato">
@@ -42,12 +33,9 @@
               <input name="categoria" class="form-control" list="prod_categorie">
               <datalist id="prod_categorie">{% for c in categorie %}<option value="{{ c }}">{% endfor %}</datalist>
             </div>
-            <div class="col-md-8">
-              <label class="form-label form-label-sm mb-1">Formato etichetta (foglio pretagliato)</label>
-              <select name="formato_etichetta_id" class="form-select">
-                <option value="">—</option>
-                {% for f in formati %}<option value="{{ f.id }}">{{ f.descrizione }} · {{ f.uso }}</option>{% endfor %}
-              </select>
+            <div class="col-md-8 small text-muted d-flex align-items-end">
+              <span><i class="bi bi-info-circle"></i> Peso e foglio di etichette non sono del prodotto: dipendono dal
+                contenitore (vasetto, bottiglia…), che si sceglie nella ricetta e nel lotto.</span>
             </div>
           </div>
 
@@ -56,7 +44,7 @@
             <div class="col-md-7">
               <label class="form-label form-label-sm mb-1">Dicitura</label>
               <select name="tipo_scadenza" class="form-select">
-                {% for k, v in tipi_scadenza.items() %}<option value="{{ k }}">{{ v }}… {% if k == 'tmc' %}(TMC: conserve, marmellate, pasta congelata){% else %}(deperibili){% endif %}</option>{% endfor %}
+                {% for k, v in tipi_scadenza.items() %}<option value="{{ k }}">{{ v }}… {% if k == 'tmc' %}(TMC: conserve, confetture, pasta congelata){% else %}(deperibili){% endif %}</option>{% endfor %}
               </select>
             </div>
             <div class="col-md-5">

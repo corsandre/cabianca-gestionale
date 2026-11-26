@@ -41,8 +41,9 @@ const EditorRicetta = {
         this.el('ricHaccp').value = dati.note_haccp || '';
         this.el('ricPredefinita').checked = !!dati.predefinita || !dati.id;
         this.el('ricettaUsata').classList.toggle('d-none', !usata);
-        const titolo = dati.id ? ('Ricetta v' + dati.versione + (usata ? ' → nuova versione' : '')) : 'Nuova ricetta';
+        const titolo = dati.id ? ('Ricetta v' + dati.versione + (usata ? ' (usata in un lotto)' : '')) : 'Nuova ricetta';
         document.querySelector('#modaleRicetta .modal-title').textContent = titolo;
+        this.disegnaContenitori(dati.contenitori || []);
         this.el('ricRighe').innerHTML = '';
         (dati.righe || []).forEach(function (r) { EditorRicetta.aggiungiRiga(r); });
         this.aggiungiRiga();                                   // sempre una riga vuota in fondo
@@ -61,6 +62,42 @@ const EditorRicetta = {
             if (!j.ok) throw new Error(j.error);
             this.apri(j.ricetta, j.ricetta.usata);
         } catch (e) { prodAvviso(e.message, 'danger'); }
+    },
+
+    /* Contenitori: una riga per ogni contenitore attivo (spunta + pesi facoltativi). */
+    disegnaContenitori: function (scelti) {
+        const perId = {};
+        scelti.forEach(function (c) { perId[c.contenitore_id] = c; });
+        const num = function (v) { return v != null && v !== '' ? String(v).replace('.', ',') : ''; };
+        this.el('ricContenitori').innerHTML = (window.PROD_CONTENITORI_RICETTA || []).map(function (c) {
+            const s = perId[c.id];
+            return '<div class="prod-contenitore-riga d-flex align-items-center gap-2 mb-1" data-id="' + c.id + '">' +
+                '<div class="form-check flex-grow-1 mb-0"><input class="form-check-input ric-cont" type="checkbox" id="ric_cont_' + c.id + '"' + (s ? ' checked' : '') + '>' +
+                '<label class="form-check-label" for="ric_cont_' + c.id + '">' + prodEsc(c.nome) + '</label></div>' +
+                '<input class="form-control form-control-sm ric-cont-peso" style="width:6.5rem" inputmode="decimal" title="Peso netto in etichetta, se diverso" placeholder="' +
+                prodEsc(c.peso_netto ? String(c.peso_netto).replace('.', ',') + ' ' + c.unita : 'peso') + '" value="' + num(s && s.peso_netto) + '">' +
+                '<input class="form-control form-control-sm ric-cont-sgocc" style="width:6.5rem" inputmode="decimal" title="Peso sgocciolato (sottoli, sottaceti)" placeholder="sgocciolato" value="' + num(s && s.peso_sgocciolato) + '">' +
+                '</div>';
+        }).join('') || '<span class="small text-muted">Nessun contenitore: crearli nella pagina Contenitori.</span>';
+        this.el('ricContenitori').querySelectorAll('.prod-contenitore-riga').forEach(function (riga) {
+            const aggiorna = function () {
+                const on = riga.querySelector('.ric-cont').checked;
+                riga.querySelectorAll('input.form-control').forEach(function (i) { i.disabled = !on; });
+            };
+            riga.querySelector('.ric-cont').addEventListener('change', aggiorna);
+            aggiorna();
+        });
+    },
+
+    contenitori: function () {
+        const out = [];
+        this.el('ricContenitori').querySelectorAll('.prod-contenitore-riga').forEach(function (riga) {
+            if (!riga.querySelector('.ric-cont').checked) return;
+            out.push({ contenitore_id: parseInt(riga.dataset.id, 10),
+                       peso_netto: riga.querySelector('.ric-cont-peso').value.replace(',', '.'),
+                       peso_sgocciolato: riga.querySelector('.ric-cont-sgocc').value.replace(',', '.') });
+        });
+        return out;
     },
 
     aggiungiRiga: function (r) {
@@ -210,7 +247,7 @@ const EditorRicetta = {
             id: this.id, prodotto_id: this.el('ricProdotto').value, nome: this.el('ricNome').value,
             resa_pezzi: this.el('ricResaPezzi').value, resa_kg: this.el('ricResaKg').value,
             procedimento: this.el('ricProcedimento').value, note_haccp: this.el('ricHaccp').value,
-            predefinita: this.el('ricPredefinita').checked, righe: this.righe(),
+            predefinita: this.el('ricPredefinita').checked, righe: this.righe(), contenitori: this.contenitori(),
         };
         try {
             const j = await prodInCorso(bottone, prodPost(window.PROD_URL.ricettaSalva, dati));

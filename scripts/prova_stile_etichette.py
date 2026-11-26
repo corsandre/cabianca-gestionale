@@ -33,7 +33,7 @@ prove = [
   ("Medio", "unica", e(nome="Mostarda di zucca violino", peso="150 g",
      ingredienti="zucca violino, zucchero, succo di limone, essenza di **SENAPE**.", conservazione="Dopo l'apertura conservare in frigorifero.",
      lotto="L061126-MZV", scadenza="06/11/2027")),
-  ("Piccolo", "fronte_retro", e(nome="Marmellata di fichi", peso="100 g", ingredienti="fichi freschi, zucchero.",
+  ("Piccolo", "fronte_retro", e(nome="Confettura di fichi", peso="100 g", ingredienti="fichi freschi, zucchero.",
      dichiarazioni_extra="Frutta utilizzata: 60 g per 100 g. Zuccheri totali: 55 g per 100 g.",
      conservazione="Dopo l'apertura conservare in frigorifero e consumare entro 10 giorni.", lotto="L050826-MFI", scadenza="05/08/2027")),
   ("Salumi", "piegata", e(nome="Salame Ca' Bianca", peso="", ingredienti="carne di suino, sale, aromi naturali, spezie, vino, conservante: E252.",

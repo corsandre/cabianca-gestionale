@@ -47,7 +47,7 @@
         {% for l in ultimi_lotti %}
         <tr onclick="location.href='{{ url_for('prodotti.lotto', id=l.id) }}'" style="cursor:pointer">
             <td class="prod-codice-lotto ps-3">{{ l.codice }}</td><td>{{ l.prodotto.nome_completo }}</td>
-            <td>{{ l.data_produzione | data_it }}</td><td class="text-end pe-3">{{ l.pezzi_prodotti or '' }} pz</td>
+            <td>{{ l.data_produzione | data_it }}</td><td class="text-end pe-3 small">{{ l.confezioni_testo }}</td>
         </tr>
         {% else %}
         <tr><td class="text-muted text-center py-4">Nessun lotto ancora. Il primo si crea con «Nuovo lotto».</td></tr>

@@ -4,6 +4,8 @@
 - Ogni stampa genera un PDF in data/prodotti/etichette/AAAA/<lotto>_<sha8>.pdf, registrato in
   stampe_etichette con l'impronta sha256 e la copia JSON dei dati stampati. Non si sovrascrive né si
   cancella (il database lo impedisce): una ristampa è una stampa nuova.
+- Dalla 2.0.0 si stampa per CONFEZIONE del lotto (es. i 40 vasetti da 150 g): il peso viene dalla
+  confezione e i fogli proposti sono solo quelli adatti al suo contenitore (pagina Contenitori).
 - Modalità "unica" = un'etichetta per confezione; "fronte_retro" = due etichette per confezione (fronte
   con marchio/nome/peso e retro con tutto il resto), utile sulle etichette piccole.
 """
@@ -16,7 +18,7 @@ from datetime import datetime
 from flask import abort, current_app, jsonify, render_template, request, send_file
 
 from app import db
-from app.moduli.prodotti.models import FormatoEtichetta, Impostazione, Lotto, StampaEtichetta
+from app.moduli.prodotti.models import FormatoEtichetta, Impostazione, Lotto, LottoConfezione, StampaEtichetta, peso_testo
 from app.moduli.prodotti.routes import bp
 from app.moduli.prodotti.routes.comune import dati_richiesta, errore, numero, utente
 from app.moduli.prodotti.services import etichette as motore
@@ -54,14 +56,20 @@ def formato_dict(f):
     return {c.name: getattr(f, c.name) for c in FormatoEtichetta.__table__.columns}
 
 
-def dati_stampa(l):
-    """Tutto ciò che va sull'etichetta di un lotto (dict `e` dei modelli di stile)."""
+def dati_stampa(l, confezione=None):
+    """Tutto ciò che va sull'etichetta di una confezione del lotto (dict `e` dei modelli di stile).
+    Senza confezione (lotti della 1.x) il peso è quello copiato nel lotto, se c'è."""
     et = l.etichetta_dati
     scad = l.data_scadenza
-    peso = et.get("peso") or ""
+    if confezione is not None:
+        peso = confezione.peso_testo
+        sgocciolato = peso_testo(confezione.peso_sgocciolato, confezione.unita)
+    else:
+        peso, sgocciolato = et.get("peso") or "", ""
     return {
         "nome": et.get("nome") or l.prodotto.nome, "sottotitolo": et.get("sottotitolo") or "",
         "peso": peso, "dicitura_peso": "Contenuto netto" if peso.endswith(("ml", " l")) else "Peso netto",
+        "peso_sgocciolato": sgocciolato,
         "ingredienti_html": _ingredienti_html(l.ingredienti_testo), "tracce": et.get("tracce") or "",
         "conservazione": et.get("conservazione") or "", "modalita_uso": et.get("modalita_uso") or "",
         "dichiarazioni_extra": et.get("dichiarazioni_extra") or "", "prodotto_da": et.get("prodotto_da") or "",
@@ -188,15 +196,41 @@ def _misura(e, formato, stile, modalita):
     return scale, corpo, soglia, avviso
 
 
+def formati_adatti(confezione):
+    """(fogli adatti, foglio proposto) per una confezione: quelli del suo contenitore; tutti gli attivi se la
+    confezione non ha contenitore (lotti della 1.x) o il contenitore non ne indica."""
+    tutti = FormatoEtichetta.query.filter_by(attivo=True).order_by(FormatoEtichetta.id).all()
+    c = confezione.contenitore if confezione is not None else None
+    adatti = [f for f in (c.formati if c else []) if f.attivo] or tutti
+    proposto = next((f for f in adatti if c and f.id == c.formato_predefinito_id), adatti[0] if adatti else None)
+    return adatti, proposto
+
+
+def confezioni_etichette(l):
+    """Per la scheda del lotto: le confezioni con i loro fogli adatti (la tendina dei fogli si filtra)."""
+    out = []
+    for c in l.confezioni or [None]:
+        adatti, proposto = formati_adatti(c)
+        out.append({"id": c.id if c else "", "testo": f"{c.nome} · {c.pezzi} pz" if c else "Tutto il lotto",
+                    "pezzi": c.pezzi if c else (l.pezzi_prodotti or ""), "formati": [f.id for f in adatti],
+                    "proposto": proposto.id if proposto else None})
+    return out
+
+
 def _lotto_e_formato(id, d):
+    """Lotto, confezione scelta, foglio (solo tra quelli adatti alla confezione) e modalità."""
     l = db.session.get(Lotto, id)
     if not l:
         abort(404)
-    fid = numero(d.get("formato_id"), intero=True) or l.etichetta_dati.get("formato_etichetta_id") \
-        or l.prodotto.formato_etichetta_id
-    f = db.session.get(FormatoEtichetta, fid or 0) or FormatoEtichetta.query.filter_by(attivo=True).first()
+    confezione = db.session.get(LottoConfezione, numero(d.get("confezione_id"), intero=True) or 0)
+    if confezione is None or confezione.lotto_id != l.id:
+        confezione = l.confezioni[0] if l.confezioni else None
+    adatti, proposto = formati_adatti(confezione)
+    fid = numero(d.get("formato_id"), intero=True)
+    f = next((x for x in adatti if x.id == fid), None) or proposto \
+        or FormatoEtichetta.query.filter_by(attivo=True).first()
     modalita = d.get("modalita") if d.get("modalita") in MODALITA else modalita_proposta(f, l.prodotto)
-    return l, f, modalita
+    return l, confezione, f, modalita
 
 
 def modalita_proposta(formato, prodotto=None):
@@ -231,15 +265,16 @@ def immagini_anteprima(e, fd, stile, modalita, scale, dpi=220):
 def prova_etichetta(id):
     """Anteprima: immagine dell'etichetta (o di fronte e retro) alla scala che ci sta, con gli avvisi."""
     d = dati_richiesta()
-    l, f, modalita = _lotto_e_formato(id, d)
+    l, confezione, f, modalita = _lotto_e_formato(id, d)
     stile = d.get("stile") if d.get("stile") in stili_disponibili() else stile_attivo()
-    e, fd = dati_stampa(l), formato_dict(f)
+    e, fd = dati_stampa(l, confezione), formato_dict(f)
     scale, corpo, soglia, avviso = misura(e, fd, stile, modalita)
     immagini = immagini_anteprima(e, fd, stile, modalita, scale)
-    n = numero(d.get("n_confezioni"), intero=True) or l.pezzi_prodotti or f.per_foglio
+    n = numero(d.get("n_confezioni"), intero=True) or (confezione.pezzi if confezione else l.pezzi_prodotti) \
+        or f.per_foglio
     n_etichette = n * etichette_per_confezione(modalita)
     return jsonify(ok=True, immagini=immagini, scala=min(scale.values()), corpo_pt=corpo, soglia_pt=soglia,
-                   avviso=avviso, formato=f.descrizione, modalita=modalita, n_etichette=n_etichette,
+                   avviso=avviso, formato=f.descrizione, formato_id=f.id, modalita=modalita, n_etichette=n_etichette,
                    fogli=motore.fogli_necessari(n_etichette, f.per_foglio), stile=stile,
                    problemi_formato=motore.controlla_formato(fd))
 
@@ -249,14 +284,18 @@ def prova_etichetta(id):
 def stampa_etichette(id):
     """Genera il PDF dei fogli, lo archivia e restituisce l'indirizzo per aprirlo."""
     d = dati_richiesta()
-    l, f, modalita = _lotto_e_formato(id, d)
+    l, confezione, f, modalita = _lotto_e_formato(id, d)
+    richiesto = numero(d.get("formato_id"), intero=True)
+    if richiesto and richiesto != f.id:
+        return errore(f"Questo foglio non è adatto a «{confezione.nome if confezione else l.codice}»: sceglierne uno dell'elenco "
+                      "(i fogli adatti si cambiano nella pagina Contenitori).")
     n_confezioni = numero(d.get("n_confezioni"), intero=True)
     if not n_confezioni or n_confezioni < 1:
         return errore("Indicare quante confezioni etichettare.")
     if n_confezioni > 2000:
         return errore("Troppe etichette in una volta (massimo 2000 confezioni).")
     stile = stile_attivo()
-    e, fd = dati_stampa(l), formato_dict(f)
+    e, fd = dati_stampa(l, confezione), formato_dict(f)
     problemi = motore.controlla_formato(fd)
     if problemi:
         return errore("Formato non valido: " + "; ".join(problemi))
@@ -272,7 +311,9 @@ def stampa_etichette(id):
             fh.write(dati_pdf)
     s = StampaEtichetta(lotto_id=l.id, formato_id=f.id, stile=stile, n_etichette=n_etichette,
                         pdf_path=f"{anno}/{nome}", sha256=impronta, creato_da=utente(),
+                        confezione_id=confezione.id if confezione else None,
                         dati=json.dumps({"etichetta": e, "formato": fd, "modalita": modalita,
+                                         "confezione": confezione.nome if confezione else "",
                                          "n_confezioni": n_confezioni, "scala": min(scale.values()),
                                          "corpo_pt": corpo, "generata": datetime.now().isoformat(timespec="seconds")},
                                         ensure_ascii=False))

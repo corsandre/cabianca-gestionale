@@ -41,7 +41,7 @@
     <div class="table-responsive">
     <table class="table table-sm align-middle mb-0">
         <thead><tr><th><input type="checkbox" class="form-check-input" checked onchange="document.querySelectorAll('.sel').forEach(c => c.checked = this.checked)"></th>
-            <th>Lotto</th><th>Prodotto</th><th>Produzione</th><th>Scadenza</th><th class="text-end">Pezzi</th><th>Stato</th><th>Ingrediente coinvolto</th></tr></thead>
+            <th>Lotto</th><th>Prodotto</th><th>Produzione</th><th>Scadenza</th><th>Confezioni</th><th>Stato</th><th>Ingrediente coinvolto</th></tr></thead>
         <tbody>
         {% for l, righe in risultati %}
         <tr>
@@ -49,7 +49,7 @@
             <td class="prod-codice-lotto"><a href="{{ url_for('prodotti.lotto', id=l.id) }}">{{ l.codice }}</a></td>
             <td>{{ l.prodotto.nome_completo }}</td>
             <td>{{ l.data_produzione | data_it }}</td><td>{{ l.data_scadenza | data_it }}</td>
-            <td class="text-end">{{ l.pezzi_prodotti or '' }}</td>
+            <td class="small">{{ l.confezioni_testo }}</td>
             <td>{% if l.stato == 'ritirato' %}<span class="badge bg-danger">ritirato</span>{% else %}<span class="badge bg-secondary">{{ l.stato }}</span>{% endif %}</td>
             <td class="small">{% for r in righe %}{{ r.nome }} – {{ 'propria' if r.produzione_propria else (r.fornitore_nome or '?') }}{% if r.lotto_fornitore %}, lotto <b>{{ r.lotto_fornitore }}</b>{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
         </tr>

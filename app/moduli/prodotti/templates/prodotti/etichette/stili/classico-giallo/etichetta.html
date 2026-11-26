@@ -5,6 +5,7 @@
   <div class="testi">
     {% if e.ingredienti_html %}<p class="ingredienti">{{ e.ingredienti_html | safe }}</p>{% endif %}
     {% if e.tracce %}<p class="voce">Può contenere tracce di {{ e.tracce | trim('.') }}.</p>{% endif %}
+    {% if e.peso_sgocciolato %}<p class="voce">Peso sgocciolato: {{ e.peso_sgocciolato }}.</p>{% endif %}
     {% if e.dichiarazioni_extra %}<p class="voce">{{ e.dichiarazioni_extra }}</p>{% endif %}
     {% if e.conservazione %}<p class="voce"><b>Conservazione:</b> {{ e.conservazione }}</p>{% endif %}
     {% if e.modalita_uso %}<p class="voce"><b>Modalità d'uso:</b> {{ e.modalita_uso }}</p>{% endif %}

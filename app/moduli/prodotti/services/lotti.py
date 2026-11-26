@@ -18,7 +18,7 @@ def pulisci_sigla(sigla):
 def proponi_sigla(nome):
     """Sigla di 3 lettere dal nome, saltando le parole vuote ("di", "e", "al"...): iniziale della prima
     parola significativa + prime due lettere della seconda, oppure le prime 3 lettere se è una sola.
-    Es. "Marmellata di fichi" → MFI, "Passata" → PAS, "Tortelli di zucca" → TZU.
+    Es. "Confettura di fichi" → CFI, "Passata" → PAS, "Tortelli di zucca" → TZU.
     È solo una proposta modificabile."""
     vuote = {"di", "del", "della", "delle", "dei", "e", "al", "alla", "allo", "con", "in", "da", "a", "il", "la"}
     parole = [p for p in re.findall(r"[A-Za-zÀ-ÿ]+", nome or "") if p.lower() not in vuote]
@@ -56,6 +56,17 @@ def fattore_scala(resa_pezzi, pezzi):
     except (TypeError, ValueError):
         pass
     return 1.0
+
+
+def fattore_ricetta(resa_kg, resa_pezzi, kg, pezzi):
+    """Fattore per un lotto con più contenitori: dai kg totali se la ricetta ha la resa in kg (e i contenitori
+    hanno un peso), altrimenti dai pezzi totali sulla resa in pezzi; 1 se mancano i dati."""
+    try:
+        if resa_kg and kg and float(resa_kg) > 0:
+            return float(kg) / float(resa_kg)
+    except (TypeError, ValueError):
+        pass
+    return fattore_scala(resa_pezzi, pezzi)
 
 
 def arrotonda_quantita(q):

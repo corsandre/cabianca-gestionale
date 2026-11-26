@@ -16,6 +16,7 @@
   <div class="dati">
     <span>Sigla lotti: <b>{{ r.sigla }}</b></span>
     {% if r.resa_pezzi %}<span>Resa: <b>{{ r.resa_pezzi }} pezzi</b></span>{% endif %}
+    {% if r.contenitori %}<span>Contenitori: <b>{{ r.contenitori }}</b></span>{% endif %}
     {% if r.resa_kg %}<span>Resa: <b>{{ '%g' | format(r.resa_kg) }} kg</b></span>{% endif %}
     <span>{{ 'In uso' if r.attiva else 'Non più in uso' }}{% if r.predefinita %} · proposta per i nuovi lotti{% endif %}</span>
     <span>Creata il {{ r.creato_il | data_it }}{% if r.creato_da %} da {{ r.creato_da }}{% endif %}</span>

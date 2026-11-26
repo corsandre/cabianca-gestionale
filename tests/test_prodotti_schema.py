@@ -63,6 +63,47 @@ class TestSchemaProdotti(unittest.TestCase):
         self.bloccato("DELETE FROM stampe_etichette")
         self.bloccato("UPDATE stampe_etichette SET n_etichette = 1")
 
+    def test_cancellazione_autorizzata_dall_amministratore(self):
+        # migrazione 5: con il permesso (scritto dalla route dell'admin) lotto e stampe si cancellano,
+        # e lo storico conserva la copia del lotto
+        self.c.execute("UPDATE lotti SET cancellazione_autorizzata = 1, stato_motivo = 'ELIMINATO: prova', "
+                       "modificato_da = 'Andrea' WHERE id = 1")
+        self.c.execute("DELETE FROM stampe_etichette WHERE lotto_id = 1")
+        self.c.execute("DELETE FROM lotti_ingredienti WHERE lotto_id = 1")
+        self.c.execute("DELETE FROM lotti WHERE id = 1")
+        chi, prima = self.c.execute("SELECT chi, prima FROM storico WHERE tabella = 'lotti' AND azione = 'cancellazione'").fetchone()
+        self.assertEqual(chi, "Andrea")
+        self.assertIn("ELIMINATO: prova", prima)
+        # un altro lotto, senza permesso, resta bloccato
+        self.c.execute("INSERT INTO lotti (codice, prodotto_id, data_produzione) VALUES ('L251126-ZUC', 1, '2026-11-25')")
+        self.bloccato("DELETE FROM lotti")
+
+    def test_migrazione_6_contenitori_e_lotti_vecchi(self):
+        # un database alla versione 5 con un lotto «alla vecchia» (peso nel prodotto, pezzi nel lotto)
+        db = os.path.join(self.tmp.name, "v5.db")
+        bk = os.path.join(self.tmp.name, "bk5")
+        mig.applica(db, [m for m in schema.MIGRAZIONI if m[0] <= 5], "prodotti", bk, copia=bs.copia_sqlite)
+        c = sqlite3.connect(db)
+        c.execute("INSERT INTO prodotti (nome, sigla, peso_netto, unita) VALUES ('Confettura di fichi', 'CFI', 150, 'g')")
+        c.execute("INSERT INTO lotti (codice, prodotto_id, data_produzione, pezzi_prodotti) VALUES ('L011126-CFI', 1, '2026-11-01', 40)")
+        c.commit()
+        c.close()
+        mig.applica(db, schema.MIGRAZIONI, "prodotti", bk, copia=bs.copia_sqlite)
+        c = sqlite3.connect(db)
+        self.assertEqual(c.execute("SELECT nome, peso_netto, pezzi, contenitore_id FROM lotti_confezioni").fetchall(),
+                         [("Confezione 150 g", 150.0, 40, None)])
+        # contenitori di partenza con il loro foglio proposto tra quelli adatti
+        cont = dict(c.execute("SELECT c.nome, f.codice_foglio FROM contenitori c JOIN formati_etichetta f "
+                              "ON f.id = c.formato_predefinito_id"))
+        self.assertEqual(cont["Vasetto 150 g"], "Avery L7163")
+        self.assertEqual(cont["Vasetto 300 g"], "Avery L7165")
+        self.assertEqual(c.execute("SELECT count(*) FROM contenitori c WHERE NOT EXISTS (SELECT 1 FROM contenitori_formati x "
+                                   "WHERE x.contenitore_id = c.id AND x.formato_id = c.formato_predefinito_id)").fetchone()[0], 0)
+        # le confezioni dei lotti finiscono nello storico quando si correggono
+        c.execute("UPDATE lotti_confezioni SET pezzi = 38, modificato_da = 'Agnese'")
+        self.assertEqual(c.execute("SELECT chi FROM storico WHERE tabella = 'lotti_confezioni'").fetchone()[0], "Agnese")
+        c.close()
+
     def test_codice_lotto_unico_e_stato_valido(self):
         self.bloccato("INSERT INTO lotti (codice, prodotto_id, data_produzione) VALUES ('L241126-ZUC', 1, '2026-11-24')")
         self.bloccato("UPDATE lotti SET stato = 'boh'")

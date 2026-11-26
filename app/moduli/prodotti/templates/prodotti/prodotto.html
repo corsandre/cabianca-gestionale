@@ -5,13 +5,16 @@
 <div class="cb-page-header flex-wrap gap-2">
     <div>
         <a href="{{ url_for('prodotti.catalogo') }}" class="small text-muted text-decoration-none"><i class="bi bi-arrow-left"></i> Catalogo</a>
-        <h1 class="mb-0">{{ p.nome }} <small class="text-muted fs-5">{{ p.peso_testo }}</small> <span class="prod-sigla fs-6 align-middle">{{ p.sigla }}</span></h1>
+        <h1 class="mb-0">{{ p.nome }} <span class="prod-sigla fs-6 align-middle">{{ p.sigla }}</span></h1>
         {% if p.sottotitolo %}<div class="text-muted">{{ p.sottotitolo }}</div>{% endif %}
     </div>
     <div class="d-flex flex-wrap gap-2">
         {% if scrive %}
         <a href="{{ url_for('prodotti.lotti', nuovo=p.id) }}" class="btn btn-cb"><i class="bi bi-plus-circle"></i> Nuovo lotto</a>
         <button class="btn btn-cb-outline" onclick="ModaleProdotto.apri(PRODOTTO)"><i class="bi bi-pencil"></i> Modifica</button>
+        {% endif %}
+        {% if current_user.role == 'admin' %}
+        <button class="btn btn-outline-danger" onclick="eliminaProdotto(this)"><i class="bi bi-trash"></i> Elimina</button>
         {% endif %}
     </div>
 </div>
@@ -26,7 +29,6 @@
             <h6 class="text-cb-prod">Dati in etichetta</h6>
             <dl class="row small mb-0">
                 <dt class="col-5">Categoria</dt><dd class="col-7">{{ p.categoria or '—' }}</dd>
-                <dt class="col-5">Formato etichetta</dt><dd class="col-7">{{ p.formato.descrizione if p.formato else '—' }}</dd>
                 <dt class="col-5">Scadenza</dt><dd class="col-7">{{ p.TIPI_SCADENZA[p.tipo_scadenza] }}{% if p.durata_giorni %}: <b>{{ p.durata_giorni }} giorni</b> dalla produzione{% endif %}</dd>
                 <dt class="col-5">Conservazione</dt><dd class="col-7">{{ p.conservazione or '—' }}</dd>
                 <dt class="col-5">Modalità d'uso</dt><dd class="col-7">{{ p.modalita_uso or '—' }}</dd>
@@ -53,12 +55,15 @@
                         {% if p.ricetta_default_id == r.id %}<span class="badge bg-success">proposta per i lotti</span>{% endif %}
                         {% if r.usata %}<span class="badge bg-light text-dark border" title="Usata in almeno un lotto: non si modifica più"><i class="bi bi-lock"></i> usata</span>{% endif %}
                         {% if not r.attiva %}<span class="badge bg-secondary">non in uso</span>{% endif %}
-                        <div class="small text-muted">{% if r.resa_pezzi %}resa {{ r.resa_pezzi }} pezzi{% endif %}{% if r.resa_kg %} · {{ r.resa_kg | round(2) }} kg{% endif %} · {{ r.creato_il | data_it }}{% if r.creato_da %} · {{ r.creato_da }}{% endif %}</div>
+                        <div class="small text-muted">{% if r.resa_kg %}resa {{ ('%g' | format(r.resa_kg | round(2))) | replace('.', ',') }} kg · {% endif %}{% if r.resa_pezzi %}{{ r.resa_pezzi }} pezzi · {% endif %}{{ r.creato_il | data_it }}{% if r.creato_da %} · {{ r.creato_da }}{% endif %}</div>
                     </div>
                     <button class="btn btn-sm btn-outline-secondary" onclick="EditorRicetta.modifica({{ r.id }})">
-                        <i class="bi bi-{{ 'eye' if not scrive else ('files' if r.usata else 'pencil') }}"></i>
-                        {{ 'Apri' if not scrive else ('Nuova versione' if r.usata else 'Modifica') }}
+                        <i class="bi bi-{{ 'eye' if not scrive else 'pencil' }}"></i>
+                        {{ 'Apri' if not scrive else 'Modifica' }}
                     </button>
+                </div>
+                <div class="small mt-1"><i class="bi bi-cup-hot text-cb-prod"></i>
+                    {% for rc in r.contenitori %}<span class="badge bg-light text-dark border me-1">{{ rc.contenitore.nome }}{% if rc.peso_netto %} · {{ '%g' | format(rc.peso_netto) }} {{ rc.contenitore.unita }}{% endif %}{% if rc.peso_sgocciolato %} (sgocc. {{ '%g' | format(rc.peso_sgocciolato) }}){% endif %}</span>{% else %}<span class="text-warning">nessun contenitore scelto</span>{% endfor %}
                 </div>
                 <div class="small mt-1">
                     {% for x in r.righe %}{{ x.materia_prima.nome }} <span class="text-muted">{{ x.quantita | round(1) | string | replace('.0', '') }} {{ x.unita }}</span>{{ ', ' if not loop.last }}{% endfor %}
@@ -75,14 +80,14 @@
             <div class="p-3 pb-2"><h6 class="text-cb-prod mb-0">Lotti ({{ lotti | length }})</h6></div>
             <div class="table-responsive">
             <table class="table table-sm table-hover align-middle mb-0">
-                <thead><tr><th>Codice</th><th>Produzione</th><th>Scadenza</th><th class="text-end">Pezzi</th><th>Ricetta</th><th>Stato</th></tr></thead>
+                <thead><tr><th>Codice</th><th>Produzione</th><th>Scadenza</th><th>Confezioni</th><th>Ricetta</th><th>Stato</th></tr></thead>
                 <tbody>
                 {% for l in lotti %}
                 <tr>
                     <td class="prod-codice-lotto"><a href="{{ url_for('prodotti.lotto', id=l.id) }}">{{ l.codice }}</a></td>
                     <td>{{ l.data_produzione | data_it }}</td>
                     <td>{{ l.data_scadenza | data_it }}</td>
-                    <td class="text-end">{{ l.pezzi_prodotti or '' }}</td>
+                    <td>{{ l.confezioni_testo }}</td>
                     <td>{{ l.ricetta.etichetta if l.ricetta else '—' }}</td>
                     <td>{{ l.STATI[l.stato] }}</td>
                 </tr>
@@ -103,4 +108,15 @@
 {% block prodotti_js %}
 <script src="{{ url_for('prodotti.static', filename='ricette.js') }}"></script>
 <script>const PRODOTTO = {{ prodotto_json | tojson }};</script>
+{% if current_user.role == 'admin' %}
+<script>
+async function eliminaProdotto(bottone) {
+    if (!confirm('Eliminare ' + PRODOTTO.nome_completo + ' e le sue ricette? Non si può tornare indietro.')) return;
+    try {
+        const r = await prodInCorso(bottone, prodPost("{{ url_for('prodotti.elimina_prodotto', id=p.id) }}", {}));
+        location.href = r.url;
+    } catch (e) { prodAvviso(e.message, 'danger'); }
+}
+</script>
+{% endif %}
 {% endblock %}

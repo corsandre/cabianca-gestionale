@@ -3,8 +3,10 @@
  *  FinestraLotto.apri(prodottoId)  nuovo lotto (se il prodotto è indicato si parte dal passo 2)
  *  FinestraLotto.modifica(lotto)   correzione di un lotto esistente (dati da routes/lotti.lotto_json)
  *
- * Il passo 2 chiede al server (/prodotti/lotti/prepara) ricetta, codice, scadenza e ingredienti con le
- * quantità scalate e la provenienza ripresa dall'ultimo lotto. Cambiando data, pezzi o ricetta si
+ * Il passo 2 chiede al server (/prodotti/lotti/prepara) ricetta, codice, scadenza, contenitori compatibili
+ * con la ricetta e ingredienti con le quantità scalate e la provenienza ripresa dall'ultimo lotto.
+ * Confezioni: righe contenitore + pezzi (un lotto può andare in più contenitori); le dosi si scalano sui kg
+ * totali (o sui pezzi, se la ricetta non ha la resa in kg). Cambiando data, confezioni o ricetta si
  * ricalcola; il codice e la scadenza si ricalcolano solo finché non li si modifica a mano.
  * Fornitore: si scrive o si sceglie dall'elenco; un nome nuovo diventa un fornitore in Anagrafica.
  */
@@ -17,6 +19,7 @@ const FinestraLotto = {
     codiceManuale: false,
     scadenzaManuale: false,
     testoManuale: false,
+    contenitori: [],
 
     el: function (id) { return document.getElementById(id); },
 
@@ -27,7 +30,8 @@ const FinestraLotto = {
         document.querySelector('#modaleLotto .modal-title').textContent = 'Nuovo lotto';
         this.el('lotSalva').innerHTML = '<i class="bi bi-check-lg"></i> Crea lotto';
         this.el('lotData').value = new Date().toISOString().slice(0, 10);
-        this.el('lotPezzi').value = '';
+        this.el('lotConfezioni').innerHTML = '';
+        this.el('lotTotale').textContent = '';
         this.el('lotNote').value = '';
         this.el('lotCerca').value = '';
         this.disegnaProdotti();
@@ -51,15 +55,22 @@ const FinestraLotto = {
             || { id: l.prodotto_id, nome: '' };
         this.el('lotNomeProdotto').textContent = this.prodotto.nome;
         this.el('lotData').value = l.data;
-        this.el('lotPezzi').value = l.pezzi || '';
         this.el('lotCodice').value = l.codice;
         this.el('lotScadenza').value = l.scadenza;
         this.el('lotNote').value = l.note;
         this.el('lotTesto').value = l.ingredienti_testo;
         this.el('lotRighe').innerHTML = '';
         l.righe.forEach(function (r) { FinestraLotto.aggiungiRiga(r); });
-        // ricette del prodotto per la tendina, senza toccare le righe
-        this.prepara(false).then(function () { FinestraLotto.el('lotRicetta').value = l.ricetta_id || ''; });
+        // ricette e contenitori del prodotto per le tendine, senza toccare le righe
+        this.el('lotRicetta').innerHTML = l.ricetta_id ? '<option value="' + l.ricetta_id + '"></option>' : '';
+        this.el('lotRicetta').value = l.ricetta_id || '';
+        this.prepara(false).then(function () {
+            FinestraLotto.el('lotRicetta').value = l.ricetta_id || '';
+            FinestraLotto.el('lotConfezioni').innerHTML = '';
+            (l.confezioni || []).forEach(function (c) { FinestraLotto.aggiungiConfezione(c); });
+            if (!(l.confezioni || []).length) FinestraLotto.aggiungiConfezione({ pezzi: l.pezzi });
+            FinestraLotto.mostraTotale();
+        });
         this.passo(2);
     },
 
@@ -84,6 +95,9 @@ const FinestraLotto = {
         if (this.attuale === 2) {
             if (!this.el('lotCodice').value.trim()) { prodAvviso('Manca il codice lotto.', 'warning'); return; }
             if (!this.righe().length) { prodAvviso('Aggiungere almeno un ingrediente.', 'warning'); return; }
+            if (!this.confezioni().some(function (c) { return c.contenitore_id && parseInt(c.pezzi, 10) > 0; })) {
+                prodAvviso('Indicare quanti pezzi e in quale contenitore (es. 40 vasetti da 150 g).', 'warning'); return;
+            }
         }
         this.passo(this.attuale + 1);
     },
@@ -123,21 +137,27 @@ const FinestraLotto = {
     /* Chiede al server i dati calcolati. modo:
      *   'tutto'  prodotto o ricetta scelti: ricostruisce le righe degli ingredienti
      *   'data'   cambiata la data: solo codice e scadenza
-     *   'pezzi'  cambiati i pezzi: solo le quantità (fornitori e lotti già scritti restano)
-     *   false    solo la tendina delle ricette (correzione di un lotto) */
+     *   'pezzi'  cambiate le confezioni: solo le quantità (fornitori e lotti già scritti restano)
+     *   false    solo le tendine di ricette e contenitori (correzione di un lotto) */
     prepara: async function (modo) {
-        const par = new URLSearchParams({ prodotto_id: this.prodotto.id, data: this.el('lotData').value,
-                                          pezzi: this.el('lotPezzi').value });
+        const par = new URLSearchParams({ prodotto_id: this.prodotto.id, data: this.el('lotData').value });
         if (this.el('lotRicetta').value) par.set('ricetta_id', this.el('lotRicetta').value);
+        // con 'tutto' (prodotto o ricetta nuovi) le confezioni le propone il server
+        if (modo !== 'tutto') par.set('confezioni', JSON.stringify(this.confezioni()));
         try {
             const r = await fetch(window.PROD_URL.lottoPrepara + '?' + par, { credentials: 'same-origin' });
             const j = await r.json();
             if (!j.ok) throw new Error(j.error);
             this.el('lotRicetta').innerHTML = '<option value="">— nessuna —</option>' + j.ricette.map(function (x) {
-                return '<option value="' + x.id + '">' + prodEsc(x.etichetta) + (x.resa_pezzi ? ' (resa ' + x.resa_pezzi + ' pz)' : '') + '</option>';
+                const resa = x.resa_kg ? ' (resa ' + String(x.resa_kg).replace('.', ',') + ' kg)' : (x.resa_pezzi ? ' (resa ' + x.resa_pezzi + ' pz)' : '');
+                return '<option value="' + x.id + '">' + prodEsc(x.etichetta) + resa + '</option>';
             }).join('');
             this.el('lotRicetta').value = j.ricetta_id || '';
             this.el('lotSenzaRicetta').classList.toggle('d-none', !!j.ricette.length);
+            this.contenitori = j.contenitori || [];
+            this.aggiornaTendineConfezioni();
+            this.fattore = j.fattore;
+            this.mostraTotale();
             if (!modo) return;
             if (!this.codiceManuale) this.el('lotCodice').value = j.codice;
             if (!this.scadenzaManuale) this.el('lotScadenza').value = j.scadenza;
@@ -151,7 +171,10 @@ const FinestraLotto = {
                 });
                 return;
             }
-            if (!this.el('lotPezzi').value && j.pezzi) this.el('lotPezzi').value = j.pezzi;
+            this.el('lotConfezioni').innerHTML = '';
+            (j.confezioni || []).forEach(function (c) { FinestraLotto.aggiungiConfezione(c); });
+            if (!(j.confezioni || []).length) this.aggiungiConfezione({});
+            this.mostraTotale();
             this.el('lotRighe').innerHTML = '';
             j.righe.forEach(function (x) { FinestraLotto.aggiungiRiga(x); });
             if (!j.righe.length) this.aggiungiRiga({});
@@ -159,6 +182,86 @@ const FinestraLotto = {
         } catch (e) { prodAvviso(e.message, 'danger'); }
     },
 
+    /* ---------------- confezioni ---------------- */
+    opzioniContenitori: function (scelto, nomeVecchio) {
+        let html = '<option value="">— contenitore —</option>';
+        let trovato = false;
+        this.contenitori.forEach(function (c) {
+            if (String(c.id) === String(scelto)) trovato = true;
+            html += '<option value="' + c.id + '"' + (String(c.id) === String(scelto) ? ' selected' : '') + '>' +
+                prodEsc(c.nome) + (c.peso_testo && c.nome.indexOf(c.peso_testo) < 0 ? ' · ' + prodEsc(c.peso_testo) : '') + '</option>';
+        });
+        // confezione salvata con un contenitore che la ricetta non propone più (o dei lotti della 1.x)
+        if (scelto && !trovato) html += '<option value="' + scelto + '" selected>' + prodEsc(nomeVecchio || 'contenitore ' + scelto) + '</option>';
+        if (!scelto && nomeVecchio) html += '<option value="" selected>' + prodEsc(nomeVecchio) + ' (da scegliere)</option>';
+        return html;
+    },
+
+    aggiungiConfezione: function (c) {
+        const tr = document.createElement('tr');
+        tr.dataset.id = c.id || '';
+        tr.dataset.nome = c.nome || '';
+        tr.innerHTML =
+            '<td data-etichetta="Contenitore"><select class="form-select form-select-sm c-cont"></select></td>' +
+            '<td data-etichetta="Pezzi" style="width:8rem"><div class="input-group input-group-sm"><input class="form-control c-pezzi" inputmode="numeric" placeholder="pezzi">' +
+            '<span class="input-group-text">pz</span></div></td>' +
+            '<td class="prod-togli"><button type="button" class="btn btn-sm btn-outline-secondary" title="Togli"><i class="bi bi-x"></i></button></td>';
+        tr.querySelector('.c-cont').innerHTML = this.opzioniContenitori(c.contenitore_id, c.nome);
+        tr.querySelector('.c-pezzi').value = c.pezzi != null ? c.pezzi : '';
+        tr.querySelector('.c-cont').addEventListener('change', function () { FinestraLotto.confezioniCambiate(); });
+        tr.querySelector('.c-pezzi').addEventListener('input', function () { FinestraLotto.confezioniCambiate(); });
+        tr.querySelector('button').addEventListener('click', function () { tr.remove(); FinestraLotto.confezioniCambiate(); });
+        this.el('lotConfezioni').appendChild(tr);
+    },
+
+    aggiornaTendineConfezioni: function () {
+        this.el('lotConfezioni').querySelectorAll('tr').forEach(function (tr) {
+            const sel = tr.querySelector('.c-cont');
+            sel.innerHTML = FinestraLotto.opzioniContenitori(sel.value, tr.dataset.nome);
+        });
+    },
+
+    confezioni: function () {
+        const out = [];
+        this.el('lotConfezioni').querySelectorAll('tr').forEach(function (tr) {
+            const cid = tr.querySelector('.c-cont').value, pezzi = tr.querySelector('.c-pezzi').value.trim();
+            if (cid || pezzi) out.push({ id: tr.dataset.id || null, contenitore_id: cid || null, pezzi: pezzi });
+        });
+        return out;
+    },
+
+    /* Totale: pezzi e kg (dai pesi dei contenitori proposti dalla ricetta). */
+    mostraTotale: function () {
+        let pezzi = 0, kg = 0;
+        const perId = {};
+        this.contenitori.forEach(function (c) { perId[c.id] = c; });
+        this.confezioni().forEach(function (c) {
+            const n = parseInt(c.pezzi, 10) || 0, k = perId[c.contenitore_id];
+            pezzi += n;
+            if (k && k.peso_netto) kg += n * k.peso_netto * ({ kg: 1000, l: 1000 }[k.unita] || 1) / 1000;
+        });
+        this.el('lotTotale').textContent = pezzi ? 'Totale: ' + pezzi + ' pezzi' +
+            (kg ? ' · ' + kg.toLocaleString('it-IT', { maximumFractionDigits: 2 }) + ' kg' : '') +
+            (this.fattore && this.fattore !== 1 && !this.lottoId ? ' · dosi della ricetta × ' + String(this.fattore).replace('.', ',') : '') : '';
+    },
+
+    confezioniCambiate: function () {
+        this.mostraTotale();
+        if (this.lottoId || !this.prodotto) return;           // correzione: niente ricalcolo delle dosi
+        clearTimeout(this._c);
+        this._c = setTimeout(function () { FinestraLotto.prepara('pezzi'); }, 500);
+    },
+
+    testoConfezioni: function () {
+        const perId = {};
+        this.contenitori.forEach(function (c) { perId[c.id] = c; });
+        return this.confezioni().filter(function (c) { return parseInt(c.pezzi, 10) > 0; }).map(function (c) {
+            const k = perId[c.contenitore_id];
+            return c.pezzi + ' × ' + (k ? k.nome : '?');
+        }).join(', ');
+    },
+
+    /* ---------------- ingredienti ---------------- */
     aggiungiRiga: function (r) {
         const tr = document.createElement('tr');
         tr.dataset.materiaId = r.materia_prima_id || '';
@@ -254,7 +357,7 @@ const FinestraLotto = {
             ['Codice lotto', '<span class="prod-codice-lotto">' + prodEsc(this.el('lotCodice').value.toUpperCase()) + '</span>'],
             ['Produzione', prodEsc(this.el('lotData').value.split('-').reverse().join('/'))],
             ['Scadenza', prodEsc((this.el('lotScadenza').value || '—').split('-').reverse().join('/'))],
-            ['Pezzi', prodEsc(this.el('lotPezzi').value || '—')],
+            ['Confezioni', prodEsc(this.testoConfezioni() || '—')],
             ['Ricetta', prodEsc(ric.value ? ric.options[ric.selectedIndex].text : 'nessuna')],
             ['Ingredienti', righe.length + (senzaLotto.length
                 ? ' <span class="text-warning"><i class="bi bi-exclamation-triangle"></i> senza lotto fornitore: ' + prodEsc(senzaLotto.join(', ')) + '</span>'
@@ -268,7 +371,7 @@ const FinestraLotto = {
     salva: async function (bottone) {
         const dati = {
             id: this.lottoId, prodotto_id: this.prodotto.id, ricetta_id: this.el('lotRicetta').value,
-            data: this.el('lotData').value, pezzi: this.el('lotPezzi').value,
+            data: this.el('lotData').value, confezioni: this.confezioni(),
             codice: this.el('lotCodice').value, scadenza: this.el('lotScadenza').value,
             ingredienti_testo: this.el('lotTesto').value, note: this.el('lotNote').value, righe: this.righe(),
         };
@@ -284,8 +387,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const el = document.getElementById('modaleLotto');
     if (!el) return;
     FinestraLotto.el('lotCerca').addEventListener('input', function () { FinestraLotto.disegnaProdotti(); });
-    // cambiando data, pezzi o ricetta si ricalcola solo quello che ne dipende (solo per un lotto nuovo)
-    const modi = { lotData: 'data', lotPezzi: 'pezzi', lotRicetta: 'tutto' };
+    // cambiando data o ricetta si ricalcola solo quello che ne dipende (solo per un lotto nuovo);
+    // le confezioni hanno i loro eventi (confezioniCambiate)
+    const modi = { lotData: 'data', lotRicetta: 'tutto' };
     Object.keys(modi).forEach(function (id) {
         FinestraLotto.el(id).addEventListener('change', function () {
             if (!FinestraLotto.lottoId && FinestraLotto.prodotto) FinestraLotto.prepara(modi[id]);

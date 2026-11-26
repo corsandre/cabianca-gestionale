@@ -32,7 +32,7 @@
 <div class="cb-card p-0">
     <div class="table-responsive">
     <table class="table table-hover align-middle mb-0">
-        <thead><tr><th>Codice</th><th>Prodotto</th><th>Produzione</th><th>Scadenza</th><th class="text-end">Pezzi</th><th>Tracciabilità</th><th>Stato</th></tr></thead>
+        <thead><tr><th>Codice</th><th>Prodotto</th><th>Produzione</th><th>Scadenza</th><th>Confezioni</th><th>Tracciabilità</th><th>Stato</th></tr></thead>
         <tbody>
         {% for l in lotti %}
         {% set senza = l.ingredienti | rejectattr('produzione_propria') | rejectattr('lotto_fornitore') | list %}
@@ -41,7 +41,7 @@
             <td>{{ l.prodotto.nome_completo }}</td>
             <td>{{ l.data_produzione | data_it }}</td>
             <td>{{ l.data_scadenza | data_it }}</td>
-            <td class="text-end">{{ l.pezzi_prodotti or '' }}</td>
+            <td class="small">{{ l.confezioni_testo }}</td>
             <td class="small">{% if not l.ingredienti %}<span class="text-danger">nessun ingrediente</span>
                 {% elif senza %}<span class="text-warning" title="{{ senza | map(attribute='nome') | join(', ') }}"><i class="bi bi-exclamation-triangle"></i> {{ senza | length }} senza lotto</span>
                 {% else %}<span class="text-success"><i class="bi bi-check-circle"></i> completa</span>{% endif %}</td>

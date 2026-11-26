@@ -19,7 +19,7 @@ class TestLotti(unittest.TestCase):
         self.assertEqual(lot.codice_lotto(date(2027, 1, 5), "M-A R"), "L050127-MAR")
 
     def test_sigle(self):
-        self.assertEqual(lot.proponi_sigla("Marmellata di fichi"), "MFI")
+        self.assertEqual(lot.proponi_sigla("Confettura di fichi"), "CFI")
         self.assertEqual(lot.proponi_sigla("Passata"), "PAS")
         self.assertEqual(lot.proponi_sigla("Tortelli di zucca"), "TZU")
         self.assertEqual(lot.proponi_sigla(""), "")
@@ -33,6 +33,11 @@ class TestLotti(unittest.TestCase):
         self.assertEqual(lot.fattore_scala(40, 100), 2.5)
         self.assertEqual(lot.fattore_scala(None, 100), 1.0)
         self.assertEqual(lot.fattore_scala(0, 100), 1.0)
+        # lotto con più contenitori: kg totali sulla resa in kg; senza kg, i pezzi sulla resa in pezzi
+        self.assertAlmostEqual(lot.fattore_ricetta(4.8, 40, 9.6, 52), 2.0)
+        self.assertEqual(lot.fattore_ricetta(None, 40, 9.6, 80), 2.0)
+        self.assertEqual(lot.fattore_ricetta(4.8, 40, 0, 80), 2.0)       # salumi: peso variabile
+        self.assertEqual(lot.fattore_ricetta(None, None, 9.6, 80), 1.0)
         self.assertEqual(lot.arrotonda_quantita(1234.56), 1235)
         self.assertEqual(lot.arrotonda_quantita(12.345), 12.3)
 

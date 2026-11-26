@@ -1,7 +1,7 @@
 # Piano: gestionale a moduli (3.3.3 → 3.4.x) e modulo "Prodotti" 1.0.0 (ricettario, libro lotti, etichette)
 
 ## Contesto
-Fattoria Ca' Bianca produce e trasforma prodotti per la vendita: marmellate, mostarde, passate, sottoli e sottaceti, pasta ripiena, salumi, farine e prodotti da forno. Oggi le etichette sono file Illustrator e PDF sparsi in `~/Desktop/etichette/Etichette prodotti` (circa 70 cartelle). I formati dei codici lotto sono diversi tra loro e non esiste un registro unico dei lotti con le materie prime usate.
+Fattoria Ca' Bianca produce e trasforma prodotti per la vendita: confetture, mostarde, passate, sottoli e sottaceti, pasta ripiena, salumi, farine e prodotti da forno. Oggi le etichette sono file Illustrator e PDF sparsi in `~/Desktop/etichette/Etichette prodotti` (circa 70 cartelle). I formati dei codici lotto sono diversi tra loro e non esiste un registro unico dei lotti con le materie prime usate.
 
 In caso di controllo NAS o ATS serve:
 - un **libro dei lotti** con la tracciabilità "un passo indietro": per ogni ingrediente, il fornitore e il suo lotto (Reg. CE 178/2002);
@@ -324,6 +324,7 @@ Poi il modulo, rilasciato sempre con `deploy.sh sito`, cioè con un riavvio di 3
 
 ### Diario
 - 26/11/2026 – prodotti 1.2.0. I salumi si etichettano con l'etichetta **piegata sul cordino**, sul foglio Grande L7165 (ogni faccia 67,7×49,5 mm). Il foglio Salumi L7164 è spento (migrazione 4): **da comprare solo L7165, L7163, L7160**.
+- 26/11/2026 – prodotti 2.0.0 (con dentro la 1.3.0, mai rilasciata da sola). Contenitori: vedi la sezione «Prodotti 2.0.0» in fondo. L'admin può **eliminare un lotto** (Stato → Elimina il lotto, con motivo: si cancellano anche confezioni, stampe e PDF, lo storico ne tiene la copia) e **un prodotto** senza lotti (scheda → Elimina). Migrazioni 5 e 6. Pulizia del catalogo con `scripts/pulizia_catalogo_20261126.py`: tolti i 2 lotti di prova, «Marmellata» → «Confettura» (per legge la marmellata è solo di agrumi), un prodotto per nome con i contenitori nella ricetta (vasetti solo 150/300 g; 250 g di conserve e sughi → 300 g; confetture solo 100/250 g eliminate), sigle nuove per le confetture (CFI, CAL…). Provato su una copia della produzione: 68 → 50 prodotti, e nel browser (nuovo lotto 40 × 150 g + 12 × 300 g = 9,6 kg, etichette Medio e Grande).
 - 25/11/2026 sera – prodotti 1.1.0.
   - Nuovo stile «classico-giallo», che ricrea le etichette storiche con sfondo crema.
   - Indicatore di attesa con i secondi.
@@ -378,3 +379,24 @@ Ritorno alla 3.3.2 (solo per questo primo rilascio): `:web-precedente` non esist
 
 Idee rimandate: bollino tondo per il tappo, stampa da una posizione N del foglio, tabella nutrizionale.
 Per sviluppi e correzioni futuri: README, «Guida rapida: sviluppi e correzioni futuri».
+
+## Prodotti 2.0.0 – contenitori (piano del 26/11/2026, decisioni di Andrea)
+
+Problema: peso e formato dell'etichetta stavano nel PRODOTTO (un «Marmellata di fichi» per ogni vasetto). In
+realtà il prodotto è generico (ricetta + dati di etichetta); il contenitore si sceglie nel LOTTO, e un lotto può
+uscire in più contenitori (es. 40 × 150 g + 12 × 300 g, stesso codice lotto).
+
+1. **Contenitori** (sezione nuova): nome, contenuto netto standard (vuoto = peso variabile: salumi, forno),
+   formati di etichetta adatti (molti) + quello proposto, attivo.
+2. **Prodotto generico**: peso e formato spariscono da scheda e finestra (le colonne restano nel DB, non usate).
+   I doppioni si uniscono (fichi 150/300, ragù, sacchettini spezie 100/120, spezie con timo 80/200).
+3. **Ricetta → contenitori compatibili**, con correzione facoltativa del peso netto e peso sgocciolato
+   (sottoli/sottaceti). Modificabili anche su ricetta usata (non toccano ingredienti); la nuova versione le copia.
+   Resa in kg per scalare le dosi (più formati nello stesso lotto).
+4. **Lotto → confezioni**: righe contenitore + pezzi (copia di nome e pesi), con storico. Dosi scalate sui kg totali.
+5. **Etichette**: si sceglie la confezione del lotto → formati filtrati per quel contenitore → n etichette = pezzi
+   della confezione, peso dalla confezione. La stampa archiviata registra la confezione.
+6. Libro lotti, export e richiamo mostrano le confezioni.
+7. Migrazione 6 (contenitori, compatibilità, confezioni; i lotti esistenti si convertono) e pulizia del catalogo
+   che UNISCE i doppioni invece di eliminarli (le confetture solo 100/250 si eliminano comunque).
+Rilascio unico prodotti 2.0.0, con dentro la 1.3.0 (eliminazioni dell'admin, confetture), mai rilasciata.

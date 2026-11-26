@@ -112,30 +112,56 @@ class TestFlussoCompleto(ProdottiAppBase):
         uova = self.post("/prodotti/materie-prime/salva", {"nome": "Uova", "nome_etichetta": "uova", "allergeni": ["uova"]}, op)["materia"]
         self.post("/prodotti/materie-prime/salva", {"nome": "zucca"}, op, atteso=400)      # doppione
         # prodotto
-        p = self.post("/prodotti/catalogo/salva", {"nome": "Tortelli di zucca", "peso_netto": "500", "unita": "g",
-                                                   "durata_giorni": "92", "formato_etichetta_id": "1"}, op)["prodotto"]
+        # prodotto GENERICO (dalla 2.0.0 peso e foglio sono del contenitore)
+        p = self.post("/prodotti/catalogo/salva", {"nome": "Tortelli di zucca", "durata_giorni": "92"}, op)["prodotto"]
         self.assertEqual(p["sigla"], "TZU")
+        self.assertNotIn("peso_netto", p)
+        # contenitori della migrazione 6: la busta da 500 g ha il foglio Grande; in Contenitori si aggiunge il Piccolo
+        from app.moduli.prodotti.models import Contenitore
+        with self.app.app_context():
+            busta = Contenitore.query.filter_by(nome="Busta pasta 500 g").one()
+            busta_id, busta250_id = busta.id, Contenitore.query.filter_by(nome="Busta pasta 250 g").one().id
+            self.assertEqual([f.codice_foglio for f in busta.formati], ["Avery L7165"])
+        pagina = self.client(op).get("/prodotti/contenitori").get_data(as_text=True)
+        self.assertIn("Busta pasta 500 g", pagina)
+        self.post("/prodotti/contenitori/salva", {"id": busta_id, "nome": "Busta pasta 500 g", "peso_netto": "500",
+                                                  "formati": []}, op, atteso=400)          # serve almeno un foglio
+        self.post("/prodotti/contenitori/salva", {"nome": "busta pasta 500 G", "formati": ["5"]}, op, atteso=400)  # doppione
+        self.post("/prodotti/contenitori/salva", {"id": busta_id, "nome": "Busta pasta 500 g", "peso_netto": "500",
+                                                  "unita": "g", "formati": ["5", "7"], "formato_predefinito_id": "5"}, op)
+        self.post("/prodotti/contenitori/salva", {"nome": "Vaschetta", "formati": ["5"]}, self.consulente_id, atteso=403)
         # ricetta: anteprima e salvataggio
         righe = [{"materia_prima_id": farina["id"], "quantita": "1", "unita": "kg"},
                  {"materia_prima_id": zucca["id"], "quantita": "1500", "unita": "g"},
                  {"materia_prima_id": uova["id"], "quantita": "400", "unita": "g"}]
         a = self.post("/prodotti/ricette/anteprima", {"righe": righe}, op)
         self.assertEqual(a["testo"], "Ingredienti: zucca, farina di **GRANO** tenero tipo 00, **UOVA**.")
-        ric = self.post("/prodotti/ricette/salva", {"prodotto_id": p["id"], "resa_pezzi": "20", "righe": righe}, op)["ricetta"]
+        ric = self.post("/prodotti/ricette/salva", {"prodotto_id": p["id"], "resa_pezzi": "20", "resa_kg": "10",
+                                                    "righe": righe, "contenitori": [{"contenitore_id": busta_id}]}, op)["ricetta"]
         self.assertEqual(ric["versione"], 1)
+        self.assertEqual([x["nome"] for x in ric["contenitori"]], ["Busta pasta 500 g"])
         # il consulente non può scrivere
         self.post("/prodotti/ricette/salva", {"prodotto_id": p["id"], "righe": righe}, self.consulente_id, atteso=403)
 
         # nuovo lotto: dati proposti
         c = self.client(op)
-        prep = c.get(f"/prodotti/lotti/prepara?prodotto_id={p['id']}&data=2026-11-24&pezzi=40").get_json()
+        import json as _json
+        proposta = c.get(f"/prodotti/lotti/prepara?prodotto_id={p['id']}&data=2026-11-24").get_json()
+        self.assertEqual(proposta["confezioni"], [{"contenitore_id": busta_id, "pezzi": 20}])   # resa della ricetta
+        self.assertEqual([x["id"] for x in proposta["contenitori"]], [busta_id])             # solo i compatibili
+        conf = _json.dumps([{"contenitore_id": busta_id, "pezzi": 40}])
+        prep = c.get(f"/prodotti/lotti/prepara?prodotto_id={p['id']}&data=2026-11-24&confezioni={conf}").get_json()
         self.assertEqual(prep["codice"], "L241126-TZU")
         self.assertEqual(prep["scadenza"], "2027-02-24")
-        self.assertEqual([r["quantita"] for r in prep["righe"]], [2, 3000, 800])          # ricetta per 20 → 40
+        self.assertEqual(prep["kg"], 20)
+        self.assertEqual([r["quantita"] for r in prep["righe"]], [2, 3000, 800])          # 40 × 500 g = 20 kg, ricetta per 10 kg
         righe_lotto = prep["righe"]
         righe_lotto[0].update(lotto_fornitore="MR-2611", rif_documento="DDT 55")
+        self.post("/prodotti/lotti/salva", {"prodotto_id": p["id"], "ricetta_id": ric["id"], "data": "2026-11-24",
+                                            "codice": prep["codice"], "righe": righe_lotto}, op, atteso=400)  # senza confezioni
         salvato = self.post("/prodotti/lotti/salva", {"prodotto_id": p["id"], "ricetta_id": ric["id"], "data": "2026-11-24",
-                                                      "pezzi": 40, "codice": prep["codice"], "scadenza": prep["scadenza"],
+                                                      "confezioni": [{"contenitore_id": busta_id, "pezzi": 40}],
+                                                      "codice": prep["codice"], "scadenza": prep["scadenza"],
                                                       "righe": righe_lotto}, op)
         self.assertIn("Uova", salvato["avviso"])                       # uova senza lotto fornitore
         # secondo lotto lo stesso giorno: codice -2 e lotto della farina ripreso dall'ultimo
@@ -144,17 +170,35 @@ class TestFlussoCompleto(ProdottiAppBase):
         self.assertEqual(prep2["righe"][0]["lotto_fornitore"], "MR-2611")
         self.assertTrue(prep2["righe"][0]["precompilato"])
         self.post("/prodotti/lotti/salva", {"prodotto_id": p["id"], "data": "2026-11-24", "codice": "L241126-TZU",
+                                            "confezioni": [{"contenitore_id": busta_id, "pezzi": 1}],
                                             "righe": righe_lotto}, op, atteso=400)     # codice doppio
 
-        # correzione del lotto: lo storico la registra
+        # correzione del lotto: 38 buste da 500 g e 6 da 250 g (contenitore non della ricetta: si può); lo storico la registra
+        from app.moduli.prodotti.models import Lotto as _Lotto
+        with self.app.app_context():
+            conf_id = _Lotto.query.get(salvato["id"]).confezioni[0].id
         self.post("/prodotti/lotti/salva", {"id": salvato["id"], "prodotto_id": p["id"], "ricetta_id": ric["id"],
-                                            "data": "2026-11-24", "pezzi": 38, "codice": "L241126-TZU",
+                                            "data": "2026-11-24", "codice": "L241126-TZU",
+                                            "confezioni": [{"id": conf_id, "contenitore_id": busta_id, "pezzi": 38},
+                                                           {"contenitore_id": busta250_id, "pezzi": 6}],
                                             "righe": righe_lotto[:2]}, op)
         pagina = c.get(f"/prodotti/lotti/{salvato['id']}").get_data(as_text=True)
         self.assertIn("Storico delle correzioni", pagina)
         self.assertIn("Laboratorio", pagina)
+        self.assertIn("40 × Busta pasta 500 g", pagina)                   # nello storico: com'era prima
+        with self.app.app_context():
+            l_ = _Lotto.query.get(salvato["id"])
+            self.assertEqual(l_.confezioni_testo, "38 × 500 g, 6 × 250 g")
+            self.assertEqual((l_.pezzi_prodotti, l_.quantita_kg), (44, 20.5))   # 38 × 0,5 + 6 × 0,25 kg
+            conf250_id = l_.confezioni[1].id
 
-        # la ricetta ora è usata: modificarla crea la v2
+        # la ricetta ora è usata: cambiare solo i contenitori la lascia v1; cambiare le dosi crea la v2
+        r1 = self.post("/prodotti/ricette/salva", {"id": ric["id"], "prodotto_id": p["id"], "resa_pezzi": "20", "resa_kg": "10",
+                                                   "righe": righe, "contenitori": [{"contenitore_id": busta_id},
+                                                                                   {"contenitore_id": busta250_id, "peso_netto": "240"}]}, op)
+        self.assertEqual(r1["ricetta"]["versione"], 1)
+        self.assertIn("Contenitori della v1", r1["messaggio"])
+        self.assertEqual([x["peso_netto"] for x in r1["ricetta"]["contenitori"]], [None, 240])
         r2 = self.post("/prodotti/ricette/salva", {"id": ric["id"], "prodotto_id": p["id"], "resa_pezzi": "20", "righe": righe[:2]}, op)
         self.assertEqual(r2["ricetta"]["versione"], 2)
         self.assertIn("nuova versione", r2["messaggio"])
@@ -166,11 +210,17 @@ class TestFlussoCompleto(ProdottiAppBase):
         # etichette: anteprima, stampa archiviata, download; il consulente vede ma non stampa
         prova = self.post(f"/prodotti/lotti/{salvato['id']}/etichette/prova", {"modalita": "unica"}, op)
         self.assertTrue(prova["immagini"][0]["src"].startswith("data:image/png;base64,"))
-        self.assertEqual(prova["fogli"], 5)                        # 38 confezioni, 8 per foglio (Grande)
+        self.assertEqual(prova["fogli"], 5)                        # 38 buste da 500 g, 8 per foglio (Grande, proposto)
+        self.assertEqual(prova["formato_id"], 5)
+        # la busta da 250 g ha solo il Grande: il Piccolo non è adatto e non si stampa
+        self.post(f"/prodotti/lotti/{salvato['id']}/etichette/stampa", {"confezione_id": conf250_id, "formato_id": 7,
+                                                                         "n_confezioni": 6}, op, atteso=400)
+        prova250 = self.post(f"/prodotti/lotti/{salvato['id']}/etichette/prova", {"confezione_id": conf250_id}, op)
+        self.assertEqual((prova250["n_etichette"], prova250["formato_id"]), (6, 5))
         self.post(f"/prodotti/lotti/{salvato['id']}/etichette/stampa", {"n_confezioni": 10}, self.consulente_id, atteso=403)
-        st = self.post(f"/prodotti/lotti/{salvato['id']}/etichette/stampa", {"n_confezioni": 10, "formato_id": 3,
+        st = self.post(f"/prodotti/lotti/{salvato['id']}/etichette/stampa", {"n_confezioni": 10, "formato_id": 7,
                                                                                "modalita": "fronte_retro"}, op)
-        self.assertEqual((st["n_etichette"], st["fogli"]), (20, 1))     # Piccolo: 24 per foglio
+        self.assertEqual((st["n_etichette"], st["fogli"]), (20, 1))     # Piccolo L7160: 21 per foglio
         pdf = c.get(st["url"])
         self.assertEqual(pdf.status_code, 200)
         self.assertTrue(pdf.data.startswith(b"%PDF"))
@@ -178,6 +228,8 @@ class TestFlussoCompleto(ProdottiAppBase):
         from app.moduli.prodotti.models import StampaEtichetta
         with self.app.app_context():
             s = StampaEtichetta.query.one()
+            self.assertEqual(_json.loads(s.dati)["etichetta"]["peso"], "500 g")     # peso dalla confezione
+            self.assertEqual(s.confezione_testo, "Busta pasta 500 g")
             import hashlib
             self.assertEqual(hashlib.sha256(pdf.data).hexdigest(), s.sha256)
             self.assertTrue(os.path.exists(os.path.join(self.cartella, "prodotti", "etichette", "2026", os.path.basename(s.pdf_path))))
@@ -250,6 +302,33 @@ class TestFlussoCompleto(ProdottiAppBase):
                         f"/prodotti/catalogo/{p['id']}", "/prodotti/ricettario", "/prodotti/materie-prime", "/prodotti/formati", "/prodotti/richiamo",
                         f"/prodotti/lotti?nuovo={p['id']}", "/prodotti/lotti?stato=ritirato&dal=2026-01-01"):
                 self.assertEqual(cl.get(url).status_code, 200, url)
+        self.assertIn("Elimina il lotto", self.client().get(f"/prodotti/lotti/{salvato['id']}").get_data(as_text=True))
+        self.assertNotIn("Elimina il lotto", c.get(f"/prodotti/lotti/{salvato['id']}").get_data(as_text=True))
+
+        self.assertIn("eliminaProdotto", self.client().get(f"/prodotti/catalogo/{p['id']}").get_data(as_text=True))
+        self.assertNotIn("eliminaProdotto", c.get(f"/prodotti/catalogo/{p['id']}").get_data(as_text=True))
+        # eliminare: solo l'admin. Un prodotto con lotti no; il lotto sì (con stampe e PDF), con il motivo
+        self.post(f"/prodotti/catalogo/{p['id']}/elimina", {}, atteso=400)                  # ha lotti
+        self.post(f"/prodotti/lotti/{salvato['id']}/elimina", {"motivo": "prova"}, op, atteso=403)
+        self.post(f"/prodotti/lotti/{salvato['id']}/elimina", {}, atteso=400)               # manca il motivo
+        from app.moduli.prodotti.models import Lotto, Prodotto, Ricetta, Storico
+        with self.app.app_context():
+            pdf_lotto = [os.path.join(self.cartella, "prodotti", "etichette", s.pdf_path)
+                         for s in StampaEtichetta.query.filter_by(lotto_id=salvato["id"])]
+        self.assertEqual(len(pdf_lotto), 3)
+        self.post(f"/prodotti/lotti/{salvato['id']}/elimina", {"motivo": "lotto di prova"})
+        self.assertFalse(any(os.path.exists(f) for f in pdf_lotto))
+        with self.app.app_context():
+            self.assertIsNone(db.session.get(Lotto, salvato["id"]))
+            self.assertEqual(StampaEtichetta.query.filter_by(lotto_id=salvato["id"]).count(), 0)
+            canc = Storico.query.filter_by(tabella="lotti", riga_id=salvato["id"], azione="cancellazione").one()
+            self.assertIn("ELIMINATO: lotto di prova", canc.prima)
+            self.assertEqual(Lotto.query.filter_by(prodotto_id=p["id"]).count(), 0)
+        self.post(f"/prodotti/catalogo/{p['id']}/elimina", {}, op, atteso=403)
+        self.assertEqual(self.post(f"/prodotti/catalogo/{p['id']}/elimina", {})["url"], "/prodotti/catalogo")
+        with self.app.app_context():
+            self.assertIsNone(db.session.get(Prodotto, p["id"]))
+            self.assertEqual(Ricetta.query.filter_by(prodotto_id=p["id"]).count(), 0)
 
 
 if __name__ == "__main__":

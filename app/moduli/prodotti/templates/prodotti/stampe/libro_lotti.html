@@ -17,7 +17,7 @@
     <span><b>{{ l.prodotto.nome_completo }}</b></span>
     <span>Prodotto il {{ l.data_produzione | data_it }}</span>
     {% if l.data_scadenza %}<span>Scadenza {{ l.data_scadenza | data_it }}</span>{% endif %}
-    {% if l.pezzi_prodotti %}<span>{{ l.pezzi_prodotti }} pezzi</span>{% endif %}
+    {% if l.confezioni_testo %}<span>{{ l.confezioni_testo }}</span>{% endif %}
     {% if l.ricetta %}<span>Ricetta {{ l.ricetta.etichetta }}</span>{% endif %}
     <span>Stato: <b>{{ stati[l.stato] }}</b>{% if l.stato_motivo %} ({{ l.stato_motivo }}){% endif %}</span>
   </div>

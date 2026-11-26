@@ -14,7 +14,7 @@ bordeaux, testi in Fira Sans e un riquadro verde con lotto e scadenza.
 
 ## Dati disponibili nei modelli
 
-- `e`: un'etichetta (dict, vedi `routes/etichette.dati_stampa`): `nome`, `sottotitolo`, `peso`,
+- `e`: un'etichetta (dict, vedi `routes/etichette.dati_stampa`): `nome`, `sottotitolo`, `peso`, `peso_sgocciolato` (sottoli e sottaceti, facoltativo),
   `ingredienti_html` (già con `<strong>` sugli allergeni), `tracce`, `conservazione`, `modalita_uso`,
   `dichiarazioni_extra`, `prodotto_da`, `lavorato_da`, `lotto`, `dicitura_scadenza`, `scadenza`, `piede`.
 - `formato`: dict del formato (misure in mm, `layout`), `scala`, `parte`.

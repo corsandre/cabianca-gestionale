@@ -16,7 +16,7 @@ from app.moduli.prodotti.services.allergeni import ALLERGENI, NOMI_BREVI
 from app.moduli.prodotti.services.lotti import proponi_sigla, pulisci_sigla
 from app.utils.decorators import write_required
 
-CATEGORIE = ["Confetture e marmellate", "Mostarde", "Conserve e sottoli", "Sottaceti e agrodolci",
+CATEGORIE = ["Confetture", "Mostarde", "Conserve e sottoli", "Sottaceti e agrodolci",
              "Passate e sughi", "Pasta fresca ripiena", "Salumi", "Farine", "Prodotti da forno",
              "Frutta secca e spezie", "Succhi", "Altro"]
 
@@ -92,8 +92,7 @@ def nuovo_fornitore():
 # ---------------------------------------------------------------- prodotti
 
 def prodotto_json(p):
-    campi = ("id", "nome", "sottotitolo", "sigla", "categoria", "peso_netto", "unita", "formato_etichetta_id",
-             "tipo_scadenza", "durata_giorni", "conservazione", "modalita_uso", "tracce", "prodotto_da",
+    campi = ("id", "nome", "sottotitolo", "sigla", "categoria", "tipo_scadenza", "durata_giorni", "conservazione", "modalita_uso", "tracce", "prodotto_da",
              "lavorato_da", "dichiarazioni_extra", "ricetta_default_id", "note")
     out = {c: getattr(p, c) for c in campi}
     out.update(attivo=bool(p.attivo), da_verificare=bool(p.da_verificare), nome_completo=p.nome_completo)
@@ -110,7 +109,7 @@ def catalogo():
     if q:
         query = query.filter(db.or_(Prodotto.nome.ilike(f"%{q}%"), Prodotto.sigla.ilike(f"%{q}%"),
                                     Prodotto.categoria.ilike(f"%{q}%")))
-    prodotti = query.order_by(Prodotto.categoria, Prodotto.nome, Prodotto.peso_netto).all()
+    prodotti = query.order_by(Prodotto.categoria, Prodotto.nome).all()
     gruppi = {}
     for p in prodotti:
         gruppi.setdefault(p.categoria or "Senza categoria", []).append(p)
@@ -120,10 +119,16 @@ def catalogo():
                            **_dati_modale_prodotto())
 
 
+def _contenitori_attivi():
+    from app.moduli.prodotti.routes.contenitori import contenitori_attivi
+    return contenitori_attivi()
+
+
 def _dati_modale_prodotto():
     from app.moduli.prodotti.models import Impostazione
     return {"categorie": CATEGORIE,
             "formati": FormatoEtichetta.query.filter_by(attivo=True).order_by(FormatoEtichetta.id).all(),
+            "contenitori_attivi": _contenitori_attivi(),
             "tipi_scadenza": Prodotto.TIPI_SCADENZA,
             "produttore_predefinito": Impostazione.leggi("produttore", "")}
 
@@ -161,10 +166,7 @@ def salva_prodotto():
     for campo in ("sottotitolo", "categoria", "conservazione", "modalita_uso", "tracce", "prodotto_da",
                   "lavorato_da", "dichiarazioni_extra", "note"):
         setattr(p, campo, (d.get(campo) or "").strip() or None)
-    p.nome, p.sigla = nome, sigla
-    p.peso_netto = numero(d.get("peso_netto"))
-    p.unita = d.get("unita") if d.get("unita") in ("g", "ml", "kg", "l") else "g"
-    p.formato_etichetta_id = numero(d.get("formato_etichetta_id"), intero=True)
+    p.nome, p.sigla = nome, sigla             # peso e formato: dalla 2.0.0 sono del contenitore (lotto)
     p.tipo_scadenza = d.get("tipo_scadenza") if d.get("tipo_scadenza") in Prodotto.TIPI_SCADENZA else "tmc"
     p.durata_giorni = numero(d.get("durata_giorni"), intero=True)
     if d.get("ricetta_default_id") is not None:
@@ -179,3 +181,31 @@ def salva_prodotto():
     db.session.add(p)
     db.session.commit()
     return jsonify(ok=True, prodotto=prodotto_json(p), url=url_for("prodotti.scheda_prodotto", id=p.id))
+
+
+@bp.route("/catalogo/<int:id>/elimina", methods=["POST"])
+@write_required
+def elimina_prodotto(id):
+    """Solo l'amministratore: cancella un prodotto e le sue ricette. Se ha lotti no: il libro lotti deve
+    restare collegato al prodotto. Si eliminano prima i lotti, oppure si disattiva il prodotto."""
+    from flask_login import current_user
+    from app.moduli.prodotti.models import Lotto, Ricetta, RicettaContenitore, RicettaRiga
+    if current_user.role != "admin":                       # JSON, non la pagina 403 di admin_required
+        return errore("Solo l'amministratore può eliminare un prodotto.", 403)
+    p = db.session.get(Prodotto, id)
+    if not p:
+        return errore("Prodotto non trovato.", 404)
+    n_lotti = Lotto.query.filter_by(prodotto_id=id).count()
+    if n_lotti:
+        return errore(f"{p.nome_completo} ha {n_lotti} lott{'o' if n_lotti == 1 else 'i'} nel libro lotti: "
+                      "eliminare prima i lotti, oppure disattivare il prodotto (Modifica → Attivo).")
+    nome = p.nome_completo
+    ricette = [r.id for r in Ricetta.query.filter_by(prodotto_id=id)]
+    if ricette:
+        RicettaContenitore.query.filter(RicettaContenitore.ricetta_id.in_(ricette)).delete(synchronize_session=False)
+        RicettaRiga.query.filter(RicettaRiga.ricetta_id.in_(ricette)).delete(synchronize_session=False)
+        Ricetta.query.filter(Ricetta.id.in_(ricette)).delete(synchronize_session=False)
+    Prodotto.query.filter_by(id=id).delete(synchronize_session=False)
+    db.session.commit()
+    db.session.expunge_all()
+    return jsonify(ok=True, nome=nome, url=url_for("prodotti.catalogo"))

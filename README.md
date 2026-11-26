@@ -689,7 +689,7 @@ Stato che il servizio ricorda nelle impostazioni (`settings`): `impianto_vuoto_s
 
 ### Prodotti (modulo, tema oro – dalla 3.4)
 
-Ricettario, libro dei lotti ed etichette dei prodotti trasformati (marmellate, mostarde, conserve, pasta
+Ricettario, libro dei lotti ed etichette dei prodotti trasformati (confetture, mostarde, conserve, pasta
 ripiena, salumi…), pensato per i controlli NAS/ATS: per ogni lotto si registrano gli ingredienti usati con
 fornitore e lotto del fornitore (rintracciabilità «un passo indietro», Reg. CE 178/2002) e si stampano le
 etichette (Reg. UE 1169/2011). È un modulo a sé (`app/moduli/prodotti/`, database `data/prodotti.db`):
@@ -700,22 +700,26 @@ Accesso: sezione **Prodotti** in Impostazioni → utenti; il consulente vede ma 
 |---|---|
 | **Panoramica** | pulsante grande «Nuovo lotto», prodotti fatti di recente da rifare con un tocco, ultimi lotti, avvisi |
 | **Libro lotti** | elenco con filtri (periodo, prodotto, stato, codice) e stato della tracciabilità; **PDF per il controllo** ed Excel |
-| **Scheda lotto** | ingredienti e provenienza, testo in etichetta, **etichette** (anteprima, PDF da stampare, archivio), storico delle correzioni, stato (esaurito / ritirato / annullato con motivo) |
-| **Catalogo** | prodotti con i dati di etichetta (nome, denominazione, peso, formato, scadenza, conservazione, tracce, produttore) |
-| **Ricettario** | ricette con versioni; editor con elenco ingredienti di legge in anteprima; PDF ed Excel |
+| **Scheda lotto** | confezioni, ingredienti e provenienza, testo in etichetta, **etichette per confezione** (anteprima, PDF da stampare, archivio), storico delle correzioni, stato (esaurito / ritirato / annullato con motivo); l'admin può eliminare il lotto |
+| **Catalogo** | prodotti **generici** con i dati di etichetta (nome, denominazione, scadenza, conservazione, tracce, produttore); l'admin elimina un prodotto senza lotti |
+| **Ricettario** | ricette con versioni e **contenitori compatibili** (con peso proprio o sgocciolato); editor con elenco ingredienti di legge in anteprima; PDF ed Excel |
+| **Contenitori** | vasetti, bottiglie, buste, sacchetti: peso standard e fogli di etichette adatti (con quello proposto) |
 | **Materie prime** | ingredienti con nome in etichetta, allergeni, fornitore abituale o produzione propria |
 | **Richiamo** | dato un lotto di materia prima (o un fornitore), i lotti di prodotto che lo contengono; ritiro in blocco; PDF |
 | **Formati e stili** | fogli A4 pretagliati, foglio di calibrazione della stampante, stile delle etichette, piede |
 
-**Nuovo lotto** (finestra in 3 passi, comoda anche dal telefono): 1) il prodotto; 2) data, pezzi, ricetta:
-codice (`L` + GGMMAA + `-SIGLA`, es. `L241126-ZUC`; `-2` se nello stesso giorno c'è già) e scadenza sono
-calcolati, le quantità scalate sui pezzi, fornitore e lotto del fornitore **ripresi dall'ultimo lotto**
-(icona ✨ da ricontrollare); 3) elenco ingredienti in etichetta (automatico, modificabile per il lotto).
+**Nuovo lotto** (finestra in 3 passi, comoda anche dal telefono): 1) il prodotto; 2) data, ricetta e
+**confezioni** (es. 40 vasetti da 150 g e 12 da 300 g: uno stesso lotto può andare in più contenitori, tra
+quelli compatibili con la ricetta): codice (`L` + GGMMAA + `-SIGLA`, es. `L241126-ZUC`; `-2` se nello stesso
+giorno c'è già) e scadenza sono calcolati, le quantità scalate sui kg totali (resa in kg della ricetta),
+fornitore e lotto del fornitore **ripresi dall'ultimo lotto** (icona ✨ da ricontrollare); 3) elenco
+ingredienti in etichetta (automatico, modificabile per il lotto).
 
 **Regole del registro** (garantite dal database, `schema.py`): i lotti e le etichette stampate non si
-cancellano; le correzioni ai lotti sono permesse ma finiscono nello **storico** con chi e quando; una
-ricetta usata in un lotto non cambia più (salvando si crea una nuova versione). Il lotto conserva una copia
-dei dati di etichetta del momento.
+cancellano, tranne quando l'**amministratore** elimina un lotto (con motivo: lo storico ne conserva la copia);
+le correzioni ai lotti sono permesse ma finiscono nello **storico** con chi e quando; una ricetta usata in un
+lotto non cambia più (salvando si crea una nuova versione; i contenitori compatibili invece si cambiano). Il
+lotto conserva una copia dei dati di etichetta e delle confezioni del momento.
 
 **Etichette**: generate in PDF con WeasyPrint dallo stile attivo (`templates/prodotti/etichette/stili/`),
 che si sceglie in «Formati e stili»:

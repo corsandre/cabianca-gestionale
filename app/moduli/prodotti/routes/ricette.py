@@ -2,11 +2,13 @@
 
 Versioni: una ricetta già usata in un lotto non si modifica (lo impedisce anche il database). Se la si
 modifica dall'editor, il salvataggio crea in automatico la versione successiva e lo dice.
+Contenitori compatibili (dalla 2.0.0): si cambiano anche su una ricetta usata, perché non toccano ingredienti
+né dosi. Se di una ricetta usata cambiano SOLO i contenitori (o il nome), resta la stessa versione.
 """
 from flask import jsonify, render_template, request
 
 from app import db
-from app.moduli.prodotti.models import Lotto, MateriaPrima, Prodotto, Ricetta, RicettaRiga
+from app.moduli.prodotti.models import Contenitore, Lotto, MateriaPrima, Prodotto, Ricetta, RicettaContenitore, RicettaRiga
 from app.moduli.prodotti.routes import bp
 from app.moduli.prodotti.routes.catalogo import materia_json
 from app.moduli.prodotti.routes.comune import dati_richiesta, errore, fornitori, numero, utente, vero
@@ -23,14 +25,46 @@ def ricetta_json(r):
             "note_haccp": r.note_haccp or "", "attiva": bool(r.attiva), "usata": r.usata,
             "predefinita": r.prodotto.ricetta_default_id == r.id if r.prodotto else False,
             "righe": [{"materia_prima_id": x.materia_prima_id, "nome": x.materia_prima.nome,
-                       "quantita": x.quantita, "unita": x.unita, "nota": x.nota or ""} for x in r.righe]}
+                       "quantita": x.quantita, "unita": x.unita, "nota": x.nota or ""} for x in r.righe],
+            "contenitori": [{"contenitore_id": c.contenitore_id, "nome": c.contenitore.nome, "peso_netto": c.peso_netto,
+                             "peso_sgocciolato": c.peso_sgocciolato} for c in r.contenitori]}
+
+
+def contenitori_editor():
+    from app.moduli.prodotti.routes.contenitori import contenitori_attivi
+    return [{"id": c.id, "nome": c.nome, "peso_netto": c.peso_netto, "unita": c.unita, "peso_testo": c.peso_testo}
+            for c in contenitori_attivi()]
+
+
+def leggi_contenitori(lista):
+    """[{contenitore_id, peso_netto, peso_sgocciolato}] dal browser → righe valide (senza doppioni)."""
+    out, visti = [], set()
+    for x in lista or []:
+        cid = numero(x.get("contenitore_id"), intero=True)
+        if not cid or cid in visti or not db.session.get(Contenitore, cid):
+            continue
+        visti.add(cid)
+        out.append({"contenitore_id": cid, "peso_netto": numero(x.get("peso_netto")),
+                    "peso_sgocciolato": numero(x.get("peso_sgocciolato"))})
+    return out
+
+
+def scrivi_contenitori(r, righe):
+    """Sostituisce i contenitori compatibili della ricetta (aggiornando quelli che restano)."""
+    attuali = {c.contenitore_id: c for c in r.contenitori}
+    nuovi = []
+    for x in righe:
+        c = attuali.get(x["contenitore_id"]) or RicettaContenitore(contenitore_id=x["contenitore_id"])
+        c.peso_netto, c.peso_sgocciolato = x["peso_netto"], x["peso_sgocciolato"]
+        nuovi.append(c)
+    r.contenitori = nuovi
 
 
 def dati_editor():
     """Quello che serve alla finestra dell'editor (inclusa in più pagine)."""
     materie = MateriaPrima.query.filter_by(attiva=True).order_by(MateriaPrima.nome).all()
-    prodotti = Prodotto.query.filter_by(attivo=True).order_by(Prodotto.nome, Prodotto.peso_netto).all()
-    return {"materie_json": [materia_json(m) for m in materie],
+    prodotti = Prodotto.query.filter_by(attivo=True).order_by(Prodotto.nome).all()
+    return {"materie_json": [materia_json(m) for m in materie], "contenitori_ricetta": contenitori_editor(),
             "prodotti_scelta": [{"id": p.id, "nome": p.nome_completo} for p in prodotti],
             "unita_ricetta": UNITA, "allergeni": ALLERGENI, "fornitori": fornitori()}
 
@@ -41,7 +75,7 @@ def ricettario():
     query = Prodotto.query.join(Ricetta).distinct()
     if q:
         query = query.filter(Prodotto.nome.ilike(f"%{q}%"))
-    prodotti = query.order_by(Prodotto.nome, Prodotto.peso_netto).all()
+    prodotti = query.order_by(Prodotto.nome).all()
     usate = {r[0] for r in db.session.query(Lotto.ricetta_id).distinct()}
     senza = (Prodotto.query.filter_by(attivo=True)
              .filter(~Prodotto.id.in_(db.session.query(Ricetta.prodotto_id))).order_by(Prodotto.nome).all())
@@ -92,7 +126,18 @@ def salva_ricetta():
     if not righe:
         return errore("La ricetta deve avere almeno un ingrediente.")
 
+    contenitori = leggi_contenitori(d.get("contenitori"))
     esistente = db.session.get(Ricetta, int(d["id"])) if d.get("id") else None
+    if esistente is not None and esistente.usata and not vero(d.get("nuova_versione")) \
+            and not _cambiata(esistente, d, righe):
+        # ricetta usata, cambiano solo contenitori (o nome / predefinita): stessa versione
+        esistente.nome = (d.get("nome") or "").strip() or None
+        scrivi_contenitori(esistente, contenitori)
+        if vero(d.get("predefinita")):
+            prodotto.ricetta_default_id = esistente.id
+        db.session.commit()
+        return jsonify(ok=True, ricetta=ricetta_json(esistente),
+                       messaggio=f"Contenitori della v{esistente.versione} aggiornati (ingredienti e dosi invariati).")
     nuova_versione = esistente is None or esistente.usata or vero(d.get("nuova_versione"))
     if nuova_versione:
         ultima = db.session.query(db.func.max(Ricetta.versione)).filter_by(prodotto_id=prodotto.id).scalar() or 0
@@ -110,6 +155,7 @@ def salva_ricetta():
     r.note_haccp = (d.get("note_haccp") or "").strip() or None
     r.attiva = True
     r.righe.extend(righe)
+    scrivi_contenitori(r, contenitori)
     db.session.add(r)
     db.session.flush()
     # la prima ricetta di un prodotto, o quella indicata, diventa la predefinita per i nuovi lotti
@@ -122,6 +168,16 @@ def salva_ricetta():
         messaggio = (f"La v{esistente.versione} è già usata in un lotto e resta com'è: "
                      f"salvata come nuova versione v{r.versione}.")
     return jsonify(ok=True, ricetta=ricetta_json(r), messaggio=messaggio)
+
+
+def _cambiata(r, d, righe):
+    """True se cambia qualcosa di bloccato su una ricetta usata: righe, rese, procedimento, note HACCP."""
+    prima = [(x.materia_prima_id, x.quantita, x.unita, x.nota) for x in r.righe]
+    dopo = [(x.materia_prima_id, x.quantita, x.unita, x.nota) for x in righe]
+    return (prima != dopo or r.resa_pezzi != numero(d.get("resa_pezzi"), intero=True)
+            or r.resa_kg != numero(d.get("resa_kg"))
+            or (r.procedimento or "") != (d.get("procedimento") or "").strip()
+            or (r.note_haccp or "") != (d.get("note_haccp") or "").strip())
 
 
 @bp.route("/ricette/<int:id>/attiva", methods=["POST"])

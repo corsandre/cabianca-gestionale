@@ -33,11 +33,7 @@
               <label class="form-label form-label-sm mb-1">Data di produzione</label>
               <input type="date" class="form-control" id="lotData">
             </div>
-            <div class="col-6 col-md-2">
-              <label class="form-label form-label-sm mb-1">Pezzi prodotti</label>
-              <input class="form-control" id="lotPezzi" inputmode="numeric" placeholder="es. 40">
-            </div>
-            <div class="col-md-3">
+            <div class="col-md-5">
               <label class="form-label form-label-sm mb-1">Ricetta</label>
               <select class="form-select" id="lotRicetta"></select>
             </div>
@@ -50,6 +46,18 @@
               <input type="date" class="form-control" id="lotScadenza">
             </div>
           </div>
+          <label class="form-label form-label-sm mb-1">Confezioni prodotte
+            <span class="text-muted">— uno stesso lotto può andare in più contenitori</span></label>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-1 prod-tab-confezioni">
+              <tbody id="lotConfezioni"></tbody>
+            </table>
+          </div>
+          <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="FinestraLotto.aggiungiConfezione({}); FinestraLotto.confezioniCambiate()"><i class="bi bi-plus"></i> Contenitore</button>
+            <span class="small text-muted" id="lotTotale"></span>
+          </div>
+
           <div class="alert alert-light border small py-2 d-none" id="lotSenzaRicetta">
             <i class="bi bi-info-circle"></i> Questo prodotto non ha una ricetta: aggiungere gli ingredienti a mano qui sotto (o crearla nel Ricettario).
           </div>

@@ -9,7 +9,8 @@ I modelli SQLAlchemy in models.py devono rispecchiare queste tabelle: le tabelle
 NON db.create_all().
 
 Il registro di legge (libro lotti) è protetto dal database stesso, non solo dal codice:
-- i lotti e le stampe delle etichette NON si possono cancellare (trigger *_no_delete);
+- i lotti e le stampe delle etichette NON si possono cancellare (trigger *_no_delete), tranne un lotto che
+  l'amministratore ha autorizzato a cancellare (migrazione 5), insieme alle sue stampe;
 - ogni modifica o cancellazione di lotti e ingredienti dei lotti finisce in `storico` con i valori di
   PRIMA e chi l'ha fatta (colonna modificato_da, scritta dall'applicazione): si può correggere un errore
   di battitura, ma resta la traccia;
@@ -240,4 +241,96 @@ MIGRAZIONI = [
         "UPDATE formati_etichetta SET uso = uso || '; salumi (anche piegata sul cordino: ogni faccia 67,7×49,5 mm)' "
         "WHERE codice_foglio = 'Avery L7165' AND attivo = 1 AND uso NOT LIKE '%salumi%'",
     ]),
+    # 26/11/2026, Andrea: l'amministratore deve poter eliminare un lotto (anche già stampato), es. i lotti di
+    # prova. ECCEZIONE alla regola «niente DROP»: si sostituiscono solo i due trigger di blocco, nessun dato.
+    # Il blocco resta nel database: si cancella solo un lotto con cancellazione_autorizzata = 1, che scrive
+    # SOLO la route dell'amministratore (routes/lotti.elimina_lotto) insieme al motivo. Quell'UPDATE e la
+    # cancellazione finiscono nello storico (copia completa del lotto e degli ingredienti, con chi e quando).
+    # Le stampe del lotto si cancellano con lui. Tornare alla 1.2.0 dopo questa migrazione: vedi migrazioni.py
+    # (DatabasePiuNuovo) → ripristinare backups/prodotti_pre_v5_*.db.
+    (5, "cancellazione dei lotti da parte dell'amministratore; formati 150 g / 300 g", [
+        "ALTER TABLE lotti ADD COLUMN cancellazione_autorizzata INTEGER NOT NULL DEFAULT 0",
+        "DROP TRIGGER lotti_no_delete",
+        "CREATE TRIGGER lotti_no_delete BEFORE DELETE ON lotti WHEN OLD.cancellazione_autorizzata IS NOT 1 "
+        "BEGIN SELECT RAISE(ABORT, 'Il libro lotti non si cancella: annullare il lotto (eliminarlo può solo l''amministratore)'); END",
+        "DROP TRIGGER stampe_no_delete",
+        "CREATE TRIGGER stampe_no_delete BEFORE DELETE ON stampe_etichette "
+        "WHEN NOT EXISTS (SELECT 1 FROM lotti WHERE id = OLD.lotto_id AND cancellazione_autorizzata = 1) "
+        "BEGIN SELECT RAISE(ABORT, 'Le etichette stampate restano in archivio'); END",
+        # vasetti solo da 150 g e 300 g (più la passata da 750): il Piccolo resta per sacchettini e pesto
+        "UPDATE formati_etichetta SET uso = replace(uso, 'vasetti 250–314 ml', 'vasetti 300 g') "
+        "WHERE codice_foglio = 'Avery L7165' AND attivo = 1",
+        "UPDATE formati_etichetta SET uso = 'vasetti 150 g' WHERE codice_foglio = 'Avery L7163' AND attivo = 1",
+        "UPDATE formati_etichetta SET uso = 'sacchettini, pesto 100 g' WHERE codice_foglio = 'Avery L7160' AND attivo = 1",
+    ]),
+    # 26/11/2026, Andrea: il prodotto è GENERICO (ricetta + dati di etichetta); il contenitore si sceglie nel
+    # lotto, che può uscire in più contenitori (es. 40 vasetti da 150 g e 12 da 300 g, stesso codice lotto).
+    # - contenitori: peso standard (vuoto = peso variabile) e fogli di etichetta adatti, con quello proposto;
+    # - ricette_contenitori: dove si può confezionare la ricetta, con peso netto / sgocciolato propri se
+    #   diversi da quelli standard. NON bloccati sulle ricette usate: non cambiano ingredienti né dosi;
+    # - lotti_confezioni: quanti pezzi di ogni contenitore, con COPIA di nome e pesi (registro), storico;
+    # - stampe_etichette.confezione_id: per quale confezione del lotto è stata fatta la stampa.
+    # Peso e formato del prodotto restano nelle colonne (niente DROP) ma l'applicazione non li usa più.
+    (6, "contenitori: il prodotto è generico, il lotto ha le sue confezioni", [
+        "CREATE TABLE contenitori ("
+        " id INTEGER PRIMARY KEY,"
+        " nome TEXT NOT NULL UNIQUE,"                 # es. 'Vasetto 150 g'
+        " peso_netto REAL, unita TEXT NOT NULL DEFAULT 'g',"   # peso standard; vuoto = peso variabile
+        " formato_predefinito_id INTEGER REFERENCES formati_etichetta(id),"
+        " ordine INTEGER NOT NULL DEFAULT 0,"
+        " attivo INTEGER NOT NULL DEFAULT 1,"
+        " note TEXT)",
+        "CREATE TABLE contenitori_formati ("
+        " contenitore_id INTEGER NOT NULL REFERENCES contenitori(id),"
+        " formato_id INTEGER NOT NULL REFERENCES formati_etichetta(id),"
+        " PRIMARY KEY (contenitore_id, formato_id))",
+        "CREATE TABLE ricette_contenitori ("
+        " id INTEGER PRIMARY KEY,"
+        " ricetta_id INTEGER NOT NULL REFERENCES ricette(id),"
+        " contenitore_id INTEGER NOT NULL REFERENCES contenitori(id),"
+        " peso_netto REAL,"                           # se diverso dallo standard del contenitore
+        " peso_sgocciolato REAL,"                     # sottoli e sottaceti
+        " UNIQUE (ricetta_id, contenitore_id))",
+        "CREATE TABLE lotti_confezioni ("
+        " id INTEGER PRIMARY KEY,"
+        " lotto_id INTEGER NOT NULL REFERENCES lotti(id),"
+        " contenitore_id INTEGER REFERENCES contenitori(id),"
+        " nome TEXT NOT NULL,"                        # copia del nome del contenitore
+        " peso_netto REAL, peso_sgocciolato REAL, unita TEXT NOT NULL DEFAULT 'g',"   # copia dei pesi in etichetta
+        " pezzi INTEGER NOT NULL DEFAULT 0,"
+        " ordine INTEGER NOT NULL DEFAULT 0,"
+        " modificato_da TEXT)",
+        "CREATE INDEX ix_lotti_conf_lotto ON lotti_confezioni (lotto_id)",
+        "ALTER TABLE stampe_etichette ADD COLUMN confezione_id INTEGER",
+
+        # contenitori di partenza (Andrea, 26/11/2026: vasetti solo da 150 g e 300 g, più la passata)
+        "INSERT INTO contenitori (nome, peso_netto, unita, ordine, formato_predefinito_id) VALUES"
+        " ('Vasetto 150 g', 150, 'g', 10, (SELECT id FROM formati_etichetta WHERE codice_foglio = 'Avery L7163' AND attivo = 1)),"
+        " ('Vasetto 300 g', 300, 'g', 20, (SELECT id FROM formati_etichetta WHERE codice_foglio = 'Avery L7165' AND attivo = 1)),"
+        " ('Bottiglia passata 750 g', 750, 'g', 30, (SELECT id FROM formati_etichetta WHERE codice_foglio = 'Avery L7165' AND attivo = 1)),"
+        " ('Vasetto pesto 100 g', 100, 'g', 40, (SELECT id FROM formati_etichetta WHERE codice_foglio = 'Avery L7160' AND attivo = 1)),"
+        " ('Busta pasta 250 g', 250, 'g', 50, (SELECT id FROM formati_etichetta WHERE codice_foglio = 'Avery L7165' AND attivo = 1)),"
+        " ('Busta pasta 500 g', 500, 'g', 51, (SELECT id FROM formati_etichetta WHERE codice_foglio = 'Avery L7165' AND attivo = 1)),"
+        " ('Sacchetto farina 500 g', 500, 'g', 60, (SELECT id FROM formati_etichetta WHERE codice_foglio = 'Avery L7165' AND attivo = 1)),"
+        " ('Sacchettino 80 g', 80, 'g', 70, (SELECT id FROM formati_etichetta WHERE codice_foglio = 'Avery L7160' AND attivo = 1)),"
+        " ('Sacchettino 100 g', 100, 'g', 71, (SELECT id FROM formati_etichetta WHERE codice_foglio = 'Avery L7160' AND attivo = 1)),"
+        " ('Sacchettino 120 g', 120, 'g', 72, (SELECT id FROM formati_etichetta WHERE codice_foglio = 'Avery L7163' AND attivo = 1)),"
+        " ('Sacchettino 200 g', 200, 'g', 73, (SELECT id FROM formati_etichetta WHERE codice_foglio = 'Avery L7163' AND attivo = 1)),"
+        " ('Salume (peso variabile)', NULL, 'g', 80, (SELECT id FROM formati_etichetta WHERE codice_foglio = 'Avery L7165' AND attivo = 1)),"
+        " ('Pezzo da forno (peso variabile)', NULL, 'g', 90, (SELECT id FROM formati_etichetta WHERE codice_foglio = 'Avery L7165' AND attivo = 1))",
+        # fogli adatti: quello proposto e, per i piccoli, anche il Medio (più spazio per il testo)
+        "INSERT INTO contenitori_formati (contenitore_id, formato_id) "
+        "SELECT id, formato_predefinito_id FROM contenitori WHERE formato_predefinito_id IS NOT NULL",
+        "INSERT OR IGNORE INTO contenitori_formati (contenitore_id, formato_id) "
+        "SELECT c.id, f.id FROM contenitori c, formati_etichetta f WHERE f.codice_foglio = 'Avery L7163' AND f.attivo = 1 "
+        "AND c.nome IN ('Vasetto pesto 100 g', 'Sacchettino 80 g', 'Sacchettino 100 g', 'Pezzo da forno (peso variabile)')",
+
+        # lotti già registrati: una confezione con i pezzi e il peso che il prodotto aveva (senza contenitore)
+        "INSERT INTO lotti_confezioni (lotto_id, contenitore_id, nome, peso_netto, unita, pezzi, modificato_da) "
+        "SELECT l.id, NULL, CASE WHEN p.peso_netto IS NULL THEN 'Confezione' "
+        "ELSE 'Confezione ' || CAST(p.peso_netto AS INTEGER) || ' ' || p.unita END, p.peso_netto, p.unita, "
+        "COALESCE(l.pezzi_prodotti, 0), 'migrazione 6' FROM lotti l JOIN prodotti p ON p.id = l.prodotto_id",
+    ]
+    + _storico("lotti_confezioni", ["lotto_id", "contenitore_id", "nome", "peso_netto", "peso_sgocciolato", "unita",
+                                    "pezzi", "ordine", "modificato_da"])),
 ]

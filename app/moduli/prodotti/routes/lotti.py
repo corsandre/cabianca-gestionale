@@ -2,13 +2,15 @@
 
 Flusso della finestra "Nuovo lotto" (static/lotti.js):
   1. si sceglie il prodotto (o se ne crea uno nuovo);
-  2. GET /prodotti/lotti/prepara → ricetta proposta, codice lotto e scadenza calcolati, ingredienti con le
-     quantità scalate sui pezzi e fornitore/lotto del fornitore PRECOMPILATI con quelli usati l'ultima
-     volta per la stessa materia prima;
+  2. GET /prodotti/lotti/prepara → ricetta proposta, codice lotto e scadenza calcolati, contenitori
+     compatibili con la ricetta, ingredienti con le quantità scalate sulle confezioni (kg totali sulla resa
+     in kg, o pezzi sulla resa in pezzi) e fornitore/lotto del fornitore PRECOMPILATI con quelli usati
+     l'ultima volta per la stessa materia prima;
   3. si controlla/corregge e si salva (POST /prodotti/lotti/salva).
 
-Il lotto conserva una COPIA dei dati di etichetta del prodotto (`dati_etichetta`) e del testo degli
-ingredienti: se in futuro il prodotto cambia, il registro mostra com'era quel lotto.
+Il lotto conserva una COPIA dei dati di etichetta del prodotto (`dati_etichetta`), del testo degli
+ingredienti e delle confezioni (contenitore, pesi e pezzi: un lotto può uscire in più contenitori, es.
+40 × 150 g e 12 × 300 g): se in futuro prodotto o contenitori cambiano, il registro mostra com'era quel lotto.
 Correzioni: permesse, ma il database registra ogni modifica nello storico (schema.py).
 """
 import json
@@ -17,7 +19,9 @@ from datetime import date
 from flask import jsonify, redirect, render_template, request, url_for
 
 from app import db
-from app.moduli.prodotti.models import Lotto, LottoIngrediente, MateriaPrima, Prodotto, Ricetta, Storico
+from app.moduli.prodotti.models import (
+    Contenitore, Lotto, LottoConfezione, LottoIngrediente, MateriaPrima, Prodotto, Ricetta, Storico, peso_kg, peso_testo,
+)
 from app.moduli.prodotti.routes import bp
 from app.moduli.prodotti.routes.catalogo import _dati_modale_prodotto
 from app.moduli.prodotti.routes.comune import (
@@ -26,7 +30,7 @@ from app.moduli.prodotti.routes.comune import (
 from app.moduli.prodotti.services import ingredienti as ing
 from app.moduli.prodotti.services.allergeni import ALLERGENI, descrivi
 from app.moduli.prodotti.services.lotti import (
-    arrotonda_quantita, codice_lotto, da_iso, data_scadenza, fattore_scala,
+    arrotonda_quantita, codice_lotto, da_iso, data_scadenza, fattore_ricetta,
 )
 from app.utils.decorators import write_required
 
@@ -35,11 +39,57 @@ from app.utils.decorators import write_required
 
 def dati_etichetta(p):
     """Copia dei dati del prodotto che finiscono in etichetta, salvata nel lotto."""
-    return {"nome": p.nome, "sottotitolo": p.sottotitolo, "peso": p.peso_testo,
+    return {"nome": p.nome, "sottotitolo": p.sottotitolo,
             "dicitura_scadenza": Prodotto.TIPI_SCADENZA.get(p.tipo_scadenza), "conservazione": p.conservazione,
             "modalita_uso": p.modalita_uso, "tracce": p.tracce, "prodotto_da": p.prodotto_da,
-            "lavorato_da": p.lavorato_da, "dichiarazioni_extra": p.dichiarazioni_extra,
-            "formato_etichetta_id": p.formato_etichetta_id}
+            "lavorato_da": p.lavorato_da, "dichiarazioni_extra": p.dichiarazioni_extra}
+
+
+def contenitori_per(ricetta):
+    """Contenitori proponibili per un lotto: i compatibili della ricetta, con i suoi pesi; se la ricetta non
+    ne ha (o non c'è), tutti quelli attivi con il peso standard."""
+    if ricetta is not None and ricetta.contenitori:
+        return [{"id": rc.contenitore_id, "nome": rc.contenitore.nome, "peso_netto": rc.peso_effettivo,
+                 "peso_sgocciolato": rc.peso_sgocciolato, "unita": rc.contenitore.unita,
+                 "peso_testo": peso_testo(rc.peso_effettivo, rc.contenitore.unita) or "peso variabile"}
+                for rc in ricetta.contenitori if rc.contenitore.attivo]
+    from app.moduli.prodotti.routes.contenitori import contenitori_attivi
+    return [{"id": c.id, "nome": c.nome, "peso_netto": c.peso_netto, "peso_sgocciolato": None, "unita": c.unita,
+             "peso_testo": c.peso_testo} for c in contenitori_attivi()]
+
+
+def leggi_confezioni(lista, ricetta, esistenti=()):
+    """[{id?, contenitore_id, pezzi}] dal browser → righe con la COPIA di nome e pesi.
+
+    Una confezione già salvata che resta sullo stesso contenitore tiene la sua copia (correggere i pezzi non
+    cambia il peso in etichetta); se cambia contenitore, o è nuova, i pesi vengono dalla ricetta o dal contenitore.
+    """
+    pesi = {c["id"]: c for c in contenitori_per(ricetta)}
+    prima = {c.id: c for c in esistenti}
+    out = []
+    for x in lista or []:
+        cid = numero(x.get("contenitore_id"), intero=True)
+        pezzi = numero(x.get("pezzi"), intero=True) or 0
+        vecchia = prima.get(numero(x.get("id"), intero=True) or 0)
+        if vecchia is not None and vecchia.contenitore_id == cid:
+            out.append({"contenitore_id": cid, "nome": vecchia.nome, "peso_netto": vecchia.peso_netto,
+                        "peso_sgocciolato": vecchia.peso_sgocciolato, "unita": vecchia.unita, "pezzi": pezzi})
+            continue
+        c = db.session.get(Contenitore, cid or 0)
+        if not c:
+            continue
+        info = pesi.get(cid) or {"peso_netto": c.peso_netto, "peso_sgocciolato": None}
+        out.append({"contenitore_id": cid, "nome": c.nome, "peso_netto": info["peso_netto"],
+                    "peso_sgocciolato": info["peso_sgocciolato"], "unita": c.unita, "pezzi": pezzi})
+    for i, r in enumerate(out):
+        r["ordine"] = i
+    return out
+
+
+def totali(confezioni):
+    """(pezzi, kg) delle confezioni."""
+    return (sum(c["pezzi"] for c in confezioni),
+            sum(c["pezzi"] * peso_kg(c["peso_netto"], c["unita"]) for c in confezioni))
 
 
 def ultima_provenienza(materia_prima_id):
@@ -53,9 +103,8 @@ def ultima_provenienza(materia_prima_id):
             "produzione_propria": bool(r.produzione_propria)}
 
 
-def righe_da_ricetta(ricetta, pezzi):
-    """Ingredienti del lotto proposti dalla ricetta, scalati sui pezzi e con la provenienza precompilata."""
-    fattore = fattore_scala(ricetta.resa_pezzi, pezzi)
+def righe_da_ricetta(ricetta, fattore):
+    """Ingredienti del lotto proposti dalla ricetta, scalati di `fattore` e con la provenienza precompilata."""
     out = []
     for x in ricetta.righe:
         m = x.materia_prima
@@ -88,22 +137,38 @@ def prepara_lotto():
     if not p:
         return errore("Prodotto non trovato.", 404)
     giorno = da_iso(request.args.get("data")) or date.today()
-    pezzi = numero(request.args.get("pezzi"), intero=True)
     ricette = [r for r in p.ricette if r.attiva]
     ricetta = None
     if request.args.get("ricetta_id"):
         ricetta = db.session.get(Ricetta, int(request.args["ricetta_id"]))
     ricetta = ricetta or p.ricetta_predefinita
-    if pezzi is None and ricetta and ricetta.resa_pezzi:
-        pezzi = ricetta.resa_pezzi
+    contenitori = contenitori_per(ricetta)
+    try:
+        richieste = json.loads(request.args.get("confezioni") or "[]")
+    except ValueError:
+        richieste = []
+    confezioni = leggi_confezioni(richieste, ricetta)
+    if not richieste:
+        # proposta: un rigo per ogni contenitore della ricetta; con uno solo, i pezzi della resa
+        confezioni = [{"contenitore_id": c["id"], "pezzi": None} for c in contenitori if ricetta and ricetta.contenitori]
+        if len(confezioni) == 1 and ricetta.resa_pezzi:
+            confezioni[0]["pezzi"] = ricetta.resa_pezzi
+        pezzi, kg = totali(leggi_confezioni(confezioni, ricetta))
+    else:
+        pezzi, kg = totali(confezioni)
     esistenti = [c for (c,) in db.session.query(Lotto.codice).filter(Lotto.codice.like(f"L{giorno:%d%m%y}-%"))]
-    righe = righe_da_ricetta(ricetta, pezzi) if ricetta else []
+    fattore = fattore_ricetta(ricetta.resa_kg, ricetta.resa_pezzi, kg, pezzi) if ricetta else 1.0
+    righe = righe_da_ricetta(ricetta, fattore) if ricetta else []
     testo, allergeni = testo_da_righe(righe)
     scad = data_scadenza(giorno, p.durata_giorni)
     return jsonify(ok=True, prodotto={"id": p.id, "nome": p.nome_completo, "sigla": p.sigla,
                                       "tracce": p.tracce or "", "durata_giorni": p.durata_giorni},
-                   ricette=[{"id": r.id, "etichetta": r.etichetta, "resa_pezzi": r.resa_pezzi} for r in ricette],
-                   ricetta_id=ricetta.id if ricetta else None, pezzi=pezzi, data=giorno.isoformat(),
+                   ricette=[{"id": r.id, "etichetta": r.etichetta, "resa_pezzi": r.resa_pezzi, "resa_kg": r.resa_kg}
+                            for r in ricette],
+                   ricetta_id=ricetta.id if ricetta else None, data=giorno.isoformat(),
+                   contenitori=contenitori, confezioni=[{"contenitore_id": c["contenitore_id"], "pezzi": c["pezzi"]}
+                                                        for c in confezioni],
+                   pezzi=pezzi, kg=round(kg, 3), fattore=round(fattore, 3),
                    codice=codice_lotto(giorno, p.sigla, esistenti),
                    scadenza=scad.isoformat() if scad else "", righe=righe,
                    ingredienti_testo=testo, ingredienti_html=ing.testo_html(testo),
@@ -160,7 +225,7 @@ def lotti():
 
 def dati_finestra_lotto():
     """Quello che serve alla finestra "Nuovo lotto" (inclusa nel libro lotti, nella panoramica e nel lotto)."""
-    prodotti = Prodotto.query.filter_by(attivo=True).order_by(Prodotto.nome, Prodotto.peso_netto).all()
+    prodotti = Prodotto.query.filter_by(attivo=True).order_by(Prodotto.nome).all()
     recenti_id = [r[0] for r in db.session.query(Lotto.prodotto_id).group_by(Lotto.prodotto_id)
                   .order_by(db.func.max(Lotto.data_produzione).desc()).limit(6)]
     return {"prodotti_lotto": [{"id": p.id, "nome": p.nome_completo, "sigla": p.sigla,
@@ -180,16 +245,19 @@ def lotto(id):
     storico = Storico.query.filter(
         db.or_(db.and_(Storico.tabella == "lotti", Storico.riga_id == id),
                db.and_(Storico.tabella == "lotti_ingredienti",
-                       Storico.riga_id.in_(db.session.query(LottoIngrediente.id).filter_by(lotto_id=id)))
+                       Storico.riga_id.in_(db.session.query(LottoIngrediente.id).filter_by(lotto_id=id))),
+               db.and_(Storico.tabella == "lotti_confezioni",
+                       Storico.riga_id.in_(db.session.query(LottoConfezione.id).filter_by(lotto_id=id)))
                )).order_by(Storico.id.desc()).all()
-    # righe ingredienti cancellate: non sono più nella tabella, si cercano nel JSON dello storico
-    cancellate = Storico.query.filter_by(tabella="lotti_ingredienti", azione="cancellazione").all()
+    # righe cancellate: non sono più nella tabella, si cercano nel JSON dello storico
+    cancellate = Storico.query.filter(Storico.tabella.in_(("lotti_ingredienti", "lotti_confezioni")),
+                                      Storico.azione == "cancellazione").all()
     storico += [s for s in cancellate if json.loads(s.prima).get("lotto_id") == id and s not in storico]
     storico.sort(key=lambda s: s.id, reverse=True)
-    from app.moduli.prodotti.routes.etichette import MODALITA, stile_attivo
-    formato_lotto = l.etichetta_dati.get("formato_etichetta_id") or l.prodotto.formato_etichetta_id
+    from app.moduli.prodotti.routes.etichette import MODALITA, confezioni_etichette, stile_attivo
     return render_template("prodotti/lotto.html", l=l, storico=storico, json=json,
-                           modalita_etichette=MODALITA, stile_etichette=stile_attivo(), formato_lotto=formato_lotto,
+                           modalita_etichette=MODALITA, stile_etichette=stile_attivo(),
+                           confezioni_etichette=confezioni_etichette(l),
                            ingredienti_html=ing.testo_html(l.ingredienti_testo or ""),
                            allergeni_testo=descrivi(l.allergeni_lista), stati=Lotto.STATI,
                            lotto_json=lotto_json(l), **dati_finestra_lotto())
@@ -198,6 +266,8 @@ def lotto(id):
 def lotto_json(l):
     return {"id": l.id, "codice": l.codice, "prodotto_id": l.prodotto_id, "ricetta_id": l.ricetta_id,
             "data": l.data_produzione, "scadenza": l.data_scadenza or "", "pezzi": l.pezzi_prodotti,
+            "confezioni": [{"id": c.id, "contenitore_id": c.contenitore_id, "nome": c.nome, "pezzi": c.pezzi,
+                            "peso_testo": c.peso_testo} for c in l.confezioni],
             "quantita_kg": l.quantita_kg, "ingredienti_testo": l.ingredienti_testo or "", "note": l.note or "",
             "righe": [{"materia_prima_id": r.materia_prima_id, "nome": r.nome, "quantita": r.quantita,
                        "unita": r.unita, "fornitore_id": r.fornitore_id, "fornitore_nome": r.fornitore_nome or "",
@@ -246,13 +316,20 @@ def salva_lotto():
     # per la produzione propria il "lotto" è un riferimento interno facoltativo: non manca mai
     mancanti = [r["nome"] for r in righe if not r["produzione_propria"] and not r["lotto_fornitore"]]
 
+    ricetta = db.session.get(Ricetta, numero(d.get("ricetta_id"), intero=True) or 0)
+    confezioni = [c for c in leggi_confezioni(d.get("confezioni"), ricetta, l.confezioni if l.id else ())
+                  if c["pezzi"] > 0]
+    if not confezioni:
+        return errore("Indicare quanti pezzi sono stati fatti e in quale contenitore (es. 40 vasetti da 150 g).")
+    pezzi, kg = totali(confezioni)
+
     l.codice, l.prodotto_id = codice, p.id
     l.ricetta_id = numero(d.get("ricetta_id"), intero=True)
     l.data_produzione = giorno.isoformat()
     scad = da_iso(d.get("scadenza"))
     l.data_scadenza = scad.isoformat() if scad else None
-    l.pezzi_prodotti = numero(d.get("pezzi"), intero=True)
-    l.quantita_kg = numero(d.get("quantita_kg"))
+    l.pezzi_prodotti = pezzi
+    l.quantita_kg = numero(d.get("quantita_kg")) or (round(kg, 3) if kg else None)
     testo_auto, allergeni = testo_da_righe(righe)
     l.ingredienti_testo = (d.get("ingredienti_testo") or "").strip() or testo_auto
     l.allergeni_lista = allergeni
@@ -278,6 +355,19 @@ def salva_lotto():
         riga.modificato_da = utente()
         db.session.flush()
         db.session.delete(riga)
+    # confezioni: stesso metodo (lo storico registra solo i cambiamenti veri)
+    conf_prima = list(l.confezioni)
+    for i, c in enumerate(confezioni):
+        riga = conf_prima[i] if i < len(conf_prima) else LottoConfezione(lotto_id=l.id)
+        if not riga.id or any(getattr(riga, k) != v for k, v in c.items()):
+            for k, v in c.items():
+                setattr(riga, k, v)
+            riga.modificato_da = utente()
+            db.session.add(riga)
+    for riga in conf_prima[len(confezioni):]:
+        riga.modificato_da = utente()
+        db.session.flush()
+        db.session.delete(riga)
     db.session.commit()
     avviso = None
     if mancanti:
@@ -300,3 +390,45 @@ def stato_lotto(id):
     l.modificato_da, l.modificato_il = utente(), adesso()
     db.session.commit()
     return jsonify(ok=True)
+
+
+@bp.route("/lotti/<int:id>/elimina", methods=["POST"])
+@write_required
+def elimina_lotto(id):
+    """Solo l'amministratore: cancella il lotto con ingredienti, stampe e PDF (schema.py, migrazione 5).
+
+    Nel registro resta la traccia: lo storico conserva il lotto e gli ingredienti com'erano, con il motivo
+    (scritto in stato_motivo prima di cancellare) e chi l'ha eliminato.
+    """
+    import os
+    from flask_login import current_user
+    from app.moduli.prodotti.models import StampaEtichetta
+    from app.moduli.prodotti.routes.etichette import cartella_pdf
+    if current_user.role != "admin":                       # JSON, non la pagina 403 di admin_required
+        return errore("Solo l'amministratore può eliminare un lotto.", 403)
+    l = db.session.get(Lotto, id)
+    if not l:
+        return errore("Lotto non trovato.", 404)
+    motivo = (dati_richiesta().get("motivo") or "").strip()
+    if not motivo:
+        return errore("Scrivere il motivo dell'eliminazione (resta nello storico).")
+    chi, codice = utente(), l.codice
+    pdf = [s.pdf_path for s in l.stampe]
+    l.stato, l.stato_motivo = "annullato", f"ELIMINATO: {motivo}"
+    l.modificato_da, l.modificato_il, l.cancellazione_autorizzata = chi, adesso(), 1
+    db.session.flush()
+    StampaEtichetta.query.filter_by(lotto_id=id).delete(synchronize_session=False)
+    LottoIngrediente.query.filter_by(lotto_id=id).update({"modificato_da": chi}, synchronize_session=False)
+    LottoIngrediente.query.filter_by(lotto_id=id).delete(synchronize_session=False)
+    LottoConfezione.query.filter_by(lotto_id=id).update({"modificato_da": chi}, synchronize_session=False)
+    LottoConfezione.query.filter_by(lotto_id=id).delete(synchronize_session=False)
+    Lotto.query.filter_by(id=id).delete(synchronize_session=False)
+    db.session.commit()
+    db.session.expunge_all()
+    cartella = cartella_pdf()
+    for p in pdf:
+        try:
+            os.remove(os.path.join(cartella, p))
+        except OSError:
+            pass
+    return jsonify(ok=True, codice=codice, url=url_for("prodotti.lotti"))

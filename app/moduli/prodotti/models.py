@@ -106,6 +106,47 @@ class FormatoEtichetta(db.Model):
         return f"{self.nome} – {self.larghezza_mm:g}×{self.altezza_mm:g} mm, {self.per_foglio} per foglio"
 
 
+def peso_testo(peso, unita="g"):
+    """'150 g', '750 ml'; '' se il peso non c'è (peso variabile)."""
+    return f"{peso:g} {unita or 'g'}".replace(".", ",") if peso else ""      # in etichetta: virgola decimale
+
+
+def peso_kg(peso, unita="g"):
+    """Peso in kg (ml e l come g e kg: per scalare le dosi basta)."""
+    if not peso:
+        return 0.0
+    return peso if unita in ("kg", "l") else peso / 1000.0
+
+
+contenitori_formati = db.Table(
+    "contenitori_formati",
+    db.Column("contenitore_id", db.Integer, db.ForeignKey("contenitori.id"), primary_key=True),
+    db.Column("formato_id", db.Integer, db.ForeignKey("formati_etichetta.id"), primary_key=True),
+    bind_key=BIND,
+)
+
+
+class Contenitore(db.Model):
+    """Vasetto, bottiglia, busta…: peso standard e fogli di etichetta adatti (schema.py, migrazione 6)."""
+    __bind_key__ = BIND
+    __tablename__ = "contenitori"
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.Text, nullable=False, unique=True)
+    peso_netto = db.Column(db.Float)
+    unita = db.Column(db.Text, nullable=False, default="g")
+    formato_predefinito_id = db.Column(db.Integer, db.ForeignKey("formati_etichetta.id"))
+    ordine = db.Column(db.Integer, nullable=False, default=0)
+    attivo = db.Column(db.Boolean, nullable=False, default=True)
+    note = db.Column(db.Text)
+
+    formato_predefinito = db.relationship("FormatoEtichetta")
+    formati = db.relationship("FormatoEtichetta", secondary=contenitori_formati, order_by="FormatoEtichetta.id")
+
+    @property
+    def peso_testo(self):
+        return peso_testo(self.peso_netto, self.unita) or "peso variabile"
+
+
 class Prodotto(db.Model):
     __bind_key__ = BIND
     __tablename__ = "prodotti"
@@ -138,16 +179,12 @@ class Prodotto(db.Model):
 
     TIPI_SCADENZA = {"tmc": "Da consumarsi preferibilmente entro il", "scadenza": "Da consumarsi entro il"}
 
-    @property
-    def peso_testo(self):
-        """'500 g', '750 ml', '' se non indicato."""
-        if not self.peso_netto:
-            return ""
-        return f"{self.peso_netto:g} {self.unita}"
+    # peso_netto, unita, formato_etichetta_id: colonne della 1.x, non più usate (dalla 2.0.0 il peso è del
+    # contenitore e il formato si sceglie per la confezione del lotto)
 
     @property
     def nome_completo(self):
-        return f"{self.nome} {self.peso_testo}".strip()
+        return self.nome
 
     @property
     def ricetta_predefinita(self):
@@ -176,10 +213,16 @@ class Ricetta(db.Model):
 
     prodotto = db.relationship("Prodotto", back_populates="ricette")
     righe = db.relationship("RicettaRiga", order_by="RicettaRiga.ordine", cascade="all, delete-orphan")
+    contenitori = db.relationship("RicettaContenitore", cascade="all, delete-orphan",
+                                  order_by="RicettaContenitore.id")
 
     @property
     def etichetta(self):
         return f"v{self.versione}" + (f" – {self.nome}" if self.nome else "")
+
+    @property
+    def contenitori_testo(self):
+        return ", ".join(rc.contenitore.nome for rc in self.contenitori)
 
     @property
     def usata(self):
@@ -204,6 +247,23 @@ class RicettaRiga(db.Model):
     materia_prima = db.relationship("MateriaPrima")
 
 
+class RicettaContenitore(db.Model):
+    """Contenitore in cui si può confezionare la ricetta, con i pesi propri se diversi dallo standard."""
+    __bind_key__ = BIND
+    __tablename__ = "ricette_contenitori"
+    id = db.Column(db.Integer, primary_key=True)
+    ricetta_id = db.Column(db.Integer, db.ForeignKey("ricette.id"), nullable=False)
+    contenitore_id = db.Column(db.Integer, db.ForeignKey("contenitori.id"), nullable=False)
+    peso_netto = db.Column(db.Float)
+    peso_sgocciolato = db.Column(db.Float)
+
+    contenitore = db.relationship("Contenitore")
+
+    @property
+    def peso_effettivo(self):
+        return self.peso_netto if self.peso_netto else self.contenitore.peso_netto
+
+
 class Lotto(_ListaJSON, db.Model):
     __bind_key__ = BIND
     __tablename__ = "lotti"
@@ -225,14 +285,24 @@ class Lotto(_ListaJSON, db.Model):
     creato_il = db.Column(db.Text, nullable=False, default=adesso)
     modificato_da = db.Column(db.Text)
     modificato_il = db.Column(db.Text)
+    cancellazione_autorizzata = db.Column(db.Integer, nullable=False, default=0)   # solo routes/lotti.elimina_lotto
 
     prodotto = db.relationship("Prodotto")
     ricetta = db.relationship("Ricetta")
     ingredienti = db.relationship("LottoIngrediente", order_by="LottoIngrediente.ordine",
                                   back_populates="lotto")
     stampe = db.relationship("StampaEtichetta", order_by="StampaEtichetta.id.desc()")
+    confezioni = db.relationship("LottoConfezione", order_by="LottoConfezione.ordine", back_populates="lotto")
 
     STATI = {"attivo": "Attivo", "esaurito": "Esaurito", "ritirato": "Ritirato (richiamo)", "annullato": "Annullato"}
+
+    @property
+    def confezioni_testo(self):
+        """'40 × 150 g, 12 × 300 g' (o i pezzi, per un lotto senza confezioni)."""
+        parti = [c.testo for c in self.confezioni if c.pezzi]
+        if parti:
+            return ", ".join(parti)
+        return f"{self.pezzi_prodotti} pz" if self.pezzi_prodotti else ""
 
     @property
     def etichetta_dati(self):
@@ -271,6 +341,38 @@ class LottoIngrediente(db.Model):
         return " · ".join(parti)
 
 
+class LottoConfezione(db.Model):
+    """Quanti pezzi di un contenitore ha dato il lotto, con la copia di nome e pesi (vanno in etichetta)."""
+    __bind_key__ = BIND
+    __tablename__ = "lotti_confezioni"
+    id = db.Column(db.Integer, primary_key=True)
+    lotto_id = db.Column(db.Integer, db.ForeignKey("lotti.id"), nullable=False)
+    contenitore_id = db.Column(db.Integer, db.ForeignKey("contenitori.id"))
+    nome = db.Column(db.Text, nullable=False)
+    peso_netto = db.Column(db.Float)
+    peso_sgocciolato = db.Column(db.Float)
+    unita = db.Column(db.Text, nullable=False, default="g")
+    pezzi = db.Column(db.Integer, nullable=False, default=0)
+    ordine = db.Column(db.Integer, nullable=False, default=0)
+    modificato_da = db.Column(db.Text)
+
+    lotto = db.relationship("Lotto", back_populates="confezioni")
+    contenitore = db.relationship("Contenitore")
+
+    @property
+    def peso_testo(self):
+        return peso_testo(self.peso_netto, self.unita)
+
+    @property
+    def testo(self):
+        """'40 × 150 g' oppure '6 × Salume (peso variabile)'."""
+        return f"{self.pezzi} × {self.peso_testo or self.nome}"
+
+    @property
+    def kg(self):
+        return (self.pezzi or 0) * peso_kg(self.peso_netto, self.unita)
+
+
 class StampaEtichetta(db.Model):
     __bind_key__ = BIND
     __tablename__ = "stampe_etichette"
@@ -284,8 +386,16 @@ class StampaEtichetta(db.Model):
     dati = db.Column(db.Text, nullable=False)
     creato_da = db.Column(db.Text)
     creato_il = db.Column(db.Text, nullable=False, default=adesso)
+    confezione_id = db.Column(db.Integer)          # lotti_confezioni.id (la confezione può essere poi corretta)
 
     formato = db.relationship("FormatoEtichetta")
+
+    @property
+    def confezione_testo(self):
+        try:
+            return json.loads(self.dati).get("confezione") or ""
+        except ValueError:
+            return ""
 
 
 class Storico(db.Model):

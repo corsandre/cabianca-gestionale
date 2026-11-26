@@ -102,7 +102,7 @@ def esporta_lotti(formato):
     righe_lotti, righe_ing = [], []
     for l in reversed(lotti):
         righe_lotti.append([l.codice, l.prodotto.nome_completo, _data_it(l.data_produzione), _data_it(l.data_scadenza),
-                            l.pezzi_prodotti, l.ricetta.etichetta if l.ricetta else "", Lotto.STATI.get(l.stato),
+                            l.pezzi_prodotti, l.confezioni_testo, l.ricetta.etichetta if l.ricetta else "", Lotto.STATI.get(l.stato),
                             l.stato_motivo or "", descrivi(l.allergeni_lista), (l.ingredienti_testo or "").replace("**", ""),
                             l.creato_da or "", l.note or ""])
         for r in l.ingredienti:
@@ -110,7 +110,7 @@ def esporta_lotti(formato):
                               r.unita, "sì" if r.produzione_propria else "", r.fornitore_nome or "",
                               r.lotto_fornitore or "", r.rif_documento or ""])
     return excel([
-        ("Lotti", ["Codice", "Prodotto", "Produzione", "Scadenza", "Pezzi", "Ricetta", "Stato", "Motivo stato",
+        ("Lotti", ["Codice", "Prodotto", "Produzione", "Scadenza", "Pezzi", "Confezioni", "Ricetta", "Stato", "Motivo stato",
                    "Allergeni", "Ingredienti in etichetta", "Registrato da", "Note"], righe_lotti),
         ("Ingredienti", ["Codice lotto", "Prodotto", "Produzione", "Ingrediente", "Quantità", "Unità",
                          "Produzione propria", "Fornitore", "Lotto fornitore", "Documento"], righe_ing),
@@ -125,7 +125,7 @@ def _ricetta_dict(r, lotti_per_ricetta):
     testo = ing.testo_ingredienti(righe)
     return {
         "prodotto": r.prodotto.nome_completo, "sigla": r.prodotto.sigla, "versione": r.etichetta,
-        "resa_pezzi": r.resa_pezzi, "resa_kg": r.resa_kg, "attiva": r.attiva,
+        "resa_pezzi": r.resa_pezzi, "resa_kg": r.resa_kg, "attiva": r.attiva, "contenitori": r.contenitori_testo,
         "predefinita": r.prodotto.ricetta_default_id == r.id, "creato_il": r.creato_il, "creato_da": r.creato_da,
         "n_lotti": lotti_per_ricetta.get(r.id, 0), "procedimento": r.procedimento, "note_haccp": r.note_haccp,
         "ingredienti_html": ing.testo_html(testo), "ingredienti_testo": testo.replace("**", ""), "allergeni": descrivi(ing.allergeni_presenti(righe)),
@@ -145,7 +145,7 @@ def esporta_ricettario(formato):
         query = query.filter(Ricetta.id == int(request.args["ricetta"]))
     elif request.args.get("solo_attive") == "1":
         query = query.filter(Ricetta.attiva.is_(True))
-    ricette = query.order_by(Prodotto.nome, Prodotto.peso_netto, Ricetta.versione).all()
+    ricette = query.order_by(Prodotto.nome, Ricetta.versione).all()
     lotti_per_ricetta = dict(db.session.query(Lotto.ricetta_id, db.func.count(Lotto.id)).group_by(Lotto.ricetta_id))
     dati = [_ricetta_dict(r, lotti_per_ricetta) for r in ricette]
     oggi = datetime.now().strftime("%Y%m%d")
@@ -157,9 +157,9 @@ def esporta_ricettario(formato):
     if formato != "xlsx":
         abort(404)
     return excel([
-        ("Ricette", ["Prodotto", "Sigla", "Versione", "Resa pezzi", "Resa kg", "In uso", "Proposta per i lotti",
+        ("Ricette", ["Prodotto", "Sigla", "Versione", "Resa pezzi", "Resa kg", "Contenitori", "In uso", "Proposta per i lotti",
                      "Lotti fatti", "Allergeni", "Ingredienti in etichetta", "Procedimento", "Note HACCP", "Creata il"],
-         [[d["prodotto"], d["sigla"], d["versione"], d["resa_pezzi"], d["resa_kg"], "sì" if d["attiva"] else "no",
+         [[d["prodotto"], d["sigla"], d["versione"], d["resa_pezzi"], d["resa_kg"], d["contenitori"], "sì" if d["attiva"] else "no",
            "sì" if d["predefinita"] else "", d["n_lotti"], d["allergeni"],
            d["ingredienti_testo"],
            d["procedimento"] or "", d["note_haccp"] or "", _data_it(d["creato_il"])] for d in dati]),

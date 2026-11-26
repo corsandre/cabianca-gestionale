@@ -1,0 +1,117 @@
+{% extends "prodotti/_base.html" %}
+{% block title %}Contenitori - Prodotti{% endblock %}
+{% set scrive = current_user.role != 'consulente' %}
+{% block content %}
+<div class="cb-page-header">
+    <h1><i class="bi bi-cup-hot text-cb-prod"></i> Contenitori</h1>
+    {% if scrive %}
+    <button class="btn btn-cb" onclick="ModaleContenitore.apri()"><i class="bi bi-plus-lg"></i> Nuovo contenitore</button>
+    {% endif %}
+</div>
+<p class="text-muted small">Vasetti, bottiglie, buste e sacchetti. Nella <b>ricetta</b> si spuntano quelli in cui si può
+    confezionare, nel <b>lotto</b> si scrive quanti pezzi di ognuno. Le etichette propongono solo i fogli adatti al contenitore.
+    Il peso è quello standard: se per una ricetta è diverso (o serve il peso sgocciolato), si corregge nella ricetta.</p>
+
+<div class="cb-card p-0">
+    <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+        <thead><tr><th>Contenitore</th><th>Peso standard</th><th>Fogli di etichette adatti</th><th class="text-end">Ricette</th><th></th></tr></thead>
+        <tbody>
+        {% for c in contenitori %}
+        <tr class="{{ 'text-muted' if not c.attivo }}">
+            <td><strong>{{ c.nome }}</strong>{% if not c.attivo %} <span class="badge bg-secondary">spento</span>{% endif %}
+                {% if c.note %}<div class="small text-muted">{{ c.note }}</div>{% endif %}</td>
+            <td>{{ c.peso_testo }}</td>
+            <td class="small">{% for f in c.formati %}<span class="badge {{ 'bg-success' if f.id == c.formato_predefinito_id else 'bg-light text-dark border' }} me-1"
+                title="{{ 'proposto' if f.id == c.formato_predefinito_id }}">{{ f.nome }}{% if f.codice_foglio %} · {{ f.codice_foglio }}{% endif %}</span>{% endfor %}</td>
+            <td class="text-end">{{ uso.get(c.id, 0) }}</td>
+            <td class="text-end">{% if scrive %}<button class="btn btn-sm btn-outline-secondary" onclick="ModaleContenitore.apri(CONTENITORI[{{ loop.index0 }}])"><i class="bi bi-pencil"></i></button>{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-center text-muted py-4">Nessun contenitore.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+{% if scrive %}
+<div class="modal fade" id="modaleContenitore" tabindex="-1">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Contenitore</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form action="{{ url_for('prodotti.salva_contenitore') }}" onsubmit="event.preventDefault(); ModaleContenitore.salva(this.closest('.modal').querySelector('.prod-salva'))">
+        <input type="hidden" name="id">
+        <div class="modal-body">
+          <div class="row g-2">
+            <div class="col-12">
+              <label class="form-label form-label-sm mb-1">Nome *</label>
+              <input name="nome" class="form-control form-control-lg" placeholder="es. Vasetto 150 g" required>
+            </div>
+            <div class="col-8">
+              <label class="form-label form-label-sm mb-1">Peso standard in etichetta</label>
+              <div class="input-group">
+                <input name="peso_netto" class="form-control" inputmode="decimal" placeholder="vuoto = peso variabile">
+                <select name="unita" class="form-select" style="max-width:5.5rem">{% for u in unita %}<option value="{{ u }}">{{ u }}</option>{% endfor %}</select>
+              </div>
+            </div>
+            <div class="col-4">
+              <label class="form-label form-label-sm mb-1">Ordine</label>
+              <input name="ordine" class="form-control" inputmode="numeric" placeholder="10">
+            </div>
+            <div class="col-12">
+              <label class="form-label form-label-sm mb-1">Fogli di etichette adatti *</label>
+              {% for f in formati %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="formati" value="{{ f.id }}" id="cont_f_{{ f.id }}">
+                <label class="form-check-label small" for="cont_f_{{ f.id }}">{{ f.descrizione }}{% if f.codice_foglio %} ({{ f.codice_foglio }}){% endif %}</label>
+              </div>
+              {% endfor %}
+            </div>
+            <div class="col-12">
+              <label class="form-label form-label-sm mb-1">Foglio proposto</label>
+              <select name="formato_predefinito_id" class="form-select">
+                {% for f in formati %}<option value="{{ f.id }}">{{ f.nome }}{% if f.codice_foglio %} ({{ f.codice_foglio }}){% endif %}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label form-label-sm mb-1">Note</label>
+              <input name="note" class="form-control" placeholder="es. vasetto Bormioli 156 ml, capsula 53">
+            </div>
+            <div class="col-12">
+              <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="attivo" id="cont_attivo">
+                <label class="form-check-label" for="cont_attivo">In uso (spento: non compare più in ricette e lotti)</label></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+          <button type="submit" class="btn btn-cb prod-salva"><i class="bi bi-check-lg"></i> Salva</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+{% block prodotti_js %}
+<script>
+const CONTENITORI = {{ contenitori_json | tojson }};
+const ModaleContenitore = {
+    el: function () { return document.getElementById('modaleContenitore'); },
+    apri: function (c) {
+        const form = this.el().querySelector('form');
+        prodRiempi(form, Object.assign({ unita: 'g', attivo: true, formati: [] }, c || {}));
+        this.el().querySelector('.modal-title').textContent = c && c.id ? 'Modifica contenitore' : 'Nuovo contenitore';
+        bootstrap.Modal.getOrCreateInstance(this.el()).show();
+    },
+    salva: async function (bottone) {
+        const form = this.el().querySelector('form');
+        try {
+            await prodInCorso(bottone, prodPost(form.action, prodLeggi(form)));
+            location.reload();
+        } catch (e) { prodAvviso(e.message, 'danger'); }
+    },
+};
+</script>
+{% endblock %}

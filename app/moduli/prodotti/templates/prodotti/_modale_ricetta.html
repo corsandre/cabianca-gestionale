@@ -10,8 +10,9 @@
       </div>
       <div class="modal-body">
         <div class="alert alert-warning py-2 small d-none" id="ricettaUsata">
-          <i class="bi bi-lock"></i> Questa versione è già stata usata in un lotto e non si modifica: salvando
-          si crea una <b>nuova versione</b>; i lotti già fatti restano legati a quella vecchia.
+          <i class="bi bi-lock"></i> Questa versione è già stata usata in un lotto: se cambiano ingredienti, dosi,
+          resa o procedimento, salvando si crea una <b>nuova versione</b> e i lotti già fatti restano legati a quella
+          vecchia. Se cambiano solo i <b>contenitori</b>, resta questa versione.
         </div>
         <div class="row g-3">
           <div class="col-lg-7">
@@ -47,17 +48,22 @@
               <span class="small text-muted align-self-center">Totale: <b id="ricTotale">0</b></span>
             </div>
 
-            <div class="row g-2">
-              <div class="col-6">
-                <label class="form-label form-label-sm mb-1">Resa: pezzi</label>
-                <input id="ricResaPezzi" class="form-control" inputmode="numeric" placeholder="es. 40 vasetti">
-              </div>
+            <div class="row g-2 mb-3">
               <div class="col-6">
                 <label class="form-label form-label-sm mb-1">Resa: kg di prodotto finito</label>
                 <input id="ricResaKg" class="form-control" inputmode="decimal" placeholder="es. 10">
               </div>
-              <div class="col-12 form-text mt-0">Con la resa in pezzi, nel nuovo lotto le quantità si ricalcolano da sole in base ai pezzi da fare.</div>
+              <div class="col-6">
+                <label class="form-label form-label-sm mb-1">Resa: pezzi <span class="text-muted">(facoltativa)</span></label>
+                <input id="ricResaPezzi" class="form-control" inputmode="numeric" placeholder="es. 40">
+              </div>
+              <div class="col-12 form-text mt-0">Con la resa in kg, nel nuovo lotto le quantità si ricalcolano da sole dai
+                contenitori (es. 40 × 150 g + 12 × 300 g = 9,6 kg). La resa in pezzi serve solo se i kg non ci sono.</div>
             </div>
+
+            <label class="form-label form-label-sm mb-1">Contenitori in cui si confeziona
+              <span class="text-muted">— peso diverso dallo standard o peso sgocciolato (sottoli, sottaceti): scriverlo accanto</span></label>
+            <div class="prod-contenitori-ricetta" id="ricContenitori"></div>
           </div>
 
           <div class="col-lg-5">
@@ -92,4 +98,5 @@
   });
   window.PROD_MATERIE = {{ materie_json | tojson }};
   window.PROD_UNITA = {{ unita_ricetta | tojson }};
+  window.PROD_CONTENITORI_RICETTA = {{ contenitori_ricetta | tojson }};
 </script>

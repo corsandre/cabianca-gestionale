@@ -3,13 +3,13 @@
 {% block contenuto %}
 <p><b>{{ risultati | length }} {{ 'lotto coinvolto' if risultati | length == 1 else 'lotti coinvolti' }}</b>{% if pezzi %}, {{ pezzi }} pezzi prodotti in tutto{% endif %}.</p>
 <table>
-  <thead><tr><th>Lotto</th><th>Prodotto</th><th>Produzione</th><th>Scadenza</th><th class="num">Pezzi</th><th>Stato</th><th>Ingrediente coinvolto (fornitore, lotto, documento)</th></tr></thead>
+  <thead><tr><th>Lotto</th><th>Prodotto</th><th>Produzione</th><th>Scadenza</th><th>Confezioni</th><th>Stato</th><th>Ingrediente coinvolto (fornitore, lotto, documento)</th></tr></thead>
   <tbody>
   {% for l, righe in risultati %}
   <tr>
     <td class="codice">{{ l.codice }}</td><td>{{ l.prodotto.nome_completo }}</td>
     <td>{{ l.data_produzione | data_it }}</td><td>{{ l.data_scadenza | data_it }}</td>
-    <td class="num">{{ l.pezzi_prodotti or '' }}</td>
+    <td>{{ l.confezioni_testo }}</td>
     <td>{{ stati[l.stato] }}{% if l.stato_motivo %}<div class="piccolo">{{ l.stato_motivo }}</div>{% endif %}</td>
     <td>{% for r in righe %}{{ r.nome }}{% if r.quantita %} {{ '%g' | format(r.quantita) }} {{ r.unita }}{% endif %} – {{ 'produzione propria' if r.produzione_propria else (r.fornitore_nome or '?') }}{% if r.lotto_fornitore %}, lotto {{ r.lotto_fornitore }}{% endif %}{% if r.rif_documento %}, {{ r.rif_documento }}{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
   </tr>

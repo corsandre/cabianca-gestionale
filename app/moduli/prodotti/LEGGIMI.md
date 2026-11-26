@@ -1,7 +1,7 @@
 # Modulo Prodotti – mappa
 
 Ricettario, libro dei lotti ed etichette dei prodotti trasformati di Fattoria Ca' Bianca
-(marmellate, mostarde, conserve, pasta ripiena, salumi…). Serve anche come registro per i controlli
+(confetture, mostarde, conserve, pasta ripiena, salumi…). Serve anche come registro per i controlli
 NAS/ATS: tracciabilità "un passo indietro" (fornitore e lotto di ogni ingrediente, Reg. CE 178/2002)
 ed etichette secondo il Reg. UE 1169/2011.
 
@@ -19,10 +19,11 @@ ed etichette secondo il Reg. UE 1169/2011.
 | **routes/** | pagine `/prodotti/...`; login + sezione "prodotti" obbligatori per tutte (`__init__.py`) |
 | `routes/comune.py` | aiuti: utente, fornitori (Contact del nucleo, anche creati al volo), numeri con la virgola, JSON |
 | `routes/panoramica.py` | pagina iniziale |
-| `routes/catalogo.py` | materie prime e prodotti (catalogo, scheda prodotto) |
-| `routes/ricette.py` | ricettario, editor con versioni, anteprima dell'elenco ingredienti |
-| `routes/lotti.py` | libro lotti, finestra «Nuovo lotto» (`prepara`, `salva`), scheda lotto, stati |
-| `routes/etichette.py` | anteprima e stampa archiviata delle etichette, formati, calibrazione, stile attivo |
+| `routes/catalogo.py` | materie prime e prodotti (catalogo, scheda prodotto; il prodotto è generico: niente peso né foglio) |
+| `routes/contenitori.py` | contenitori (vasetti, bottiglie, buste…): peso standard e fogli di etichette adatti |
+| `routes/ricette.py` | ricettario, editor con versioni e contenitori compatibili, anteprima dell'elenco ingredienti |
+| `routes/lotti.py` | libro lotti, finestra «Nuovo lotto» (`prepara`, `salva`, confezioni), scheda lotto, stati, eliminazione (admin) |
+| `routes/etichette.py` | anteprima e stampa archiviata delle etichette per confezione (fogli filtrati per contenitore), formati, calibrazione, stile attivo |
 | `routes/esporta.py` | libro lotti e ricettario in PDF ed Excel |
 | `routes/richiamo.py` | ricerca dei lotti che contengono un lotto di materia prima; ritiro in blocco |
 | **services/** | logica pura senza Flask, testata in `tests/test_prodotti_*.py` |
@@ -47,6 +48,17 @@ Fuori dalla cartella: `scripts/importa_etichette.py` (catalogo dalle etichette s
 - Database proprio `data/prodotti.db`; PDF delle etichette in `data/prodotti/etichette/AAAA/`.
 - Backup: automatico (il backup notturno salva tutti i `data/*.db` e la domenica archivia i PDF).
 
+## Prodotto, contenitori, confezioni (dalla 2.0.0)
+
+- **Prodotto** = generico: nome, sigla, dati di etichetta, ricette. Niente peso né foglio di etichette.
+- **Contenitore** (`contenitori`) = vasetto, bottiglia, busta…: peso standard (vuoto = peso variabile) e fogli
+  adatti (`contenitori_formati`), con quello proposto.
+- **Ricetta → contenitori compatibili** (`ricette_contenitori`), con peso netto o sgocciolato propri se diversi.
+  Non bloccati sulle ricette usate. Se di una ricetta usata cambiano solo questi, resta la stessa versione.
+- **Lotto → confezioni** (`lotti_confezioni`): contenitore e pezzi, con COPIA di nome e pesi. Le dosi si scalano
+  sui kg totali / resa in kg (o pezzi / resa in pezzi).
+- **Etichette** per confezione: il peso viene dalla confezione, i fogli sono solo quelli adatti al contenitore.
+
 ## Aggiungere una colonna o una tabella
 
 1. Nuova voce in fondo a `MIGRAZIONI` in `schema.py` (numero successivo, solo aggiunte).
@@ -61,3 +73,4 @@ Fuori dalla cartella: `scripts/importa_etichette.py` (catalogo dalle etichette s
 | 1.0.1 | etichette disegnate una alla volta (lucchetto su WeasyPrint): due anteprime contemporanee facevano cadere il sito (502, 25/11/2026) |
 | 1.1.0 | stile «classico-giallo» (le etichette storiche, sfondo crema); PDF ~10 volte più veloci (logo PNG, etichetta disegnata una volta e copiata nel foglio, misure riusate); indicatore di attesa con secondi; `stile.json` per il minimo di legge di ogni stile |
 | 1.2.0 | modalità «piegata sul cordino» per i salumi (fronte e retro sulla stessa etichetta del foglio Grande, ruotati verso la piega); foglio Salumi L7164 spento (migrazione 4): 3 fogli da comprare |
+| 2.0.0 | **contenitori**: prodotto generico, contenitori compatibili nella ricetta (pesi propri e sgocciolato), confezioni nel lotto (più contenitori per lotto, dosi sui kg), etichette per confezione con i fogli filtrati (migrazione 6). L'amministratore elimina lotti (anche stampati: con ingredienti, confezioni, stampe e PDF; copia nello storico) e prodotti senza lotti (migrazione 5). «Confetture» al posto di «Confetture e marmellate»; pulizia del catalogo `scripts/pulizia_catalogo_20261126.py` |
