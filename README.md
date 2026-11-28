@@ -219,6 +219,13 @@ struttura fisica vanno aggiornate in entrambi i file.
 - **Cicli chiusi (3.5.1)**: nel selettore (menu «Cicli chiusi…», anche in Soccida) e in Impostazioni («Apri»). Le
   pagine si fermano alla data di fine; per gli utenti sono in sola lettura (`_sola_lettura_cicli_chiusi` rifiuta i
   POST con il `ciclo_id` di un ciclo chiuso), l'admin può ancora correggerle (riscontri, fatture, Soccida).
+- **Cicli a confronto (3.6.0, `/allevamento/cicli`, chi vede la Soccida)**: una riga per ciclo (capi, mortalità,
+  giacenze iniziale e finale, bolle, mangime consumato e a capo, carne, indice, resa, siero, minimo, netto, premio,
+  saldo o liquidato), con i controlli «finale = iniziale del successivo» e «consumato = bolle + iniziale − finale».
+  I cicli 1-6 di prima del gestionale sono in `CicloStorico`, caricati una volta dall'Excel (file `data/cicli_excel.json`, fuori da git perché
+  il repository è pubblico: va copiato a mano sul server) e modificabili dall'admin («controllato»). I cicli del gestionale usano la
+  **fotografia del conto** (`SoccidaFotografia`, Soccida › «Salva il conto», con la liquidazione di Veronesi) se
+  c'è, altrimenti il conto della Soccida ricalcolato.
 - Panoramica: conteggio live per capannone/box (ultimo censimento + delta di mortalità e spostamenti), giorni di
   vita e peso stimato per box proiettati a oggi, contatori uscite macello per categoria, giacenze mangime e siero.
 

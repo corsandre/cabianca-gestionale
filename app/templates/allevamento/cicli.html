@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Allevamento – Cicli a confronto{% endblock %}
+{# Tabella dei cicli (3.6.0): prepara tutto app/services/cicli_riepilogo.py. #}
+{% macro n(v, dec=0) -%}
+{%- if v is none -%}<span class="text-muted">–</span>{%- else -%}
+{{ ("{:,.%df}" % dec).format(v).replace(",", "X").replace(".", ",").replace("X", ".") }}
+{%- endif -%}
+{%- endmacro %}
+{% macro t(v) -%}{%- if v is none -%}<span class="text-muted">–</span>{%- else -%}{{ n(v / 1000, 1) }}{%- endif -%}{%- endmacro %}
+
+{% block extra_head %}
+<style>
+.cb-cicli th, .cb-cicli td { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cb-cicli td.num, .cb-cicli th.num { text-align: right; }
+.cb-cicli .gruppo { border-left: 2px solid #e7e8ec; }
+.cb-cicli tr.storico td:first-child { border-left: 3px solid #c6a96f; }
+.cb-cicli tr.gestionale td:first-child { border-left: 3px solid #c2185b; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+    <h4 class="mb-0"><i class="bi bi-table me-2" style="color:#c2185b"></i>Cicli a confronto</h4>
+    <div class="small text-muted">Pesi in tonnellate dove indicato, importi in euro.
+        <span class="ms-2" style="border-left:3px solid #c6a96f;padding-left:4px">dall'Excel</span>
+        <span class="ms-2" style="border-left:3px solid #c2185b;padding-left:4px">dal gestionale</span></div>
+</div>
+
+<div class="cb-card p-0 mb-3" style="overflow-x:auto">
+<table class="table table-sm table-hover mb-0 align-middle cb-cicli">
+    <thead class="table-light">
+        <tr>
+            <th>Ciclo</th><th>Periodo</th><th class="num">Giorni</th>
+            <th class="num gruppo">Entrati</th><th class="num" title="Suini di Fattoria Ca' Bianca, esclusi dal conto">di cui Ca' Bianca</th><th class="num">Usciti</th><th class="num">Morti</th><th class="num">Mortalità</th>
+            <th class="num gruppo" title="Mangime nei silos a inizio ciclo">Giacenza iniziale (t)</th><th class="num">Bolle (t)</th><th class="num" title="Mangime nei silos a fine ciclo">Giacenza finale (t)</th><th class="num">Consumato (t)</th><th class="num">kg a capo</th>
+            <th class="num gruppo">Carne (t)</th><th class="num">Peso morto medio</th><th class="num">Indice</th><th class="num">Premi %</th>
+            <th class="num gruppo">Resa</th><th class="num">Siero</th><th class="num">Minimo</th><th class="num">Netto</th><th>Premio</th><th class="num">Saldo / liquidato</th>
+            {% if modifica %}<th></th>{% endif %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for r in righe %}
+        <tr class="{{ r.tipo }}" id="{{ r.tipo }}-{{ r.id }}">
+            <td><strong>{{ r.nome }}</strong><br>
+                <span class="badge {{ 'bg-success-subtle text-success-emphasis' if r.stato in ('controllato',) or r.stato.startswith('conto salvato') else 'bg-warning-subtle text-warning-emphasis' }}">{{ r.stato }}</span></td>
+            <td class="small">{{ r.inizio.strftime('%d/%m/%Y') }} → {{ r.fine.strftime('%d/%m/%Y') if r.fine else 'in corso' }}</td>
+            <td class="num">{{ r.giorni }}</td>
+            <td class="num gruppo">{{ n(r.capi_entrati) }}</td>
+            <td class="num">{{ n(r.capi_cabianca) }}</td>
+            <td class="num">{{ n(r.capi_usciti) }}</td>
+            <td class="num">{{ n(r.morti) }}</td>
+            <td class="num">{% if r.mortalita_perc is not none %}{{ n(r.mortalita_perc, 1) }}%{% else %}{{ n(none) }}{% endif %}</td>
+            <td class="num gruppo {{ 'table-warning' if r.giacenza_iniziale_diversa }}">{{ t(r.giacenza_iniziale_kg) }}</td>
+            <td class="num">{{ t(r.mangime_bolle_kg) }}</td>
+            <td class="num">{{ t(r.giacenza_finale_kg) }}{% if r.giacenza_finale_stimata %}<span class="text-muted small" title="Stimata: manca la giacenza finale comunicata"> *</span>{% endif %}</td>
+            <td class="num {{ 'table-warning' if r.consumato_diverso }}">{{ t(r.mangime_consumato_kg) }}</td>
+            <td class="num">{{ n(r.mangime_capo_kg) }}</td>
+            <td class="num gruppo">{{ t(r.carne_kg) }}</td>
+            <td class="num">{{ n(r.peso_morto_medio_kg, 1) }}</td>
+            <td class="num"><strong>{{ n(r.indice, 2) }}</strong></td>
+            <td class="num">{{ n(r.premi_perc, 2) }}</td>
+            <td class="num gruppo">{{ n(r.resa_eur) }}</td>
+            <td class="num">{{ n(r.siero_eur) }}</td>
+            <td class="num">{{ n(r.minimo_eur) }}</td>
+            <td class="num"><strong>{{ n(r.netto_eur) }}</strong></td>
+            <td>{% if r.a_premio is none %}{{ n(none) }}{% elif r.a_premio %}<span class="badge bg-success">a premio</span> <span class="small text-muted">+{{ n(r.margine_eur) }}</span>{% else %}<span class="badge bg-secondary">minimo</span> <span class="small text-muted">{{ n(r.margine_eur) }}</span>{% endif %}</td>
+            <td class="num">{% if r.liquidato_eur is defined and r.liquidato_eur is not none %}{{ n(r.liquidato_eur) }} <span class="small text-muted">liq.</span>{% elif r.saldo_eur is defined %}{{ n(r.saldo_eur) }}{% else %}{{ n(none) }}{% endif %}</td>
+            {% if modifica %}<td>
+                {% if r.tipo == 'storico' %}
+                <button class="btn btn-sm btn-outline-secondary py-0" data-bs-toggle="modal" data-bs-target="#mod-storico-{{ r.id }}">Modifica</button>
+                {% else %}
+                <a class="btn btn-sm btn-outline-secondary py-0" href="{{ url_for('allevamento.soccida', ciclo=r.id) }}">Soccida</a>
+                {% endif %}
+            </td>{% endif %}
+        </tr>
+        {% if r.avvisi %}
+        <tr class="{{ r.tipo }}"><td colspan="{{ 24 if modifica else 23 }}" class="small text-warning-emphasis bg-warning-subtle">
+            <i class="bi bi-exclamation-triangle me-1"></i>{{ r.avvisi | join(' · ') }}</td></tr>
+        {% endif %}
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<div class="small text-muted mb-4">
+    Controlli: la giacenza finale di un ciclo deve essere l'iniziale del successivo, e il mangime consumato deve essere
+    bolle + giacenza iniziale − giacenza finale; le celle che non tornano sono in giallo. Mortalità sui capi di Veronesi
+    (entrati meno quelli di Fattoria Ca' Bianca). Netto = il più alto tra resa − siero e minimo. Per i cicli del gestionale
+    i numeri vengono dalla Soccida: finché il conto non è salvato (Soccida › «Salva il conto») si ricalcolano e per un
+    ciclo in corso sono una stima. * giacenza finale stimata.
+</div>
+
+{% if modifica %}
+{% for r in righe if r.tipo == 'storico' %}
+<div class="modal fade" id="mod-storico-{{ r.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+        <form method="post" action="{{ url_for('allevamento.ciclo_storico_salva', sid=r.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-header"><h5 class="modal-title">{{ r.nome }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="row g-2">
+                    <div class="col-12 col-md-6"><label class="form-label small mb-0">Nome</label><input class="form-control form-control-sm" name="nome" value="{{ r.nome }}" required></div>
+                    <div class="col-6 col-md-3"><label class="form-label small mb-0">Inizio</label><input type="date" class="form-control form-control-sm" name="data_inizio" value="{{ r.inizio.isoformat() }}" required></div>
+                    <div class="col-6 col-md-3"><label class="form-label small mb-0">Fine</label><input type="date" class="form-control form-control-sm" name="data_fine" value="{{ r.fine.isoformat() if r.fine }}"></div>
+                    {% for campo, etichetta in [('posti', 'Posti'), ('capi_entrati', 'Suini ricevuti'), ('capi_cabianca', "di cui Ca' Bianca"), ('capi_usciti', 'Consegnati'), ('morti', 'Morti'), ('giorni_pagati', 'Giorni pagati'),
+                                                 ('giacenza_iniziale_kg', 'Giacenza iniziale (kg)'), ('mangime_bolle_kg', 'Bolle mangime (kg)'), ('giacenza_finale_kg', 'Giacenza finale (kg)'), ('mangime_consumato_kg', 'Mangime consumato (kg)'),
+                                                 ('carne_kg', 'Carne (kg)'), ('indice', 'Indice'), ('premi_perc_prontuario', 'Premi da prontuario %'), ('premio_extra_perc', 'Premio extra % (Esselunga)'),
+                                                 ('siero_eur', 'Siero €'), ('resa_eur', 'Resa €'), ('minimo_eur', 'Minimo €'), ('anticipi_eur', 'Anticipi €'), ('saldo_eur', 'Bonifico a saldo €')] %}
+                    <div class="col-6 col-md-3"><label class="form-label small mb-0">{{ etichetta }}</label>
+                        <input type="text" inputmode="decimal" class="form-control form-control-sm" name="{{ 'premi_perc' if campo == 'premi_perc_prontuario' else campo }}"
+                               value="{% set v = storico_valori[r.id][campo] %}{{ '' if v is none else ('%g' % v).replace('.', ',') }}"></div>
+                    {% endfor %}
+                    <div class="col-12"><label class="form-label small mb-0">Note</label><textarea class="form-control form-control-sm" name="note" rows="2">{{ r.note or '' }}</textarea></div>
+                    <div class="col-12 form-check ms-2"><input class="form-check-input" type="checkbox" name="controllato" value="1" id="ctrl-{{ r.id }}" {{ 'checked' if r.stato == 'controllato' }}>
+                        <label class="form-check-label" for="ctrl-{{ r.id }}">Controllato</label></div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <button type="submit" name="elimina" value="1" class="btn btn-sm btn-outline-danger" onclick="return confirm('Eliminare questo ciclo dallo storico?')">Elimina</button>
+                <button type="submit" class="btn btn-sm" style="background:#c2185b;color:#fff">Salva</button>
+            </div>
+        </form>
+    </div></div>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

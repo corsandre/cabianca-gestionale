@@ -86,8 +86,11 @@ def soccida():
     if not ciclo:
         return render_template("allevamento/soccida.html", s=None, modifica=modifica)
     par = D.parametri(ciclo)
+    from app.services import cicli_riepilogo as R
+    foto = R.ultima_fotografia(ciclo)
     return render_template("allevamento/soccida.html", s=V.scheda(ciclo, par, request.args, _url, oggi=_oggi(ciclo)),
-                           par=par, modifica=modifica)
+                           par=par, modifica=modifica, foto=foto, foto_dati=R.dati_fotografia(foto),
+                           correnti=R.dati_correnti(ciclo) if (foto or ciclo.chiuso) else None)
 
 
 @bp.route("/soccida/scenario", methods=["POST"])
@@ -285,3 +288,76 @@ def soccida_fattura_assegna(fid):
     db.session.commit()
     flash("Assegnazione della fattura aggiornata.", "success")
     return redirect(url_for("allevamento.soccida_impostazioni") + "#fatture")
+
+
+# ── Fotografia del conto e cicli a confronto (3.6.0) ────────────────────────
+
+@bp.route("/soccida/fotografia", methods=["POST"])
+@login_required
+def soccida_fotografia():
+    """Salva il conto del ciclo così com'è adesso, con la liquidazione di Veronesi se è arrivata."""
+    _solo_admin()
+    from app.services import cicli_riepilogo as R
+    ciclo = _ciclo()
+    if not ciclo:
+        abort(404)
+    try:
+        R.fotografa(ciclo, current_user.display_name or current_user.username,
+                    liquidato_eur=_numero(request.form.get("liquidato")), nota=(request.form.get("nota") or "").strip() or None)
+        db.session.commit()
+        flash(f"Conto di «{ciclo.nome}» salvato: da qui in poi la tabella dei cicli usa questi numeri.", "success")
+    except ValueError as e:
+        db.session.rollback()
+        flash(f"Conto non salvato: {e}", "danger")
+    return redirect(url_for("allevamento.soccida") + "#fotografia")
+
+
+@bp.route("/cicli")
+@login_required
+def cicli():
+    """Tutti i cicli a confronto: numeri finali, giacenze e conto (anche quelli vecchi dall'Excel)."""
+    _puo_vedere()
+    from app.services import cicli_riepilogo as R
+    from app.models import CicloStorico
+    R.importa_excel_se_serve()
+    valori = {c.id: dict({k: getattr(c, k) for k in CAMPI_STORICO_INTERI + CAMPI_STORICO_NUMERI},
+                         premi_perc_prontuario=c.premi_perc) for c in CicloStorico.query.all()}
+    return render_template("allevamento/cicli.html", righe=R.tabella(), modifica=current_user.role == "admin",
+                           storico_valori=valori)
+
+
+CAMPI_STORICO_INTERI = ("posti", "capi_entrati", "capi_cabianca", "capi_usciti", "morti", "giorni_pagati")
+CAMPI_STORICO_NUMERI = ("giacenza_iniziale_kg", "mangime_bolle_kg", "giacenza_finale_kg", "mangime_consumato_kg",
+                        "carne_kg", "indice", "premi_perc", "premio_extra_perc", "siero_eur", "resa_eur", "minimo_eur",
+                        "anticipi_eur", "saldo_eur")
+
+
+@bp.route("/cicli/storico/<int:sid>", methods=["POST"])
+@login_required
+def ciclo_storico_salva(sid):
+    _solo_admin()
+    from app.models import CicloStorico
+    c = db.session.get(CicloStorico, sid)
+    if not c:
+        abort(404)
+    try:
+        if request.form.get("elimina") == "1":
+            db.session.delete(c)
+            db.session.commit()
+            flash(f"«{c.nome}» eliminato dallo storico.", "success")
+            return redirect(url_for("allevamento.cicli"))
+        c.nome = (request.form.get("nome") or c.nome).strip()
+        c.data_inizio = date.fromisoformat(request.form["data_inizio"])
+        c.data_fine = date.fromisoformat(request.form["data_fine"]) if request.form.get("data_fine") else None
+        for campo in CAMPI_STORICO_INTERI:
+            setattr(c, campo, _numero(request.form.get(campo), intero=True))
+        for campo in CAMPI_STORICO_NUMERI:
+            setattr(c, campo, _numero(request.form.get(campo)))
+        c.controllato = request.form.get("controllato") == "1"
+        c.note = (request.form.get("note") or "").strip() or None
+        db.session.commit()
+        flash(f"«{c.nome}» salvato.", "success")
+    except (KeyError, ValueError) as e:
+        db.session.rollback()
+        flash(f"Non salvato: {e}", "danger")
+    return redirect(url_for("allevamento.cicli") + f"#storico-{sid}")

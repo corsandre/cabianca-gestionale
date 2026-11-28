@@ -884,6 +884,51 @@ class SoccidaFattura(db.Model):
     ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"))
 
 
+class SoccidaFotografia(db.Model):
+    """Fotografia del conto di soccida (3.6.0): i numeri finali del ciclo salvati così com'erano, per confrontarli
+    con la liquidazione di Veronesi e perché non cambino se domani cambia una regola o un dato. Si può rifare:
+    vale l'ultima. dati: JSON con le chiavi di app/services/cicli_riepilogo.py (CAMPI)."""
+    __tablename__ = "soccida_fotografie"
+    id = db.Column(db.Integer, primary_key=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"), nullable=False, index=True)
+    creata_il = db.Column(db.DateTime, nullable=False, default=datetime.now)
+    operatore = db.Column(db.String(100))
+    liquidato_eur = db.Column(db.Float)       # importo della liquidazione di Veronesi (pagato), se arrivata
+    nota = db.Column(db.String(300))
+    dati = db.Column(db.Text, nullable=False)
+
+
+class CicloStorico(db.Model):
+    """Ciclo vecchio, di prima del gestionale (3.6.0): solo i dati finali, copiati dall'Excel «Calcoli compenso
+    Soccida» e da controllare (controllato). Compare solo nella tabella dei cicli a confronto."""
+    __tablename__ = "cicli_storico"
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False)
+    data_inizio = db.Column(db.Date, nullable=False)
+    data_fine = db.Column(db.Date)
+    posti = db.Column(db.Integer)
+    capi_entrati = db.Column(db.Integer)          # suini ricevuti (con quelli di Fattoria Ca' Bianca)
+    capi_cabianca = db.Column(db.Integer)         # suini di Fattoria Ca' Bianca (esclusi dal conto)
+    capi_usciti = db.Column(db.Integer)           # consegnati al macello per Veronesi
+    morti = db.Column(db.Integer)
+    giacenza_iniziale_kg = db.Column(db.Float)
+    mangime_bolle_kg = db.Column(db.Float)
+    giacenza_finale_kg = db.Column(db.Float)
+    mangime_consumato_kg = db.Column(db.Float)
+    carne_kg = db.Column(db.Float)
+    indice = db.Column(db.Float)
+    premi_perc = db.Column(db.Float)              # da prontuario
+    premio_extra_perc = db.Column(db.Float)       # «Esselunga» fino al ciclo 5
+    siero_eur = db.Column(db.Float)
+    resa_eur = db.Column(db.Float)
+    minimo_eur = db.Column(db.Float)
+    giorni_pagati = db.Column(db.Integer)
+    anticipi_eur = db.Column(db.Float)
+    saldo_eur = db.Column(db.Float)               # bonifico ricevuto a saldo
+    controllato = db.Column(db.Boolean, default=False)
+    note = db.Column(db.Text)
+
+
 class SieroFatturaRiga(db.Model):
     """Riga letta da una fattura di siero (3.0): un carico (DDT, data, tonnellate, importo) abbinato,
     quando si trova, alla consegna registrata in Consegne. Scritte da app/services/siero_fatture.py.

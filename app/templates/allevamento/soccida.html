@@ -112,7 +112,8 @@
 
 <nav class="salti" aria-label="Sezioni della scheda">
     <a href="#esito">Esito</a><a href="#scenario">Scenario</a><a href="#probabilita">Probabilità</a><a href="#leve">Leve</a>
-    <a href="#dati">Dati da aggiornare</a><a href="#conto">Il conto</a><a href="#controlli">Animali e controlli</a>
+    <a href="#dati">Dati da aggiornare</a><a href="#conto">Il conto</a><a href="#fotografia">Conto salvato</a><a href="#controlli">Animali e controlli</a>
+    <a href="{{ url_for('allevamento.cicli') }}">Cicli a confronto</a>
 </nav>
 
 {# ── ESITO ── #}
@@ -304,6 +305,48 @@
         <thead><tr><th>Voce</th><th class="num">Valore</th><th>Come si ottiene</th><th>Stato</th></tr></thead>
         <tbody>{% for r in s.righe %}<tr><td>{{ r.voce }}</td><td class="num" style="font-size:15px">{{ r.valore }}</td><td class="nota">{{ r.come }}</td><td class="nota" style="white-space:nowrap">{{ r.stato }}</td></tr>{% endfor %}</tbody>
     </table></div>
+</section>
+
+{# ── FOTOGRAFIA DEL CONTO (3.6.0) ── #}
+{% macro eu(v, dec=0) -%}{%- if v is none -%}–{%- else -%}{{ ("{:,.%df}" % dec).format(v).replace(",", "X").replace(".", ",").replace("X", ".") }}{%- endif -%}{%- endmacro %}
+<section id="fotografia" class="carta">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <h2>Conto salvato</h2>
+        <a class="nota" href="{{ url_for('allevamento.cicli') }}">Tutti i cicli a confronto →</a>
+    </div>
+    {% if foto %}
+    <div class="nota">Salvato il {{ foto.creata_il.strftime('%d/%m/%Y alle %H:%M') }}{% if foto.operatore %} da {{ foto.operatore }}{% endif %}{% if foto.nota %} · {{ foto.nota }}{% endif %}.
+        Questi numeri non cambiano più: la tabella dei cicli usa questi. Accanto, quelli ricalcolati adesso.</div>
+    <div class="scorri"><table style="min-width:520px">
+        <thead><tr><th>Voce</th><th class="num">Salvato</th><th class="num">Adesso</th><th class="num">Differenza</th></tr></thead>
+        <tbody>
+        {% for chiave, voce, dec in [('mangime_consumato_kg', 'Mangime consumato (kg)', 0), ('giacenza_iniziale_kg', 'Giacenza iniziale (kg)', 0), ('giacenza_finale_kg', 'Giacenza finale (kg)', 0),
+                                   ('carne_kg', 'Carne valida (kg)', 0), ('capi_usciti', 'Capi consegnati', 0), ('indice', 'Indice di conversione', 3), ('premi_perc', 'Premi %', 2),
+                                   ('resa_eur', 'Resa €', 2), ('siero_eur', 'Siero €', 2), ('minimo_eur', 'Minimo €', 2), ('pagato_eur', 'Pagato da Veronesi €', 2), ('netto_eur', 'Netto €', 2)] %}
+        {% set a = foto_dati.get(chiave) %}{% set b = correnti.get(chiave) if correnti else none %}
+        <tr><td>{{ voce }}</td><td class="num">{{ eu(a, dec) }}</td><td class="num nota">{{ eu(b, dec) }}</td>
+            <td class="num">{% if a is not none and b is not none and (a - b)|abs > 0.005 %}<span class="pillola st-dafare">{{ eu(b - a, dec) }}</span>{% else %}<span class="nota">=</span>{% endif %}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {% if foto.liquidato_eur is not none %}
+    {% set diff = foto.liquidato_eur - (foto_dati.pagato_eur or 0) %}
+    <div class="riquadro"><div>Liquidazione di Veronesi: <b>{{ eu(foto.liquidato_eur, 2) }} €</b>, il nostro conto dice {{ eu(foto_dati.pagato_eur, 2) }} €:
+        {% if diff|abs < 1 %}tornano.{% else %}differenza di <b>{{ eu(diff, 2) }} €</b>.{% endif %}</div></div>
+    {% endif %}
+    {% else %}
+    <div class="nota">Il conto non è ancora salvato. Si salva a ciclo finito, quando tutti i carichi hanno il riscontro e ci sono giacenza finale e premi comunicati:
+        da quel momento non cambia più, anche se cambia un dato o una regola, e si confronta con la liquidazione di Veronesi.
+        {% if correnti %}{% if correnti.definitivo %}<b>Il conto è definitivo: si può salvare.</b>{% else %}Il conto non è ancora definitivo (manca qualcosa tra riscontri, giacenza finale e premi comunicati, o ci sono capi in stalla).{% endif %}{% endif %}</div>
+    {% endif %}
+    {% if modifica %}
+    <form method="post" action="{{ url_for('allevamento.soccida_fotografia') }}" class="campi" onsubmit="return confirm('Salvare il conto di questo ciclo così com\'è adesso?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="campo"><label for="f-liq">Importo liquidato da Veronesi (€, se arrivato)</label><input id="f-liq" type="number" step="0.01" name="liquidato" value="{{ foto.liquidato_eur if foto and foto.liquidato_eur is not none }}"></div>
+        <div class="campo"><label for="f-nota">Nota</label><input id="f-nota" type="text" name="nota" class="form-control" style="min-height:44px"></div>
+        <div class="campo" style="align-content:end"><button class="bottone pieno">{{ 'Salva di nuovo il conto' if foto else 'Salva il conto' }}</button></div>
+    </form>
+    {% endif %}
 </section>
 
 {# ── ANIMALI E CONTROLLI ── #}

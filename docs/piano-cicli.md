@@ -180,3 +180,15 @@ Ancora aperte:
 - Prova: `data/_prova_cicli.py`, parte «FASE 1», tutto OK.
 - Da ricordare: la Soccida del ciclo nuovo copia la giacenza finale del vecchio quando la si apre la prima volta;
   conviene inserire la giacenza finale del 05/2026 prima di aprire la Soccida del ciclo nuovo (o correggerla a mano).
+
+**28/11/2026 — fase 2 in parte (3.6.0): fotografia del conto e tabella dei cicli, con lo storico dall'Excel.**
+- Soccida › «Conto salvato»: salva i numeri del conto (SoccidaFotografia, si può rifare, vale l'ultima) con
+  l'importo liquidato da Veronesi; mostra salvato contro ricalcolato adesso e la differenza con la liquidazione.
+- `/allevamento/cicli` «Cicli a confronto» (link da Soccida e Impostazioni): cicli storici 1-6 dall'Excel (da
+  controllare da Andrea: pulsante Modifica, casella «Controllato») e cicli del gestionale; giacenze iniziale e finale
+  in colonna con gli avvisi; per un ciclo non finito i valori sono la stima della Soccida (kg a capo e peso morto sui
+  capi usciti più quelli ancora da caricare).
+- Dall'Excel: cicli 1-3 senza giacenze; ciclo 4 con 500 kg sommati alle bolle (presi come giacenza iniziale), finale
+  non scritta; ciclo 5 iniziale 4.000 kg (il 4 non ha la finale: avviso); 5 → 6: 10.000 kg; 6 → 05/2026: 3.000 kg.
+- Resta della fase 2: «Confronta con» in Analisi (curve allineate per giorno di ciclo), da fare quando il ciclo nuovo
+  avrà qualche settimana di dati.
