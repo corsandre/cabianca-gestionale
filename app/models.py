@@ -427,7 +427,21 @@ class Ciclo(db.Model):
     data_fine = db.Column(db.Date)
     note = db.Column(db.Text)
     attivo = db.Column(db.Boolean, default=True)
+    # 3.5.0: ciclo nuovo aperto mentre il vecchio è ancora attivo (cicli accavallati). Si vede e ci si
+    # scrive dalle pagine, ma bot, impianto e avvisi lavorano sul ciclo attivo; diventa attivo alla
+    # chiusura del vecchio. Stati: attivo, in avvio (attivo=False, in_avvio=True), chiuso (data_fine).
+    in_avvio = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @property
+    def stato(self):
+        if self.attivo:
+            return "attivo"
+        return "avvio" if self.in_avvio else "chiuso"
+
+    @property
+    def chiuso(self):
+        return not self.attivo and not self.in_avvio
 
 
 class Censimento(db.Model):
@@ -727,6 +741,8 @@ class CalibrazioneGiacenza(db.Model):
     tipo = db.Column(db.String(20), nullable=False, default="mangime")
     valore_q = db.Column(db.Float, nullable=False)
     timestamp = db.Column(db.DateTime, nullable=False)
+    # 3.5.0: vuoto = conto della stalla; un ciclo in avvio ha la sua giacenza (silo dei piccoli)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"))
     operatore = db.Column(db.String(100))
     note = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -775,6 +791,9 @@ class ImpiantoLinea(db.Model):
     fine = db.Column(db.DateTime)
     stato = db.Column(db.String(20), nullable=False, default="proposta")
     uso_pasto_id = db.Column(db.Integer, db.ForeignKey("uso_pasti.id"))
+    # 3.5.0: ciclo su cui è stata spostata la lettura (pasto dei piccoli di un ciclo in avvio);
+    # vuoto = ciclo attivo, come sempre
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("cicli_v2.id"))
     decisa_da = db.Column(db.String(100))               # chi ha approvato/scartato
     decisa_il = db.Column(db.DateTime)
     note = db.Column(db.Text)

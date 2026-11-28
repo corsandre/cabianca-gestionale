@@ -1,0 +1,28 @@
+{# Selettore del ciclo (3.5.0): compare solo mentre due cicli sono in corso (il vecchio attivo e il nuovo in avvio).
+   Ogni modulo POST della pagina riceve il campo nascosto ciclo_id, così scrive sul ciclo che si sta guardando. #}
+{% set sc = selettore_ciclo %}
+<div class="cb-card p-2 mb-3 d-flex flex-wrap align-items-center gap-2 {{ 'border border-warning' if sc.scelto.in_avvio }}" id="selettore-ciclo" data-ciclo-id="{{ sc.scelto.id }}">
+    <span class="small text-muted"><i class="bi bi-arrow-left-right me-1"></i>Ciclo:</span>
+    <div class="btn-group btn-group-sm" role="group" aria-label="Ciclo">
+        {% for c in sc.cicli %}
+        <a href="{{ url_for(request.endpoint, ciclo=c.id, **(request.view_args or {})) }}"
+           class="btn {{ 'btn-dark' if c.id == sc.scelto.id else 'btn-outline-secondary' }}">
+            {{ c.nome }} <span class="small opacity-75">({{ 'attivo' if c.attivo else 'in avvio' }})</span>
+        </a>
+        {% endfor %}
+    </div>
+    {% if sc.scelto.in_avvio %}
+    <span class="small text-warning-emphasis">Stai lavorando sul ciclo in avvio: quello che inserisci qui va su «{{ sc.scelto.nome }}». Bot, PC e avvisi restano sul ciclo attivo.</span>
+    {% endif %}
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    var id = document.getElementById("selettore-ciclo").dataset.cicloId;
+    document.querySelectorAll("form").forEach(function (f) {
+        if ((f.getAttribute("method") || "").toLowerCase() !== "post" || f.querySelector("input[name=ciclo_id]")) return;
+        var i = document.createElement("input");
+        i.type = "hidden"; i.name = "ciclo_id"; i.value = id;
+        f.appendChild(i);
+    });
+});
+</script>

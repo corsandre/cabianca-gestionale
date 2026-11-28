@@ -26,19 +26,19 @@ def orario_avvisi():
 def trattamenti_da_ripetere():
     """Righe di testo, una per animale (o gruppo di animali), con i medicinali da dare oggi. Con il marcatore
     si indica anche quale segno fare sulla schiena (uno per giorno di trattamento, es. «2ª S»)."""
-    from app.models import Ciclo
+    from app.services.allevamento_conteggio import cicli_in_corso
     from app.services.allevamento_trattamenti import da_ripetere_per_animale, riga_ordinale, quantita
-    ciclo = Ciclo.query.filter_by(attivo=True).first()
-    if not ciclo:
-        return []
+    cicli = cicli_in_corso()       # con un ciclo in avvio (3.5.0) anche i trattamenti dei piccoli
     righe = []
-    for g in da_ripetere_per_animale(ciclo.id):
-        dosi = []
-        for t, s in g["trattamenti"]:
-            ml = f", {quantita(s['dose_totale_ml'], s['unita'])} oggi per tutti i capi" if s["dose_totale_ml"] else ""
-            dosi.append(f"<b>{html.escape(t.medicinale.nome)}</b> dose {s['fatte'] + 1} di {s['totali']}{ml}")
-        riga = f" → fai {'la' if g['segno'] in ('riga', 's') else 'il'} <b>{riga_ordinale(g['riga'], g['segno'])}</b>" if g["colore"] else ""
-        righe.append(f"• {html.escape(g['animale'])}: " + "; ".join(dosi) + riga)
+    for ciclo in cicli:
+        for g in da_ripetere_per_animale(ciclo.id):
+            dosi = []
+            for t, s in g["trattamenti"]:
+                ml = f", {quantita(s['dose_totale_ml'], s['unita'])} oggi per tutti i capi" if s["dose_totale_ml"] else ""
+                dosi.append(f"<b>{html.escape(t.medicinale.nome)}</b> dose {s['fatte'] + 1} di {s['totali']}{ml}")
+            riga = f" → fai {'la' if g['segno'] in ('riga', 's') else 'il'} <b>{riga_ordinale(g['riga'], g['segno'])}</b>" if g["colore"] else ""
+            quale = f" ({html.escape(ciclo.nome)})" if len(cicli) > 1 else ""
+            righe.append(f"• {html.escape(g['animale'])}{quale}: " + "; ".join(dosi) + riga)
     return righe
 
 
@@ -46,8 +46,11 @@ def messaggio_del_giorno():
     righe = trattamenti_da_ripetere()
     if not righe:
         return None
+    from app.services.allevamento_conteggio import ciclo_in_avvio
+    nuovo = ciclo_in_avvio()
+    dove = (f" (quelle di «{html.escape(nuovo.nome)}», in avvio, dal gestionale: pagina Trattamenti)" if nuovo else "")
     return ("💊 <b>Trattamenti da ripetere oggi</b>\n" + "\n".join(righe) +
-            "\n\nPer registrarle: bot → 💊 Trattamenti → Da fare oggi.")
+            "\n\nPer registrarle: bot → 💊 Trattamenti → Da fare oggi" + dove + ".")
 
 
 def controlla(adesso=None):

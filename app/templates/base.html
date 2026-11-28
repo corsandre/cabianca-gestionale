@@ -67,6 +67,7 @@
             {% endif %}
             {% endwith %}
 
+            {% if selettore_ciclo %}{% include "allevamento/_selettore_ciclo.html" %}{% endif %}
             {% block content %}{% endblock %}
         </main>
     </div>

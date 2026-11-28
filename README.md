@@ -205,6 +205,17 @@ struttura fisica vanno aggiornate in entrambi i file.
 #### Cicli e panoramica (`/allevamento/`)
 - Un `Ciclo` è un periodo produttivo (nome, data inizio/fine, attivo). **Un solo ciclo attivo alla volta**; si apre
   e si chiude da Impostazioni. Quasi tutte le registrazioni sono legate al ciclo attivo.
+- **Cicli accavallati (3.5.0)**: aprendo un ciclo con un altro ancora attivo, il nuovo parte **in avvio**
+  (`Ciclo.in_avvio`, al massimo uno). Bot, impianto e avvisi restano sul ciclo attivo; i dati del ciclo nuovo si
+  inseriscono dalle pagine (Panoramica, Mortalità, Censimento, Spostamenti, Consegne, Alimentazione, Analisi,
+  Trattamenti), che mostrano in alto un **selettore del ciclo** (`ciclo_scelto()`: campo `ciclo_id` aggiunto a ogni
+  modulo della pagina, poi `?ciclo=`, poi la sessione). Le letture del PC dei piccoli (pasto con un orario e una
+  ricetta loro, entro 120 minuti da quello dei grandi) si spostano in Alimentazione con «Sposta sul ciclo nuovo»
+  (`ImpiantoLinea.ciclo_id`); le letture dello stesso pasto e linea di un ciclo si sommano. Il mangime del ciclo in
+  avvio ha un conto suo (`conto=<id>` in `allevamento_scorte`, ricalibrazione con `ciclo_id`); siero e orario
+  effettivo del pasto restano del ciclo attivo. Il censimento dal bot è sospeso, e il bot avvisa per morti e
+  trattamenti in box senza capi del ciclo attivo. Alla **chiusura** (data scelta, controlli non bloccanti) il ciclo
+  in avvio diventa attivo e si reinserisce la giacenza di tutti i silos. Piano: `docs/piano-cicli.md`.
 - Panoramica: conteggio live per capannone/box (ultimo censimento + delta di mortalità e spostamenti), giorni di
   vita e peso stimato per box proiettati a oggi, contatori uscite macello per categoria, giacenze mangime e siero.
 

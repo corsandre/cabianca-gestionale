@@ -179,3 +179,28 @@ def scarta(lid):
         db.session.commit()
         flash(f"Pasto {l.pasto}, linea {l.linea}: lettura del PC scartata.", "success")
     return redirect(url_for("allevamento.alimentazione", data=l.data.isoformat()))
+
+
+@bp.route("/linea/<int:lid>/sposta", methods=["POST"])
+@login_required
+def sposta(lid):
+    """Sposta una lettura del PC sul ciclo in avvio (pasto dei piccoli) o la riporta sul ciclo attivo (3.5.0)."""
+    _check_allevamento()
+    from app.services.allevamento_conteggio import ciclo_in_avvio
+    from app.services.impianto.registrazione import sposta as sposta_lettura
+    l = _lettura_o_404(lid)
+    try:
+        if request.form.get("verso") == "attivo":
+            destinazione = None
+        else:
+            destinazione = ciclo_in_avvio()
+            if destinazione is None:
+                raise ValueError("Non c'è un ciclo in avvio su cui spostare la lettura.")
+        sposta_lettura(l, destinazione, current_user.display_name or current_user.username)
+        db.session.commit()
+        dove = f"sul ciclo «{destinazione.nome}»" if destinazione else "sul ciclo attivo"
+        flash(f"Pasto {l.pasto} delle {l.orario_pasto:%H:%M}, linea {l.linea}: lettura spostata {dove}.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
+    return redirect(url_for("allevamento.alimentazione", data=l.data.isoformat()))

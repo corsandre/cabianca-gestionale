@@ -125,6 +125,15 @@ def start_bot(app):
 
         if data == "censimento":
             with app.app_context():
+                from app.services.allevamento_conteggio import ciclo_in_avvio
+                nuovo = ciclo_in_avvio()
+                nome_nuovo = nuovo.nome if nuovo else None
+            if nome_nuovo:      # cicli accavallati (3.5.0): il bot non sa di quale ciclo è ogni box
+                await q.edit_message_text(
+                    f"⚠️ Ci sono due cicli in corso (il nuovo «{nome_nuovo}» è in avvio): il censimento si fa dal "
+                    f"gestionale, scegliendo il ciclo in alto nella pagina Censimento.", reply_markup=kb_main())
+                return MAIN_MENU
+            with app.app_context():
                 from app.models import Ciclo, Censimento
                 ciclo = Ciclo.query.filter_by(attivo=True).first()
                 rif = None
@@ -296,9 +305,12 @@ def start_bot(app):
             )
             db.session.add(ev)
             db.session.commit()
+            from app.services.allevamento_conteggio import avviso_ciclo_in_avvio
+            avviso = avviso_ciclo_in_avvio(ciclo, box=box, cap=cap)
         box_txt = f"box {box}" if box else f"CAP {cap}"
         await update.message.reply_text(
-            f"✅ Salvato: {qty} morti in {box_txt}" + (f" — {causa}" if causa else "") + "\n\nUsa /start per continuare.",
+            f"✅ Salvato: {qty} morti in {box_txt}" + (f" — {causa}" if causa else "")
+            + (f"\n\n{avviso}" if avviso else "") + "\n\nUsa /start per continuare.",
             reply_markup=kb_main(),
         )
 
@@ -657,6 +669,8 @@ def start_bot(app):
                                       None, colore, registrato_da="telegram", segno=segno,
                                       capannoni=ctx.user_data.get("tratt_caps") or None)
             db.session.commit()
+            from app.services.allevamento_conteggio import avviso_ciclo_in_avvio
+            avviso = avviso_ciclo_in_avvio(ciclo, box=box, cap=cap, caps=ctx.user_data.get("tratt_caps"))
             righe = []
             for t in creati:
                 u = t.medicinale.unita_dose
@@ -670,6 +684,8 @@ def start_bot(app):
         if colore:
             from app.services.allevamento_trattamenti import testo_marcatore, riga_ordinale
             testo += f"\nFai {'la' if segno in ('riga', 's') else 'il'} {riga_ordinale(1, segno)} ({testo_marcatore(colore, segno)})."
+        if avviso:
+            testo += f"\n\n{avviso}"
         await q.edit_message_text(testo + "\n\nUsa /start per continuare.")
         return ConversationHandler.END
 

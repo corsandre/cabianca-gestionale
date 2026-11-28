@@ -74,11 +74,14 @@ def _scarto_al(istante_pc):
     return (vicino or ultimo).scarto_orologio_s
 
 
-def _intervalli(righe):
-    """[(inizio, fine, {linea: {comp: q}})] in ora reale, uno per fotografia (dalla precedente)."""
+def _intervalli(righe, box_validi=None):
+    """[(inizio, fine, {linea: {comp: q}})] in ora reale, uno per fotografia (dalla precedente).
+    box_validi: solo questi box (con un ciclo in avvio, i box del ciclo attivo: i piccoli non contano)."""
     from app.services.allevamento_conteggio import LINEA_PER_BOX
     per_foto = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
     for istante, box, comp, kg in righe:
+        if box_validi is not None and box not in box_validi:
+            continue
         if box in LINEA_PER_BOX and comp in COMPONENTI_PC:
             per_foto[istante][LINEA_PER_BOX[box]][COMPONENTI_PC[comp]] += kg / 100
     foto = sorted(per_foto)
@@ -113,7 +116,12 @@ def recupera(lettore, ciclo, oggi=None, adesso=None):
     if not mancanti:
         return []
     dal = min(d for d, _, _ in mancanti) - timedelta(days=1)
-    intervalli = _intervalli(lettore.consumi_per_box(dal))
+    from app.services.allevamento_scorte import cicli_in_avvio_ids
+    box_validi = None
+    if cicli_in_avvio_ids():      # cicli accavallati: solo i consumi dei box con capi del ciclo attivo
+        from app.services.allevamento_conteggio import live_count
+        box_validi = {b for b, n in live_count(ciclo).items() if n > 0}
+    intervalli = _intervalli(lettore.consumi_per_box(dal), box_validi)
     righe_uso = {(u.data, u.pasto, u.linea): u for u in UsoPasto.query.filter(
         UsoPasto.ciclo_id == ciclo.id, UsoPasto.data >= dal - timedelta(days=1)).all()}
     recuperate = []

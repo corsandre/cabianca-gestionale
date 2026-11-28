@@ -49,6 +49,64 @@ def ciclo_attivo():
     return Ciclo.query.filter_by(attivo=True).order_by(Ciclo.data_inizio.desc()).first()
 
 
+def ciclo_in_avvio():
+    """Il ciclo nuovo aperto mentre il vecchio è ancora attivo (3.5.0, cicli accavallati), o None."""
+    from app.models import Ciclo
+    return Ciclo.query.filter_by(in_avvio=True).order_by(Ciclo.data_inizio.desc()).first()
+
+
+def cicli_in_corso():
+    """Ciclo attivo e ciclo in avvio (di norma solo il primo)."""
+    return [c for c in (ciclo_attivo(), ciclo_in_avvio()) if c]
+
+
+def avviso_ciclo_in_avvio(ciclo, box=None, cap=None, caps=None):
+    """Per il bot (3.5.0): con un ciclo in avvio, un evento registrato sul ciclo attivo in un box (o capannone)
+    senza capi del ciclo attivo è probabilmente dei piccoli. Testo dell'avviso o None."""
+    nuovo = ciclo_in_avvio()
+    if not nuovo or not ciclo:
+        return None
+    live = live_count(ciclo)
+    if box:
+        if live.get(box, 0) > 0:
+            return None
+        dove = f"Il box {box}"
+    else:
+        capannoni = [cap] if cap else list(caps or [])
+        if not capannoni or any(live.get(b, 0) > 0 for c in capannoni for b in BOX_PER_CAP.get(c, [])):
+            return None
+        dove = f"Il CAP {capannoni[0]}" if len(capannoni) == 1 else "Questi capannoni"
+    return (f"⚠️ {dove} non ha capi nel ciclo attivo «{ciclo.nome}». Se è del ciclo nuovo «{nuovo.nome}», "
+            f"elimina questa registrazione e inseriscila dal gestionale scegliendo quel ciclo.")
+
+
+CHIAVE_SESSIONE_CICLO = "allevamento_ciclo"
+
+
+def ciclo_scelto():
+    """Il ciclo su cui lavorano le pagine dell'allevamento: quello del modulo (campo nascosto ciclo_id,
+    aggiunto a ogni modulo della pagina, così due schede aperte su cicli diversi non si confondono),
+    poi ?ciclo=<id> (che lo ricorda per l'utente), poi quello ricordato, altrimenti il ciclo attivo.
+    Per ora solo cicli in corso (attivo o in avvio). Bot, impianto e avvisi usano sempre ciclo_attivo()."""
+    from flask import has_request_context, request, session
+    from app import db
+    from app.models import Ciclo
+    if not has_request_context():
+        return ciclo_attivo()
+    cid = request.form.get("ciclo_id", type=int) if request.method == "POST" else None
+    if cid is None:
+        cid = request.args.get("ciclo", type=int)
+        if cid is not None:
+            session[CHIAVE_SESSIONE_CICLO] = cid
+    if cid is None:
+        cid = session.get(CHIAVE_SESSIONE_CICLO)
+    if cid is not None:
+        c = db.session.get(Ciclo, cid)
+        if c and (c.attivo or c.in_avvio):
+            return c
+    return ciclo_attivo()
+
+
 # Fino alla 3.0.3 tutti gli eventi del giorno del censimento si applicavano dopo il censimento,
 # anche quelli registrati prima: il censimento del 16/11/2026, fatto alle 14:39 con il box 5 già
 # senza il morto del mattino, lo ha fatto togliere due volte. Da questa data conta l'ora di

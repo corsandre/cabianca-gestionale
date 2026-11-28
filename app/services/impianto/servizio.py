@@ -894,6 +894,9 @@ class Servizio:
                 valori += " (" + " + ".join(f"{_silos(n)} {_q(q)}" for n, q in sorted(silos.items())) + ")"
             if registrata:
                 esito = "registrata nel gestionale"
+                from app.services.allevamento_scorte import cicli_in_avvio_ids
+                if cicli_in_avvio_ids():     # cicli accavallati (3.5.0)
+                    esito += " sul ciclo attivo (se è il pasto dei piccoli: «Sposta sul ciclo nuovo» in Alimentazione)"
             elif lettura.stato == "proposta" and lettura.note:
                 esito = html.escape(lettura.note)
             else:

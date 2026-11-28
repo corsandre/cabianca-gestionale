@@ -84,13 +84,17 @@ rapporto 10:{{ ('%.1f'|format(r)).replace('.', ',') }}{% if superato %} (imposta
     </div>
     <table class="table table-sm mb-0 align-middle">
         <thead class="table-light">
-            <tr><th>Pasto</th><th>Linea</th><th>Farina</th><th>Siero</th><th>Acqua</th><th>Letture concordi</th><th>Stato</th><th></th></tr>
+            <tr><th>Pasto</th><th>Linea</th>{% if ciclo_in_avvio %}<th>Ricetta</th><th>Ciclo</th>{% endif %}<th>Farina</th><th>Siero</th><th>Acqua</th><th>Letture concordi</th><th>Stato</th><th></th></tr>
         </thead>
         <tbody>
             {% for l in letture_impianto %}
-            <tr>
+            <tr{% if ciclo_in_avvio and l.ciclo_id == ciclo_in_avvio.id %} class="table-warning"{% endif %}>
                 <td>{{ l.pasto or '?' }} <span class="text-muted small">({{ l.orario_pasto.strftime('%H:%M') }})</span></td>
                 <td>{{ l.linea }}</td>
+                {% if ciclo_in_avvio %}
+                <td class="small">{{ l.ricetta or '–' }}</td>
+                <td class="small text-nowrap">{% if l.ciclo_id == ciclo_in_avvio.id %}<strong>{{ ciclo_in_avvio.nome }}</strong> (in avvio){% elif l.ciclo_id %}altro ciclo{% else %}{{ ciclo_attivo.nome if ciclo_attivo else 'attivo' }}{% endif %}</td>
+                {% endif %}
                 {% for reale, teorico in [(l.farina_qli, l.farina_teorica_qli), (l.siero_qli, l.siero_teorico_qli), (l.acqua_qli, l.acqua_teorica_qli)] %}
                 <td>{{ reale }} <span class="text-muted small">({{ teorico if teorico is not none else '–' }})</span></td>
                 {% endfor %}
@@ -111,6 +115,17 @@ rapporto 10:{{ ('%.1f'|format(r)).replace('.', ',') }}{% if superato %} (imposta
                     <form method="post" action="{{ url_for('impianto.scarta', lid=l.id) }}" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="btn btn-sm btn-outline-secondary py-0">Scarta</button>
+                    </form>
+                    {% endif %}
+                    {% if ciclo_in_avvio and l.stato != 'scartata' and l.pasto %}
+                    <form method="post" action="{{ url_for('impianto.sposta', lid=l.id) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        {% if l.ciclo_id == ciclo_in_avvio.id %}
+                        <input type="hidden" name="verso" value="attivo">
+                        <button class="btn btn-sm btn-outline-secondary py-0" title="Riporta la lettura sul ciclo attivo">Riporta sul ciclo attivo</button>
+                        {% else %}
+                        <button class="btn btn-sm btn-warning py-0" title="Pasto dei piccoli: la lettura va sul ciclo {{ ciclo_in_avvio.nome }}">Sposta sul ciclo nuovo</button>
+                        {% endif %}
                     </form>
                     {% endif %}
                 </td>

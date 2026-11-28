@@ -5,7 +5,11 @@ non può disallinearsi dai dati che l'utente inserisce in Consegne e
 Alimentazione.
 
 - Mangime: un unico contatore cumulativo su tutta la storia (i 3 silos non si
-  svuotano al cambio ciclo, l'avanzo passa al ciclo successivo).
+  svuotano al cambio ciclo, l'avanzo passa al ciclo successivo). Dalla 3.5.0, mentre un ciclo nuovo è
+  «in avvio» (cicli accavallati, piccoli con un silo a parte), ogni ciclo scala dalle sue consegne:
+  il conto della stalla (conto=None) non vede consegne, pasti e ricalibrazioni dei cicli in avvio, il
+  conto di un ciclo in avvio (conto=<id>) vede solo i suoi. Alla chiusura del ciclo vecchio si
+  ricalibra e si torna a un conto solo.
 - Siero: la cisterna viene sempre svuotata e lavata prima del carico
   successivo, quindi ogni consegna apre un "periodo" che si chiude quando ne
   arriva una nuova (o quando l'utente segnala manualmente "cisterna vuota").
@@ -70,6 +74,31 @@ ORARIO_KEYS = {
 DEFAULT_ORARI = {1: "07:00", 2: "12:00", 3: "18:00"}
 
 
+def cicli_in_avvio_ids():
+    """Id dei cicli «in avvio» (di norma nessuno, al massimo uno): letti una volta per contesto."""
+    from flask import g, has_app_context
+    from app.models import Ciclo
+    if has_app_context() and "_cicli_in_avvio" in g:
+        return g._cicli_in_avvio
+    ids = [c.id for c in Ciclo.query.filter_by(in_avvio=True).all()]
+    if has_app_context():
+        g._cicli_in_avvio = ids
+    return ids
+
+
+def filtra_conto(q, colonna, conto=None, nullable=False):
+    """Filtro di una query sul conto del mangime: conto=None è il conto della stalla (senza i cicli in
+    avvio), conto=<id ciclo> solo quel ciclo. nullable: colonna che può essere vuota (= conto della stalla)."""
+    if conto is not None:
+        return q.filter(colonna == conto)
+    esclusi = cicli_in_avvio_ids()
+    if not esclusi:
+        return q
+    if nullable:
+        return q.filter(db.or_(colonna.is_(None), colonna.notin_(esclusi)))
+    return q.filter(colonna.notin_(esclusi))
+
+
 def orario_pasto_str(pasto):
     """Valore configurato (o di default) come stringa HH:MM, per i form."""
     key = ORARIO_KEYS.get(pasto)
@@ -127,12 +156,13 @@ def pasto_avvenuto(data_pasto, pasto, adesso=None):
     return _datetime_pasto(data_pasto, pasto) <= adesso
 
 
-def _linee_attive():
+def _linee_attive(conto=None):
     """Linee (1/2/3) con almeno un animale vivo secondo l'ultimo censimento
-    del ciclo attivo. Una linea senza animali non ha bisogno di dati di
+    del ciclo attivo (o del ciclo in avvio del conto). Una linea senza animali non ha bisogno di dati di
     consumo per considerare completo un pasto."""
+    from app.models import Ciclo
     from app.services.allevamento_conteggio import ciclo_attivo as _get_ciclo_attivo, live_count as _live_count, LINEA_PER_BOX
-    ciclo = _get_ciclo_attivo()
+    ciclo = db.session.get(Ciclo, conto) if conto is not None else _get_ciclo_attivo()
     if not ciclo:
         return {1, 2, 3}
     count = _live_count(ciclo)
@@ -140,7 +170,7 @@ def _linee_attive():
     return attive or {1, 2, 3}
 
 
-def pasto_completo(campo, data_pasto, pasto, linee_attive=None):
+def pasto_completo(campo, data_pasto, pasto, linee_attive=None, conto=None):
     """True se il pasto è avvenuto E tutte le linee con animali vivi hanno un
     valore per questo campo. Finché manca anche una sola linea attiva (es.
     stai ancora inserendo i dati linea per linea in Alimentazione), il
@@ -149,15 +179,15 @@ def pasto_completo(campo, data_pasto, pasto, linee_attive=None):
     inserite)."""
     if not pasto_avvenuto(data_pasto, pasto):
         return False
-    linee_attive = linee_attive if linee_attive is not None else _linee_attive()
+    linee_attive = linee_attive if linee_attive is not None else _linee_attive(conto)
     valori = {
         r.linea: getattr(r, campo)
-        for r in UsoPasto.query.filter_by(data=data_pasto, pasto=pasto).all()
+        for r in filtra_conto(UsoPasto.query.filter_by(data=data_pasto, pasto=pasto), UsoPasto.ciclo_id, conto).all()
     }
     return all(valori.get(linea) is not None for linea in linee_attive)
 
 
-def _somma_consumo(campo, dal=None, al=None):
+def _somma_consumo(campo, dal=None, al=None, conto=None):
     """Somma un campo (mangime_qli/siero_qli) di UsoPasto tra due istanti
     (datetime), usando l'orario nominale di ciascun pasto per confrontarlo
     con dal/al: serve sia per far partire un periodo dall'ora esatta di una
@@ -165,9 +195,9 @@ def _somma_consumo(campo, dal=None, al=None):
     07:00 non va attribuito a una consegna arrivata alle 11:00 dello
     stesso giorno), sia — tramite pasto_completo — per escludere i pasti
     non ancora avvenuti o non ancora inseriti su tutte le linee attive."""
-    linee_attive = _linee_attive()
+    linee_attive = _linee_attive(conto)
     completi = {}
-    q = UsoPasto.query
+    q = filtra_conto(UsoPasto.query, UsoPasto.ciclo_id, conto)
     if dal is not None:
         q = q.filter(UsoPasto.data >= dal.date())
     if al is not None:
@@ -179,7 +209,7 @@ def _somma_consumo(campo, dal=None, al=None):
             continue
         chiave = (riga.data, riga.pasto)
         if chiave not in completi:
-            completi[chiave] = pasto_completo(campo, riga.data, riga.pasto, linee_attive)
+            completi[chiave] = pasto_completo(campo, riga.data, riga.pasto, linee_attive, conto)
         if not completi[chiave]:
             continue
         istante = _datetime_pasto(riga.data, riga.pasto)
@@ -213,29 +243,29 @@ def set_setting(key, value):
         db.session.add(Setting(key=key, value=str(value)))
 
 
-def ultima_calibrazione(tipo, prima_di=None):
+def ultima_calibrazione(tipo, prima_di=None, conto=None):
     """L'ultima ricalibrazione manuale di un certo tipo (es. 'mangime'),
-    prima di un dato istante (o l'ultima in assoluto se prima_di è None)."""
+    prima di un dato istante (o l'ultima in assoluto se prima_di è None), del conto indicato."""
     from app.models import CalibrazioneGiacenza
-    q = CalibrazioneGiacenza.query.filter_by(tipo=tipo)
+    q = filtra_conto(CalibrazioneGiacenza.query.filter_by(tipo=tipo), CalibrazioneGiacenza.ciclo_id, conto, nullable=True)
     if prima_di is not None:
         q = q.filter(CalibrazioneGiacenza.timestamp <= prima_di)
     return q.order_by(CalibrazioneGiacenza.timestamp.desc()).first()
 
 
-def giacenza_mangime_a_data(data_limite=None):
+def giacenza_mangime_a_data(data_limite=None, conto=None):
     """Giacenza cumulativa mangime fino a una data esclusa (o su tutta la
     storia se data_limite è None). Se esiste una ricalibrazione manuale
     precedente al punto richiesto, riparte da quel valore invece che dalla
     somma dall'inizio dei tempi — altrimenti resta il comportamento
     originale (somma da sempre), per chi non l'ha mai usata."""
     limite_dt = datetime.combine(data_limite, dt_time(0, 0)) if data_limite is not None else None
-    calibrazione = ultima_calibrazione("mangime", prima_di=limite_dt)
+    calibrazione = ultima_calibrazione("mangime", prima_di=limite_dt, conto=conto)
     baseline = calibrazione.valore_q if calibrazione else 0
     dal = calibrazione.timestamp if calibrazione else None
 
     tot_consegne = 0.0
-    q_consegne = ConsegnaMangime.query
+    q_consegne = filtra_conto(ConsegnaMangime.query, ConsegnaMangime.ciclo_id, conto)
     if data_limite is not None:
         q_consegne = q_consegne.filter(ConsegnaMangime.data < data_limite)
     for c in q_consegne.all():
@@ -247,31 +277,31 @@ def giacenza_mangime_a_data(data_limite=None):
         tot_consegne += c.quantita_qli
 
     al = datetime.combine(data_limite - timedelta(days=1), dt_time(23, 59, 59)) if data_limite is not None else None
-    usato = _somma_consumo("mangime_qli", dal=dal, al=al)
+    usato = _somma_consumo("mangime_qli", dal=dal, al=al, conto=conto)
     return baseline + tot_consegne - usato
 
 
-def giacenza_mangime():
-    return giacenza_mangime_a_data(None)
+def giacenza_mangime(conto=None):
+    return giacenza_mangime_a_data(None, conto)
 
 
-def _ultimo_consumo_pasto(campo):
+def _ultimo_consumo_pasto(campo, conto=None):
     """Totale sulle 3 linee dell'ultimo pasto già avvenuto per cui esiste un
     valore di questo campo (reale o stimato). Con poca storia disponibile,
     una media tra giorni diversi pesa troppo un giorno vecchio non più
     rappresentativo: per la sola proiezione di esaurimento è meglio
     assumere che i pasti successivi restino sugli ultimi valori registrati,
     senza variazioni."""
-    righe = UsoPasto.query.filter(getattr(UsoPasto, campo).isnot(None)).order_by(
+    righe = filtra_conto(UsoPasto.query.filter(getattr(UsoPasto, campo).isnot(None)), UsoPasto.ciclo_id, conto).order_by(
         UsoPasto.data.desc(), UsoPasto.pasto.desc()
     ).all()
-    linee_attive = _linee_attive()
+    linee_attive = _linee_attive(conto)
     for r in righe:
-        if not pasto_completo(campo, r.data, r.pasto, linee_attive):
+        if not pasto_completo(campo, r.data, r.pasto, linee_attive, conto):
             continue
-        tot = db.session.query(db.func.sum(getattr(UsoPasto, campo))).filter(
+        tot = filtra_conto(db.session.query(db.func.sum(getattr(UsoPasto, campo))).filter(
             UsoPasto.data == r.data, UsoPasto.pasto == r.pasto
-        ).scalar() or 0
+        ), UsoPasto.ciclo_id, conto).scalar() or 0
         return tot
     return 0
 
@@ -299,11 +329,19 @@ SIERO_MINIMO_Q = 0.15
 
 
 def _inizi_linee():
-    """{(data, pasto, linea): inizio reale} delle linee lette dall'impianto."""
+    """{(data, pasto, linea): inizio reale} delle linee lette dall'impianto (solo quelle del ciclo attivo:
+    il siero è solo suo, le letture spostate su un ciclo in avvio non contano). Con due letture dello
+    stesso pasto e linea vale la prima."""
     from app.models import ImpiantoLinea
-    return {(l.data, l.pasto, l.linea): l.inizio.replace(second=0, microsecond=0)
-            for l in ImpiantoLinea.query.filter(ImpiantoLinea.inizio.isnot(None), ImpiantoLinea.pasto.isnot(None),
-                                                ImpiantoLinea.stato.in_(("registrata", "approvata"))).all()}
+    inizi = {}
+    for l in ImpiantoLinea.query.filter(ImpiantoLinea.inizio.isnot(None), ImpiantoLinea.pasto.isnot(None),
+                                        ImpiantoLinea.ciclo_id.is_(None),
+                                        ImpiantoLinea.stato.in_(("registrata", "approvata"))).all():
+        chiave = (l.data, l.pasto, l.linea)
+        inizio = l.inizio.replace(second=0, microsecond=0)
+        if chiave not in inizi or inizio < inizi[chiave]:
+            inizi[chiave] = inizio
+    return inizi
 
 
 def per_pasto(voci):
@@ -338,7 +376,7 @@ def attribuzione_siero():
     linee_attive = _linee_attive()
     inizi = _inizi_linee()
     per_linea = {}
-    for riga in UsoPasto.query.filter(UsoPasto.siero_qli > 0).all():
+    for riga in filtra_conto(UsoPasto.query.filter(UsoPasto.siero_qli > 0), UsoPasto.ciclo_id).all():
         chiave = (riga.data, riga.pasto, riga.linea)
         per_linea[chiave] = per_linea.get(chiave, 0) + riga.siero_qli
     completi = {}
@@ -519,12 +557,14 @@ def _perc_capacita(giacenza_q, capacita_q):
     return max(0, min(100, round(giacenza_q / capacita_q * 100, 1)))
 
 
-def stato_mangime():
-    giacenza = giacenza_mangime()
-    capacita = get_setting_float("allevamento_capacita_mangime_q")
+def stato_mangime(conto=None):
+    """Scorta di mangime del conto della stalla, o di un ciclo in avvio (conto=<id>): per questo la
+    capacità del silo non è impostata, quindi niente barra né spazio per un carico."""
+    giacenza = giacenza_mangime(conto)
+    capacita = get_setting_float("allevamento_capacita_mangime_q") if conto is None else None
     soglia_pasti = get_setting_int("allevamento_soglia_mangime_pasti")
-    ordine_qli = get_setting_float("allevamento_ordine_mangime_q")
-    ultimo_pasto = _ultimo_consumo_pasto("mangime_qli")
+    ordine_qli = get_setting_float("allevamento_ordine_mangime_q") if conto is None else None
+    ultimo_pasto = _ultimo_consumo_pasto("mangime_qli", conto)
     stima = stima_esaurimento(giacenza, ultimo_pasto)
     stima_carico = stima_spazio_carico(giacenza, capacita, ordine_qli, ultimo_pasto)
 
@@ -540,7 +580,7 @@ def stato_mangime():
         if ultimo_pasto:
             soglia_testo += f" (≈ {soglia_pasti * ultimo_pasto:.1f} q)"
 
-    calibrazione = ultima_calibrazione("mangime")
+    calibrazione = ultima_calibrazione("mangime", conto=conto)
     calibrazione_testo = None
     if calibrazione:
         calibrazione_testo = (
@@ -569,6 +609,7 @@ def stato_mangime():
         "barra_testo": barra_testo,
         "calibrazione_testo": calibrazione_testo,
         "carico_testo": carico_testo,
+        "conto": conto,
     }
 
 

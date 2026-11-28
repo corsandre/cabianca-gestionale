@@ -8,7 +8,7 @@
 <h6 class="text-uppercase text-muted small mb-2">Ciclo produttivo attivo</h6>
 <div class="cb-card p-3 mb-4">
     {% if ciclo_attivo %}
-    <div class="d-flex justify-content-between align-items-start">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
         <div>
             <span class="badge mb-1" style="background:#c2185b">Attivo</span>
             <h5 class="mb-1">{{ ciclo_attivo.nome }}</h5>
@@ -18,18 +18,48 @@
             </div>
             {% if ciclo_attivo.note %}<div class="text-muted small mt-1">{{ ciclo_attivo.note }}</div>{% endif %}
         </div>
-        <form method="post" action="{{ url_for('allevamento.ciclo_chiudi', cid=ciclo_attivo.id) }}"
-              onsubmit="return confirm('Chiudere il ciclo {{ ciclo_attivo.nome }}? Questa azione non può essere annullata.')">
+        <form method="post" action="{{ url_for('allevamento.ciclo_chiudi', cid=ciclo_attivo.id) }}" class="d-flex flex-wrap align-items-end gap-2"
+              onsubmit="return confirm('Chiudere il ciclo {{ ciclo_attivo.nome }}?{% if ciclo_in_avvio %} Il ciclo {{ ciclo_in_avvio.nome }} diventa attivo.{% endif %} Questa azione non può essere annullata.')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div>
+                <label class="form-label small mb-0" for="data_fine">Data di fine</label>
+                <input type="date" class="form-control form-control-sm" id="data_fine" name="data_fine" value="{{ oggi.isoformat() }}" required>
+            </div>
+            {% if ciclo_in_avvio %}
+            <div>
+                <label class="form-label small mb-0" for="giacenza_mangime_q">Mangime in tutti i silos (q)</label>
+                <input type="text" inputmode="decimal" class="form-control form-control-sm" id="giacenza_mangime_q" name="giacenza_mangime_q" required style="width:9rem">
+            </div>
+            {% endif %}
             <button class="btn btn-sm btn-outline-danger">
                 <i class="bi bi-x-circle me-1"></i>Chiudi ciclo
             </button>
         </form>
     </div>
+    {% if avvisi_chiusura %}
+    <div class="alert alert-warning small mt-3 mb-0">
+        <strong>Prima di chiudere controlla:</strong>
+        <ul class="mb-0">{% for a in avvisi_chiusura %}<li>{{ a }}</li>{% endfor %}</ul>
+        Puoi chiudere lo stesso.
+    </div>
+    {% endif %}
+    {% if ciclo_in_avvio %}
+    <div class="small text-muted mt-2">Alla chiusura «{{ ciclo_in_avvio.nome }}» diventa attivo e tutto passa a lui: bot, PC, avvisi e il conto del mangime, che riparte dalla giacenza di tutti i silos inserita qui.</div>
+    {% endif %}
     {% else %}
     <p class="text-muted mb-0">Nessun ciclo attivo. Crea un nuovo ciclo per iniziare a registrare i dati.</p>
     {% endif %}
 </div>
+
+{% if ciclo_in_avvio %}
+<h6 class="text-uppercase text-muted small mb-2">Ciclo in avvio</h6>
+<div class="cb-card p-3 mb-4 border border-warning">
+    <span class="badge bg-warning text-dark mb-1">In avvio</span>
+    <h5 class="mb-1">{{ ciclo_in_avvio.nome }}</h5>
+    <div class="text-muted small">Dal {{ ciclo_in_avvio.data_inizio.strftime('%d/%m/%Y') }}{% if ciclo_in_avvio.note %} · {{ ciclo_in_avvio.note }}{% endif %}</div>
+    <div class="small mt-2">I suoi dati si inseriscono dalle pagine, dopo averlo scelto in alto (Riepilogo, Mortalità, Censimento, Spostamenti, Consegne, Alimentazione, Trattamenti). Le letture del PC dei piccoli si spostano in Alimentazione con «Sposta sul ciclo nuovo». Il suo mangime ha un conto a parte fino alla chiusura del ciclo attivo.</div>
+</div>
+{% endif %}
 
 <!-- Soccida: ha una pagina sua -->
 <div class="cb-card p-3 mb-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -39,12 +69,13 @@
 </div>
 
 <!-- Nuovo ciclo -->
+{% if not ciclo_in_avvio %}
 <h6 class="text-uppercase text-muted small mb-2">Crea nuovo ciclo</h6>
 <div class="cb-card p-3 mb-4">
     {% if ciclo_attivo %}
-    <div class="alert alert-warning mb-3">
-        <i class="bi bi-exclamation-triangle me-1"></i>
-        Esiste già un ciclo attivo. Crearne uno nuovo lo disattiverà automaticamente.
+    <div class="alert alert-info mb-3">
+        <i class="bi bi-info-circle me-1"></i>
+        C'è un ciclo attivo: quello nuovo parte <strong>in avvio</strong> (cicli accavallati). «{{ ciclo_attivo.nome }}» resta attivo per bot, PC e avvisi finché non lo chiudi; i dati del ciclo nuovo si inseriscono dalle pagine.
     </div>
     {% endif %}
     <form method="post" action="{{ url_for('allevamento.ciclo_new') }}">
@@ -52,7 +83,7 @@
         <div class="row g-3">
             <div class="col-md-4">
                 <label class="form-label">Nome ciclo</label>
-                <input type="text" name="nome" class="form-control" placeholder="es. Ciclo 2026/01" required>
+                <input type="text" name="nome" class="form-control" placeholder="es. Ciclo 12/2026" required>
             </div>
             <div class="col-md-3">
                 <label class="form-label">Data inizio</label>
@@ -64,10 +95,11 @@
             </div>
         </div>
         <button type="submit" class="btn mt-3" style="background:#c2185b;color:#fff">
-            <i class="bi bi-plus-circle me-1"></i>Crea e attiva ciclo
+            <i class="bi bi-plus-circle me-1"></i>{{ 'Apri ciclo in avvio' if ciclo_attivo else 'Crea e attiva ciclo' }}
         </button>
     </form>
 </div>
+{% endif %}
 
 
 <!-- Scorte siero/mangime -->

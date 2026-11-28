@@ -391,6 +391,10 @@ def _init_db_nucleo(app):
         ("spostamenti_animali", "riscontro_path", "VARCHAR(300)"),
         # 3.0.6: razione della curva (in produzione c'è già dal modulo v1)
         ("curva_accrescimento", "razione_kg_giorno", "FLOAT"),
+        # 3.5.0: ciclo in avvio (cicli accavallati), letture del PC spostate, giacenza per ciclo
+        ("cicli_v2", "in_avvio", "BOOLEAN DEFAULT 0"),
+        ("impianto_letture_linee", "ciclo_id", "INTEGER REFERENCES cicli_v2(id)"),
+        ("calibrazioni_giacenza", "ciclo_id", "INTEGER REFERENCES cicli_v2(id)"),
     ]
     for table, col, col_type in _migrate_columns:
         try:

@@ -39,7 +39,8 @@ def _elimina_bolla(bolla_path):
 from app.services.allevamento_conteggio import (  # noqa: E402
     CAP_PER_BOX, LINEA_PER_BOX, POSTI_PER_BOX_STANDARD, CAPANNONI, CATEGORIE_USCITA, BOX_PER_CAP, POSTI_PER_CAP,
     REGOLA_ORA_CENSIMENTO_DAL, eventi_dopo_censimento,
-    live_count as _live_count, ciclo_attivo as _get_ciclo_attivo,
+    live_count as _live_count, ciclo_attivo as _get_ciclo_attivo, ciclo_scelto as _ciclo_scelto,
+    ciclo_in_avvio as _ciclo_in_avvio,
 )
 GIORNI_SETTIMANA = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
 
@@ -50,6 +51,25 @@ def _check_allevamento():
         abort(403)
 
 
+# Pagine che lavorano sul ciclo scelto (3.5.0): con un ciclo in avvio mostrano il selettore.
+# Le altre (razione, curva, soccida, impostazioni, confronto con il PC) restano sul ciclo attivo.
+PAGINE_CON_SELETTORE = {
+    "allevamento.index", "allevamento.mortalita", "allevamento.censimento", "allevamento.spostamenti",
+    "allevamento.consegne", "allevamento.alimentazione", "allevamento.analisi", "allevamento.trattamenti",
+}
+
+
+@bp.context_processor
+def _selettore_ciclo():
+    from app.services.allevamento_conteggio import cicli_in_corso
+    if request.endpoint not in PAGINE_CON_SELETTORE or not current_user.is_authenticated:
+        return {}
+    in_corso = cicli_in_corso()
+    if len(in_corso) < 2:
+        return {}
+    return {"selettore_ciclo": {"cicli": in_corso, "scelto": _ciclo_scelto()}}
+
+
 # ── Dashboard ──────────────────────────────────────────────────────────────
 
 @bp.route("/")
@@ -58,7 +78,7 @@ def index():
     _check_allevamento()
     from app.models import EventoMortalita, ConsegnaSiero, ConsegnaMangime, Censimento, UsoPasto
     from app.services.allevamento_scorte import stato_mangime, stato_siero, giacenza_mangime_a_data
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
     if not ciclo:
         return render_template("allevamento/index.html", ciclo=None,
                                cap_data={}, kpi={}, consegne_siero=[], consegne_mangime=[],
@@ -127,8 +147,10 @@ def index():
                            ciclo=ciclo, cap_data=cap_data, kpi=kpi,
                            consegne_siero=consegne_siero, consegne_mangime=consegne_mangime,
                            totali_alimentazione_ciclo=totali_alimentazione_ciclo,
-                           scorta_mangime=stato_mangime(), scorta_siero=stato_siero(),
-                           apertura_mangime=giacenza_mangime_a_data(ciclo.data_inizio),
+                           # ciclo in avvio (3.5.0): il suo mangime ha un conto a parte, il siero è del ciclo attivo
+                           scorta_mangime=stato_mangime(ciclo.id if ciclo.in_avvio else None),
+                           scorta_siero=None if ciclo.in_avvio else stato_siero(),
+                           apertura_mangime=None if ciclo.in_avvio else giacenza_mangime_a_data(ciclo.data_inizio),
                            stat_fine_ciclo=stat_fine_ciclo, stat_scarti=stat_scarti,
                            stat_agriturismo=stat_agriturismo, stat_venduti=stat_venduti,
                            CAP_PER_BOX=CAP_PER_BOX, BOX_PER_CAP=BOX_PER_CAP,
@@ -142,7 +164,7 @@ def index():
 def mortalita():
     _check_allevamento()
     from app.models import EventoMortalita
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
 
     # Selettore settimana
     settimana_offset = int(request.args.get("settimana", 0))
@@ -188,7 +210,7 @@ def mortalita():
 def mortalita_new():
     _check_allevamento()
     from app.models import EventoMortalita
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
     if not ciclo:
         flash("Nessun ciclo attivo.", "danger")
         return redirect(url_for("allevamento.mortalita"))
@@ -398,7 +420,7 @@ def _stima_censimento(ciclo, al_giorno=None):
 def censimento():
     _check_allevamento()
     from app.models import Censimento
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
     live = _live_count(ciclo) if ciclo else {b: 0 for b in range(1, 55)}
     totale_live = sum(live.values())
     proiezione = _proiezione_giorni_peso(ciclo) if ciclo else {}
@@ -430,7 +452,7 @@ def censimento_stima():
     """Attesi e stima per box a una certa data: il modal del nuovo censimento
     la richiede quando si cambia la data."""
     _check_allevamento()
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
     if not ciclo:
         return jsonify(error="Nessun ciclo attivo."), 404
     try:
@@ -470,7 +492,7 @@ def censimento_dettaglio(cid):
 def censimento_new():
     _check_allevamento()
     from app.models import Censimento, CensimentoBox
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
     if not ciclo:
         flash("Nessun ciclo attivo.", "danger")
         return redirect(url_for("allevamento.censimento"))
@@ -545,7 +567,7 @@ def _statistiche_uscita(ciclo_id, categoria):
 def spostamenti():
     _check_allevamento()
     from app.models import Spostamento
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
 
     tipo_filter = request.args.get("tipo", "")
     categoria_filter = request.args.get("categoria", "")
@@ -648,7 +670,7 @@ def _svuota_campi_uscita(s):
 def spostamenti_new():
     _check_allevamento()
     from app.models import Spostamento
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
     if not ciclo:
         flash("Nessun ciclo attivo.", "danger")
         return redirect(url_for("allevamento.spostamenti"))
@@ -921,7 +943,7 @@ def consegne():
     from app.services.allevamento_scorte import (
         stato_mangime, stato_siero, scarto_consegna_siero, get_setting_float, attribuzione_siero, per_pasto,
     )
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
 
     tab = request.args.get("tab", "siero")
     siero_list = ConsegnaSiero.query.filter_by(
@@ -955,7 +977,8 @@ def consegne():
                            ciclo=ciclo, tab=tab, fatture_siero=fatture_siero,
                            siero_list=siero_list, mangime_list=mangime_list,
                            tot_siero=tot_siero, tot_mangime=tot_mangime,
-                           scorta_mangime=stato_mangime(), scorta_siero=stato_siero(),
+                           scorta_mangime=stato_mangime(ciclo.id if ciclo and ciclo.in_avvio else None),
+                           scorta_siero=stato_siero(),
                            scarti_siero=scarti_siero,
                            speditori=SpeditoreSiero.query.order_by(SpeditoreSiero.azienda, SpeditoreSiero.indirizzo).all(),
                            attribuzione_siero={cid: dict(v, a_cisterna_vuota=per_pasto(v["a_cisterna_vuota"]))
@@ -1050,9 +1073,10 @@ def mangime_ricalibra():
         operatore = request.form.get("operatore", "").strip() or None
         note = request.form.get("note", "").strip() or None
 
+        ciclo = _ciclo_scelto()       # un ciclo in avvio ricalibra il suo conto (silo dei piccoli)
         db.session.add(CalibrazioneGiacenza(
             tipo="mangime", valore_q=valore, timestamp=timestamp,
-            operatore=operatore, note=note,
+            operatore=operatore, note=note, ciclo_id=ciclo.id if ciclo and ciclo.in_avvio else None,
         ))
         db.session.commit()
         flash(f"Giacenza mangime ricalibrata a {valore} q.", "success")
@@ -1223,7 +1247,7 @@ def consegne_siero_new():
     _check_allevamento()
     from app.models import ConsegnaSiero
     from app.services.allevamento_scorte import chiudi_consegne_siero_precedenti
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
     ajax = request.headers.get("X-Requested-With") == "fetch"
     if not ciclo:
         if ajax:
@@ -1392,7 +1416,7 @@ def consegne_siero_riapri(cid):
 def consegne_mangime_new():
     _check_allevamento()
     from app.models import ConsegnaMangime
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
     ajax = request.headers.get("X-Requested-With") == "fetch"
     if not ciclo:
         if ajax:
@@ -1499,7 +1523,7 @@ def consegne_mangime_delete(cid):
 def alimentazione():
     _check_allevamento()
     from app.models import UsoPasto
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
 
     data_str = request.args.get("data", str(date.today()))
     try:
@@ -1661,7 +1685,8 @@ def alimentazione():
                            schede_siero=_schede_siero(ciclo, data_sel, perc_ss_siero_attuale, perc_ss_mangime),
                            perc_ss_mangime=perc_ss_mangime,
                            orari_standard=orari_standard, orari_effettivi=orari_effettivi,
-                           letture_impianto=letture_impianto, impianto_attivo=modalita_impianto() != MANUALE)
+                           letture_impianto=letture_impianto, impianto_attivo=modalita_impianto() != MANUALE,
+                           ciclo_in_avvio=_ciclo_in_avvio(), ciclo_attivo=_get_ciclo_attivo())
 
 
 def _schede_siero(ciclo, giorno, brix_carico, perc_ss_mangime):
@@ -1714,7 +1739,7 @@ def alimentazione_orario():
 def analisi():
     _check_allevamento()
     from app.services.allevamento_analisi import dati_analisi
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
     return render_template("allevamento/analisi.html", ciclo=ciclo,
                            dati=dati_analisi(ciclo) if ciclo else None)
 
@@ -1724,7 +1749,7 @@ def analisi():
 def alimentazione_new():
     _check_allevamento()
     from app.services.allevamento_pasti import registra_pasto
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
     if not ciclo:
         flash("Nessun ciclo attivo.", "danger")
         return redirect(url_for("allevamento.alimentazione"))
@@ -1950,7 +1975,7 @@ from app.services.allevamento_trattamenti import stato_trattamento as _stato_tra
 def box_ultimo_peso(box_numero):
     _check_allevamento()
     from app.models import Censimento, CensimentoBox
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
     peso = None
     if ciclo:
         riga = (
@@ -1973,7 +1998,7 @@ def trattamenti():
     _check_allevamento()
     from app.models import Trattamento, Medicinale
     from app.services.allevamento_trattamenti import ambito, caps_di, quantita
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
 
     lista = Trattamento.query.filter_by(
         ciclo_id=ciclo.id if ciclo else -1
@@ -2023,7 +2048,7 @@ def trattamenti_capi():
     """Capi presenti e peso medio per precompilare il modulo: ?box=N, oppure ?cap=1&cap=2 (capannoni interi)."""
     _check_allevamento()
     from app.services.allevamento_trattamenti import capi_e_peso
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
     box = request.args.get("box", type=int)
     caps = request.args.getlist("cap", type=int)
     boxes = [box] if box else [b for c in caps for b in BOX_PER_CAP.get(c, [])]
@@ -2038,7 +2063,7 @@ def trattamenti_capi():
 def trattamenti_new():
     _check_allevamento()
     from app.models import Trattamento, Somministrazione, Medicinale
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
     if not ciclo:
         flash("Nessun ciclo attivo.", "danger")
         return redirect(url_for("allevamento.trattamenti"))
@@ -2090,7 +2115,7 @@ def trattamenti_colori(box):
     """Marcatori (colore + segno) già in uso nel box (trattamenti in corso) e quello proposto."""
     _check_allevamento()
     from app.services.allevamento_trattamenti import marcatori_in_uso, marcatore_suggerito, testo_marcatore
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo_scelto()
     if not ciclo:
         return jsonify(in_uso=[], suggerito=None)
     colore, segno = marcatore_suggerito(ciclo.id, box)
@@ -2563,7 +2588,9 @@ def impostazioni():
     from app.services.allevamento_scorte import get_setting_float, get_setting_int, orario_pasto_str
     from app.services.allevamento_avvisi import orario_avvisi
     ciclo_attivo = _get_ciclo_attivo()
-    cicli_precedenti = Ciclo.query.filter_by(attivo=False).order_by(Ciclo.data_inizio.desc()).all()
+    ciclo_in_avvio = _ciclo_in_avvio()
+    avvisi_chiusura = controlli_chiusura(ciclo_attivo) if ciclo_attivo else []
+    cicli_precedenti = Ciclo.query.filter_by(attivo=False, in_avvio=False).order_by(Ciclo.data_inizio.desc()).all()
     medicinali = Medicinale.query.filter_by(attivo=True).order_by(Medicinale.nome).all()
     curva_accrescimento = CurvaAccrescimento.query.order_by(CurvaAccrescimento.eta_giorni).all()
     soglia_mangime_pasti = get_setting_int("allevamento_soglia_mangime_pasti") or 0
@@ -2594,6 +2621,7 @@ def impostazioni():
     }
     return render_template("allevamento/impostazioni.html",
                            ciclo_attivo=ciclo_attivo, cicli_precedenti=cicli_precedenti,
+                           ciclo_in_avvio=ciclo_in_avvio, avvisi_chiusura=avvisi_chiusura,
                            scorte_settings=scorte_settings, medicinali=medicinali,
                            curva_accrescimento=curva_accrescimento,
                            impianto=impianto, impianto_info=impianto_info,
@@ -2603,39 +2631,104 @@ def impostazioni():
 @bp.route("/ciclo/new", methods=["POST"])
 @login_required
 def ciclo_new():
+    """Nuovo ciclo: attivo se non ce n'è un altro, altrimenti «in avvio» (cicli accavallati, 3.5.0):
+    si inseriscono i suoi dati dalle pagine e diventa attivo alla chiusura del vecchio."""
     _check_allevamento()
     if current_user.role != "admin":
         abort(403)
     from app.models import Ciclo
     try:
         nome = request.form["nome"].strip()
+        if not nome:
+            raise ValueError("Il nome del ciclo è obbligatorio.")
         data_inizio = date.fromisoformat(request.form["data_inizio"])
         note = request.form.get("note", "").strip() or None
-
-        # Disattiva tutti i cicli precedenti
-        Ciclo.query.filter_by(attivo=True).update({"attivo": False})
-        db.session.add(Ciclo(nome=nome, data_inizio=data_inizio, attivo=True, note=note))
+        attivo = _get_ciclo_attivo()
+        if attivo and _ciclo_in_avvio():
+            raise ValueError("C'è già un ciclo in avvio: chiudi prima il ciclo attivo.")
+        db.session.add(Ciclo(nome=nome, data_inizio=data_inizio, attivo=attivo is None, in_avvio=attivo is not None,
+                             note=note))
         db.session.commit()
-        flash(f"Ciclo '{nome}' creato e attivato.", "success")
+        if attivo:
+            flash(f"Ciclo «{nome}» aperto in avvio: sceglilo in alto nelle pagine per inserire i suoi dati. "
+                  f"Bot, PC e avvisi restano su «{attivo.nome}» finché non lo chiudi.", "success")
+        else:
+            flash(f"Ciclo «{nome}» creato e attivato.", "success")
     except Exception as e:
         db.session.rollback()
         flash(f"Errore: {e}", "danger")
     return redirect(url_for("allevamento.impostazioni"))
 
 
+def controlli_chiusura(ciclo):
+    """Avvisi prima di chiudere un ciclo (non bloccano)."""
+    from app.models import Spostamento, Trattamento
+    from app.services.allevamento_trattamenti import stato_trattamento
+    from app.services.allevamento_scorte import consegna_siero_aperta
+    avvisi = []
+    capi = sum(_live_count(ciclo).values())
+    if capi:
+        avvisi.append(f"Secondo il gestionale ci sono ancora {capi} capi.")
+    senza = Spostamento.query.filter(Spostamento.ciclo_id == ciclo.id, Spostamento.tipo == "uscita",
+                                     Spostamento.categoria_uscita.in_(("fine_ciclo", "scarto_sottopeso")),
+                                     Spostamento.riscontro_data.is_(None)).count()
+    if senza:
+        avvisi.append(f"{senza} carichi senza il riscontro del macello.")
+    aperti = [t for t in Trattamento.query.filter_by(ciclo_id=ciclo.id).all() if not stato_trattamento(t).get("completo")]
+    if aperti:
+        avvisi.append(f"{len(aperti)} trattamenti ancora in corso.")
+    if consegna_siero_aperta():
+        avvisi.append("C'è una consegna di siero ancora aperta (cisterna non segnata vuota).")
+    return avvisi
+
+
 @bp.route("/ciclo/<int:cid>/chiudi", methods=["POST"])
 @login_required
 def ciclo_chiudi(cid):
+    """Chiude il ciclo attivo con la data di fine scelta. Se c'è un ciclo in avvio diventa attivo e tutto passa
+    a lui (bot, PC, avvisi, silos): la giacenza di mangime di tutti i silos si reinserisce qui (ricalibrazione)."""
     _check_allevamento()
     if current_user.role != "admin":
         abort(403)
-    from app.models import Ciclo
+    from datetime import datetime
+    from app.models import Ciclo, CalibrazioneGiacenza
     ciclo = db.session.get(Ciclo, cid)
-    if ciclo:
+    if not ciclo or not ciclo.attivo:
+        flash("Si può chiudere solo il ciclo attivo.", "danger")
+        return redirect(url_for("allevamento.impostazioni"))
+    try:
+        data_fine = date.fromisoformat(request.form.get("data_fine") or date.today().isoformat())
+        if data_fine < ciclo.data_inizio:
+            raise ValueError("La data di fine è prima dell'inizio del ciclo.")
+        nuovo = _ciclo_in_avvio()
+        giacenza = None
+        if nuovo:
+            testo = (request.form.get("giacenza_mangime_q") or "").strip().replace(",", ".")
+            if not testo:
+                raise ValueError("Inserisci la giacenza di mangime di tutti i silos: da qui riparte il conto del ciclo nuovo.")
+            giacenza = float(testo)
         ciclo.attivo = False
-        ciclo.data_fine = date.today()
+        ciclo.in_avvio = False
+        ciclo.data_fine = data_fine
+        if nuovo:
+            nuovo.in_avvio = False
+            nuovo.attivo = True
+            db.session.add(CalibrazioneGiacenza(
+                tipo="mangime", valore_q=giacenza, timestamp=datetime.now().replace(second=0, microsecond=0),
+                operatore=current_user.display_name or current_user.username,
+                note=f"Chiusura del ciclo «{ciclo.nome}»: giacenza di tutti i silos, passa a «{nuovo.nome}»"))
         db.session.commit()
-        flash(f"Ciclo '{ciclo.nome}' chiuso.", "success")
+        from flask import session
+        from app.services.allevamento_conteggio import CHIAVE_SESSIONE_CICLO
+        session.pop(CHIAVE_SESSIONE_CICLO, None)
+        if nuovo:
+            flash(f"Ciclo «{ciclo.nome}» chiuso il {data_fine:%d/%m/%Y}. Ora è attivo «{nuovo.nome}»: bot, PC, avvisi "
+                  f"e mangime ({giacenza:g} q) passano a lui.", "success")
+        else:
+            flash(f"Ciclo «{ciclo.nome}» chiuso il {data_fine:%d/%m/%Y}.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore: {e}", "danger")
     return redirect(url_for("allevamento.impostazioni"))
 
 
