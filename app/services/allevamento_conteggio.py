@@ -87,7 +87,8 @@ def ciclo_scelto():
     """Il ciclo su cui lavorano le pagine dell'allevamento: quello del modulo (campo nascosto ciclo_id,
     aggiunto a ogni modulo della pagina, così due schede aperte su cicli diversi non si confondono),
     poi ?ciclo=<id> (che lo ricorda per l'utente), poi quello ricordato, altrimenti il ciclo attivo.
-    Per ora solo cicli in corso (attivo o in avvio). Bot, impianto e avvisi usano sempre ciclo_attivo()."""
+    Anche un ciclo chiuso (fase 1): le pagine lo mostrano in sola lettura, solo l'admin può correggerlo.
+    Bot, impianto e avvisi usano sempre ciclo_attivo()."""
     from flask import has_request_context, request, session
     from app import db
     from app.models import Ciclo
@@ -102,9 +103,23 @@ def ciclo_scelto():
         cid = session.get(CHIAVE_SESSIONE_CICLO)
     if cid is not None:
         c = db.session.get(Ciclo, cid)
-        if c and (c.attivo or c.in_avvio):
+        if c:
             return c
     return ciclo_attivo()
+
+
+def cicli_chiusi():
+    from app.models import Ciclo
+    return Ciclo.query.filter_by(attivo=False, in_avvio=False).order_by(Ciclo.data_inizio.desc()).all()
+
+
+def oggi_del_ciclo(ciclo):
+    """«Oggi» per le pagine: per un ciclo chiuso la sua data di fine (conteggi, età, grafici si fermano lì)."""
+    from datetime import date as _date
+    oggi = _date.today()
+    if ciclo is not None and ciclo.chiuso and ciclo.data_fine and ciclo.data_fine < oggi:
+        return ciclo.data_fine
+    return oggi
 
 
 # Fino alla 3.0.3 tutti gli eventi del giorno del censimento si applicavano dopo il censimento,

@@ -40,7 +40,7 @@ from app.services.allevamento_conteggio import (  # noqa: E402
     CAP_PER_BOX, LINEA_PER_BOX, POSTI_PER_BOX_STANDARD, CAPANNONI, CATEGORIE_USCITA, BOX_PER_CAP, POSTI_PER_CAP,
     REGOLA_ORA_CENSIMENTO_DAL, eventi_dopo_censimento,
     live_count as _live_count, ciclo_attivo as _get_ciclo_attivo, ciclo_scelto as _ciclo_scelto,
-    ciclo_in_avvio as _ciclo_in_avvio,
+    ciclo_in_avvio as _ciclo_in_avvio, oggi_del_ciclo as _oggi_del_ciclo,
 )
 GIORNI_SETTIMANA = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
 
@@ -51,23 +51,44 @@ def _check_allevamento():
         abort(403)
 
 
-# Pagine che lavorano sul ciclo scelto (3.5.0): con un ciclo in avvio mostrano il selettore.
-# Le altre (razione, curva, soccida, impostazioni, confronto con il PC) restano sul ciclo attivo.
+# Pagine che lavorano sul ciclo scelto (3.5.0): con più di un ciclo mostrano il selettore (cicli in corso e
+# cicli chiusi). Le altre (razione, curva, impostazioni, confronto con il PC) restano sul ciclo attivo.
 PAGINE_CON_SELETTORE = {
     "allevamento.index", "allevamento.mortalita", "allevamento.censimento", "allevamento.spostamenti",
     "allevamento.consegne", "allevamento.alimentazione", "allevamento.analisi", "allevamento.trattamenti",
+    "allevamento.soccida", "allevamento.soccida_impostazioni",
 }
+# POST permessi a tutti anche su un ciclo chiuso (non salvano niente)
+POST_LIBERI_SU_CICLO_CHIUSO = set()
 
 
 @bp.context_processor
 def _selettore_ciclo():
-    from app.services.allevamento_conteggio import cicli_in_corso
+    from app.services.allevamento_conteggio import cicli_in_corso, cicli_chiusi
     if request.endpoint not in PAGINE_CON_SELETTORE or not current_user.is_authenticated:
         return {}
-    in_corso = cicli_in_corso()
-    if len(in_corso) < 2:
+    in_corso, chiusi = cicli_in_corso(), cicli_chiusi()
+    if len(in_corso) + len(chiusi) < 2:
         return {}
-    return {"selettore_ciclo": {"cicli": in_corso, "scelto": _ciclo_scelto()}}
+    return {"selettore_ciclo": {"cicli": in_corso, "chiusi": chiusi, "scelto": _ciclo_scelto(),
+                                "modifica": current_user.role == "admin"}}
+
+
+@bp.before_request
+def _sola_lettura_cicli_chiusi():
+    """Un ciclo chiuso si guarda ma non si modifica (fase 1): solo l'admin può correggerlo. Il ciclo di un modulo
+    è nel campo nascosto ciclo_id, che il selettore aggiunge a ogni modulo della pagina."""
+    if request.method != "POST" or request.endpoint in POST_LIBERI_SU_CICLO_CHIUSO:
+        return None
+    cid = request.form.get("ciclo_id", type=int)
+    if cid is None or not current_user.is_authenticated or current_user.role == "admin":
+        return None
+    from app.models import Ciclo
+    c = db.session.get(Ciclo, cid)
+    if c and c.chiuso:
+        flash(f"Il ciclo «{c.nome}» è chiuso: si può solo guardare.", "warning")
+        return redirect(request.referrer or url_for("allevamento.index"))
+    return None
 
 
 # ── Dashboard ──────────────────────────────────────────────────────────────
@@ -90,8 +111,8 @@ def index():
                                CAP_PER_BOX=CAP_PER_BOX, BOX_PER_CAP=BOX_PER_CAP,
                                POSTI_PER_CAP=POSTI_PER_CAP, CAPANNONI=CAPANNONI)
 
-    live = _live_count(ciclo)
-    oggi = date.today()
+    oggi = _oggi_del_ciclo(ciclo)            # ciclo chiuso: la sua data di fine
+    live = _live_count(ciclo, al_giorno=oggi if ciclo.chiuso else None)
     inizio_settimana = oggi - timedelta(days=oggi.weekday())
 
     morti_settimana = db.session.query(db.func.sum(EventoMortalita.quantita)).filter(
@@ -148,8 +169,9 @@ def index():
                            consegne_siero=consegne_siero, consegne_mangime=consegne_mangime,
                            totali_alimentazione_ciclo=totali_alimentazione_ciclo,
                            # ciclo in avvio (3.5.0): il suo mangime ha un conto a parte, il siero è del ciclo attivo
-                           scorta_mangime=stato_mangime(ciclo.id if ciclo.in_avvio else None),
-                           scorta_siero=None if ciclo.in_avvio else stato_siero(),
+                           # ciclo chiuso: niente scorte (sono della stalla di oggi)
+                           scorta_mangime=None if ciclo.chiuso else stato_mangime(ciclo.id if ciclo.in_avvio else None),
+                           scorta_siero=None if ciclo.in_avvio or ciclo.chiuso else stato_siero(),
                            apertura_mangime=None if ciclo.in_avvio else giacenza_mangime_a_data(ciclo.data_inizio),
                            stat_fine_ciclo=stat_fine_ciclo, stat_scarti=stat_scarti,
                            stat_agriturismo=stat_agriturismo, stat_venduti=stat_venduti,
@@ -168,7 +190,7 @@ def mortalita():
 
     # Selettore settimana
     settimana_offset = int(request.args.get("settimana", 0))
-    oggi = date.today()
+    oggi = _oggi_del_ciclo(ciclo)
     lun = oggi - timedelta(days=oggi.weekday()) + timedelta(weeks=settimana_offset)
     dom = lun + timedelta(days=6)
 
@@ -1525,11 +1547,11 @@ def alimentazione():
     from app.models import UsoPasto
     ciclo = _ciclo_scelto()
 
-    data_str = request.args.get("data", str(date.today()))
+    data_str = request.args.get("data", str(_oggi_del_ciclo(ciclo)))
     try:
         data_sel = date.fromisoformat(data_str)
     except ValueError:
-        data_sel = date.today()
+        data_sel = _oggi_del_ciclo(ciclo)
 
     from app.services.allevamento_scorte import pasto_avvenuto, orario_pasto_str, orario_effettivo
     avvenuto = {pasto: pasto_avvenuto(data_sel, pasto) for pasto in [1, 2, 3]}

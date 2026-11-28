@@ -176,7 +176,8 @@
     </div>
 </div>
 
-<!-- Scorte siero/mangime -->
+<!-- Scorte siero/mangime (non per un ciclo chiuso: sono quelle della stalla di oggi) -->
+{% if scorta_mangime %}
 <h6 class="text-uppercase text-muted small mb-2 mt-4">Scorte</h6>
 <div class="row g-3">
     {% if scorta_siero %}
@@ -189,5 +190,6 @@
                        nota_extra=('Giacenza a inizio ciclo: ' ~ (apertura_mangime | round(1)) ~ ' q') if apertura_mangime is not none else none) }}
     </div>
 </div>
+{% endif %}
 {% endif %}
 {% endblock %}

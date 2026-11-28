@@ -70,7 +70,10 @@ def _rapporto_per_giorno(ciclo):
     if modalita() == MANUALE:
         return {}
     per_giorno = {}
-    for l in ImpiantoLinea.query.filter(ImpiantoLinea.data >= ciclo.data_inizio, ImpiantoLinea.rapporto.isnot(None)).all():
+    q = ImpiantoLinea.query.filter(ImpiantoLinea.data >= ciclo.data_inizio, ImpiantoLinea.rapporto.isnot(None))
+    if ciclo.data_fine:                     # ciclo chiuso: solo le letture fino alla fine
+        q = q.filter(ImpiantoLinea.data <= ciclo.data_fine)
+    for l in q.all():
         per_giorno.setdefault(l.data.isoformat(), set()).add(l.rapporto)
     return {d: v.pop() for d, v in per_giorno.items() if len(v) == 1}
 
@@ -79,7 +82,8 @@ def dati_analisi(ciclo):
     from app.services.allevamento_conteggio import live_count as _live_count, LINEA_PER_BOX
     from app.services.allevamento_scorte import get_setting_float, peso_da_giorni
 
-    oggi = date.today()
+    from app.services.allevamento_conteggio import oggi_del_ciclo
+    oggi = oggi_del_ciclo(ciclo)          # ciclo chiuso: le serie si fermano alla data di fine
     censimenti = Censimento.query.filter_by(ciclo_id=ciclo.id).order_by(Censimento.data, Censimento.id).all()
     conteggi = {c.id: c.conteggi.all() for c in censimenti}
 
@@ -140,7 +144,7 @@ def dati_analisi(ciclo):
         "ciclo": {"nome": ciclo.nome, "inizio": ciclo.data_inizio.isoformat()},
         "oggi": oggi.isoformat(),
         "perc_ss_mangime": get_setting_float("allevamento_perc_ss_mangime") or 100,
-        "rapporto_impostato": _rapporto_impostato(),
+        "rapporto_impostato": None if ciclo.chiuso else _rapporto_impostato(),
         "rapporto_impostato_giorni": _rapporto_per_giorno(ciclo),
         "giorni": giorni,
         "entrate": _entrate(ciclo, censimenti, conteggi, _live_count, LINEA_PER_BOX),

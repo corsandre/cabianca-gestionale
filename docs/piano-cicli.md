@@ -165,5 +165,18 @@ Ancora aperte:
   `docker run --rm -v "$PWD":/app -w /app -e RUOLO=sviluppo -e SECRET_KEY=prova -e DATABASE_URL=sqlite:////app/data/_test_cicli.db cabianca-gestionale:latest python data/_prova_cicli.py`
 - Non c'è un avviso Telegram del mangime (né prima né ora): la scorta del ciclo in avvio si vede nel Riepilogo.
 - La Soccida resta sul ciclo attivo: quella del ciclo nuovo si apre dopo la chiusura del vecchio.
-- Prossimo: fase 1 (cicli chiusi visibili in sola lettura nel selettore, «oggi» = data di fine, Soccida del ciclo
-  chiuso per liquidazione e giacenza finale) **prima di chiudere il ciclo 05/2026**.
+- Rilasciata in produzione il 28/11/2026 alle 9:30 (commit 46a0030, `deploy.sh tutto`).
+
+**28/11/2026 — fase 1 fatta (3.5.1).**
+- Selettore con i cicli chiusi (menu «Cicli chiusi…»), anche in Soccida e Impostazioni Soccida; in Impostazioni
+  allevamento i cicli precedenti hanno «Apri» e «Soccida».
+- Ciclo chiuso: fascia «Ciclo chiuso il …»; per gli utenti sola lettura (pulsanti dei moduli disattivati, i pulsanti
+  che aprono i modal nascosti, e il server rifiuta i POST con il ciclo_id di un ciclo chiuso); l'admin può correggere
+  tutto (deciso con Andrea il 28/11), con la fascia in rosso.
+- «Oggi» = data di fine: Panoramica (conteggio alla data di fine, niente scorte), Mortalità (settimana della fine),
+  Alimentazione (giorno di fine), Analisi (serie e letture dell'impianto fino alla fine), Soccida (scheda alla data di
+  fine; senza giacenza finale comunicata la stima è la giacenza della stalla del giorno dopo la fine).
+- La Soccida di un ciclo in avvio non si apre (resta quella del ciclo attivo, con un messaggio).
+- Prova: `data/_prova_cicli.py`, parte «FASE 1», tutto OK.
+- Da ricordare: la Soccida del ciclo nuovo copia la giacenza finale del vecchio quando la si apre la prima volta;
+  conviene inserire la giacenza finale del 05/2026 prima di aprire la Soccida del ciclo nuovo (o correggerla a mano).

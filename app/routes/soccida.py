@@ -20,7 +20,7 @@ from flask_login import current_user, login_required
 
 from app import db
 from app.models import BankTransaction, SdiInvoice, SoccidaAnticipo, SoccidaFattura, SoccidaTabella
-from app.routes.allevamento import _check_allevamento, _get_ciclo_attivo, bp
+from app.routes.allevamento import _check_allevamento, _get_ciclo_attivo, _ciclo_scelto, bp
 from app.services import soccida as S
 from app.services import soccida_dati as D
 from app.services import soccida_scheda as V
@@ -37,6 +37,23 @@ def _puo_vedere():
     _check_allevamento()
     if not current_user.has_section("soccida"):
         abort(403)
+
+
+def _ciclo():
+    """Il ciclo scelto in alto (3.5.0), anche chiuso: liquidazione, giacenza finale e premi si inseriscono dopo
+    la chiusura. Un ciclo in avvio non ha ancora la Soccida (le servono data di fine e giacenza finale del
+    ciclo precedente): si resta sul ciclo attivo."""
+    ciclo = _ciclo_scelto()
+    if ciclo and ciclo.in_avvio:
+        if request.method == "GET":
+            flash(f"La Soccida di «{ciclo.nome}» si apre dopo la chiusura del ciclo attivo: qui vedi quella del ciclo attivo.", "info")
+        return _get_ciclo_attivo()
+    return ciclo
+
+
+def _oggi(ciclo):
+    """Per un ciclo chiuso la scheda si ferma alla data di fine."""
+    return ciclo.data_fine if ciclo and ciclo.chiuso and ciclo.data_fine else None
 
 
 def _url(nome):
@@ -65,11 +82,12 @@ def _numero(testo, intero=False):
 def soccida():
     _puo_vedere()
     modifica = current_user.role == "admin"
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo()
     if not ciclo:
         return render_template("allevamento/soccida.html", s=None, modifica=modifica)
     par = D.parametri(ciclo)
-    return render_template("allevamento/soccida.html", s=V.scheda(ciclo, par, request.args, _url), par=par, modifica=modifica)
+    return render_template("allevamento/soccida.html", s=V.scheda(ciclo, par, request.args, _url, oggi=_oggi(ciclo)),
+                           par=par, modifica=modifica)
 
 
 @bp.route("/soccida/scenario", methods=["POST"])
@@ -77,7 +95,7 @@ def soccida():
 def soccida_scenario():
     """Salva i valori provati nella scheda come scenario standard."""
     _solo_admin()
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo()
     if not ciclo:
         abort(404)
     par = D.parametri(ciclo)
@@ -114,7 +132,7 @@ CAMPI_TESTO = ("fornitori_siero_piva", "anticipi_pagante")
 @login_required
 def soccida_impostazioni():
     _solo_admin()
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo()
     if not ciclo:
         return render_template("allevamento/soccida_impostazioni.html", ciclo=None)
     par = D.parametri(ciclo)
@@ -141,7 +159,7 @@ def soccida_impostazioni():
 @login_required
 def soccida_impostazioni_salva():
     _solo_admin()
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo()
     if not ciclo:
         abort(404)
     par = D.parametri(ciclo)
@@ -179,7 +197,7 @@ def soccida_impostazioni_salva():
 def soccida_tabella_salva():
     """Sostituisce la tabella di rapporto del ciclo con le righe inviate (le righe vuote si scartano)."""
     _solo_admin()
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo()
     if not ciclo:
         abort(404)
     try:
@@ -209,7 +227,7 @@ def soccida_tabella_salva():
 def soccida_anticipo_nuovo():
     """Aggiunge un anticipo: a mano (data e importo) o da un bonifico trovato in banca (bank_id)."""
     _solo_admin()
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo()
     if not ciclo:
         abort(404)
     try:
@@ -251,7 +269,7 @@ def soccida_anticipo_elimina(aid):
 def soccida_fattura_assegna(fid):
     """Assegna a mano una fattura di siero: a questo ciclo, fuori da questo ciclo, o di nuovo «secondo la data»."""
     _solo_admin()
-    ciclo = _get_ciclo_attivo()
+    ciclo = _ciclo()
     f = db.session.get(SdiInvoice, fid)
     if not ciclo or not f:
         abort(404)

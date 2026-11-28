@@ -119,11 +119,14 @@ def consumo_mangime_giorno_kg(ciclo, oggi):
     return consumo_cucina(ciclo, "mangime_qli", dal, al) * 100 / giorni if giorni else 0.0
 
 
-def giacenza_oggi_kg(par):
-    """Mangime nei silos: la giacenza finale comunicata, se c'è, altrimenti quella stimata."""
+def giacenza_oggi_kg(par, ciclo=None):
+    """Mangime nei silos: la giacenza finale comunicata, se c'è, altrimenti quella stimata (per un ciclo chiuso
+    quella della stalla al giorno dopo la fine: stima, da sostituire con la giacenza finale comunicata)."""
     if par.giacenza_finale_kg is not None:
         return par.giacenza_finale_kg, True
-    from app.services.allevamento_scorte import giacenza_mangime
+    from app.services.allevamento_scorte import giacenza_mangime, giacenza_mangime_a_data
+    if ciclo is not None and ciclo.chiuso and ciclo.data_fine:
+        return max(0.0, giacenza_mangime_a_data(ciclo.data_fine + timedelta(days=1)) * 100), False
     return max(0.0, giacenza_mangime() * 100), False
 
 
@@ -259,7 +262,7 @@ def situazione(ciclo, par, oggi=None):
     """La Situazione del ciclo a oggi per il calcolo, più i dettagli che servono alla scheda
     (da dove viene ogni numero). Ritorna (Situazione, dettagli)."""
     oggi = oggi or date.today()
-    giac, giac_comunicata = giacenza_oggi_kg(par)
+    giac, giac_comunicata = giacenza_oggi_kg(par, ciclo)
     sie = siero(ciclo, par, oggi)
     eta, cens = eta_media_giorni(ciclo, oggi)
     car = carichi(ciclo)

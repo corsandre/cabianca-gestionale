@@ -1,28 +1,53 @@
-{# Selettore del ciclo (3.5.0): compare solo mentre due cicli sono in corso (il vecchio attivo e il nuovo in avvio).
-   Ogni modulo POST della pagina riceve il campo nascosto ciclo_id, così scrive sul ciclo che si sta guardando. #}
+{# Selettore del ciclo (3.5.0): compare quando c'è più di un ciclo (in corso o chiuso).
+   Ogni modulo POST della pagina riceve il campo nascosto ciclo_id, così scrive sul ciclo che si sta guardando.
+   Su un ciclo chiuso la pagina è in sola lettura (pulsanti dei moduli disattivati), tranne per l'admin; il server
+   lo controlla comunque (_sola_lettura_cicli_chiusi). #}
 {% set sc = selettore_ciclo %}
-<div class="cb-card p-2 mb-3 d-flex flex-wrap align-items-center gap-2 {{ 'border border-warning' if sc.scelto.in_avvio }}" id="selettore-ciclo" data-ciclo-id="{{ sc.scelto.id }}">
+{% set va = request.view_args or {} %}
+<div class="cb-card p-2 mb-3 d-flex flex-wrap align-items-center gap-2 {{ 'border border-warning' if sc.scelto.in_avvio }}{{ (' border border-danger' if sc.modifica else ' border border-secondary') if sc.scelto.chiuso }}"
+     id="selettore-ciclo" data-ciclo-id="{{ sc.scelto.id }}" data-sola-lettura="{{ '1' if sc.scelto.chiuso and not sc.modifica else '0' }}">
     <span class="small text-muted"><i class="bi bi-arrow-left-right me-1"></i>Ciclo:</span>
-    <div class="btn-group btn-group-sm" role="group" aria-label="Ciclo">
+    <div class="btn-group btn-group-sm" role="group" aria-label="Cicli in corso">
         {% for c in sc.cicli %}
-        <a href="{{ url_for(request.endpoint, ciclo=c.id, **(request.view_args or {})) }}"
+        <a href="{{ url_for(request.endpoint, ciclo=c.id, **va) }}"
            class="btn {{ 'btn-dark' if c.id == sc.scelto.id else 'btn-outline-secondary' }}">
             {{ c.nome }} <span class="small opacity-75">({{ 'attivo' if c.attivo else 'in avvio' }})</span>
         </a>
         {% endfor %}
     </div>
+    {% if sc.chiusi %}
+    <select class="form-select form-select-sm w-auto" aria-label="Cicli chiusi" onchange="if (this.value) location.href = this.value">
+        <option value="">Cicli chiusi…</option>
+        {% for c in sc.chiusi %}
+        <option value="{{ url_for(request.endpoint, ciclo=c.id, **va) }}" {{ 'selected' if c.id == sc.scelto.id }}>
+            {{ c.nome }}{% if c.data_fine %} (chiuso il {{ c.data_fine.strftime('%d/%m/%Y') }}){% endif %}
+        </option>
+        {% endfor %}
+    </select>
+    {% endif %}
     {% if sc.scelto.in_avvio %}
     <span class="small text-warning-emphasis">Stai lavorando sul ciclo in avvio: quello che inserisci qui va su «{{ sc.scelto.nome }}». Bot, PC e avvisi restano sul ciclo attivo.</span>
+    {% elif sc.scelto.chiuso %}
+    <span class="small {{ 'text-danger-emphasis fw-semibold' if sc.modifica else 'text-secondary-emphasis' }}"><i class="bi bi-lock me-1"></i>Ciclo chiuso{% if sc.scelto.data_fine %} il {{ sc.scelto.data_fine.strftime('%d/%m/%Y') }}: i dati si fermano a quel giorno{% endif %}.
+        {% if sc.modifica %}Sei amministratore: puoi ancora correggerlo (riscontri, fatture, Soccida…), fai attenzione.{% else %}Sola lettura.{% endif %}</span>
     {% endif %}
 </div>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    var id = document.getElementById("selettore-ciclo").dataset.cicloId;
+    var box = document.getElementById("selettore-ciclo");
+    var id = box.dataset.cicloId, solaLettura = box.dataset.solaLettura === "1";
     document.querySelectorAll("form").forEach(function (f) {
-        if ((f.getAttribute("method") || "").toLowerCase() !== "post" || f.querySelector("input[name=ciclo_id]")) return;
-        var i = document.createElement("input");
-        i.type = "hidden"; i.name = "ciclo_id"; i.value = id;
-        f.appendChild(i);
+        if ((f.getAttribute("method") || "").toLowerCase() !== "post") return;
+        if (!f.querySelector("input[name=ciclo_id]")) {
+            var i = document.createElement("input");
+            i.type = "hidden"; i.name = "ciclo_id"; i.value = id;
+            f.appendChild(i);
+        }
+        if (solaLettura) {
+            f.querySelectorAll("button, input[type=submit]").forEach(function (b) { b.disabled = true; b.title = "Ciclo chiuso: sola lettura"; });
+            var m = f.closest(".modal");      // i pulsanti che aprono un modulo in un modal
+            if (m && m.id) document.querySelectorAll('[data-bs-target="#' + m.id + '"]').forEach(function (b) { b.classList.add("d-none"); });
+        }
     });
 });
 </script>

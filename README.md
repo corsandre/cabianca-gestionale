@@ -216,6 +216,9 @@ struttura fisica vanno aggiornate in entrambi i file.
   effettivo del pasto restano del ciclo attivo. Il censimento dal bot è sospeso, e il bot avvisa per morti e
   trattamenti in box senza capi del ciclo attivo. Alla **chiusura** (data scelta, controlli non bloccanti) il ciclo
   in avvio diventa attivo e si reinserisce la giacenza di tutti i silos. Piano: `docs/piano-cicli.md`.
+- **Cicli chiusi (3.5.1)**: nel selettore (menu «Cicli chiusi…», anche in Soccida) e in Impostazioni («Apri»). Le
+  pagine si fermano alla data di fine; per gli utenti sono in sola lettura (`_sola_lettura_cicli_chiusi` rifiuta i
+  POST con il `ciclo_id` di un ciclo chiuso), l'admin può ancora correggerle (riscontri, fatture, Soccida).
 - Panoramica: conteggio live per capannone/box (ultimo censimento + delta di mortalità e spostamenti), giorni di
   vita e peso stimato per box proiettati a oggi, contatori uscite macello per categoria, giacenze mangime e siero.
 

@@ -444,7 +444,7 @@
 <div class="cb-card p-0">
     <table class="table table-sm mb-0">
         <thead class="table-light">
-            <tr><th>Nome</th><th>Inizio</th><th>Fine</th><th>Durata</th><th>Note</th></tr>
+            <tr><th>Nome</th><th>Inizio</th><th>Fine</th><th>Durata</th><th>Note</th><th></th></tr>
         </thead>
         <tbody>
             {% for c in cicli_precedenti %}
@@ -456,6 +456,10 @@
                     {% if c.data_fine %}{{ (c.data_fine - c.data_inizio).days }} giorni{% else %}–{% endif %}
                 </td>
                 <td class="text-muted">{{ c.note or '' }}</td>
+                <td class="text-nowrap">
+                    <a class="btn btn-sm btn-outline-secondary py-0" href="{{ url_for('allevamento.index', ciclo=c.id) }}" title="Apri il ciclo in sola lettura">Apri</a>
+                    <a class="btn btn-sm btn-outline-secondary py-0" href="{{ url_for('allevamento.soccida', ciclo=c.id) }}">Soccida</a>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
