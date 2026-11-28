@@ -159,6 +159,11 @@
                     <i class="bi bi-cash-coin"></i> Soccida
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'allevamento.cicli' %}active{% endif %}" href="{{ url_for('allevamento.cicli') }}">
+                    <i class="bi bi-table"></i> Cicli a confronto
+                </a>
+            </li>
             {% endif %}
             {% if current_user.role == 'admin' %}
             <li class="cb-nav-divider"></li>
